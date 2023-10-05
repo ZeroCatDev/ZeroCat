@@ -1,0 +1,241 @@
+<link id="layui_theme_css" rel="stylesheet">
+
+<script src="https://npm.elemecdn.com/jquery@3.2.1/dist/jquery.min.js"></script>
+<script async src="https://umami.192325.xyz/script.js" data-website-id="be8c7cd8-d471-4a0b-b5a7-819a6af35613"></script>
+<div class="appbar mdui-appbar mdui-appbar-fixed webkit-app-region">
+  <div class="mdui-toolbar mdui-color-theme"> <button href="javascript:;"
+      class="mdui-btn mdui-btn-icon mdui-ripple webkit-app-region-no" id="toggle"
+      mdui-drawer="{target: '#drawer',swipe: true}"><i class="mdui-icon material-icons">menu</i></button> <a
+      class="webkit-app-region-no" href="/"><span class="mdui-typo-title">
+        <%= process.env.siteneme %>
+      </span></a>
+    <div class="mdui-toolbar-spacer"></div><a class="mdui-btn mdui-btn-icon mdui-ripple  webkit-app-region-no"
+      mdui-dialog="{target: '#search'}"><i class="mdui-icon material-icons">feedback</i></a>
+    <% if (login==false) { %> <a href="/user/login"
+        class="mdui-btn mdui-ripple webkit-app-region-no md3botton">登录/注册</a>
+      <% } else { %> <a class="mdui-btn mdui-btn-icon webkit-app-region-no  mdui-hoverable mdui-ripple md3botton"
+          mdui-menu="{target: '#userlist'}"><img class=" md3botton mdui-img-fluid "
+            src="<%= process.env.qiniuurl %>/user/<%= userid %>.png" style="pointer-events: none;" /></a>
+        <ul class="mdui-menu md3botton" id="userlist">
+          <li class="mdui-menu-item"> <a href="/user?id=<%= userid %>" class="mdui-ripple md3botton" ondragstart="return false">
+              <% if (login==false) { %>、
+                尚未登陆
+                <% } else { %>
+                  登录为:<%= nickname %>
+                    <% } %>
+            </a> </li>
+          <li class="mdui-menu-item">
+            <a href="/my/scratch" class="mdui-ripple md3botton" ondragstart="return false"> <i
+                class="mdui-menu-item-icon mdui-icon material-icons">insert_drive_file</i>Scratch作品 </a>
+          </li>
+          <li class="mdui-menu-item">
+            <a href="/my/python" class="mdui-ripple md3botton" ondragstart="return false"> <i
+                class="mdui-menu-item-icon mdui-icon material-icons">insert_drive_file</i>python作品 </a>
+          </li>
+          <li class="mdui-menu-item">
+            <a href="/my/info" class="mdui-ripple md3botton" ondragstart="return false"> <i
+                class="mdui-menu-item-icon mdui-icon material-icons">remove_red_eye</i>个人信息 </a>
+          </li>
+          <li class="mdui-divider"></li>
+          <li class="mdui-menu-item">
+            <a href="/user/logout" class="mdui-ripple md3botton" ondragstart="return false"> <i
+                class="mdui-menu-item-icon mdui-icon material-icons">close</i>退出 </a>
+          </li>
+        </ul>
+        <% } %><!--<button href="javascript:;" class="mdui-btn mdui-btn-icon mdui-ripple webkit-app-region-no"><i
+                  class="mdui-icon material-icons">remove</i></button><button href="javascript:;" class="mdui-btn mdui-btn-icon mdui-ripple webkit-app-region-no"><i
+                class="mdui-icon material-icons">fullscreen</i></button><button href="javascript:;"  class="mdui-btn mdui-btn-icon mdui-ripple webkit-app-region-no"><i
+              class="mdui-icon material-icons" id="close" onclick="close1()">close</i></button>-->
+  </div>
+</div>
+
+
+<div class="mdui-drawer mdui-drawer-close" id="drawer">
+  <ul class="mdui-list"> <a class="mdui-list-item mdui-ripple" href="/"><i
+        class="mdui-list-item-icon mdui-icon material-icons">desktop_windows</i>
+      <div class="mdui-list-item-content">首页</div>
+    </a>
+    <% if (login==false) { %> <a class="mdui-list-item mdui-ripple" href="/user/login"><i
+          class="mdui-list-item-icon mdui-icon material-icons">insert_drive_file</i>
+        <div class="mdui-list-item-content">登录/注册</div>
+      </a>
+      <% } else { %> <a class="mdui-list-item mdui-ripple" href="/my/scratch"><i
+            class="mdui-list-item-icon mdui-icon material-icons">star</i>
+          <div class="mdui-list-item-content">Scratch作品</div>
+        </a> <a class="mdui-list-item mdui-ripple" href="/my/python"><i
+            class="mdui-list-item-icon mdui-icon material-icons">star</i>
+          <div class="mdui-list-item-content">Python作品</div>
+        </a> <a class="mdui-list-item mdui-ripple" href="/my/info"><i
+            class="mdui-list-item-icon mdui-icon material-icons">account_circle</i>
+          <div class="mdui-list-item-content">个人信息</div>
+        </a> <a class="mdui-list-item mdui-ripple" href="/about"><i
+            class="mdui-list-item-icon mdui-icon material-icons">info</i>
+          <div class="mdui-list-item-content">关于</div>
+        </a>
+        <% } %> <a class="mdui-list-item mdui-ripple" mdui-dialog="{target: '#search'}"><i
+              class="mdui-list-item-icon mdui-icon material-icons">send</i>
+            <div class="mdui-list-item-content">反馈</div>
+          </a>
+          <li class="mdui-subheader">工具</li> <a class="mdui-list-item mdui-ripple" href="/asdm"><i
+              class="mdui-list-item-icon mdui-icon material-icons">content_copy</i>
+            <div class="mdui-list-item-content">Scratch下载镜像</div>
+          </a> <a class="mdui-list-item mdui-ripple" href="https://wuyuan.dev/scratch_packager/"><i
+              class="mdui-list-item-icon mdui-icon material-icons">move_to_inbox</i>
+            <div class="mdui-list-item-content">多平台打包工具</div>
+          </a> <a class="mdui-list-item mdui-ripple" href="/comparer"><i
+              class="mdui-list-item-icon mdui-icon material-icons">build</i>
+            <div class="mdui-list-item-content">项目比较器</div>
+          </a>  <a class="mdui-list-item mdui-ripple" href="https://github.com/<%= process.env.siteneme %>Org"><i
+              class="mdui-list-item-icon mdui-icon material-icons">web</i>
+            <div class="mdui-list-item-content">Github</div>
+          </a> <a class="mdui-list-item mdui-ripple"
+            href="https://umami.192325.xyz/share/B0pMXh8TOb9W6Eyd/<%= process.env.siteneme %>%E7%A4%BE%E5%8C%BA"><i
+              class="mdui-list-item-icon mdui-icon material-icons">trending_up</i>
+            <div class="mdui-list-item-content">统计数据</div>
+          </a>
+          <li class="mdui-subheader">设置</li> <a class="mdui-list-item mdui-ripple" id="switch-theme"><i
+              class="mdui-list-item-icon mdui-icon material-icons">brightness_4</i>
+            <div class="mdui-list-item-content">切换主题</div>
+          </a>
+          <div class="mdui-card-content"> 当前CDN节点: </br><span id="cdn">[未知]</span></br> 你的ip: </br><span
+              id="ip">[未知]</span></br> 你的所在国家/地区: </br><span id="loc">[未知]</span></br></br>© 2023 <%=
+              process.env.siteneme %><br />Powered
+              by <a href="https://wuyuan.dev">孙悟元</a> </div>
+  </ul>
+</div>
+<button class="mdui-fab mdui-fab-fixed mdui-ripple mdui-color-theme-accent" mdui-dialog="{target: '#new'}">
+  <i class="mdui-icon material-icons">add</i>
+</button>
+<div class="mdui-dialog md3botton" id="new">
+  <div class="mdui-dialog-title">创建作品 </div>
+  <div class="mdui-dialog-content">登录为 <%= nickname %>
+  </div>
+  <div class="mdui-dialog-actions">
+    <div class="mdui-tab">
+      <a href="/scratch/edit" class="mdui-ripple  md3botton"><i class="mdui-icon material-icons">add</i>
+        <label>Scratch项目</label> </a> <a href="/python/edit" class="mdui-ripple md3botton"> <i
+          class="mdui-icon material-icons">add</i> <label>Python项目</label> </a>
+    </div> <button class="mdui-btn mdui-ripple md3botton" mdui-dialog-close>关闭</button>
+  </div>
+</div>
+<div class="mdui-dialog  md3botton" id="search">
+  <div class="mdui-dialog-title">反馈 </div>
+  <div class="mdui-dialog-content">涉及代码请去Github
+    Discussions，站务请去兔小巢(测试阶段不会受理大型站务问题)，涉及漏洞、安全问题请加QQ1847261658或1847261658@qq.com</div>
+  <div class="mdui-dialog-actions">
+    <div class="mdui-tab"> <a href="https://github.com/orgs/<%= process.env.siteneme %>Org/discussions"
+        class="mdui-ripple md3botton"> <i class="mdui-icon material-icons">feedback</i> <label>Github
+          Discussions</label>
+      </a> <a href="/user/tuxiaochao" class="mdui-ripple md3botton"> <i class="mdui-icon material-icons">feedback</i>
+        <label>兔小巢</label>
+      </a> </div> <button class="mdui-btn mdui-ripple md3botton" mdui-dialog-close>关闭</button>
+  </div>
+</div>
+
+
+
+
+<script>if (localStorage.darkTheme) {
+    document.body.classList.add("mdui-theme-layout-dark");
+    document.body.setAttribute("dark", "");
+    $("#layui_theme_css").attr("href", "<%= process.env.staticurl %>/css/layui-theme-dark.css");
+  }
+  document.getElementById("switch-theme").addEventListener("click", () => {
+    document.body.classList.toggle("mdui-theme-layout-dark");
+    document.body.toggleAttribute("dark");
+    if (document.body.hasAttribute("dark")) {
+      localStorage.darkTheme = true;
+      $("#layui_theme_css").attr("href", "<%= process.env.staticurl %>/css/layui-theme-dark.css");
+    } else {
+      delete localStorage.darkTheme;
+      $("#layui_theme_css").removeAttr("href");
+    }
+  });
+</script>
+<script>
+  getCDNinfo = function () {
+    jQuery.ajax({
+      url: "/cdn-cgi/trace",
+      success: function (data, status) {
+        let areas = "Antananarivo, Madagascar - (TNR);Cape Town, South Africa - (CPT);Casablanca, Morocco - (CMN);Dar Es Salaam, Tanzania - (DAR);Djibouti City, Djibouti - (JIB);Durban, South Africa - (DUR);Johannesburg, South Africa - (JNB);Kigali, Rwanda - (KGL);Lagos, Nigeria - (LOS);Luanda, Angola - (LAD);Maputo, MZ - (MPM);Mombasa, Kenya - (MBA);Port Louis, Mauritius - (MRU);Réunion, France - (RUN);Bangalore, India - (BLR);Bangkok, Thailand - (BKK);Bandar Seri Begawan, Brunei - (BWN);Cebu, Philippines - (CEB);Chengdu, China - (CTU);Chennai, India - (MAA);Chittagong, Bangladesh - (CGP);Chongqing, China - (CKG);Colombo, Sri Lanka - (CMB);Dhaka, Bangladesh - (DAC);Dongguan, China - (SZX);Foshan, China - (FUO);Fuzhou, China - (FOC);Guangzhou, China - (CAN);Hangzhou, China - (HGH);Hanoi, Vietnam - (HAN);Hengyang, China - (HNY);Ho Chi Minh City, Vietnam - (SGN);Hong Kong - (HKG);Hyderabad, India - (HYD);Islamabad, Pakistan - (ISB);Jakarta, Indonesia - (CGK);Jinan, China - (TNA);Karachi, Pakistan - (KHI);Kathmandu, Nepal - (KTM);Kolkata, India - (CCU);Kuala Lumpur, Malaysia - (KUL);Lahore, Pakistan - (LHE);Langfang, China - (NAY);Luoyang, China - (LYA);Macau - (MFM);Malé, Maldives - (MLE);Manila, Philippines - (MNL);Mumbai, India - (BOM);Nagpur, India - (NAG);Nanning, China - (NNG);New Delhi, India - (DEL);Osaka, Japan - (KIX);Phnom Penh, Cambodia - (PNH);Qingdao, China - (TAO);Seoul, South Korea - (ICN);Shanghai, China - (SHA);Shenyang, China - (SHE);Shijiazhuang, China - (SJW);Singapore, Singapore - (SIN);Suzhou, China - (SZV);Taipei - (TPE);Thimphu, Bhutan - (PBH);Tianjin, China - (TSN);Tokyo, Japan - (NRT);Ulaanbaatar, Mongolia - (ULN);Vientiane, Laos - (VTE);Wuhan, China - (WUH);Wuxi, China - (WUX);Xi'an, China - (XIY);Yerevan, Armenia - (EVN);Zhengzhou, China - (CGO);Zuzhou, China - (CSX);Amsterdam, Netherlands - (AMS);Athens, Greece - (ATH);Barcelona, Spain - (BCN);Belgrade, Serbia - (BEG);Berlin, Germany - (TXL);Brussels, Belgium - (BRU);Bucharest, Romania - (OTP);Budapest, Hungary - (BUD);Chișinău, Moldova - (KIV);Copenhagen, Denmark - (CPH);Cork, Ireland -  (ORK);Dublin, Ireland - (DUB);Düsseldorf, Germany - (DUS);Edinburgh, United Kingdom - (EDI);Frankfurt, Germany - (FRA);Geneva, Switzerland - (GVA);Gothenburg, Sweden - (GOT);Hamburg, Germany - (HAM);Helsinki, Finland - (HEL);Istanbul, Turkey - (IST);Kyiv, Ukraine - (KBP);Lisbon, Portugal - (LIS);London, United Kingdom - (LHR);Luxembourg City, Luxembourg - (LUX);Madrid, Spain - (MAD);Manchester, United Kingdom - (MAN);Marseille, France - (MRS);Milan, Italy - (MXP);Moscow, Russia - (DME);Munich, Germany - (MUC);Nicosia, Cyprus - (LCA);Oslo, Norway - (OSL);Paris, France - (CDG);Prague, Czech Republic - (PRG);Reykjavík, Iceland - (KEF);Riga, Latvia - (RIX);Rome, Italy - (FCO);Saint Petersburg, Russia - (LED);Sofia, Bulgaria - (SOF);Stockholm, Sweden - (ARN);Tallinn, Estonia - (TLL);Thessaloniki, Greece - (SKG);Vienna, Austria - (VIE);Vilnius, Lithuania - (VNO);Warsaw, Poland - (WAW);Zagreb, Croatia - (ZAG);Zürich, Switzerland - (ZRH);Arica, Chile - (ARI);Asunción, Paraguay - (ASU);Bogotá, Colombia - (BOG);Buenos Aires, Argentina - (EZE);Curitiba, Brazil - (CWB);Fortaleza, Brazil - (FOR);Guatemala City, Guatemala - (GUA);Lima, Peru - (LIM);Medellín, Colombia - (MDE);Panama City, Panama - (PTY);Porto Alegre, Brazil - (POA);Quito, Ecuador - (UIO);Rio de Janeiro, Brazil - (GIG);São Paulo, Brazil - (GRU);Santiago, Chile - (SCL);Willemstad, Curaçao - (CUR);St. George's, Grenada - (GND);Amman, Jordan - (AMM);Baghdad, Iraq - (BGW);Baku, Azerbaijan - (GYD);Beirut, Lebanon - (BEY);Doha, Qatar - (DOH);Dubai, United Arab Emirates - (DXB);Kuwait City, Kuwait - (KWI);Manama, Bahrain - (BAH);Muscat, Oman - (MCT);Ramallah - (ZDM);Riyadh, Saudi Arabia - (RUH);Tel Aviv, Israel - (TLV);Ashburn, VA, United States - (IAD);Atlanta, GA, United States - (ATL);Boston, MA, United States - (BOS);Buffalo, NY, United States - (BUF);Calgary, AB, Canada - (YYC);Charlotte, NC, United States - (CLT);Chicago, IL, United States - (ORD);Columbus, OH, United States - (CMH);Dallas, TX, United States - (DFW);Denver, CO, United States - (DEN);Detroit, MI, United States - (DTW);Honolulu, HI, United States - (HNL);Houston, TX, United States - (IAH);Indianapolis, IN, United States - (IND);Jacksonville, FL, United States - (JAX);Kansas City, MO, United States - (MCI);Las Vegas, NV, United States - (LAS);Los Angeles, CA, United States - (LAX);McAllen, TX, United States - (MFE);Memphis, TN, United States - (MEM);Mexico City, Mexico - (MEX);Miami, FL, United States - (MIA);Minneapolis, MN, United States - (MSP);Montgomery, AL, United States - (MGM);Montréal, QC, Canada - (YUL);Nashville, TN, United States - (BNA);Newark, NJ, United States - (EWR);Norfolk, VA, United States - (ORF);Omaha, NE, United States - (OMA);Philadelphia, United States - (PHL);Phoenix, AZ, United States - (PHX);Pittsburgh, PA, United States - (PIT);Port-Au-Prince, Haiti - (PAP);Portland, OR, United States - (PDX);Queretaro, MX, Mexico - (QRO);Richmond, Virginia - (RIC);Sacramento, CA, United States - (SMF);Salt Lake City, UT, United States - (SLC);San Diego, CA, United States - (SAN);San Jose, CA, United States - (SJC);Saskatoon, SK, Canada - (YXE);Seattle, WA, United States - (SEA);St. Louis, MO, United States - (STL);Tampa, FL, United States - (TPA);Toronto, ON, Canada - (YYZ);Vancouver, BC, Canada - (YVR);Tallahassee, FL, United States - (TLH);Winnipeg, MB, Canada - (YWG);Adelaide, SA, Australia - (ADL);Auckland, New Zealand - (AKL);Brisbane, QLD, Australia - (BNE);Melbourne, VIC, Australia - (MEL);Noumea, New caledonia - (NOU);Perth, WA, Australia - (PER);Sydney, NSW, Australia - (SYD)".split(";");
+        let area = data.split("colo=")[1].split("\n")[0];
+        for (var i = 0; i < areas.length; i++) {
+          if (areas[i].indexOf(area) != -1) {
+            document.getElementById("cdn").innerHTML = areas[i];
+            document.getElementById("ip").innerHTML = data.split("ip=")[1].split("\n")[0];
+            document.getElementById("loc").innerHTML = data.split("loc=")[1].split("\n")[0];
+            break;
+          }
+        }
+      }
+    })
+  }
+  jQuery(document).ready(function () {
+    getCDNinfo();
+  });
+</script>
+<script>
+  qiniuurl = "<%= process.env.qiniuurl %>"
+</script>
+<style>
+  .webkit-app-region {
+    -webkit-app-region: drag
+  }
+
+  .webkit-app-region-no {
+    -webkit-app-region: no-drag
+  }
+
+  /*
+  .md3botton:active {
+    border-radius: 5px !important;
+  }
+  
+  .md3botton:hover {
+    border-radius: 10px;
+  }
+  
+  .md3botton {
+    border-radius: 20px;
+    transition-property: border-radius;
+    transition-duration: 0.5s;
+  }*/
+
+  .md3botton {
+    border-radius: 18px;
+  }
+
+
+  .mdui-snackbar {
+    border-radius: 15px 15px 0px 0px;
+  }
+
+  .mdui-list-item {
+    border-radius: 0 50px 50px 0;
+  }
+
+  .mdui-dialog-prompt {
+    border-radius: 15px;
+  }
+
+  .mdui-snackbar {
+    border-radius: 15px 15px 0px 0px;
+  }
+
+  .substr {
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .mdui-tooltip {
+    word-wrap: break-word;
+    word-break: break-all;
+  }
+</style>
+<script>// 控制台安全提示
+      window.console.log('%c%s', 'color: red; background: yellow; font-size: 72px;', '警告！');
+      window.console.log('%c%s', 'color: red; background: yellow; font-size: 24px;', '如果你在接受远程控制，请立刻退出，不要急着看下面的内容');
+      window.console.log('%c%s', 'color: red; background: yellow; font-size: 24px;', '使用此控制台会让攻击者利用Self-XSS（自跨站脚本）攻击来冒充你，并窃取你的信息，盗取你的账户，删掉你的所有作品');
+      window.console.log('%c%s', 'color: red; background: yellow; font-size: 24px;', '请永远不要在这里粘贴或输入任何文字，不论他们告诉你这有多安全，管理员不需要查看控制台获取你的日志，OurWorld无法使用控制台进行调试或操作，任何希望你使用"检查"或F12按钮打开这里的人都是骗子，请立刻关掉这个网页并在官方渠道反馈(右上角头像旁反馈按钮)');
+</script>
+

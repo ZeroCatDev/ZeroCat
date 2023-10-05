@@ -1,0 +1,14 @@
+{
+  "name": "ourworldstaticfile",
+  "version": "1.1.4",
+  "description": "ourworld.wuyuan.dev",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"test\" "
+  },
+  "author": "wydev",
+  "license": "ISC",
+  "devDependencies": {
+    "npm-version-bump": "^1.0.0"
+  }
+}

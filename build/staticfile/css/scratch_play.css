@@ -1,0 +1,297 @@
+#author_name{
+  width: 160px;
+  font-size: large;
+  margin: auto 0 auto 8px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color: #333;
+}
+.project-title{
+color: #333;
+line-height: 68px;
+height: 68px;
+text-align: center;
+font-size:x-large;
+}
+#project_slt{
+    background-repeat:no-repeat;
+    background-position-x: center;
+    background-position-y: center;
+    background-size: 100%;
+    height: 360px;
+    border-radius: 10px;
+
+    display:flex;
+    align-items: center;
+    justify-content: center;
+}
+.green-flag-box{
+    height: 88px;
+    width: 88px;
+
+    background-color: #FFF;
+    border-radius:5px;
+    color: #333;
+    cursor: pointer;
+    opacity: 0.9;
+}
+.green-flag{
+    height: 48px;
+    width: 48px;
+    margin: 10px 0 5px 20px;
+}
+.scratch-player-bottom{
+margin: 18px 0;
+display: flex;
+justify-content: center;
+}
+
+.share-iconbox {
+position: relative;
+display: inline-block;
+margin-right: 18px;
+}
+.weixin-bar{
+
+width: 132px;
+height: 132px;
+border:10px solid #fff;
+
+
+
+}
+.weixin-bar img{
+width: 100%;
+height: 100%;
+}
+.share-iconbox:hover .weixin-bar{
+display: block;
+}
+
+/*虚拟键盘------------------------------*/
+.key {
+width: 6rem;
+height: 6rem;
+position: absolute;
+}
+.up {
+  left: 9rem;
+  bottom: 16rem;
+  background: url(/img/icon/up.png) no-repeat center/contain;
+}
+.down {
+  left: 9rem;
+  bottom: 2rem;
+  background: url(/img/icon/down.png) no-repeat center/contain;
+}
+.left {
+left: 2rem;
+bottom: 9rem;
+background: url(/img/icon/left.png) no-repeat center/contain;
+}
+.right {
+left: 16rem;
+bottom: 9rem;
+background: url(/img/icon/right.png) no-repeat center/contain;
+}
+.up .active{
+background: url(/img/icon/upactive.png) no-repeat center/contain;
+}
+.down .active{
+background: url(/img/icon/downactive.png) no-repeat center/contain;
+}
+.left .active{
+background: url(/img/icon/leftactive.png) no-repeat center/contain;
+}
+.right .active{
+background: url(/img/icon/rightactive.png) no-repeat center/contain;
+}
+
+.space {
+width: 8rem;
+height: 8rem;
+position: absolute;
+right: 2rem;
+bottom: 8rem;
+background: url(/img/icon/space.png) no-repeat center/contain;
+}
+.space .active{
+background: url(/img/icon/spaceactive.png) no-repeat center/contain;
+}
+
+/*播放部分------------------------------*/
+#container_play{
+  height: 100%;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: black;
+  font-size: 0;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  overflow: hidden;
+}
+  #wrapper {
+    display: block;
+    width: 100vw;
+
+    position: relative;
+  }
+  #monitors {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+  @media (min-aspect-ratio: 480/360) {
+    #wrapper.bak {
+
+      width: 133.33333333333334vh;
+    }
+    #wrapper {
+       width: 133.33333333333334vh;
+
+      display:flex;
+      align-items: center;
+      justify-content: center;
+    }
+  }
+  #stage {
+    width: 100%;
+    height: 100%;
+  }
+  
+  #loading-progress1 {
+    color: #0ff;
+    position: fixed;
+    
+    bottom: 0;
+    left: 0;
+    font-size: 16px;
+  }
+  #loading-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top:200px;
+  background-color: rgba(33, 33, 33, 0.7);
+  text-align: center;
+  line-height: 58px;
+}
+  #fullscreen-btn {
+    -webkit-appearance: none;
+    border: none;
+    background: none;
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 24px;
+    background-image: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"%3E%3Cpath d="M14 28h-4v10h10v-4h-6v-6zm-4-8h4v-6h6v-4H10v10zm24 14h-6v4h10V28h-4v6zm-6-24v4h6v6h4V10H28z" fill="%23fff"/%3E%3C/svg%3E');
+    background-color: rgba(0, 0, 0, 0.5);
+    border-bottom-left-radius: 10px;
+  }
+  .fullscreen #fullscreen-btn {
+    background-image: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"%3E%3Cpath d="M10 32h6v6h4V28H10v4zm6-16h-6v4h10V10h-4v6zm12 22h4v-6h6v-4H28v10zm4-22v-6h-4v10h10v-4h-6z" fill="%23fff"/%3E%3C/svg%3E');
+  }
+  
+  .monitor {
+    position: absolute;
+    background-color: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    overflow: hidden;
+    padding: 3px;
+    color: white;
+    white-space: pre;
+  }
+  .monitor-label {
+    margin: 0 5px;
+    font-weight: bold;
+  }
+  .monitor-value {
+    display: inline-block;
+    vertical-align: top;
+    min-width: 34px;
+    text-align: center;
+    border-radius: 0.25rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    user-select: text;
+    transform: translateZ(0);
+  }
+  .default .monitor-value, .slider .monitor-value {
+    background-color: rgba(0, 0, 0, 0.5);
+    margin: 0 5px;
+    padding: 1px 3px;
+  }
+  .large {
+    background-color: rgba(0, 0, 0, 0.6);
+    padding: 0.1rem 0.25rem;
+    min-width: 3rem;
+  }
+  .large .monitor-label {
+    display: none;
+  }
+  .large .monitor-value {
+    font-size: 1rem;
+    width: 100%;
+  }
+  .list {
+    padding: 0;
+    overflow: auto;
+    overflow-x: hidden;
+  }
+  .list .monitor-label {
+    text-align: center;
+    padding: 3px;
+    width: 100%;
+    display: block;
+    margin: 0;
+    box-sizing: border-box;
+    white-space: pre-wrap;
+  }
+  .list .monitor-value {
+    display: block;
+  }
+  .slider input {
+    display: block;
+    width: 100%;
+    transform: translateZ(0);
+  }
+  #asking-box {
+    display: none;
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    background-color: rgba(33, 33, 33, 0.7);
+  }
+  .asking #asking-box {
+    display: block;
+  }
+  #question {
+    display: block;
+    margin: 0 10px;
+    margin-top: 10px;
+    font-size: 12px;
+    color: white;
+  }
+  #answer {
+    border: none;
+    background: none;
+    width: 100%;
+    font: inherit;
+    font-size: 16px;
+    color: white;
+    padding: 10px;
+    box-sizing: border-box;
+  }
+  #answer:focus {
+    outline: none;
+  }

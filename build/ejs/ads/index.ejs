@@ -1,0 +1,50 @@
+<link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
+
+<body>
+<!-- 内容主体区域 -->
+<div style="margin:12px 12px 8px 12px;">
+    <table class="layui-hide" id="TableOne" lay-filter="TableOne"></table>
+</div>
+
+
+<script type="text/html" id="TableOne_bar">
+	<div class="layui-btn-container">
+		<button class="layui-btn layui-btn-sm layui-btn-warm" lay-event="add">创建新头图</button>
+		<span class="layui-btn layui-btn-sm layui-btn-primary layui-btn-disabled" >说明：高度最少260px，宽度最少720px </span>
+	</div>
+</script>
+
+<script type="text/html" id="imgTemp">
+	{{#  if(d.img){ }}
+    <img class="imgAds" src="/ads/{{d.id}}">
+	{{#  } else { }}
+    <img class="imgAds" src="/ads/default.png">
+	{{#  } }}
+</script>
+
+<script type="text/html" id="setOrgAdminTemp">
+	{{#  if(d.org_adminid === 0){ }}
+	<a class="layui-btn layui-btn-xs layui-btn-warm">设置管理员</a>
+	{{#  } else { }}
+	{{ d.username }}
+	{{#  } }}
+</script>
+<script type="text/html" id="timeTemp">
+	<div>{{new Date(d.createtime).toLocaleString()}}</div>
+</script>
+<script type="text/html" id="TableOne_tool">
+	{{#  if(d.state === 1){ }}
+    <a class="layui-btn layui-btn-xs layui-btn-danger" lay-event="setState" data-state='0'>停用</a>
+	{{#  } else { }}
+    <a class="layui-btn layui-btn-xs" lay-event="setState" data-state='1'>启用</a>
+	{{#  } }}
+	<a class="layui-btn layui-btn-xs layui-btn-danger" lay-event="del">删除</a>
+</script>
+</body>
+
+<script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
+<script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
+
+<script type="text/javascript" src="<%= process.env.staticurl %>/js/main.js"></script>
+<script type="text/javascript" src="<%= process.env.staticurl %>/js/adsjs.js"></script>
+</html>

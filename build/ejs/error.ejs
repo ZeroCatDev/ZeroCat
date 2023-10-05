@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-cmn-Hans">
+
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+	<title>错误 - <%= process.env.siteneme %></title>
+	<link rel="shortcut icon" href="<%= process.env.staticurl %>/img/ownew.svg">
+	<meta name="description" content="<%= process.env.slogan %>">
+	<meta name="keyword" content="<%= process.env.slogan %>">
+	<link rel="stylesheet" type="text/css" href="<%= process.env.staticurl %>/layui/css/layui.css">
+	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/waline.css" />
+	
+	<% include linkfile.ejs %>
+</head>
+
+<body class="mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
+	<% include hand.ejs %> <!-- Vertical Navbar --> <!-- Main content --> <!-- Header --> <!-- Main -->
+		
+
+	<div class="mdui-container">
+		<div class="mdui-typo-display-1">出错了</div>
+
+		<div class="mdui-typo-subheading">下方是错误内容，请截图并<button class="mdui-btn mdui-color-theme-accent mdui-ripple mdui-btn-dense" mdui-dialog="{target: '#search'}">反馈</button></div>
+
+		<div class="mdui-typo">
+			<blockquote>
+			  <p><%= error %>
+			</p>
+			  <footer>来自IP:<%= ip %>,UA:<%= userAgent %></footer>
+			</blockquote>
+		  </div>
+		</div>
+
+		<script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
+		<script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
+		<!--		<script type="text/javascript" src="<%= process.env.staticurl %>/js/birthday.js"></script>-->
+	
+		<script type="text/javascript" src="<%= process.env.staticurl %>/js/main.js"></script>
+		
+</body>
+
+</html>

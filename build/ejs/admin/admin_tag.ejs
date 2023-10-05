@@ -1,0 +1,27 @@
+<% include style_script %>
+<!-- 内容主体区域 -->
+<div style="margin:12px 12px 8px 12px;">
+	<table class="layui-hide" id="TableOne" lay-filter="TableOne"></table>
+</div>
+
+
+<script type="text/html" id="TableOne_bar">
+<div class="layui-btn-container">
+	<button id="tag_type_btn1" class="layui-btn layui-btn-sm" lay-event="showTags" data-type='1'>背景标签</button>
+	<button id="tag_type_btn2" class="layui-btn layui-btn-sm" lay-event="showTags" data-type='2'>角色标签</button>
+	<button id="tag_type_btn3" class="layui-btn layui-btn-sm" lay-event="showTags" data-type='3'>造型标签</button>
+	<button id="tag_type_btn4" class="layui-btn layui-btn-sm" lay-event="showTags" data-type='4'>声音标签</button>
+	<button class="layui-btn layui-btn-sm layui-btn-primary" lay-event="AddTag">添加标签</button>
+</div>
+</script>
+<script type="text/html" id="TableOne_tool">
+	<span class="layui-btn layui-btn-xs layui-btn-warm" lay-event="ModTag">修改标签名</span>
+	<span class="layui-btn layui-btn-xs layui-bg-red" lay-event="DelTag">删除标签</span>
+</script>
+
+</body>
+<script>
+	var __type=1;
+</script>
+<script type="text/javascript" src="<%= process.env.staticurl %>/js/admin/tag.js"></script>
+</html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-cmn-Hans">
+
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+	<title>关于 - <%= process.env.siteneme %></title>
+	<link rel="shortcut icon" href="<%= process.env.staticurl %>/img/ownew.svg">
+	<meta name="description" content="<%= process.env.slogan %>">
+	<meta name="keyword" content="<%= process.env.slogan %>">
+	<link rel="stylesheet" type="text/css" href="<%= process.env.staticurl %>/layui/css/layui.css">
+	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/waline.css" />
+	
+	<% include linkfile.ejs %>
+</head>
+
+<body class="mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
+	<% include hand.ejs %> <!-- Vertical Navbar --> <!-- Main content --> <!-- Header --> <!-- Main -->
+		
+
+	<div class="mdui-container">
+		<div class="mdui-typo-display-1"><%= process.env.siteneme %></div>
+
+		<div class="mdui-typo-subheading"><%= process.env.siteneme %>是一个重视个体的开源scratch论坛</div>
+
+		<div class="mdui-typo">
+			<blockquote>
+			  <p>从前，有一个叫做思快池的池塘，人们每天快乐地在里面玩耍。但有一天，有一些心怀不轨的人在里面种了一种花，叫辱花。这种花会源源不断地释放出两种毒：岗毒和苔毒。之前，这些毒物并没被人接触到，可是有一天，一个矮小的黑影摘下了辱花，将这两种毒释放了出来。有人怀疑这个黑影是来自边城的猫，但未下定论。这些毒物被释放出来之后，开始毒害思快池中快乐游玩着的人们，最终，思快池中的一点毒水被人发现，官员们害怕这点毒水会毒害更多的人们，就把思快池填平了。之前在其中游玩的人们很怀念思快池，所以~就有了这个网站
+			</p>
+			  <footer>——哔哩哔哩 是一刀斩哒</footer>
+			</blockquote>
+		  </div><p>目前网站正在测试，可能会搬各大论坛上的作品，所有作品版权归原作者所有，搬运仅用于测试项目稳定性，社区正式上线前会全部删除，目前社区用户上传的作品也会一并清除。社区开发会很慢，bug也会很多，别针之类的社区有十多人开发而<%= process.env.siteneme %>只有孙悟元一人，慢速更新请多包涵</p>
+		</p>
+		</div>
+
+		<script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
+		<script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
+		<!--		<script type="text/javascript" src="<%= process.env.staticurl %>/js/birthday.js"></script>-->
+	
+		<script type="text/javascript" src="<%= process.env.staticurl %>/js/main.js"></script>
+		
+</body>
+
+</html>

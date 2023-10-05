@@ -1,0 +1,194 @@
+/*------------------------------------*\
+	index.ejs
+\*------------------------------------*/
+#top_box{
+	position: relative;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 80px 0 40px 0;
+}
+#top_bg {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+	bottom: 0;
+	
+    z-index: -10;
+    background-position: center;
+    background-size: cover;
+	background-attachment: fixed;
+	background-image: url("https://registry.npmmirror.com/ourworldstaticfile/latest/files/img/web/sybj.jpg");
+}
+#top_overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+
+    z-index: -9;
+    opacity: .6;
+	background: #333333;
+}
+
+#header-box{
+	text-align: center;
+}
+#avatar_img{
+	border-radius: 5px;
+	width: 8em;
+	height: 8em;
+}
+#txt_username{
+    margin: 8px 0;
+    color: #FFF;
+}
+/* --  作品样式  -- */
+.img-slt{
+    width: calc(100% - 2px);
+
+    border-left:1px solid #EEE;
+    border-right:1px solid #EEE;
+    border-top:1px solid #EEE;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+}
+.txt-project-title{
+    width: calc(100% - 2px);
+    color: #333;
+    text-align: center;
+    line-height: 40px;
+
+    border-top:1px dotted #F8F8F8;
+    border-left:1px solid #EEE;
+    border-right:1px solid #EEE;
+    border-bottom:1px solid #EEE;
+    border-bottom-left-radius: 5px;
+    border-bottom-right-radius: 5px;
+}
+
+
+/* --  个人中心的样式  -- */
+.txt-project-title1{
+    width: calc(100% - 2px);
+    color: #333;
+    text-align: center;
+    line-height: 40px;
+
+    border-top:1px solid #EEE;
+    border-left:1px solid #EEE;
+    border-right:1px solid #EEE;
+    border-bottom:1px dotted #EEE;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+
+    background-color: #FFF;
+    display: flex;
+}
+.img-slt1{
+    width: calc(100% - 2px);
+    border-left:1px solid #EEE;
+    border-right:1px solid #EEE;
+}
+.txt-project-title2{
+    width: calc(100% - 2px);
+    color: #333;
+    text-align: center;
+    line-height: 40px;
+
+    border-top:1px dotted #F8F8F8;
+    border-left:1px solid #EEE;
+    border-right:1px solid #EEE;
+    border-bottom:1px solid #EEE;
+    border-bottom-left-radius: 5px;
+    border-bottom-right-radius: 5px;
+
+    background-color: #EEE;
+    display: flex;
+}
+.project-top-right{
+    border-top-right-radius: 5px;
+    flex:1;
+    color:#BBB;
+    font-size: xx-small;
+}
+.project-bottom-left{
+    flex:1;
+    border-bottom-left-radius: 5px;
+    margin-right: 1px;
+    background-color: #FFF;
+}
+.project-bottom-right{
+    flex:1;
+    border-bottom-right-radius: 5px;
+    background-color: #FFF;
+}
+.project-bottom-left:hover, .project-bottom-right:hover,.project-top-right:hover{
+    cursor: pointer;
+    background-color:#FF5722;
+    color:#FFF;
+}
+.is_null{
+    display:flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 200px;
+}
+/* --  个人中心菜单栏  -- */
+#head_box{
+    display: flex;
+    align-items:center;
+    height: 68px;
+    width: 980px;
+    margin: 0 auto;
+}
+#head_avatar{
+    width: 50px;
+    height: 50px;
+    border-radius: 5px;
+}
+
+#head_username{
+  width: 180px;
+  font-size: large;
+  margin-left: 6px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color: #333;
+}
+#head_menu{
+    width:100%;
+    display:flex;
+    justify-content:flex-end;
+}
+#head_menu>a{
+    color:#333;
+}
+#head_menu>a:hover{
+    color:#F72;
+}
+
+
+/* --  个人中心的样式  -- */
+#content_box{
+    display: flex;
+    justify-content: center;
+    background-color: #F8F8F8;
+    text-align: center;
+    padding: 20px;
+}
+.content-item{
+    display: flex;
+    justify-content: left;
+    align-items: center;
+    margin: 30px 0 20px 30px;
+}
+#content_box2{
+    display: flex;
+    justify-content: center!important;
+    text-align: center;
+}

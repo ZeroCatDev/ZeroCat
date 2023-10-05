@@ -1,0 +1,44 @@
+<% include style_script %>
+<!-- 内容主体区域 -->
+<div style="margin:12px 12px 8px 12px;">
+	<table class="layui-hide" id="TableOne" lay-filter="TableOne"></table>
+</div>
+<div style="margin:12px 12px 8px 12px;">
+	<p>添加背景的两种模式：</p>
+	<P>1、背景的真实宽高：960*720，三个参数分别为：480、360、2</P>
+	<P>2、背景的真实宽高：480*360，三个参数分别为：240、180、1</P>
+</div>
+
+<style>
+	.layui-table-cell{
+		height: auto!important;
+	}
+	.backdropImage{ 
+		height: 68px !important;
+		white-space: normal;
+	}
+</style>
+<script type="text/html" id="imgTemp">
+    <img class="backdropImage" src="/material/asset/{{d.md5}}">
+</script>
+
+<script type="text/html" id="TableOne_bar">
+	<div class="layui-btn-container">
+		<% tags.forEach(function(item){ %>
+			<button id="tag_btn<%=item.id%>" class="layui-btn layui-btn-sm" lay-event="showMates" data-id='<%=item.id%>'><%=item.tag%></button>
+		<% }) %>
+		<button id="add_mate_btn" class="layui-btn layui-btn-sm layui-btn-primary layui-hide" lay-event="AddMate">添加背景（注意：宽高比 = 960:720）</button>
+	</div>
+	</script>
+	<script type="text/html" id="TableOne_tool">
+		{{#  if(d.state === 0){ }}
+		<span class="layui-btn layui-btn-xs" lay-event="setState" data-v='1'>启用</span>
+		{{#  } else { }}
+		<span class="layui-btn layui-btn-xs layui-btn-danger" lay-event="setState" data-v='0'>停用</span>
+		{{#  } }}
+		<span class="layui-btn layui-btn-xs layui-btn-danger" lay-event="DelMate">删除</span>
+	</script>
+</body>
+
+<script type="text/javascript" src="<%= process.env.staticurl %>/js/admin/material_backdrop.js"></script>
+</html>

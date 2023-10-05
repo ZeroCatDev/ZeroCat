@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-cmn-Hans">
+
+<% if (login) { %>
+  <script>window.location.href = '/';</script>
+  <% } %>
+
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+      <title>找回密码 - <%= process.env.siteneme %>
+      </title>
+      <link rel="shortcut icon" href="<%= process.env.staticurl %>/img/ownew.svg">
+      <meta name="description" content="<%= process.env.slogan %>">
+      <meta name="keyword" content="<%= process.env.slogan %>">
+
+      <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
+      <link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css">
+      <% include linkfile.ejs %>
+    </head>
+
+    <body class="mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
+      <% include hand.ejs %>
+        <div class="layui-container" style="margin-top: 100px">
+          <div class="layui-row">
+
+            <style>
+              .title:after {
+                content: "";
+                display: block;
+                height: 4px;
+                width: 40px;
+                background-color: #448aff;
+                margin-top: 20px;
+              }
+            </style>
+
+            <div class="layui-col-md6" style="padding: 30px 0 0 30px;">
+              <div id='login-page'>
+                <div class="mdui-typo-display-2">
+                  <%= process.env.siteneme %> 重设密码
+                </div>
+
+                <div class="reply-form" style="height: max-content;">
+
+                  <div class="mdui-textfield">
+                    <i class="mdui-icon material-icons">lock</i>
+                    <input class="mdui-textfield-input" id='password' type="password" placeholder="密码" />
+                  </div>
+
+
+
+                  <div class="<%= process.env.reclass %>" data-sitekey="<%= process.env.rekey %>">
+                  </div>
+
+
+
+                  <button type="button" onclick="torepw()" class="mdui-btn mdui-color-theme-accent mdui-ripple"
+                    style="width: 120px;border-radius: 12px;">重设密码</button>
+
+                  <div>
+                  </div>
+                </div>
+              </div>
+
+
+            </div>
+
+
+
+          </div>
+        </div>
+    </body>
+
+    <script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
+    <script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
+    <script type="text/javascript" src="<%= process.env.staticurl %>/js/gter.js"></script>
+
+    <script type="text/javascript" src="<%= process.env.staticurl %>/js/main.js"></script>
+    <script type="text/javascript" src="<%= process.env.staticurl %>/js/login.js"></script>
+
+</html>
+<script src="<%= process.env.reurl %>" async defer></script>

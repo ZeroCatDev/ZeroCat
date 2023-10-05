@@ -1,0 +1,34 @@
+<% include style_script %>
+<!-- 内容主体区域 -->
+<div style="margin:12px 12px 8px 12px;">
+	<table class="layui-hide" id="TableOne" lay-filter="TableOne"></table>
+</div>
+
+<script type="text/html" id="TableOne_bar">
+	<div class="layui-btn-container">
+		<% tags.forEach(function(item){ %>
+			<button id="tag_btn<%=item.id%>" class="layui-btn layui-btn-sm" lay-event="showMates" data-id='<%=item.id%>'><%=item.tag%></button>
+		<% }) %>
+		<button id="add_mate_btn" class="layui-btn layui-btn-sm layui-btn-danger layui-hide" lay-event="AddMate">添加声音素材</button>
+	</div>
+	</script>
+	<script type="text/html" id="TableOne_tool">
+		<audio id="PlayWav{{d.id}}" src="/material/asset/{{d.md5}}" preload="none"></audio>
+		{{#  if(d.format == ''){ }}
+		<span class="layui-btn layui-btn-xs layui-btn-warm" lay-event="playSoundMate">试听</span>
+		{{#  } else { }}
+		<span class="layui-btn layui-btn-xs layui-btn-primary" lay-event="playSoundMate">试听</span>
+		{{#  } }}
+
+		<span class="modSoundMate layui-btn layui-btn-xs layui-btn-warm" lay-event="modSoundMate">更换声音文件</span>
+		
+		{{#  if(d.state === 0){ }}
+		<span class="layui-btn layui-btn-xs" lay-event="setState" data-v='1'>启用</span>
+		{{#  } else { }}
+		<span class="layui-btn layui-btn-xs layui-btn-danger" lay-event="setState" data-v='0'>停用</span>
+		{{#  } }}
+		<span class="layui-btn layui-btn-xs layui-btn-danger" lay-event="DelMate">删除</span>
+	</script>
+</body>
+<script type="text/javascript" src="<%= process.env.staticurl %>/js/admin/material_sound.js"></script>
+</html>

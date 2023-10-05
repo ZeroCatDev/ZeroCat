@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Python编程 - <%= process.env.siteneme %>
+	</title>
+	<link rel="shortcut icon" href='<%= process.env.staticurl %>/img/icon.ico'>
+
+	<% include ../linkfile.ejs %>
+
+</head>
+
+<body class="mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
+
+	<% include ../hand.ejs %>
+
+
+
+
+
+
+
+		<script async src="https://umami.192325.xyz/script.js"
+			data-website-id="be8c7cd8-d471-4a0b-b5a7-819a6af35613"></script>
+
+		<div class="mdui-container" style="margin:40px auto">
+			<div>
+				<div class="mdui-card mdui-hoverable" style="border-radius: 15px;">
+					<div style="display: flex; position: absolute; top:8px; right:0; z-index: 99999;">
+						<div style="margin:auto 10px;">
+							<button class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-theme-accent" id="run-code"
+								onclick="run_it()" style="border-radius: 10px;">运行</button>
+						</div>
+						<div style="margin:auto 10px auto 0;">
+							<button class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-red-accent"
+								onclick="run_clear()" style="border-radius: 10px;">清除</button>
+						</div>
+					</div>
+
+					<div class="layui-row">
+
+						<div id="canvas_box" style="height:calc(50vh);">
+							<div id="mycanvas"></div>
+						</div>
+
+
+						<div class=""
+							style="padding: 0; margin:0;background-color: rgba(0, 0, 0, 0);height:calc(20vh);">
+							<textarea id="output" style="height: 100%;width: 100%;" disabled>终端打印输出区</textarea>
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class=" mdui-hidden">
+				<textarea id="code_textarea"></textarea>
+			</div>
+			<br />
+			<div class="mdui-card-primary-title" id="work_title">
+
+			</div>
+			<div class="mdui-card-primary-subtitle" id="work_update">
+				项目简介
+			</div>
+			<a href="/user?id=1" id="touserurl">
+				<div class="mdui-card mdui-hoverable mdui-ripple " style="border-radius: 15px;">
+					<div class="mdui-card-header"> <img class="mdui-card-header-avatar" src="/" id="authorimg" />
+						<div class="mdui-card-header-title" id="authorname">
+							用户名
+						</div>
+						<div class="mdui-card-header-subtitle" id="authormotto">个人简介</div>
+					</div>
+				</div>
+			</a>
+			<br />
+			<div class="mdui-chip"> <span class="mdui-chip-icon"> <i class="mdui-icon material-icons">&#xe8a6;</i>
+				</span> <span class="mdui-chip-title">
+					浏览量: <span class="waline-pageview-count" /> </span> </div>
+
+			<div id="waline-users"></div>
+			<button class="mdui-btn mdui-ripple" onclick='tocode()' style="border-radius: 15px;">查看代码</button>
+			<div class="social-share"></div>
+
+
+			<div id="waline"></div>
+			<script type="module">
+				import { init } from '<%= process.env.staticurl %>/js/waline-c.mjs';
+				init({
+					el: '#waline',
+					serverURL: '<%= process.env.WalineServerURL %>',
+					path: `project-${_work_id}`,
+					copyright: false,
+					reaction: true, // 开启反应
+					pageview: true, // 浏览量统计
+					locale: {
+						reactionTitle: "这个作品怎么样？"
+					},
+					emoji: [
+						'//unpkg.com/@waline/emojis@1.1.0/weibo',
+						'//unpkg.com/@waline/emojis@1.1.0/bilibili',
+					],
+					dark: 'body[dark]',
+				});
+			</script>
+
+</body>
+
+</html>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/social-share.js/1.0.16/js/social-share.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/social-share.js/1.0.16/css/share.min.css" />
+<link rel="stylesheet" href="<%= process.env.staticurl %>/css/waline.css" />
+<script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
+<script type="text/javascript" src="/ejs/python/CodeMirror.js"></script>
+<script type="text/javascript" src="/ejs/python/js/file-saver.js"></script>
+<script type="text/javascript" src="/ejs/python/skulpt.min.js"></script>
+<script type="text/javascript" src="/ejs/python/skulpt-stdlib.js"></script>
+<script type="text/javascript" src="/ejs/python/mode/python.js"></script>
+<script type="text/javascript" src="/ejs/python/js/show-hint.js"></script>
+<script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
+<script type="text/javascript" src="/ejs/python/public.js"></script>
+
+
+<script type="text/javascript">
+	var isLogin = `<%= login %>`;
+	var _userid = `<%= userid %>`;
+</script>
+<script type="text/javascript" src="/ejs/python/python_play.js"></script>
+<script>var $config = {
+		title: _work_title, // 标题，默认读取 document.title 或者 <meta name="title" content="share.js" />
+		description: `${_work_title} 是<%= process.env.siteneme %>上的Python作品`, // 描述, 默认读取head标签：<meta name="description" content="PHP弱类型的实现原理分析" />
+		image: `<%= process.env.qiniuurl%>/scratch_slt/${_work_id}`, // 图片, 默认取网页中第一个img标签
+		wechatqrcodeTitle: "微信扫一扫分享", // 微信二维码提示文字
+		wechatqrcodeHelper: '<p>打开扫一扫</p><p>在手机上打开即可分享至朋友圈。</p>',
+	};
+
+	socialShare('.social-share', $config)</script>

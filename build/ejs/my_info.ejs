@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+	<title>个人中心 - <%= process.env.siteneme %>
+	</title>
+	<link rel="shortcut icon" href="<%= process.env.staticurl %>/img/icon.ico">
+	<meta name="description" content="<%= process.env.slogan %>">
+	<meta name="keyword" content="<%= process.env.slogan %>">
+	<link rel="stylesheet" type="text/css" href="<%= process.env.staticurl %>/layui/css/layui.css">
+	<% include linkfile.ejs %>
+</head>
+
+<body class="mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
+	<% include hand.ejs %>
+		<div class="mdui-container"><br />
+			<div class="mdui-typo-display-2">
+				<%= nickname %>
+			</div>
+			<div class="mdui-typo-headline-opacity">
+				<%= motto %>
+			</div><br />
+			<div class="mdui-panel" mdui-panel>
+				<div class="mdui-panel-item" style="border-radius: 15px 15px 0px 0px;">
+					<div class="mdui-panel-item-header" style="border-radius: 15px 15px 0px 0px;">
+						<div class="mdui-panel-item-title">个人信息</div>
+						<div class="mdui-panel-item-summary">修改个人信息</div><i
+							class="mdui-panel-item-arrow mdui-icon material-icons">keyboard_arrow_down</i>
+					</div>
+					<div class="mdui-panel-item-body">
+						<form class="mb-6">
+							<div class="mdui-row">
+								<div class="mdui-textfield mdui-textfield-floating-label mdui-col-xs-2"><label
+										class="mdui-textfield-label">用户名</label><input class="mdui-textfield-input"
+										id="my_nickname" maxlength="10" type="text" required value="<%= nickname %>" />
+									<div class="mdui-textfield-error">用户名不能为空</div>
+								</div>
+								<div class="mdui-textfield mdui-textfield-floating-label mdui-col-xs-10"><label
+										class="mdui-textfield-label">个人简介</label><textarea class="mdui-textfield-input"
+										id="my_aboutme" maxlength="255" type="text" required><%= motto %></textarea>
+									<div class="mdui-textfield-error">个人简介不能为空</div>
+								</div>
+							</div><select class="mdui-select mdui-col-xs-10" id="sex-chick" mdui-select>
+								<option value="1" <% if (sex==1) { %>selected <% } %>>男</option>
+								<option value="0" <% if (sex==0) { %>selected <% } %>>女</option>
+							</select>
+						</form>
+						<div class="mdui-panel-item-actions"><a class="mdui-btn mdui-ripple md3botton" mdui-panel-item-close
+								href="/my/info" >取消</a><button class="mdui-btn mdui-ripple md3botton"
+								onclick="updataInfo()" >确认</button></div>
+					</div>
+				</div>
+				<div class="mdui-panel-item">
+					<div class="mdui-panel-item-header">
+						<div class="mdui-panel-item-title">修改头像</div>
+						<div class="mdui-panel-item-summary">修改个人头像</div><i
+							class="mdui-panel-item-arrow mdui-icon material-icons">keyboard_arrow_down</i>
+					</div>
+					<div class="mdui-panel-item-body">
+						<div><img class="mdui-img-circle mdui-m-l-2"
+								src="<%= process.env.qiniuurl%>/user/<%= userid %>.png"
+								style="height: 100px;width: auto;border-radius: 15px;" /><button type="button"
+								class="mdui-btn mdui-ripple avatarUpload md3botton" 
+								lay-data="{exts:'png|jpg', size:1024}">修改头像</button></div>
+						<div class="mdui-panel-item-actions"><button class="mdui-btn mdui-ripple md3botton" mdui-panel-item-close
+								>取消</button></div>
+					</div>
+				</div>
+				<div class="mdui-panel-item" style="border-radius: 0px 0px 15px 15px;">
+					<div class="mdui-panel-item-header" style="border-radius: 0px 0px 15px 15px;">
+						<div class="mdui-panel-item-title">修改密码</div>
+						<div class="mdui-panel-item-summary">定期修改密码保证账户安全</div><i
+							class="mdui-panel-item-arrow mdui-icon material-icons">keyboard_arrow_down</i>
+					</div>
+					<div class="mdui-panel-item-body">
+						<div>
+							<div class="mdui-textfield mdui-textfield-floating-label"><label
+									class="mdui-textfield-label">原密码</label><input class="mdui-textfield-input"
+									id='old_password' type="password" autocomplete="off" /></div>
+							<div class="mdui-textfield mdui-textfield-floating-label"><label
+									class="mdui-textfield-label">新密码</label><input class="mdui-textfield-input"
+									id='new_password' type="password" autocomplete="off" /></div>
+						</div>
+						<div class="mdui-panel-item-actions"><button class="mdui-btn mdui-ripple md3botton" mdui-panel-item-close
+								>取消</button><button class="mdui-btn mdui-ripple md3botton"
+								onclick="updatePassword()" >确认</button></div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
+		<script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
+		<script type="text/javascript" src="<%= process.env.staticurl %>/js/gter.js"></script>
+		<script type="text/javascript" src="<%= process.env.staticurl %>/js/main.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,76 @@
+.aspectration{
+	position: relative;
+	height: 0;
+	width: 100%;
+	padding-top: 75%;
+}
+.aspectration > * {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+}
+
+#logo_top{
+    width: 68px;
+    height: 68px;
+}
+#slogan_0{
+    line-height: 68px;
+    color: #333;
+    font-size: x-large;
+    font-family:"微软雅黑";
+    letter-spacing:3px;
+    text-align: center;
+    margin-left: 10px;
+}
+
+.LT_to_RB{
+  width:40px;
+  height:40px;
+  background:linear-gradient(45deg,transparent 49.5%, #BBB 49.5%, #BBB 50.5%, transparent 50.5%);
+  background-color: #FFF;
+  margin-top: -1px;
+}
+.LB_to_RT{
+  width:40px;
+  height:40px;
+  background:linear-gradient(-45deg,transparent 49.5%, #BBB 49.5%, #BBB 50.5%, transparent 50.5%);
+  background-color: #FFF;
+  margin-top: -1px;
+}
+#Line_Bottom{
+  height: 40px; width: 100px;;border-bottom: 1px solid #DDD;
+  background-color: #FFF;
+  margin-top: -1px;
+}
+
+.box-work-course{
+    padding: 8px;
+    background-color: #FFF;
+    box-shadow:2px 2px 5px #888;
+}
+.zhuangqu-go{
+	margin: 15px auto ;
+}
+.zhuangqu-go:hover{
+	border-bottom-right-radius: 5px;
+	border-bottom-left-radius: 5px;
+}
+.author-avatar{
+    width: 32px;
+    height: 32px;
+    border-radius: 3px;
+}
+.author-nn{
+    margin-left: auto;
+    margin-right: 3px;
+    line-height:32px;
+    color: #FFB800;
+}
+.o{
+    overflow: hidden;
+    text-overflow:ellipsis;
+    white-space: nowrap;
+}

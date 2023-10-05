@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-cmn-Hans">
+
+<% if (login) { %>
+  <script>window.location.href = '/';</script>
+  <% } %>
+
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+      <title>登录/注册 - <%= process.env.siteneme %>
+      </title>
+      <link rel="shortcut icon" href="<%= process.env.staticurl %>/img/ownew.svg">
+      <meta name="description" content="<%= process.env.slogan %>">
+      <meta name="keyword" content="<%= process.env.slogan %>">
+
+      <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
+      <link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css">
+      <% include linkfile.ejs %>
+    </head>
+
+    <body class="mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
+      <% include hand.ejs %>
+        <div class="layui-container" style="margin-top: 100px">
+          <div class="layui-row">
+
+            <style>
+              .title:after {
+                content: "";
+                display: block;
+                height: 4px;
+                width: 40px;
+                background-color: #448aff;
+                margin-top: 20px;
+              }
+            </style>
+
+            <div class="layui-col-md6" style="padding: 30px 0 0 0px;">
+              <div id='login-page'>
+                <div class="mdui-typo-display-2">
+                  <%= process.env.siteneme %> 登录
+                </div>
+
+                <div class="reply-form" style="height: max-content;">
+                  <div>
+                    <div class="mdui-textfield">
+                      <i class="mdui-icon material-icons">email</i>
+                      <input class="mdui-textfield-input" id='username' type="email" placeholder="邮箱" />
+                    </div>
+                    <div class="mdui-textfield">
+                      <i class="mdui-icon material-icons">lock</i>
+                      <input class="mdui-textfield-input" id='password' type="password" placeholder="密码" />
+                    </div>
+
+
+<div id="recaptcha-div-login"></div>
+                    
+              
+
+                    <div style="display:flex; height: 50px;">
+                      <% if (reg==1) { %>
+                        <button href="javascript:;" class="mdui-btn mdui-ripple md3botton" onclick="switchPage('reg-page')"
+                          >没有账户?</button>
+                        <% } %>
+                          <button onclick="switchPage('getPW-page')" class="mdui-btn mdui-ripple md3botton"
+                            >忘记密码</button>
+                    </div>
+                    <button type="button" onclick="login()" class="mdui-btn mdui-color-theme-accent mdui-ripple md3botton"
+                      style="width: 120px;">登 录</button>
+                  </div>
+                  <div>
+                  </div>
+                </div>
+              </div>
+
+              <% if (reg==1) { %>
+                <div id='reg-page' style="display: none;">
+                  <div class="mdui-typo-display-2">
+                    <%= process.env.siteneme %> 注册
+                  </div>
+                  <div class="reply-form" style="height: max-content;"> 
+                    <div>
+                      <div class="mdui-textfield">
+                        <i class="mdui-icon material-icons">email</i>
+                        <input class="mdui-textfield-input" id='reg_username' type="email" placeholder="邮箱" />
+                      </div>
+                      <div class="mdui-textfield">
+                        <i class="mdui-icon material-icons">email</i>
+                        <input class="mdui-textfield-input" id='reg_password' type="text" placeholder="昵称" />
+                      </div>
+                     <div id="recaptcha-div-signup"></div>
+                 
+                      <div style="height: 50px;"><button class="mdui-btn mdui-ripple md3botton" onclick="switchPage('login-page')"
+                          >已有账户?</button></div>
+
+                      <button type="button" mdui-dialog="{target: '#privacy'}"
+                        class="mdui-btn mdui-color-theme-accent mdui-ripple"
+                        style="width: 120px; margin-right: 20px;border-radius: 12px;">注 册</button>
+
+                    </div>
+                    <div>
+                    </div>
+                  </div>
+                </div>
+                <% } %>
+
+                  <div id='getPW-page' style="display: none;">
+                    <div class="mdui-typo-display-2">
+                      <%= process.env.siteneme %> 找回密码
+                    </div>
+                    <div class="reply-form" style="height: max-content;">
+                      <div>
+                        <div class="mdui-textfield">
+                          <i class="mdui-icon material-icons">email</i>
+                          <input class="mdui-textfield-input" id='getPW_username' type="text" placeholder="邮箱" />
+                        </div>
+                        <div id="recaptcha-div-findpw"></div>
+                      <br /><br />
+
+                        <button type="button" onclick="getPW()" class="mdui-btn mdui-color-theme-accent mdui-ripple"
+                          style="width: 120px; margin-right: 20px;border-radius: 12px;">找回密码</button>
+                        <button onclick="switchPage('login-page')" class="mdui-btn mdui-ripple md3botton"
+                          >去登录</button>
+                      </div>
+                      <div>
+                      </div>
+                    </div>
+                  </div>
+            </div>
+
+
+
+          </div>
+        </div>
+    </body>
+    <!-- <div class="mdui-dialog" id="re" style='border-radius: 20px;'>
+      <div class="mdui-dialog-title">验证码</div>
+
+      <div class="mdui-dialog-actions">
+        <div class="<%= process.env.reclass %>" data-sitekey="<%= process.env.rekey %>" data-theme="dark"></div>
+        <button class="mdui-btn mdui-ripple" mdui-dialog-close style='border-radius: 15px;'>关闭</button>
+      </div>
+    </div>-->
+    <div class="mdui-dialog" id="privacy" style='border-radius: 15px;'>
+      <div class="mdui-dialog-title">您正在使用由孙悟元提供的服务</div>
+      <div class="mdui-dialog-content">
+        我们可能会收集您的个人信息,具体参见<a href="<%= process.env.privacypolicyurl %>" target="_blank"
+          class="mdui-text-color-blue">隐私策略</a><br />
+        <label class="mdui-checkbox">
+          <input type="checkbox" id="privacy-chick" />
+          <i class="mdui-checkbox-icon"></i>
+          我已阅读并同意隐私策略
+        </label>
+        <br /><br />
+        我们可能需要将您的个人数据传输到中国以外的国家或地区以提供服务,我们将采取必要措施确保您的数据得到安全和合法处理。<br />
+        <label class="mdui-checkbox">
+          <input type="checkbox" id="shuju-chick" />
+          <i class="mdui-checkbox-icon"></i>
+          我同意将我的个人数据传输到中国以外的地区
+        </label>
+        <br /><br />
+        在<%= process.env.siteneme %>上,你需要遵守<a href="https://scratch.mit.edu/community_guidelines" target="_blank"
+            class="mdui-text-color-blue">社区行为准则(第三方站点)</a><br />
+          <label class="mdui-checkbox">
+            <input type="checkbox" id="zhunze-chick" />
+            <i class="mdui-checkbox-icon"></i>
+            我已阅读并同意将会遵守社区行为准则
+          </label>
+          <br /><br />
+          你需要同意<a href="<%= process.env.termsofserviceurl %>" target="_blank"
+          class="mdui-text-color-blue">用户协议</a><br />
+          <label class="mdui-checkbox">
+            <input type="checkbox" id="xiugai-chick" />
+            <i class="mdui-checkbox-icon"></i>
+            我已阅读并同意用户协议
+          </label>
+          <br /><br />对于技术手段绕过此页面的行为(视为对<%= process.env.siteneme %>
+            的基础设施进行攻击)涉嫌违法(法入侵计算机系统),我们将保留追究法律责任的权利,且违规获得的账号不受保护,如果您同意以上内容,请点击“复选框”以完成注册流程.
+      </div>
+
+      <div class="mdui-dialog-actions">
+        <button class="mdui-btn mdui-ripple mdui-text-color-theme-text" mdui-dialog-close
+          style='border-radius: 15px;'>取消</button>
+        <button class="mdui-btn mdui-ripple mdui-text-color-theme-text" style='border-radius: 15px;'
+          onclick="register()">注册</button>
+      </div>
+    </div>
+
+    </div>
+    <script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
+    <script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
+    <script type="text/javascript" src="<%= process.env.staticurl %>/js/gter.js"></script>
+
+    <script type="text/javascript" src="<%= process.env.staticurl %>/js/main.js"></script>
+    <script type="text/javascript" src="<%= process.env.staticurl %>/js/login.js"></script>
+
+</html>
+<script src="<%= process.env.reurl %>?onload=onloadCallback" async defer></script>
+

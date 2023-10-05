@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-cmn-Hans">
+
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+	<title>
+		<%= user.nickname %>的个人主页 - <%= process.env.siteneme %>
+	</title>
+	<link rel="shortcut icon" href="<%= process.env.staticurl %>/img/ownew.svg">
+	<meta name="description" content="<%= process.env.slogan %>">
+	<meta name="keyword" content="<%= process.env.slogan %>">
+
+	<link rel="stylesheet" type="text/css" href="<%= process.env.staticurl %>/layui/css/layui.css">
+	<link type="text/css" rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css" />
+	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/waline.css" />
+	<% include linkfile.ejs %>
+</head>
+
+<body class="mdui-theme-primary-blue mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
+	<% include hand.ejs %>
+
+		<div class="mdui-container" style="margin:40px auto">
+
+
+			<img class="mdui-img-circle" src="<%= process.env.qiniuurl%>/user/<%= user.id %>.png"
+				style="height: 70px;" />
+			<div class="mdui-typo-display-2">
+				<%= user.nickname %>
+
+			</div>
+			<div class="mdui-typo-headline-opacity">
+				<%= user.motto %>
+			</div>
+			<div id="scratch_box">
+				<div class="mdui-row" id="scratch_projects"></div>
+				<div style="display:flex; justify-content:center;">
+					<div id="scratch_change_page"></div>
+				</div>
+			</div>
+			<div id="python_box">
+				<div class="layui-row" id="python_projects"></div>
+				<div style="display:flex; justify-content:center;">
+					<div id="python_change_page"></div>
+				</div>
+			</div>
+
+			<div id="waline"></div>
+			<script type="module">
+				import { init } from '<%= process.env.staticurl %>/js/waline-c.mjs';
+
+				init({
+					el: '#waline',
+					serverURL: '<%= process.env.WalineServerURL %>',
+					path: 'user-<%= user.id %>',
+					copyright: false,
+					reaction: true, // 开启反应
+					pageview: true, // 浏览量统计
+					locale: {
+						reactionTitle: "发表下看法？"
+					},
+					emoji: [
+						'//unpkg.com/@waline/emojis@1.1.0/weibo',
+						'//unpkg.com/@waline/emojis@1.1.0/bilibili',
+					],
+					dark: 'body[dark]',
+				});
+			</script>
+		</div>
+
+</body>
+<script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
+<script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
+<script type="text/javascript" src="<%= process.env.staticurl %>/js/main.js"></script>
+<script>	var laypage = layui.laypage, layer = layui.layer;
+
+	function Scratch() {
+		laypage.render({
+			elem: 'scratch_change_page'
+			, count: <%= scratch_count %>
+	, limit: 8
+			, theme: '#448aff'
+			, jump: function (obj, first) {
+				$.ajax({
+					'url': '/api/getUserScratchProjects',
+					'type': 'POST',
+					'data': { curr: obj.curr, limit: obj.limit, userid: getQueryString('id') },
+					'success': function (d) {
+						if (d.length) {
+							$("#scratch_projects").html("");
+							for (var i = 0; i < d.length; i++) {
+								tzzt = ''
+								if (d[i].state == 2) {
+
+									tzzt = '<div class="mdui-card-primary-subtitle">精选作品</div>'
+								}
+								$("#scratch_projects").append(`
+							<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
+							<a href="/scratch/play?id=${d[i].id}" class="mdui-ripple"  ondragstart="return false"> 
+				<div class="mdui-card mdui-ripple" style='border-radius: 15px 15px 15px 15px;'>
+					<div class="mdui-card-media">
+						<img src="<%= process.env.qiniuurl%>/scratch_slt/${d[i].id}" style="pointer-events: none;"/>
+						<div class="mdui-card-media-covered mdui-card-media-covered-gradient">
+							<div class="mdui-card-primary">${tzzt}
+								<div class="mdui-card-primary-title">${d[i].title}</div>
+						</div></div></div></div></a></div>	
+						`);
+							}
+						} else {
+							$("#scratch_projects").html(`<p class="mdui-text-center">没有找到Scratch作品</p>`);
+							mdui.snackbar({ buttonText: '关闭', message: "无满足条件的作品" });
+						}
+					}
+				});
+			}
+	});
+	}
+	function Python() {
+		laypage.render({
+			elem: 'python_change_page'
+			, count: <%= python_count %>
+	, limit: 8
+			, theme: '#448aff'
+			, jump: function (obj, first) {
+				$.ajax({
+					'url': '/api/getUserPythonProjects',
+					'type': 'POST',
+					'data': { curr: obj.curr, limit: obj.limit, userid: getQueryString('id') },
+					'success': function (d) {
+						if (d.length) {
+							$("#python_projects").html("");
+							for (var i = 0; i < d.length; i++) {
+								tzzt = ''
+								if (d[i].state == 2) {
+
+									tzzt = '<a class="mdui-color-amber">[精选作品]</a>'
+								}
+								$("#python_projects").append(`
+							<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
+								<div class="mdui-card mdui-hoverable" style='border-radius: 15px 15px 15px 15px;'>
+    
+	<div class="mdui-card-primary  mdui-ripple mdui-hoverable" onclick='window.open("/python/play#${d[i].id}")'>
+		<div class="mdui-card-primary-title substr">${d[i].title}</div>
+		<div class="mdui-card-primary-subtitle substr">${tzzt}${d[i].description}</div>
+	</div>
+	  
+ 
+</div></div>	
+
+						
+
+	
+
+						`);
+
+							}
+						} else {
+							$("#python_projects").html(`<p class="mdui-text-center">没有找到Python作品</p>`);
+
+							mdui.snackbar({ buttonText: '关闭', message: "无满足条件的作品" });
+						}
+					}
+				});
+			}
+	});
+	}
+	Scratch()
+	Python()
+	function getQueryString(name) {
+		var reg = new RegExp('(^|&)' + name + '=([^&]*)(&|$)', 'i');
+		var r = window.location.search.substr(1).match(reg);
+		if (r != null) {
+			return unescape(r[2]);
+		}
+		return null;
+	}
+</script>
+
+</html><style>
+	.md3botton {
+		border-radius: 15px;
+	}
+
+	.mdui-dialog-prompt {
+		border-radius: 15px;
+	}
+
+
+
+	.substr {
+		white-space: nowrap;
+		overflow: hidden;
+	}
+
+	.mdui-tooltip {
+		word-wrap: break-word;
+		word-break: break-all;
+	}
+</style>
