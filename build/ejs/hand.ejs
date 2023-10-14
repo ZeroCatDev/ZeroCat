@@ -3,7 +3,7 @@
 <script src="https://npm.elemecdn.com/jquery@3.2.1/dist/jquery.min.js"></script>
 <script async src="https://umami.192325.xyz/script.js" data-website-id="be8c7cd8-d471-4a0b-b5a7-819a6af35613"></script>
 <div class="appbar mdui-appbar mdui-appbar-fixed webkit-app-region">
-  <div class="mdui-toolbar mdui-color-theme"> <button href="javascript:;"
+  <div class="mdui-toolbar mdui-color-white"> <button href="javascript:;"
       class="mdui-btn mdui-btn-icon mdui-ripple webkit-app-region-no" id="toggle"
       mdui-drawer="{target: '#drawer',swipe: true}"><i class="mdui-icon material-icons">menu</i></button> <a
       class="webkit-app-region-no" href="/"><span class="mdui-typo-title">
@@ -48,7 +48,10 @@
               class="mdui-icon material-icons" id="close" onclick="close1()">close</i></button>-->
   </div>
 </div>
-
+<style>.mdui-color-white {
+  background-color: #ffffff!important;
+  color: rgba(0,0,0,.87)!important;
+}</style>
 
 <div class="mdui-drawer mdui-drawer-close" id="drawer">
   <ul class="mdui-list"> <a class="mdui-list-item mdui-ripple" href="/"><i
@@ -115,7 +118,7 @@
       <a href="/scratch/edit" class="mdui-ripple  md3botton"><i class="mdui-icon material-icons">add</i>
         <label>Scratch项目</label> </a> <a href="/python/edit" class="mdui-ripple md3botton"> <i
           class="mdui-icon material-icons">add</i> <label>Python项目</label> </a>
-    </div> <button class="mdui-btn mdui-ripple md3botton" mdui-dialog-close>关闭</button>
+    </div> <button class="mdui-btn mdui-ripple md3botton mdui-text-color-theme-text" mdui-dialog-close>关闭</button>
   </div>
 </div>
 <div class="mdui-dialog  md3botton" id="search">
@@ -128,7 +131,7 @@
           Discussions</label>
       </a> <a href="/user/tuxiaochao" class="mdui-ripple md3botton"> <i class="mdui-icon material-icons">feedback</i>
         <label>兔小巢</label>
-      </a> </div> <button class="mdui-btn mdui-ripple md3botton" mdui-dialog-close>关闭</button>
+      </a> </div> <button class="mdui-btn mdui-ripple md3botton mdui-text-color-theme-text" mdui-dialog-close>关闭</button>
   </div>
 </div>
 

@@ -7,12 +7,12 @@
   <title>Python编程 - <%= process.env.siteneme %>
   </title>
   <link rel="shortcut icon" href='<%= process.env.staticurl %>/img/icon.ico'>
-  <link rel="stylesheet" href="/ejs/python/bootstrap/css/bootstrap.min.css" />
+  <link rel="stylesheet" href="<%= process.env.staticurl %>/pythonstatic/bootstrap/css/bootstrap.min.css" />
   <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
-  <link rel="stylesheet" href="/ejs/python/css/CodeMirror.css" />
-  <link rel="stylesheet" href='/ejs/python/css/style.css' />
-  <link rel="stylesheet" href="/ejs/python/css/solarized.css" />
-  <link type="text/css" rel="stylesheet" href="/ejs/python/showWorks.css" />
+  <link rel="stylesheet" href="<%= process.env.staticurl %>/pythonstatic/css/CodeMirror.css" />
+  <link rel="stylesheet" href='<%= process.env.staticurl %>/pythonstatic/css/style.css' />
+  <link rel="stylesheet" href="<%= process.env.staticurl %>/pythonstatic/css/solarized.css" />
+  <link type="text/css" rel="stylesheet" href="<%= process.env.staticurl %>/pythonstatic/showWorks.css" />
   <% include ../linkfile.ejs %>
 </head>
 
@@ -141,7 +141,7 @@
           <div class="layui-row">
             <div class="layui-col-md12 layui-col-sm6 layui-col-xs12" style="padding: 0;">
               <div id="canvas_box"
-                style="height:calc(50vh); background:url(/*/ejs/python/img/welcome_python_editor.png*/) no-repeat center;background-size: contain;background-size:auto 100%;">
+                style="height:calc(50vh); background:url(/*<%= process.env.staticurl %>/pythonstatic/img/welcome_python_editor.png*/) no-repeat center;background-size: contain;background-size:auto 100%;">
                 <div id="mycanvas"></div>
               </div>
             </div>
@@ -206,19 +206,19 @@
   </div>
 
   <script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
-  <script type="text/javascript" src="/ejs/python/CodeMirror.js"></script>
-  <script type="text/javascript" src="/ejs/python/js/file-saver.js"></script>
-  <script type="text/javascript" src="/ejs/python/skulpt.min.js"></script>
-  <script type="text/javascript" src="/ejs/python/skulpt-stdlib.js"></script>
-  <script type="text/javascript" src="/ejs/python/mode/python.js"></script>
-  <script type="text/javascript" src="/ejs/python/js/show-hint.js"></script>
+  <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/CodeMirror.js"></script>
+  <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/js/file-saver.js"></script>
+  <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/skulpt.min.js"></script>
+  <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/skulpt-stdlib.js"></script>
+  <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/mode/python.js"></script>
+  <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/js/show-hint.js"></script>
   <script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
-  <script type="text/javascript" src="/ejs/python/public.js"></script>
+  <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/public.js"></script>
   <script type="text/javascript">
     var isLogin = `<%= login %>`;
     var _userid = `<%= userid %>`;
   </script>
-  <script type="text/javascript" src="/ejs/python/python_edit.js"></script>
+  <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/python_edit.js"></script>
 </body>
 
 </html>

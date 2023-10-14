@@ -72,7 +72,7 @@ router.get('/play', function (req, res) {
     
             res.locals['is_author'] = (SCRATCH[0].authorid==req.session.userid)?true:false;
             res.locals['project'] = SCRATCH[0];
-            res.render('ejs/scratch_play.ejs');
+            res.render('ejs/scratch/scratch_play.ejs');
         });
     });
 });

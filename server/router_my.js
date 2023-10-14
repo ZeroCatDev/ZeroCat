@@ -46,7 +46,7 @@ router.get('/scratch', function (req, res) {
             res.locals.state1_count = data[0].state1_count;
             res.locals.state2_count = data[0].state2_count;
         }
-        res.render('ejs/my_scratch_projects.ejs');
+        res.render('ejs/scratch/my_scratch_projects.ejs');
     });
 });  
 
@@ -68,7 +68,7 @@ router.get('/python', function (req, res) {
             res.locals.state1_count = data[0].state1_count;
             res.locals.state2_count = data[0].state2_count;
         }
-        res.render('ejs/my_python_projects.ejs');
+        res.render('ejs/python/my_python_projects.ejs');
     });
 });  
 //显示Scratch项目列表：数据，{curr:obj.curr, limit:obj.limit,state:state}

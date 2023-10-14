@@ -9,6 +9,69 @@ router.all('*', function (req, res, next) {
 });
 //router.get('/', function (req, res) {})
 
+//首页
+router.get("/", function (req, res) {
+    //获取已分享的作品总数：1:普通作品，2：推荐的优秀作品
+    var SQL =
+      `SELECT ` +
+      ` (SELECT count(id) FROM python WHERE state>0 ) AS python_count `;
+    DB.query(SQL, function (err, data) {
+      if (err) {
+        // console.error('数据库操作出错：');
+        res.locals.python_count = 0;
+      } else {
+        res.locals.python_count = data[0].python_count;
+      }
+  
+        res.render("ejs/python/python_projects.ejs");
+    
+    });
+  });
+
+//翻页：Python作品列表：数据
+router.post("/view/getPythonProjects", function (req, res) {
+    var curr = parseInt(req.body.curr); //当前要显示的页码
+    var limit = parseInt(req.body.limit); //每页显示的作品数
+    var type = "view_count";
+    if (req.body.type == "new") {
+      type = "time";
+    }
+  
+    var SQL = `SELECT python.id, python.title, python.state,python.authorid, python.description,user.nickname,user.motto FROM python JOIN user ON python.authorid = user.id WHERE python.state > 0 ORDER BY python.${type} DESC LIMIT ${
+      (curr - 1) * limit
+    }, ${limit}`;
+    DB.query(SQL, function (err, data) {
+      if (err) {
+        res.status(200).send([]);
+      } else {
+        res.status(200).send(data);
+      }
+    });
+  });
+
+//搜索：Scratch项目列表：数据//只搜索标题
+router.post("/view/seachPythonProjects", function (req, res) {
+    if (!req.body.txt) {
+      res.status(200).send([]);
+      return;
+    }
+    var tabelName = "python";
+    var searchinfo = "title";
+    if (req.body.searchall == "true") {
+      searchinfo = "src";
+    }
+    //var SQL = `SELECT id, title FROM ${tabelName} WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
+    var SQL = `SELECT ${tabelName}.id, ${tabelName}.title, ${tabelName}.state,${tabelName}.authorid,${tabelName}.description, user.nickname,user.motto FROM ${tabelName} JOIN user ON ${tabelName}.authorid = user.id WHERE ${tabelName}.state>0 AND (${searchinfo} LIKE ?)`;
+    var WHERE = [`%${req.body.txt}%`];
+    DB.qww(SQL, WHERE, function (err, data) {
+      if (err) {
+        res.status(200).send([]);
+      } else {
+        res.status(200).send(data);
+      }
+    });
+  });
+  
 //python项目展示界面
 router.get('/play', function (req, res) {
     

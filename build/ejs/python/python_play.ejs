@@ -63,7 +63,7 @@
 			<div class="mdui-card-primary-subtitle" id="work_update">
 				项目简介
 			</div>
-			<a href="/user?id=1" id="touserurl">
+			<div id="touserurl"  >
 				<div class="mdui-card mdui-hoverable mdui-ripple " style="border-radius: 15px;">
 					<div class="mdui-card-header"> <img class="mdui-card-header-avatar" src="/" id="authorimg" />
 						<div class="mdui-card-header-title" id="authorname">
@@ -72,11 +72,11 @@
 						<div class="mdui-card-header-subtitle" id="authormotto">个人简介</div>
 					</div>
 				</div>
-			</a>
+			</div>
 			<br />
 			<div class="mdui-chip"> <span class="mdui-chip-icon"> <i class="mdui-icon material-icons">&#xe8a6;</i>
 				</span> <span class="mdui-chip-title">
-					浏览量: <span class="waline-pageview-count" /> </span> </div>
+					浏览量: <span class="waline-pageview-count"/> </span> </div>
 
 			<div id="waline-users"></div>
 			<button class="mdui-btn mdui-ripple" onclick='tocode()' style="border-radius: 15px;">查看代码</button>
@@ -111,21 +111,21 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/social-share.js/1.0.16/css/share.min.css" />
 <link rel="stylesheet" href="<%= process.env.staticurl %>/css/waline.css" />
 <script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
-<script type="text/javascript" src="/ejs/python/CodeMirror.js"></script>
-<script type="text/javascript" src="/ejs/python/js/file-saver.js"></script>
-<script type="text/javascript" src="/ejs/python/skulpt.min.js"></script>
-<script type="text/javascript" src="/ejs/python/skulpt-stdlib.js"></script>
-<script type="text/javascript" src="/ejs/python/mode/python.js"></script>
-<script type="text/javascript" src="/ejs/python/js/show-hint.js"></script>
+<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/CodeMirror.js"></script>
+<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/js/file-saver.js"></script>
+<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/skulpt.min.js"></script>
+<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/skulpt-stdlib.js"></script>
+<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/mode/python.js"></script>
+<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/js/show-hint.js"></script>
 <script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
-<script type="text/javascript" src="/ejs/python/public.js"></script>
+<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/public.js"></script>
 
 
 <script type="text/javascript">
 	var isLogin = `<%= login %>`;
 	var _userid = `<%= userid %>`;
 </script>
-<script type="text/javascript" src="/ejs/python/python_play.js"></script>
+<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/python_play.js"></script>
 <script>var $config = {
 		title: _work_title, // 标题，默认读取 document.title 或者 <meta name="title" content="share.js" />
 		description: `${_work_title} 是<%= process.env.siteneme %>上的Python作品`, // 描述, 默认读取head标签：<meta name="description" content="PHP弱类型的实现原理分析" />

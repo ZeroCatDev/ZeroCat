@@ -189,72 +189,31 @@ app.get("/", function (req, res) {
   });
 });
 
-//翻页：Scratch作品列表：数据
-app.post("/index/getScratchProjects", function (req, res) {
-  var curr = parseInt(req.body.curr); //当前要显示的页码
-  var limit = parseInt(req.body.limit); //每页显示的作品数
-  var type = "view_count";
-  if (req.body.type == "new") {
-    type = "time";
-  }
-
-  var SQL = `SELECT scratch.id, scratch.title, scratch.state,scratch.authorid, user.nickname,user.motto FROM scratch JOIN user ON scratch.authorid = user.id WHERE scratch.state > 0 ORDER BY scratch.${type} DESC LIMIT ${
-    (curr - 1) * limit
-  }, ${limit}`;
-  DB.query(SQL, function (err, data) {
-    if (err) {
-      res.status(200).send([]);
-    } else {
-      res.status(200).send(data);
-    }
-  });
-});
-//翻页：Python作品列表：数据
-app.post("/index/getPythonProjects", function (req, res) {
-  var curr = parseInt(req.body.curr); //当前要显示的页码
-  var limit = parseInt(req.body.limit); //每页显示的作品数
-  var type = "view_count";
-  if (req.body.type == "new") {
-    type = "time";
-  }
-
-  var SQL = `SELECT python.id, python.title, python.state,python.authorid, python.description,user.nickname,user.motto FROM python JOIN user ON python.authorid = user.id WHERE python.state > 0 ORDER BY python.${type} DESC LIMIT ${
-    (curr - 1) * limit
-  }, ${limit}`;
-  DB.query(SQL, function (err, data) {
-    if (err) {
-      res.status(200).send([]);
-    } else {
-      res.status(200).send(data);
-    }
-  });
-});
-
 //搜索：Scratch项目列表：数据//只搜索标题
-app.post("/index/seachProjects", function (req, res) {
-  if (!req.body.txt) {
-    res.status(200).send([]);
-    return;
-  }
-  var tabelName = "scratch";
-  if (req.body.t == "p") {
-    tabelName = "python";
-  }
-  var searchinfo = "title";
-  if (req.body.searchall == "true") {
-    searchinfo = "src";
-  }
-  //var SQL = `SELECT id, title FROM ${tabelName} WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
-  var SQL = `SELECT ${tabelName}.id, ${tabelName}.title, ${tabelName}.state,${tabelName}.authorid,${tabelName}.description, user.nickname,user.motto FROM ${tabelName} JOIN user ON ${tabelName}.authorid = user.id WHERE ${tabelName}.state>0 AND (${searchinfo} LIKE ?)`;
-  var WHERE = [`%${req.body.txt}%`];
-  DB.qww(SQL, WHERE, function (err, data) {
-    if (err) {
-      res.status(200).send([]);
-    } else {
-      res.status(200).send(data);
-    }
-  });
-});
+//app.post("/index/seachProjects", function (req, res) {
+//  if (!req.body.txt) {
+//    res.status(200).send([]);
+//    return;
+//  }
+//  var tabelName = "scratch";
+//  if (req.body.t == "p") {
+//    tabelName = "python";
+//  }
+//  var searchinfo = "title";
+//  if (req.body.searchall == "true") {
+//    searchinfo = "src";
+//  }
+//  //var SQL = `SELECT id, title FROM ${tabelName} WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
+//  var SQL = `SELECT ${tabelName}.id, ${tabelName}.title, ${tabelName}.state,${tabelName}.authorid,${tabelName}.description, user.nickname,user.motto FROM ${tabelName} JOIN user ON ${tabelName}.authorid = user.id WHERE ${tabelName}.state>0 AND (${searchinfo} LIKE ?)`;
+//  var WHERE = [`%${req.body.txt}%`];
+//  DB.qww(SQL, WHERE, function (err, data) {
+//    if (err) {
+//      res.status(200).send([]);
+//    } else {
+//      res.status(200).send(data);
+//    }
+//  });
+//});
 
 //放在最后，确保路由时能先执行app.all=====================
 //注册、登录等功能路由，含密码找回功能
