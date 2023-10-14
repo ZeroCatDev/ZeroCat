@@ -27,7 +27,7 @@
 		<div class="mdui-container" style="margin:40px auto">
 
 			<div class="mdui-card  mdui-ripple mdui-hoverable" style='border-radius: 20px;'>
-				<div class="mdui-card-media" >
+				<div class="mdui-card-media">
 					<img src="<%= process.env.staticurl %>/img/toutu.png" style="pointer-events: none;" />
 
 
@@ -40,9 +40,10 @@
 				</div>
 				<div class="mdui-card-actions">
 					<button class="mdui-btn mdui-ripple" style='border-radius: 15px;'
-						onclick='window.open("/about")'>了解更多</button>
-					<button class="mdui-btn mdui-ripple" style='border-radius: 15px;'
 						onclick='window.open("/user/login")'>立刻加入</button>
+					<button class="mdui-btn mdui-ripple" style='border-radius: 15px;'
+						onclick='window.open("/about")'>了解更多</button>
+
 					<button class="mdui-btn mdui-btn-icon mdui-float-right">
 						<i class="mdui-icon material-icons">expand_more</i>
 					</button>
@@ -59,7 +60,8 @@
 
 							<!-- 卡片的媒体内容，可以包含图片、视频等媒体内容，以及标题、副标题 -->
 							<div class="mdui-card-media">
-								<img src="<%= process.env.staticurl %>/img/owscratch.png" style="pointer-events: none;" />
+								<img src="<%= process.env.staticurl %>/img/owscratch.png"
+									style="pointer-events: none;" />
 
 								<!-- 卡片中可以包含一个或多个菜单按钮 -->
 								<div class="mdui-card-menu">
@@ -81,31 +83,32 @@
 				</div>
 				<div class="mdui-col-xs-6 mdui-col-sm-4">
 					<a href="/python" ondragstart="return false">
-					<div class="mdui-card mdui-ripple mdui-hoverable" style='border-radius: 20px;'>
+						<div class="mdui-card mdui-ripple mdui-hoverable" style='border-radius: 20px;'>
 
 
 
-						<!-- 卡片的媒体内容，可以包含图片、视频等媒体内容，以及标题、副标题 -->
-						<div class="mdui-card-media">
-							<img src="<%= process.env.staticurl %>/img/owpython.png" style="pointer-events: none;" />
+							<!-- 卡片的媒体内容，可以包含图片、视频等媒体内容，以及标题、副标题 -->
+							<div class="mdui-card-media">
+								<img src="<%= process.env.staticurl %>/img/owpython.png"
+									style="pointer-events: none;" />
 
-							<!-- 卡片中可以包含一个或多个菜单按钮 -->
-							<div class="mdui-card-menu">
-								<button class="mdui-btn mdui-btn-icon mdui-text-color-white">
-									<i class="mdui-icon material-icons">link</i>
-								</button>
+								<!-- 卡片中可以包含一个或多个菜单按钮 -->
+								<div class="mdui-card-menu">
+									<button class="mdui-btn mdui-btn-icon mdui-text-color-white">
+										<i class="mdui-icon material-icons">link</i>
+									</button>
+								</div>
 							</div>
+
+							<!-- 卡片的标题和副标题 -->
+							<div class="mdui-card-primary">
+								<div class="mdui-card-primary-title">Python分区</div>
+								<div class="mdui-card-primary-subtitle">适合新手的编程语言</div>
+							</div>
+
+
+
 						</div>
-
-						<!-- 卡片的标题和副标题 -->
-						<div class="mdui-card-primary">
-							<div class="mdui-card-primary-title">Python分区</div>
-							<div class="mdui-card-primary-subtitle">适合新手的编程语言</div>
-						</div>
-
-
-
-					</div>
 					</a>
 				</div>
 
