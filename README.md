@@ -17,7 +17,7 @@ OurWorld 社区的源代码，包括前端与后端
     - [运行](#运行)
     - [使用 Docker](#使用-docker)
   - [相关仓库](#相关仓库)
-  - [维护者](#维护者)
+  - [开发者](#开发者)
   - [如何贡献](#如何贡献)
     - [贡献者](#贡献者)
   - [使用许可](#使用许可)
@@ -76,7 +76,7 @@ $ docker compose up -d
 
 - [StaticFile](https://github.com/OurWorldOrg/StaticFile) — 静态文件仓库
 
-## 维护者
+## 开发者
 
 [@SunWuyuan](https://github.com/sunwuyuan)
 
