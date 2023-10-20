@@ -461,7 +461,7 @@ router.post("/repw", function (req, res) {
           }
         );
       });
-      // Continue with your program
+
     }
   );
 });
@@ -515,61 +515,8 @@ router.post("/torepw", function (req, res) {
     }
   );
 });
-//产生图片滑动验证码
-var Geetest = require("gt3-sdk"); //注册时图片拖动验证：极验证的运用
-var newGeeTest = new Geetest({
-  geetest_id: "c5dbfbeac1d45d23429c6c3b01aa452f",
-  geetest_key: "6de14cce3bc4cc2b6f58ae90c15d1d8c",
-});
-router.get("/gt_slide", function (req, res, next) {
-  newGeeTest["register"](
-    { client_type: "unknown", ip_address: "unknown" },
-    function (err, data) {
-      if (err) {
-        console["error"](err);
-        return;
-      }
-      if (!data["success"]) {
-        req.session["fallback"] = true;
-        res.send(data);
-      } else {
-        req.session["fallback"] = false;
-        res.send(data);
-      }
-    }
-  );
-});
 
-//Scratch启动时，自动获取一次登录信息
-router.post("/getSession", (req, res) => {
-  if (!res.locals.login) {
-    var new_session = {
-      userid: 0,
-      username: "",
-      nickname: "",
-      avatar: ``,
-    };
-  } else {
-    var new_session = {
-      userid: parseInt(req.session["userid"]),
-      username: req.session["username"],
-      nickname: req.session["nickname"],
-      avatar: `${process.env.qiniuurl}/user/${req.session.userid}.png`,
-    };
-  }
-
-  res.status(200).send(JSON.stringify(new_session));
-});
-//从Scratch中退出
-router.post("/logout", function (req, res) {
-  logout(req, res);
-  var login_info = [{ username: "OurWorldExampleUser", success: 1 }];
-  res.status(200).send(login_info);
-});
 router.get("/walineget", function (req, res) {
-  res.render("ejs/waline_login.ejs");
-});
-router.get("/walinelogin", function (req, res) {
   if (!res.locals.login) {
     res.redirect("/");
   }
@@ -579,7 +526,6 @@ router.get("/walinelogin", function (req, res) {
       I.jwt(req.session["username"])
   );
 });
-//router.get("/github", function (req, res) { if (!req.query.redirect) { res.status(200).send({ id: req.query.code, name: req.query.code, email: req.query.code, url: "https://owscr.link/user?id=" + req.query.code, avatar: qiniuurl + "/user/" + req.query.code + ".png", }); } res.location(req.query.redirect + "&code=" + req.session["username"]); res.statusCode = 301; res.send(301); });
 
 router.get("/tuxiaochao", function (req, res) {
   if (!res.locals.login) {
@@ -595,7 +541,7 @@ router.get("/tuxiaochao", function (req, res) {
     ".png" +
     process.env.txckey;
   var cryptostr = cryptojs.MD5(txcinfo).toString();
-  res.location(
+  res.redirect(
     "https://support.qq.com/product/" +
       process.env.txcid +
       "?openid=" +
@@ -609,8 +555,7 @@ router.get("/tuxiaochao", function (req, res) {
       ".png&user_signature=" +
       cryptostr
   );
-  res.statusCode = 301;
-  res.send(301);
+ 
 });
 
 module.exports = router;

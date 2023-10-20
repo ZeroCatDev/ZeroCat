@@ -861,4 +861,30 @@ router.post("/getRandomSprite", function (req, res) {
   });
 });
 
+//Scratch启动时，自动获取一次登录信息
+router.post("/getSession", (req, res) => {
+  if (!res.locals.login) {
+    var new_session = {
+      userid: 0,
+      username: "",
+      nickname: "",
+      avatar: ``,
+    };
+  } else {
+    var new_session = {
+      userid: parseInt(req.session["userid"]),
+      username: req.session["username"],
+      nickname: req.session["nickname"],
+      avatar: `${process.env.qiniuurl}/user/${req.session.userid}.png`,
+    };
+  }
+
+  res.status(200).send(JSON.stringify(new_session));
+});
+//从Scratch中退出
+router.post("/logout", function (req, res) {
+  logout(req, res);
+  var login_info = [{ username: "OurWorldExampleUser", success: 1 }];
+  res.status(200).send(login_info);
+});
 module.exports = router;

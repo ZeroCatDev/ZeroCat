@@ -95,7 +95,7 @@
 <div class="">
     <div class="mdui-card mdui-hoverable" style='border-radius: 15px 15px 15px 15px;'>
         <a href="/scratch/play?id=${d[i].id}" target="_blank" ondragstart="return false">
-            <div class="mdui-card-media mdui-ripple mdui-hoverable">
+            <div class="mdui-card-media mdui-ripple mdui-hoverable" style='border-radius: 15px 15px 15px 15px;'>
                 <img src="<%= process.env.qiniuurl%>/scratch_slt/${d[i].id}" style="pointer-events: none;" />
                 <div class="mdui-card-media-covered mdui-card-media-covered-gradient">
                     <div class="mdui-card-primary">
@@ -103,7 +103,7 @@
                     </div>
                 </div>
             </div>   </a>
-            <div class="mdui-card-header mdui-ripple mdui-hoverable" onclick='window.open("/user?id=${d[i].authorid}")'>
+            <div class="mdui-card-header mdui-ripple" onclick='window.open("/user?id=${d[i].authorid}")' >
                 <img class="mdui-card-header-avatar" src="<%= process.env.qiniuurl%>/user/${d[i].authorid}.png" />
                 <div class="mdui-card-header-title">${d[i].nickname}</div>
                 <div class="mdui-card-header-subtitle">${d[i].motto}</div>
@@ -158,7 +158,7 @@
                     </div>
                 </div>
             </div>   </a>
-            <div class="mdui-card-header mdui-ripple mdui-hoverable" onclick='window.open("/user?id=${d[i].authorid}")'>
+            <div class="mdui-card-header mdui-ripple" onclick='window.open("/user?id=${d[i].authorid}")'>
                 <img class="mdui-card-header-avatar" src="<%= process.env.qiniuurl%>/user/${d[i].authorid}.png" />
                 <div class="mdui-card-header-title">${d[i].nickname}</div>
                 <div class="mdui-card-header-subtitle">${d[i].motto}</div>

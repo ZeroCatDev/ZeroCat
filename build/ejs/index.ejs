@@ -25,7 +25,6 @@
 <body class="mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
 	<% include hand.ejs %>
 		<div class="mdui-container" style="margin:40px auto">
-
 			<div class="mdui-card  mdui-ripple mdui-hoverable" style='border-radius: 20px;'>
 				<div class="mdui-card-media">
 					<img src="<%= process.env.staticurl %>/img/toutu.png" style="pointer-events: none;" />
@@ -51,68 +50,50 @@
 			</div>
 
 			<br />
-			<div class="mdui-row">
-				<div class="mdui-col-xs-6 mdui-col-sm-4">
+
+
+			<div class="mdui-row" id="scratch_projects">
+				<div class="mdui-col-md-4 mdui-col-sm-6 mdui-col-xs-12">
 					<a href="/scratch" ondragstart="return false">
 						<div class="mdui-card mdui-ripple mdui-hoverable" style='border-radius: 20px;'>
-
-
-
-							<!-- 卡片的媒体内容，可以包含图片、视频等媒体内容，以及标题、副标题 -->
 							<div class="mdui-card-media">
 								<img src="<%= process.env.staticurl %>/img/owscratch.png"
 									style="pointer-events: none;" />
-
-								<!-- 卡片中可以包含一个或多个菜单按钮 -->
 								<div class="mdui-card-menu">
 									<button class="mdui-btn mdui-btn-icon mdui-text-color-white">
 										<i class="mdui-icon material-icons">link</i>
 									</button>
 								</div>
 							</div>
-
-							<!-- 卡片的标题和副标题 -->
 							<div class="mdui-card-primary">
 								<div class="mdui-card-primary-title">Scratch分区</div>
 								<div class="mdui-card-primary-subtitle">图形化编程</div>
 							</div>
-
-
 						</div>
 					</a>
 				</div>
-				<div class="mdui-col-xs-6 mdui-col-sm-4">
+
+				<div class="mdui-col-md-4 mdui-col-sm-6 mdui-col-xs-12">
 					<a href="/python" ondragstart="return false">
 						<div class="mdui-card mdui-ripple mdui-hoverable" style='border-radius: 20px;'>
-
-
-
-							<!-- 卡片的媒体内容，可以包含图片、视频等媒体内容，以及标题、副标题 -->
 							<div class="mdui-card-media">
 								<img src="<%= process.env.staticurl %>/img/owpython.png"
 									style="pointer-events: none;" />
-
-								<!-- 卡片中可以包含一个或多个菜单按钮 -->
 								<div class="mdui-card-menu">
 									<button class="mdui-btn mdui-btn-icon mdui-text-color-white">
 										<i class="mdui-icon material-icons">link</i>
 									</button>
 								</div>
 							</div>
-
-							<!-- 卡片的标题和副标题 -->
 							<div class="mdui-card-primary">
 								<div class="mdui-card-primary-title">Python分区</div>
 								<div class="mdui-card-primary-subtitle">适合新手的编程语言</div>
 							</div>
-
-
-
 						</div>
 					</a>
 				</div>
-
 			</div>
+			
 
 
 
