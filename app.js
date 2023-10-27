@@ -13,8 +13,8 @@ const logger = winston.createLogger({
   level: "info",
   format: winston.format.combine(
     winston.format.timestamp(),
-    winston.format.printf(({message}) => {
-      return `${message}`; 
+    winston.format.printf(({ message }) => {
+      return `${message}`;
     })
   ),
   defaultMeta: { service: "ourworld-service" },
@@ -250,12 +250,8 @@ app.get("/asdm", function (req, res, next) {
 app.get("/share", function (req, res, next) {
   res.render("ejs/share.ejs");
 });
-
 app.get("/home", function (req, res, next) {
   res.render("ejs/home.ejs");
-});
-app.get("/chess", function (req, res, next) {
-  res.render("ejs/chess.ejs");
 });
 //python路由
 var router_python = require("./server/router_python.js");

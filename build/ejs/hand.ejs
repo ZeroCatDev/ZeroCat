@@ -1,124 +1,99 @@
 <link id="layui_theme_css" rel="stylesheet">
 
-<script src="https://npm.elemecdn.com/jquery@3.2.1/dist/jquery.min.js"></script>
-<script async src="https://umami.192325.xyz/script.js" data-website-id="be8c7cd8-d471-4a0b-b5a7-819a6af35613"></script>
 <div class="appbar mdui-appbar mdui-appbar-fixed webkit-app-region">
-  <div class="mdui-toolbar mdui-color-white"> <button href="javascript:;"
+  <div class="mdui-toolbar mdui-color-white"><button href="javascript:;"
       class="mdui-btn mdui-btn-icon mdui-ripple webkit-app-region-no" id="toggle"
-      mdui-drawer="{target: '#drawer',swipe: true}"><i class="mdui-icon material-icons">menu</i></button> <a
+      mdui-drawer="{target: '#drawer',swipe: true}"><i class="mdui-icon material-icons">menu</i></button><a
       class="webkit-app-region-no" href="/"><span class="mdui-typo-title">
         <%= process.env.siteneme %>
       </span></a>
     <div class="mdui-toolbar-spacer"></div><a class="mdui-btn mdui-btn-icon mdui-ripple  webkit-app-region-no"
       mdui-dialog="{target: '#search'}"><i class="mdui-icon material-icons">feedback</i></a>
-    <% if (login==false) { %> <a href="/user/login"
-        class="mdui-btn mdui-ripple webkit-app-region-no md3botton">登录/注册</a>
-      <% } else { %> <a class="mdui-btn mdui-btn-icon webkit-app-region-no  mdui-hoverable mdui-ripple md3botton"
+    <% if (login==false) { %><a href="/user/login" class="mdui-btn mdui-ripple webkit-app-region-no md3botton">登录/注册</a>
+      <% } else { %><a class="mdui-btn mdui-btn-icon webkit-app-region-no  mdui-hoverable mdui-ripple md3botton"
           mdui-menu="{target: '#userlist'}"><img class=" md3botton mdui-img-fluid "
             src="<%= process.env.qiniuurl %>/user/<%= userid %>.png" style="pointer-events: none;" /></a>
         <ul class="mdui-menu md3botton" id="userlist">
-          <li class="mdui-menu-item"> <a href="/user?id=<%= userid %>" class="mdui-ripple md3botton" ondragstart="return false">
-              <% if (login==false) { %>、
-                尚未登陆
-                <% } else { %>
-                  登录为:<%= nickname %>
+          <li class="mdui-menu-item"><a href="/user?id=<%= userid %>" class="mdui-ripple md3botton"
+              ondragstart="return false">
+              <% if (login==false) { %>、 尚未登陆 <% } else { %> 登录为:<%= nickname %>
                     <% } %>
-            </a> </li>
-          <li class="mdui-menu-item">
-            <a href="/my/scratch" class="mdui-ripple md3botton" ondragstart="return false"> <i
-                class="mdui-menu-item-icon mdui-icon material-icons">insert_drive_file</i>Scratch作品 </a>
-          </li>
-          <li class="mdui-menu-item">
-            <a href="/my/python" class="mdui-ripple md3botton" ondragstart="return false"> <i
-                class="mdui-menu-item-icon mdui-icon material-icons">insert_drive_file</i>python作品 </a>
-          </li>
-          <li class="mdui-menu-item">
-            <a href="/my/info" class="mdui-ripple md3botton" ondragstart="return false"> <i
-                class="mdui-menu-item-icon mdui-icon material-icons">remove_red_eye</i>个人信息 </a>
-          </li>
+            </a></li>
+          <li class="mdui-menu-item"><a href="/my/scratch" class="mdui-ripple md3botton" ondragstart="return false"><i
+                class="mdui-menu-item-icon mdui-icon material-icons">insert_drive_file</i>Scratch作品 </a></li>
+          <li class="mdui-menu-item"><a href="/my/python" class="mdui-ripple md3botton" ondragstart="return false"><i
+                class="mdui-menu-item-icon mdui-icon material-icons">insert_drive_file</i>python作品 </a></li>
+          <li class="mdui-menu-item"><a href="/my/info" class="mdui-ripple md3botton" ondragstart="return false"><i
+                class="mdui-menu-item-icon mdui-icon material-icons">remove_red_eye</i>个人信息 </a></li>
           <li class="mdui-divider"></li>
-          <li class="mdui-menu-item">
-            <a href="/user/logout" class="mdui-ripple md3botton" ondragstart="return false"> <i
-                class="mdui-menu-item-icon mdui-icon material-icons">close</i>退出 </a>
-          </li>
+          <li class="mdui-menu-item"><a href="/user/logout" class="mdui-ripple md3botton" ondragstart="return false"><i
+                class="mdui-menu-item-icon mdui-icon material-icons">close</i>退出 </a></li>
         </ul>
-        <% } %><!--<button href="javascript:;" class="mdui-btn mdui-btn-icon mdui-ripple webkit-app-region-no"><i
-                  class="mdui-icon material-icons">remove</i></button><button href="javascript:;" class="mdui-btn mdui-btn-icon mdui-ripple webkit-app-region-no"><i
-                class="mdui-icon material-icons">fullscreen</i></button><button href="javascript:;"  class="mdui-btn mdui-btn-icon mdui-ripple webkit-app-region-no"><i
-              class="mdui-icon material-icons" id="close" onclick="close1()">close</i></button>-->
+        <% } %>
   </div>
 </div>
-<style>.mdui-color-white {
-  background-color: #ffffff!important;
-  color: rgba(0,0,0,.87)!important;
-}</style>
-
 <div class="mdui-drawer mdui-drawer-close" id="drawer">
-  <ul class="mdui-list"> <a class="mdui-list-item mdui-ripple" href="/"><i
+  <ul class="mdui-list"><a class="mdui-list-item mdui-ripple" href="/"><i
         class="mdui-list-item-icon mdui-icon material-icons">desktop_windows</i>
       <div class="mdui-list-item-content">首页</div>
     </a>
-    <% if (login==false) { %> <a class="mdui-list-item mdui-ripple" href="/user/login"><i
+    <% if (login==false) { %><a class="mdui-list-item mdui-ripple" href="/user/login"><i
           class="mdui-list-item-icon mdui-icon material-icons">insert_drive_file</i>
         <div class="mdui-list-item-content">登录/注册</div>
       </a>
-      <% } else { %> <a class="mdui-list-item mdui-ripple" href="/my/scratch"><i
+      <% } else { %><a class="mdui-list-item mdui-ripple" href="/my/scratch"><i
             class="mdui-list-item-icon mdui-icon material-icons">star</i>
           <div class="mdui-list-item-content">Scratch作品</div>
-        </a> <a class="mdui-list-item mdui-ripple" href="/my/python"><i
+        </a><a class="mdui-list-item mdui-ripple" href="/my/python"><i
             class="mdui-list-item-icon mdui-icon material-icons">star</i>
           <div class="mdui-list-item-content">Python作品</div>
-        </a> <a class="mdui-list-item mdui-ripple" href="/my/info"><i
+        </a><a class="mdui-list-item mdui-ripple" href="/my/info"><i
             class="mdui-list-item-icon mdui-icon material-icons">account_circle</i>
           <div class="mdui-list-item-content">个人信息</div>
-        </a> <a class="mdui-list-item mdui-ripple" href="/about"><i
+        </a><a class="mdui-list-item mdui-ripple" href="/about"><i
             class="mdui-list-item-icon mdui-icon material-icons">info</i>
           <div class="mdui-list-item-content">关于</div>
         </a>
-        <% } %> <a class="mdui-list-item mdui-ripple" mdui-dialog="{target: '#search'}"><i
+        <% } %><a class="mdui-list-item mdui-ripple" mdui-dialog="{target: '#search'}"><i
               class="mdui-list-item-icon mdui-icon material-icons">send</i>
             <div class="mdui-list-item-content">反馈</div>
           </a>
-          <li class="mdui-subheader">工具</li> <a class="mdui-list-item mdui-ripple" href="/asdm"><i
+          <li class="mdui-subheader">工具</li><a class="mdui-list-item mdui-ripple" href="/asdm"><i
               class="mdui-list-item-icon mdui-icon material-icons">content_copy</i>
             <div class="mdui-list-item-content">Scratch下载镜像</div>
-          </a> <a class="mdui-list-item mdui-ripple" href="https://wuyuan.dev/scratch_packager/"><i
+          </a><a class="mdui-list-item mdui-ripple" href="https://wuyuan.dev/scratch_packager/"><i
               class="mdui-list-item-icon mdui-icon material-icons">move_to_inbox</i>
             <div class="mdui-list-item-content">多平台打包工具</div>
-          </a> <a class="mdui-list-item mdui-ripple" href="/comparer"><i
+          </a><a class="mdui-list-item mdui-ripple" href="/comparer"><i
               class="mdui-list-item-icon mdui-icon material-icons">build</i>
             <div class="mdui-list-item-content">项目比较器</div>
-          </a>  <a class="mdui-list-item mdui-ripple" href="https://github.com/<%= process.env.siteneme %>Org"><i
+          </a><a class="mdui-list-item mdui-ripple" href="https://github.com/<%= process.env.siteneme %>Org"><i
               class="mdui-list-item-icon mdui-icon material-icons">web</i>
             <div class="mdui-list-item-content">Github</div>
-          </a> <a class="mdui-list-item mdui-ripple"
+          </a><a class="mdui-list-item mdui-ripple"
             href="https://umami.192325.xyz/share/B0pMXh8TOb9W6Eyd/<%= process.env.siteneme %>%E7%A4%BE%E5%8C%BA"><i
               class="mdui-list-item-icon mdui-icon material-icons">trending_up</i>
             <div class="mdui-list-item-content">统计数据</div>
           </a>
-          <li class="mdui-subheader">设置</li> <a class="mdui-list-item mdui-ripple" id="switch-theme"><i
+          <li class="mdui-subheader">设置</li><a class="mdui-list-item mdui-ripple" id="switch-theme"><i
               class="mdui-list-item-icon mdui-icon material-icons">brightness_4</i>
             <div class="mdui-list-item-content">切换主题</div>
           </a>
           <div class="mdui-card-content"> 当前CDN节点: </br><span id="cdn">[未知]</span></br> 你的ip: </br><span
               id="ip">[未知]</span></br> 你的所在国家/地区: </br><span id="loc">[未知]</span></br></br>© 2023 <%=
-              process.env.siteneme %><br />Powered
-              by <a href="https://wuyuan.dev">孙悟元</a> </div>
+              process.env.siteneme %><br />Powered by <a href="https://wuyuan.dev">孙悟元</a></div>
   </ul>
-</div>
-<button class="mdui-fab mdui-fab-fixed mdui-ripple mdui-color-theme-accent" mdui-dialog="{target: '#new'}">
-  <i class="mdui-icon material-icons">add</i>
-</button>
+</div><button class="mdui-fab mdui-fab-fixed mdui-ripple mdui-color-theme-accent" mdui-dialog="{target: '#new'}"><i
+    class="mdui-icon material-icons">add</i></button>
 <div class="mdui-dialog md3botton" id="new">
   <div class="mdui-dialog-title">创建作品 </div>
   <div class="mdui-dialog-content">登录为 <%= nickname %>
   </div>
   <div class="mdui-dialog-actions">
-    <div class="mdui-tab">
-      <a href="/scratch/edit" class="mdui-ripple  md3botton"><i class="mdui-icon material-icons">add</i>
-        <label>Scratch项目</label> </a> <a href="/python/edit" class="mdui-ripple md3botton"> <i
-          class="mdui-icon material-icons">add</i> <label>Python项目</label> </a>
-    </div> <button class="mdui-btn mdui-ripple md3botton mdui-text-color-theme-text" mdui-dialog-close>关闭</button>
+    <div class="mdui-tab"><a href="/scratch/edit" class="mdui-ripple  md3botton"><i
+          class="mdui-icon material-icons">add</i><label>Scratch项目</label></a><a href="/python/edit"
+        class="mdui-ripple md3botton"><i class="mdui-icon material-icons">add</i><label>Python项目</label></a></div>
+    <button class="mdui-btn mdui-ripple md3botton mdui-text-color-theme-text" mdui-dialog-close>关闭</button>
   </div>
 </div>
 <div class="mdui-dialog  md3botton" id="search">
@@ -126,18 +101,13 @@
   <div class="mdui-dialog-content">涉及代码请去Github
     Discussions，站务请去兔小巢(测试阶段不会受理大型站务问题)，涉及漏洞、安全问题请加QQ1847261658或1847261658@qq.com</div>
   <div class="mdui-dialog-actions">
-    <div class="mdui-tab"> <a href="https://github.com/orgs/<%= process.env.siteneme %>Org/discussions"
-        class="mdui-ripple md3botton"> <i class="mdui-icon material-icons">feedback</i> <label>Github
-          Discussions</label>
-      </a> <a href="/user/tuxiaochao" class="mdui-ripple md3botton"> <i class="mdui-icon material-icons">feedback</i>
-        <label>兔小巢</label>
-      </a> </div> <button class="mdui-btn mdui-ripple md3botton mdui-text-color-theme-text" mdui-dialog-close>关闭</button>
+    <div class="mdui-tab"><a href="https://github.com/orgs/<%= process.env.siteneme %>Org/discussions"
+        class="mdui-ripple md3botton"><i class="mdui-icon material-icons">feedback</i><label>Github
+          Discussions</label></a><a href="/user/tuxiaochao" class="mdui-ripple md3botton"><i
+          class="mdui-icon material-icons">feedback</i><label>兔小巢</label></a></div><button
+      class="mdui-btn mdui-ripple md3botton mdui-text-color-theme-text" mdui-dialog-close>关闭</button>
   </div>
 </div>
-
-
-
-
 <script>if (localStorage.darkTheme) {
     document.body.classList.add("mdui-theme-layout-dark");
     document.body.setAttribute("dark", "");
@@ -181,6 +151,11 @@
   qiniuurl = "<%= process.env.qiniuurl %>"
 </script>
 <style>
+  .mdui-color-white {
+    background-color: #ffffff !important;
+    color: rgba(0, 0, 0, .87) !important;
+  }
+
   .webkit-app-region {
     -webkit-app-region: drag
   }
@@ -189,25 +164,9 @@
     -webkit-app-region: no-drag
   }
 
-  /*
-  .md3botton:active {
-    border-radius: 5px !important;
-  }
-  
-  .md3botton:hover {
-    border-radius: 10px;
-  }
-  
-  .md3botton {
-    border-radius: 20px;
-    transition-property: border-radius;
-    transition-duration: 0.5s;
-  }*/
-
   .md3botton {
     border-radius: 18px;
   }
-
 
   .mdui-snackbar {
     border-radius: 15px 15px 0px 0px;
@@ -236,9 +195,10 @@
   }
 </style>
 <script>// 控制台安全提示
-      window.console.log('%c%s', 'color: red; background: yellow; font-size: 72px;', '警告！');
-      window.console.log('%c%s', 'color: red; background: yellow; font-size: 24px;', '如果你在接受远程控制，请立刻退出，不要急着看下面的内容');
-      window.console.log('%c%s', 'color: red; background: yellow; font-size: 24px;', '使用此控制台会让攻击者利用Self-XSS（自跨站脚本）攻击来冒充你，并窃取你的信息，盗取你的账户，删掉你的所有作品');
-      window.console.log('%c%s', 'color: red; background: yellow; font-size: 24px;', '请永远不要在这里粘贴或输入任何文字，不论他们告诉你这有多安全，管理员不需要查看控制台获取你的日志，OurWorld无法使用控制台进行调试或操作，任何希望你使用"检查"或F12按钮打开这里的人都是骗子，请立刻关掉这个网页并在官方渠道反馈(右上角头像旁反馈按钮)');
+  window.console.log('%c%s', 'color: red; background: yellow; font-size: 72px;', '警告！');
+  window.console.log('%c%s', 'color: red; background: yellow; font-size: 24px;', '如果你在接受远程控制，请立刻退出，不要急着看下面的内容');
+  window.console.log('%c%s', 'color: red; background: yellow; font-size: 24px;', '使用此控制台会让攻击者利用Self-XSS（自跨站脚本）攻击来冒充你，并窃取你的信息，盗取你的账户，删掉你的所有作品');
+  window.console.log('%c%s', 'color: red; background: yellow; font-size: 24px;', '请永远不要在这里粘贴或输入任何文字，不论他们告诉你这有多安全，管理员不需要查看控制台获取你的日志，OurWorld无法使用控制台进行调试或操作，任何希望你使用"检查"或F12按钮打开这里的人都是骗子，请立刻关掉这个网页并在官方渠道反馈(右上角头像旁反馈按钮)');
 </script>
 
+<style></style>
