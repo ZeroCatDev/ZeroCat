@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Python编程 - <%= process.env.siteneme %>
   </title>
-  <link rel="shortcut icon" href='<%= process.env.staticurl %>/img/icon.ico'>
+  <link rel="shortcut icon" href='<%= process.env.staticurl %>/img/ownew.svg'>
   <link rel="stylesheet" href="<%= process.env.staticurl %>/pythonstatic/bootstrap/css/bootstrap.min.css" />
   <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
   <link rel="stylesheet" href="<%= process.env.staticurl %>/pythonstatic/css/CodeMirror.css" />
@@ -14,7 +14,7 @@
   <link rel="stylesheet" href="<%= process.env.staticurl %>/pythonstatic/css/solarized.css" />
   <link type="text/css" rel="stylesheet" href="<%= process.env.staticurl %>/pythonstatic/showWorks.css" />
   <% include ../linkfile.ejs %>
-</head>
+<%= process.env.includecode %></head>
 
 <body class="mdui-theme-accent-blue">
   <script>
@@ -27,8 +27,7 @@
         (delete localStorage.darkTheme)
     );
   </script>
-  <script async src="https://umami.192325.xyz/script.js"
-    data-website-id="be8c7cd8-d471-4a0b-b5a7-819a6af35613"></script>
+  
   <div>
     <div class="mdui-toolbar">
       <a class="mdui-btn mdui-btn-icon" id="toggle" href="/"><i class="mdui-icon material-icons">home</i></a>

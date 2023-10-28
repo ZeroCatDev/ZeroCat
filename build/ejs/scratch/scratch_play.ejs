@@ -21,7 +21,7 @@
 		integrity="sha512-ygEyjMC6rqnzJqWGjRTJUPYMEs9JUOm3i7OWUS9CgQ4XkBUvMsgCS1I8JqavidQ2ClHcREB7IbA2mN08+r9Elg=="
 		crossorigin="anonymous" referrerpolicy="no-referrer" />
 	<% include ../linkfile.ejs %>
-</head>
+<%= process.env.includecode %></head>
 	
 <body class="mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
 	<% include ../hand.ejs %>
@@ -51,9 +51,9 @@
 						</div>
 					</div>
 					<div class="layui-row scratch-player-bottom">
-						<button id="greenFlag" class="mdui-btn mdui-color-theme-accent mdui-ripple"
+						<button id="greenFlag" class="mdui-btn mdui-color-theme-accent mdui-ripple md3botton"
 							onclick="greenFlag()" style="display: none;">开始</button>
-						<button id="stopAll" class="mdui-btn mdui-color-red mdui-ripple" onclick="stopAll()"
+						<button id="stopAll" class="mdui-btn mdui-color-red mdui-ripple md3botton" onclick="stopAll()"
 							style="display: none;">停止</button>
 					</div>
 				</div>

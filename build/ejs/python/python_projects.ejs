@@ -18,7 +18,7 @@
 	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css">
 	<% include ../linkfile.ejs %>
 
-</head>
+<%= process.env.includecode %></head>
 
 
 
@@ -74,7 +74,7 @@
 		laypage.render({
 			elem: 'python_change_page'
 			, count: <%= python_count %>
-	, limit: 8
+	, limit: 16
 			, theme: '#448aff'
 			, jump: function (obj, first) {
 				$.ajax({
@@ -86,10 +86,15 @@
 							$("#python_projects").html("");
 							for (var i = 0; i < d.length; i++) {
 								tzzt=''
+								
 								if (d[i].state == 2) {
 
 									tzzt = '<i class="mdui-icon material-icons">stars</i>'
 								}
+								if (d[i].description == "") {
+
+									d[i].description = '暂无简介'
+}
 								$("#python_projects").append(`
 								<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
 <div class="">
@@ -99,7 +104,7 @@
             <div class="mdui-card-primary-title substr">${tzzt}${d[i].title}</div>
             <div class="mdui-card-primary-subtitle substr">${d[i].description}</div>
         </div>
-            <div class="mdui-card-header mdui-ripple" onclick='window.open('/user?id=${d[i].authorid},'_self')'>
+            <div class="mdui-card-header mdui-ripple" onclick='window.open("/user?id=${d[i].authorid}","_self")'>
                 <img class="mdui-card-header-avatar" src="<%= process.env.qiniuurl%>/user/${d[i].authorid}.png" />
                 <div class="mdui-card-header-title">${d[i].nickname}</div>
                 <div class="mdui-card-header-subtitle">${d[i].motto}</div>
@@ -142,6 +147,10 @@
 
 							tzzt = '<i class="mdui-icon material-icons">stars</i>'
 						}
+						if (d[i].description == "") {
+
+d[i].description = '暂无简介'
+}
 						$("#python_projects").append(`
 						<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
 <div class="">
@@ -151,7 +160,7 @@
             <div class="mdui-card-primary-title substr">${tzzt}${d[i].title}</div>
             <div class="mdui-card-primary-subtitle substr">${d[i].description}</div>
         </div>
-            <div class="mdui-card-header mdui-ripple" onclick='window.open('/user?id=${d[i].authorid},'_self')'>
+            <div class="mdui-card-header mdui-ripple" onclick='window.open("/user?id=${d[i].authorid}","_self")'>
                 <img class="mdui-card-header-avatar" src="<%= process.env.qiniuurl%>/user/${d[i].authorid}.png" />
                 <div class="mdui-card-header-title">${d[i].nickname}</div>
                 <div class="mdui-card-header-subtitle">${d[i].motto}</div>
