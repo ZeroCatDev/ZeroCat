@@ -189,34 +189,8 @@ app.get("/", function (req, res) {
   });
 });
 
-//搜索：Scratch项目列表：数据//只搜索标题
-//app.post("/index/seachProjects", function (req, res) {
-//  if (!req.body.txt) {
-//    res.status(200).send([]);
-//    return;
-//  }
-//  var tabelName = "scratch";
-//  if (req.body.t == "p") {
-//    tabelName = "python";
-//  }
-//  var searchinfo = "title";
-//  if (req.body.searchall == "true") {
-//    searchinfo = "src";
-//  }
-//  //var SQL = `SELECT id, title FROM ${tabelName} WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
-//  var SQL = `SELECT ${tabelName}.id, ${tabelName}.title, ${tabelName}.state,${tabelName}.authorid,${tabelName}.description, user.nickname,user.motto FROM ${tabelName} JOIN user ON ${tabelName}.authorid = user.id WHERE ${tabelName}.state>0 AND (${searchinfo} LIKE ?)`;
-//  var WHERE = [`%${req.body.txt}%`];
-//  DB.qww(SQL, WHERE, function (err, data) {
-//    if (err) {
-//      res.status(200).send([]);
-//    } else {
-//      res.status(200).send(data);
-//    }
-//  });
-//});
-
 //放在最后，确保路由时能先执行app.all=====================
-//注册、登录等功能路由，含密码找回功能
+//注册、登录等功能路由
 var router_register = require("./server/router_user.js");
 app.use("/user", router_register);
 
