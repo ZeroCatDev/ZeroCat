@@ -108,9 +108,9 @@ app.set("view engine", "ejs");
 var DB = require("./server/lib/database.js");
 
 //设置静态资源路径
-app.use("/", express.static("build"));
-app.use("/", express.static("data")); //用户数据内容
-
+if (process.env.localstatic == 'true') {
+  app.use(process.env.staticurl, express.static(process.env.staticpath));
+}
 //全局变量
 global.dirname = __dirname;
 
