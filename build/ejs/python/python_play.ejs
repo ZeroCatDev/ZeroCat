@@ -10,20 +10,12 @@
 
 	<% include ../linkfile.ejs %>
 
-<%- process.env.includecode %></head>
+		<%- process.env.includecode %>
+</head>
 
 <body class="mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
 
 	<% include ../hand.ejs %>
-
-
-
-
-
-
-
-		
-
 		<div class="mdui-container" style="margin:40px auto">
 			<div>
 				<div class="mdui-card mdui-hoverable" style="border-radius: 15px;">
@@ -62,7 +54,7 @@
 			<div class="mdui-card-primary-subtitle" id="work_update">
 				项目简介
 			</div>
-			<div id="touserurl"  >
+			<div id="touserurl">
 				<div class="mdui-card mdui-hoverable mdui-ripple " style="border-radius: 15px;">
 					<div class="mdui-card-header"> <img class="mdui-card-header-avatar" src="/" id="authorimg" />
 						<div class="mdui-card-header-title" id="authorname">
@@ -75,7 +67,7 @@
 			<br />
 			<div class="mdui-chip"> <span class="mdui-chip-icon"> <i class="mdui-icon material-icons">&#xe8a6;</i>
 				</span> <span class="mdui-chip-title">
-					浏览量: <span class="waline-pageview-count"/> </span> </div>
+					浏览量: <span class="waline-pageview-count" /> </span> </div>
 
 			<div id="waline-users"></div>
 			<button class="mdui-btn mdui-ripple" onclick='tocode()' style="border-radius: 15px;">查看代码</button>
