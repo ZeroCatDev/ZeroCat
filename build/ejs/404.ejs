@@ -10,9 +10,9 @@
   <link rel="shortcut icon" href="<%= process.env.staticurl %>/img/siteicon.png">
   <meta name="description" content="<%= process.env.slogan %>">
   <meta name="keyword" content="<%= process.env.slogan %>">
-  <% include linkfile.ejs %>
+  
 
-<%- process.env.includecode %></head>
+<%- process.env.includecode %><% include linkfile.ejs %></head>
 
 <body class="mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
  <% include hand.ejs %>

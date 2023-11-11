@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Scratch编程 - <%= process.env.siteneme %></title>
     <link rel="shortcut icon" href="<%= process.env.staticurl %>/img/siteicon.png"><% include ../linkfile.ejs %>
-<%- process.env.includecode %></head>
+<%- process.env.includecode %><% include linkfile.ejs %></head>
 
 <body>
  

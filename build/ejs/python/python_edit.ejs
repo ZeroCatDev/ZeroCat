@@ -14,7 +14,7 @@
   <link rel="stylesheet" href="<%= process.env.staticurl %>/pythonstatic/css/solarized.css" />
   <link type="text/css" rel="stylesheet" href="<%= process.env.staticurl %>/pythonstatic/showWorks.css" />
   <% include ../linkfile.ejs %>
-<%- process.env.includecode %></head>
+<%- process.env.includecode %><% include linkfile.ejs %></head>
 
 <body class="mdui-theme-accent-blue">
   <script>

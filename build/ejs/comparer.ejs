@@ -11,7 +11,7 @@
 	<meta name="keyword" content="<%= process.env.slogan %>">
 	<link rel="stylesheet" type="text/css" href="<%= process.env.staticurl %>/layui/css/layui.css">
 
-	<% include linkfile.ejs %>
+	
 		<link href="https://cdn.StaticFile.org/MaterialDesign-Webfont/6.6.96/css/materialdesignicons.min.css"
 			rel="stylesheet">
 		<link href="https://cdn.StaticFile.org/MaterialDesign-Webfont/6.6.96/css/materialdesignicons.min.css"
@@ -386,7 +386,7 @@
 		<meta name="viewport"
 			content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
 
-<%- process.env.includecode %></head>
+<%- process.env.includecode %><% include linkfile.ejs %></head>
 
 <body class="mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
 	<% include hand.ejs %> <!-- Vertical Navbar --> <!-- Main content --> <!-- Header --> <!-- Main -->

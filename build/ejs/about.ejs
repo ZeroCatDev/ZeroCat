@@ -11,8 +11,8 @@
 	<link rel="stylesheet" type="text/css" href="<%= process.env.staticurl %>/layui/css/layui.css">
 	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/waline.css" />
 	
-	<% include linkfile.ejs %>
-<%- process.env.includecode %></head>
+	
+<%- process.env.includecode %><% include linkfile.ejs %></head>
 
 <body class="mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
 	<% include hand.ejs %> <!-- Vertical Navbar --> <!-- Main content --> <!-- Header --> <!-- Main -->
