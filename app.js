@@ -209,9 +209,6 @@ app.use("/scratch", router_scratch);
 var apiserver = require("./server/router_api.js");
 app.use("/api", apiserver);
 
-app.get("/fankui", function (req, res, next) {
-  res.render("ejs/fankui.ejs");
-});
 app.get("/about", function (req, res, next) {
   res.render("ejs/about.ejs");
 });

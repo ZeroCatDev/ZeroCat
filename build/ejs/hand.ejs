@@ -101,13 +101,24 @@
   <div class="mdui-dialog-content">涉及代码请去Github
     Discussions，站务请去兔小巢(测试阶段不会受理大型站务问题)，涉及漏洞、安全问题请加QQ1847261658或1847261658@qq.com</div>
   <div class="mdui-dialog-actions">
-    <div class="mdui-tab"><a href="https://github.com/orgs/<%= process.env.siteneme %>Org/discussions"
-        class="mdui-ripple md3botton"><i class="mdui-icon material-icons">feedback</i><label>Github
-          Discussions</label></a><a href="/user/tuxiaochao" class="mdui-ripple md3botton"><i
-          class="mdui-icon material-icons">feedback</i><label>兔小巢</label></a></div><button
-      class="mdui-btn mdui-ripple md3botton mdui-text-color-theme-text" mdui-dialog-close>关闭</button>
+    <div class="mdui-tab">
+      <a href="https://github.com/orgs/<%= process.env.siteneme %>Org/discussions" class="mdui-ripple md3botton">
+        <i class="mdui-icon material-icons">feedback</i>
+        <label>Github Discussions</label>
+      </a>
+      <a href="/user/tuxiaochao" class="mdui-ripple md3botton">
+        <i class="mdui-icon material-icons">feedback</i>
+        <label>兔小巢</label>
+      </a>
+      <a onclick="markdevice()" class="mdui-ripple md3botton">
+        <i class="mdui-icon material-icons">notifications_active</i>
+        <label>标记设备(测试版)</label>
+      </a>
+    </div>
+    <button class="mdui-btn mdui-ripple md3botton mdui-text-color-theme-text" mdui-dialog-close>关闭</button>
   </div>
 </div>
+
 <script>if (localStorage.darkTheme) {
     document.body.classList.add("mdui-theme-layout-dark");
     document.body.setAttribute("dark", "");
@@ -145,6 +156,8 @@
   }
   jQuery(document).ready(function () {
     getCDNinfo();
+    
+   window.clarity("identify", "<%= username %>", "ourworld-user-<%= userid %>", window.location.pathname, "<%= nickname %>")
   });
 </script>
 <script>
@@ -195,10 +208,16 @@
   }
 </style>
 <script>// 控制台安全提示
-  window.console.log('%c%s', 'color: red; background: yellow; font-size: 72px;', '警告！');
-  window.console.log('%c%s', 'color: red; background: yellow; font-size: 24px;', '如果你在接受远程控制，请立刻退出，不要急着看下面的内容');
-  window.console.log('%c%s', 'color: red; background: yellow; font-size: 24px;', '使用此控制台会让攻击者利用Self-XSS（自跨站脚本）攻击来冒充你，并窃取你的信息，盗取你的账户，删掉你的所有作品');
-  window.console.log('%c%s', 'color: red; background: yellow; font-size: 24px;', '请永远不要在这里粘贴或输入任何文字，不论他们告诉你这有多安全，管理员不需要查看控制台获取你的日志，OurWorld无法使用控制台进行调试或操作，任何希望你使用"检查"或F12按钮打开这里的人都是骗子，请立刻关掉这个网页并在官方渠道反馈(右上角头像旁反馈按钮)');
+  //window.console.log('%c%s', 'color: red; background: yellow; font-size: 72px;', '警告！');
+  //window.console.log('%c%s', 'color: red; background: yellow; font-size: 24px;', '如果你在接受远程控制，请立刻退出，不要急着看下面的内容');
+  //window.console.log('%c%s', 'color: red; background: yellow; font-size: 24px;', '使用此控制台会让攻击者利用Self-XSS（自跨站脚本）攻击来冒充你，并窃取你的信息，盗取你的账户，删掉你的所有作品');
+  //window.console.log('%c%s', 'color: red; background: yellow; font-size: 24px;', '请永远不要在这里粘贴或输入任何文字，不论他们告诉你这有多安全，管理员不需要查看控制台获取你的日志，OurWorld无法使用控制台进行调试或操作，任何希望你使用"检查"或F12按钮打开这里的人都是骗子，请立刻关掉这个网页并在官方渠道反馈(右上角头像旁反馈按钮)');
 </script>
 
-<style></style>
+<script>
+  markdevice = function () {
+    
+    window.clarity("identify", "<%= username %>", "ourworld-user-<%= userid %>", window.location.pathname, "<%= nickname %>")
+  automsg('已尝试标记这个设备')
+  }
+</script>
