@@ -157,7 +157,7 @@
   jQuery(document).ready(function () {
     getCDNinfo();
     
-   if(<%= login %>==true){window.clarity("identify", "<%= username %>", "ourworld-user-<%= userid %>", window.location.pathname, "<%= nickname %>")}
+   if(<%= login %>==true){window.clarity("identify", "<%= username %>", "ourworld-user-<%= userid %>", "<%= userid %>", "<%= nickname %>")}
   });
 </script>
 <script>
@@ -217,7 +217,7 @@
 <script>
   markdevice = function () {
     
-    window.clarity("identify", "<%= username %>", "ourworld-user-<%= userid %>", window.location.pathname, "<%= nickname %>")
+    window.clarity("identify", "<%= username %>", "ourworld-user-<%= userid %>","<%= userid %>", "<%= nickname %>")
   automsg('已尝试标记这个设备')
   }
 </script>
