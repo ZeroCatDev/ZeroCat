@@ -157,7 +157,7 @@
   jQuery(document).ready(function () {
     getCDNinfo();
     
-   window.clarity("identify", "<%= username %>", "ourworld-user-<%= userid %>", window.location.pathname, "<%= nickname %>")
+   if(<%= login %>==true){window.clarity("identify", "<%= username %>", "ourworld-user-<%= userid %>", window.location.pathname, "<%= nickname %>")}
   });
 </script>
 <script>
