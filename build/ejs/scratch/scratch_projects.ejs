@@ -103,8 +103,8 @@
                     </div>
                 </div>
             </div>   </a>
-            <div class="mdui-card-header mdui-ripple" onclick='window.open('/user?id=${d[i].authorid},'_self')' >
-                <img class="mdui-card-header-avatar" src="<%= process.env.qiniuurl%>/user/${d[i].authorid}.png" />
+            <div class="mdui-card-header mdui-ripple" onclick="window.open('/user?id=${d[i].authorid}','_self')" >
+                <img class="mdui-card-header-avatar" src="/api/usertx?id=${d[i].authorid}" />
                 <div class="mdui-card-header-title">${d[i].nickname}</div>
                 <div class="mdui-card-header-subtitle">${d[i].motto}</div>
             </div>
@@ -158,8 +158,8 @@
                     </div>
                 </div>
             </div>   </a>
-            <div class="mdui-card-header mdui-ripple" onclick='window.open('/user?id=${d[i].authorid},'_self')'>
-                <img class="mdui-card-header-avatar" src="<%= process.env.qiniuurl%>/user/${d[i].authorid}.png" />
+            <div class="mdui-card-header mdui-ripple" onclick="window.open('/user?id=${d[i].authorid}','_self')">
+                <img class="mdui-card-header-avatar" src="/api/usertx?id=${d[i].authorid}" />
                 <div class="mdui-card-header-title">${d[i].nickname}</div>
                 <div class="mdui-card-header-subtitle">${d[i].motto}</div>
             </div>

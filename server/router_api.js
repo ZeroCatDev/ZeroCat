@@ -77,6 +77,24 @@ router.get('/play', function (req, res) {
     });
 });
 
+router.get('/usertx', function (req, res) {
+    
+
+    //浏览数+1
+    SQL = `SELECT images FROM user WHERE id = ${req.query.id};`;
+  
+      DB.query(SQL, function (err, USER) {
+        if (err || USER.length == 0) {
+          res.locals.tip = { opt: "flash", msg: "用户不存在" };
+          res.render("ejs/404.ejs");
+          return;
+        }
+
+  
+        res.redirect(302, process.env.qiniuurl+'/user/'+USER[0].images+'.png');
+      });
+});
+
 router.post("/getuserinfo", function (req, res) {
     //获取已分享的作品总数：1:普通作品，2：推荐的优秀作品
     

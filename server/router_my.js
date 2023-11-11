@@ -2,7 +2,7 @@
 var express = require('express');
 var router = express.Router();
 var fs = require('fs');
-
+var crypto = require('crypto');
 //功能函数集
 var I = require('./lib/fuck.js');
 //数据库
@@ -250,24 +250,45 @@ router.get('/info', function (req, res) {
 });
 //修改头像
 router.post('/set/avatar', function (req, res) {
-    //保存文件到正确位置
-    if (!req['files']['file']) {
-        res.status(200).send( {'status':'文件上传失败'});
-        return;
-    }
+   //保存文件到正确位置
+   if (!req['files']['file']) {
+       res.status(200).send( {'status':'文件上传失败'} );
+       return;
+   }
 
-    tmppath = req['files']['file']['path'];
-    newpath = `./data/user/${req.session.userid}.png`;
-    fs.rename(tmppath, newpath,function (err) {
-        if (err) {
-            res.status(200).send( {'status':'文件上传失败'});
-            return;
-        }
-        I.qiniuoverwrite(`user/${req.session.userid}.png`,newpath)
-     
-        res.status(200).send( {'status': 'ok'}); 
-           //fs.unlink(`./data/user/${req.session.userid}.png`,function (err) {if (err) {res.status(200).send( {'status':'文件上传失败'});return;}})
-    });
+   tmppath = req['files']['file']['path'];
+   newpath = `./data/user/${req.session.userid}.png`;
+   fs.rename(tmppath, newpath,function (err) {
+       if (err) {
+           res.status(200).send( {'status':'文件上传失败'} );
+           return;
+       }
+
+       // 计算图片的md5值
+       const hash = crypto.createHash('md5');
+       const chunks = fs.createReadStream(newpath);
+       chunks.on('data', (chunk) => {
+           hash.update(chunk);
+       });
+       chunks.on('end', () => {
+           const hashValue = hash.digest('hex');
+           // 上传到七牛云
+           I.qiniuupdate(`user/${hashValue}.png`,newpath);
+           var UPDATE = `UPDATE user SET ? WHERE id=${req.session.userid} LIMIT 1`;
+           var SET = {
+               'images':hashValue,
+           };
+           DB.qww(UPDATE, SET, function (err, u) {
+            if (err) {
+                res.status(200).send( {'status':'请再试一次'});
+                return;
+            }
+            res.status(200).send( {'status': 'ok'} );
+         
+          });
+           
+       });
+   });
 });
 //修改个人信息
 router.post('/set/userinfo', function (req, res) {

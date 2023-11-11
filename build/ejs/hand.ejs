@@ -12,7 +12,7 @@
     <% if (login==false) { %><a href="/user/login" class="mdui-btn mdui-ripple webkit-app-region-no md3botton">登录/注册</a>
       <% } else { %><a class="mdui-btn mdui-btn-icon webkit-app-region-no  mdui-hoverable mdui-ripple md3botton"
           mdui-menu="{target: '#userlist'}"><img class=" md3botton mdui-img-fluid "
-            src="<%= process.env.qiniuurl %>/user/<%= userid %>.png" style="pointer-events: none;" /></a>
+            src="/api/usertx?id=<%= userid %>" style="pointer-events: none;" /></a>
         <ul class="mdui-menu md3botton" id="userlist">
           <li class="mdui-menu-item"><a href="/user?id=<%= userid %>" class="mdui-ripple md3botton"
               ondragstart="return false">

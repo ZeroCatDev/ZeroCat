@@ -16,38 +16,6 @@ var secretKey = process.env.qiniusecretKey;
 var mac = new qiniu.auth.digest.Mac(accessKey, secretKey);
 
 
-exports.qiniuoverwrite = function qiniuoverwrite(name, file) {
-  var keyToOverwrite = name;
-  var options = {
-    scope: process.env.qiniubucket + ":" + keyToOverwrite,
-    expires: 7200,
-  };
-  var putPolicy = new qiniu.rs.PutPolicy(options);
-  var uploadToken = putPolicy.uploadToken(mac);
-  var localFile = file;
-  var formUploader = new qiniu.form_up.FormUploader(config);
-  var putExtra = new qiniu.form_up.PutExtra();
-  var key = name;
-  // 文件上传
-  formUploader.putFile(
-    uploadToken,
-    key,
-    localFile,
-    putExtra,
-    function (respErr, respBody, respInfo) {
-      if (respErr) {
-        throw respErr;
-      }
-      if (respInfo.statusCode == 200) {
-        console.log(respBody);
-        //fs.unlink(file, function (err) {if (err) {console.log("fe");}});
-      } else {
-        console.log(respInfo.statusCode);
-        console.log(respBody);
-      }
-    }
-  );
-};
 exports.qiniuupdate = function qiniuupdate(name, file) {
   var options = {
     scope: process.env.qiniubucket,
