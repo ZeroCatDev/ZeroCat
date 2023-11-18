@@ -175,17 +175,18 @@ app.get("/", function (req, res) {
     }
 
     // 获取首页头图
-    SQL = `SELECT id, content FROM ads WHERE state=1 ORDER BY i ASC`;
-    DB.query(SQL, function (err, ADS) {
-      if (err) {
-        console.error(err);
-        ADS = [];
-      }
+    //SQL = `SELECT id, content FROM ads WHERE state=1 ORDER BY i ASC`;
+    //DB.query(SQL, function (err, ADS) {
+    //  if (err) {
+    //    console.error(err);
+    //    ADS = [];
+    //  }
 
-      res.locals["ads"] = encodeURIComponent(JSON.stringify(ADS));
+    //  res.locals["ads"] = encodeURIComponent(JSON.stringify(ADS));
 
-      res.render("ejs/index.ejs");
-    });
+      
+    //});
+    res.render("ejs/index.ejs");
   });
 });
 

@@ -149,8 +149,8 @@
 						<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
 <div class="">
     <div class="mdui-card mdui-hoverable" style='border-radius: 15px 15px 15px 15px;'>
-        <a href="/scratch/play?id=${d[i].id}"  target="_self" ondragstart="return false">
-            <div class="mdui-card-media mdui-ripple mdui-hoverable">
+        <a href="/scratch/play?id=${d[i].id}" target="_self" ondragstart="return false">
+            <div class="mdui-card-media mdui-ripple mdui-hoverable" style='border-radius: 15px 15px 15px 15px;'>
                 <img src="<%= process.env.qiniuurl%>/scratch_slt/${d[i].id}" style="pointer-events: none;" />
                 <div class="mdui-card-media-covered mdui-card-media-covered-gradient">
                     <div class="mdui-card-primary">
@@ -158,7 +158,7 @@
                     </div>
                 </div>
             </div>   </a>
-            <div class="mdui-card-header mdui-ripple" onclick="window.open('/user?id=${d[i].authorid}','_self')">
+            <div class="mdui-card-header mdui-ripple" onclick="window.open('/user?id=${d[i].authorid}','_self')" >
                 <img class="mdui-card-header-avatar" src="/api/usertx?id=${d[i].authorid}" />
                 <div class="mdui-card-header-title">${d[i].nickname}</div>
                 <div class="mdui-card-header-subtitle">${d[i].motto}</div>
