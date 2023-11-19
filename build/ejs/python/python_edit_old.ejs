@@ -7,15 +7,14 @@
   <title>Python编程 - <%= process.env.siteneme %>
   </title>
   <link rel="shortcut icon" href='<%= process.env.staticurl %>/img/siteicon.png'>
-  <link rel="stylesheet" href='<%= process.env.staticurl %>/pythonstatic/css/style.css' />
+  <link rel="stylesheet" href="<%= process.env.staticurl %>/pythonstatic/bootstrap/css/bootstrap.min.css" />
   <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
+  <link rel="stylesheet" href="<%= process.env.staticurl %>/pythonstatic/css/CodeMirror.css" />
+  <link rel="stylesheet" href='<%= process.env.staticurl %>/pythonstatic/css/style.css' />
+  <link rel="stylesheet" href="<%= process.env.staticurl %>/pythonstatic/css/solarized.css" />
   <link type="text/css" rel="stylesheet" href="<%= process.env.staticurl %>/pythonstatic/showWorks.css" />
   <% include ../linkfile.ejs %>
-<%- process.env.includecode %><link
-rel="stylesheet"
-data-name="vs/editor/editor.main"
-href="<%= process.env.staticurl %>/vs/editor/editor.main.css"
-/></head>
+<%- process.env.includecode %></head>
 
 <body class="mdui-theme-accent-blue">
   <script>
@@ -112,18 +111,16 @@ href="<%= process.env.staticurl %>/vs/editor/editor.main.css"
         style="border-radius: 10px;">关闭</button>
     </div>
   </div>
-  <div class="mdui-fluid" style="padding: 0;">
+  <div class="layui-fluid" style="padding: 0;">
     <!-- 编程区 -->
-      
-    <div class="mdui-row mdui-row-gapless">
-      <div class="mdui-col-xs-12 mdui-col-sm-8" style="padding: 0;"
+    <div class="layui-row">
+      <div class="layui-col-md8 layui-col-sm12 layui-col-xs12" style="padding: 0; background-color: aqua;"
         id='python_edit_box'>
-        <div class="python-editor-code"><div id="container" style="height:calc(93vh); border: 1px solid grey"></div>
-     
+        <div class="python-editor-code">
+          <textarea id="code_textarea"></textarea>
         </div>
       </div>
-      <!-- 运行结果区 -->
-      <div class=" mdui-col-xs-12 mdui-col-sm-4"><div style="display: flex; position: absolute; top:8px; right:0; z-index: 99999;">
+      <div style="display: flex; position: absolute; top:8px; right:0; z-index: 99999;">
         <div style="margin:auto 10px;">
           <button class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-theme-accent" id="run-code" onclick="run_it()"
             style="border-radius: 10px;">运行</button>
@@ -132,27 +129,28 @@ href="<%= process.env.staticurl %>/vs/editor/editor.main.css"
           <button class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-red-accent" onclick="run_clear()"
             style="border-radius: 10px;">清除</button>
         </div>
-       <!-- <div style="margin:auto 10px auto 0;">
+        <div style="margin:auto 10px auto 0;">
           <button class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-cyan-700" onclick="all_Screen(this)"
             style="border-radius: 10px;">全屏运行</button>
-        </div>-->
+        </div>
       </div>
+      <!-- 运行结果区 -->
       <div id='main_edit_box'>
-        <div class="" style="padding: 0;">
-          <div class="">
-            <div class="" style="padding: 0;">
+        <div class="layui-col-md4 layui-col-sm12 layui-col-xs12" style="padding: 0;">
+          <div class="layui-row">
+            <div class="layui-col-md12 layui-col-sm6 layui-col-xs12" style="padding: 0;">
               <div id="canvas_box"
-                style="height:calc(50vh);background:url(/*<%= process.env.staticurl %>/pythonstatic/img/welcome_python_editor.png*/) no-repeat center;background-size: contain;background-size:auto 100%;">
+                style="height:calc(50vh); background:url(/*<%= process.env.staticurl %>/pythonstatic/img/welcome_python_editor.png*/) no-repeat center;background-size: contain;background-size:auto 100%;">
                 <div id="mycanvas"></div>
               </div>
             </div>
-            <div class=""
-              style="padding: 0!important ; margin:0;background-color: rgb(0, 0, 0);height:calc(50vh - 50px);">
-              <textarea id="output" class="mdui-text-color-theme-text" style="padding: 0!important ;border: 0px!important ;height: 100%;width: 100%;" disabled>终端打印输出区</textarea>
+            <div class="layui-col-md12 layui-col-sm6 layui-col-xs12"
+              style="padding: 0; margin:0;background-color: rgba(0, 0, 0, 0);height:calc(50vh - 52px);">
+              <textarea id="output" style="height: 100%;width: 100%;" disabled>终端打印输出区</textarea>
             </div>
           </div>
         </div>
-      </div></div>
+      </div>
     </div>
   </div>
 
@@ -206,20 +204,8 @@ href="<%= process.env.staticurl %>/vs/editor/editor.main.css"
     </div>
   </div>
 
-
-
-
-  <script>
-   
-  </script>
-  <script src="<%= process.env.staticurl %>/vs/loader.js"></script>
-  <script src="<%= process.env.staticurl %>/vs/editor/editor.main.nls.js"></script>
-  <script src="<%= process.env.staticurl %>/vs/editor/editor.main.js"></script>
-
-
-
-
   <script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
+  <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/CodeMirror.js"></script>
   <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/js/file-saver.js"></script>
   <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/skulpt.min.js"></script>
   <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/skulpt-stdlib.js"></script>
