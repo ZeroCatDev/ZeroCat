@@ -531,6 +531,12 @@ router.get("/tuxiaochao", function (req, res) {
   if (!res.locals.login) {
     res.redirect("https://support.qq.com/product/" + process.env.txcid);
   }
+  if (!process.env.txcid) {
+    res.redirect("https://support.qq.com/product/597800");
+  }
+  if (!process.env.txckey) {
+    res.redirect("https://support.qq.com/product/" + process.env.txcid);
+  }
   uid = req.session["userid"].toString();
   var txcinfo =
     uid +

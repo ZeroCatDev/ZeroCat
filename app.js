@@ -4,7 +4,6 @@ var http = require("http");
 
 //环境变量
 require("dotenv").config();
-
 // 日志部分
 var winston = require("winston");
 var morganlogger = require("morgan");
@@ -19,13 +18,13 @@ const logger = winston.createLogger({
   ),
   defaultMeta: { service: "ourworld-service" },
   transports: [
-    new AxiomTransport({
+    process.env.AXIOM_TOKEN ? new AxiomTransport({
       dataset: process.env.AXIOM_DATASET,
       token: process.env.AXIOM_TOKEN,
-    }),
+    }) : null,
     new winston.transports.Console(),
   ],
-});
+}); 
 // 创建自定义Stream，将日志写入Winston
 const winstonStream = {
   write: (message) => {
