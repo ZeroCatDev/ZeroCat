@@ -281,7 +281,7 @@ router.post("/register", function (req, res) {
                 html: `<div class="page flex-col">
                   <div class="box_3 flex-col"
                       style="display: flex;position: relative;width: 100%;height: 206px;background: #1289d82e;top: 0;left: 0;justify-content: center;">
-                      <img class="section_1 flex-col" src="https://b2.192325.xyz/2023/05/d405a5b948f858b3479fa0d60478c98f.svg"
+                      <img class="section_1 flex-col" src="https://b2.190823.xyz/2023/05/d405a5b948f858b3479fa0d60478c98f.svg"
                           style="position: absolute;width: 152px;height: 152px;display: flex;top: 130px;background-size: cover;">
                   </div>
                   <div class="box_4 flex-col" style="margin-top: 92px;display: flex;flex-direction: column;align-items: center;">
@@ -402,7 +402,7 @@ router.post("/repw", function (req, res) {
             html: `<div class="page flex-col">
             <div class="box_3 flex-col"
                 style="display: flex;position: relative;width: 100%;height: 206px;background: #1289d82e;top: 0;left: 0;justify-content: center;">
-                <img class="section_1 flex-col" src="https://b2.192325.xyz/2023/05/d405a5b948f858b3479fa0d60478c98f.svg"
+                <img class="section_1 flex-col" src="https://b2.190823.xyz/2023/05/d405a5b948f858b3479fa0d60478c98f.svg"
                     style="position: absolute;width: 152px;height: 152px;display: flex;top: 130px;background-size: cover;">
             </div>
             <div class="box_4 flex-col" style="margin-top: 92px;display: flex;flex-direction: column;align-items: center;">
