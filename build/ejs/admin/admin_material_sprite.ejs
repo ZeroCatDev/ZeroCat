@@ -22,7 +22,8 @@
 		<% tags.forEach(function(item){ %>
 			<button id="tag_btn<%=item.id%>" class="layui-btn layui-btn-sm" lay-event="showMates" data-id='<%=item.id%>'><%=item.tag%></button>
 		<% }) %>
-		<button id="add_mate_btn" class="layui-btn layui-btn-sm layui-btn-danger layui-hide" lay-event="AddMate">添加角色</button>
+		<button id="add_sprite_btn" class="layui-btn layui-btn-sm layui-btn-danger layui-hide" lay-event="AddMate">添加角色</button>
+		<button id="import_sprite_btn" class="layui-btn layui-btn-sm layui-btn-danger layui-hide" onclick="selectWorkID()">从作品导入角色</button>
 	</div>
 	</script>
 	<script type="text/html" id="TableOne_tool">

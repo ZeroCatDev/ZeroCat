@@ -674,7 +674,7 @@ router.post("/getBackdropLibrary", function (req, res) {
     }
 
     // 取一次背景分类
-    SELECT = `SELECT id, tag FROM material_tags WHERE type=1 ORDER BY tag DESC`;
+    SELECT = `SELECT id, tag FROM material_tags WHERE type=1 ORDER BY id DESC`;
     DB.query(SELECT, function (err, tags) {
       if (err) {
         res.status(200).send({ status: "err", data: [], tags: [] });
@@ -729,7 +729,7 @@ router.post("/getCostumeLibrary", function (req, res) {
     }
 
     // 取一次分类
-    SELECT = `SELECT id, tag FROM material_tags WHERE type=3 ORDER BY tag DESC`;
+    SELECT = `SELECT id, tag FROM material_tags WHERE type=3 ORDER BY id DESC`;
     DB.query(SELECT, function (err, tags) {
       if (err) {
         res.status(200).send({ status: "err", data: [], tags: [] });
@@ -782,7 +782,7 @@ router.post("/getSoundLibrary", function (req, res) {
     }
 
     // 取一次分类
-    SELECT = `SELECT id, tag FROM material_tags WHERE type=4 ORDER BY tag DESC`;
+    SELECT = `SELECT id, tag FROM material_tags WHERE type=4 ORDER BY id DESC`;
     DB.query(SELECT, function (err, tags) {
       if (err) {
         res.status(200).send({ status: "err", data: [], tags: [] });
@@ -834,7 +834,7 @@ router.post("/getSpriteLibrary", function (req, res) {
     }
 
     // 取一次分类
-    SELECT = `SELECT id, tag FROM material_tags WHERE type=2 ORDER BY tag DESC`;
+    SELECT = `SELECT id, tag FROM material_tags WHERE type=2 ORDER BY id DESC`;
     DB.query(SELECT, function (err, tags) {
       if (err) {
         res.status(200).send({ status: "err", data: [], tags: [] });

@@ -470,7 +470,7 @@ router.get('/material/tag/data', function(req, res) {
         return;
     }
 
-    var SQL = `SELECT id, tag FROM material_tags WHERE type=${type} ORDER BY tag DESC`;
+    var SQL = `SELECT id, tag FROM material_tags WHERE type=${type} ORDER BY id DESC`;
     DB.query(SQL, function (err, tags){
         if (err) {
             res.status(200).send({status:"x", msg: "服务器错误"});
@@ -576,7 +576,7 @@ const random_32ID_With_Time_Tag = function() {
     
 // 背景管理：页面
 router.get('/material/backdrop', function (req, res) {
-    var SQL = `SELECT id, tag FROM material_tags WHERE type=1 ORDER BY tag DESC`;
+    var SQL = `SELECT id, tag FROM material_tags WHERE type=1 ORDER BY id DESC`;
     DB.query(SQL, function (err, tags){
         if (err) {
             res.locals['tags'] = [];
@@ -753,7 +753,7 @@ router.post('/material/backdrop/setState',function(req,res){
 
 // 造型管理：页面
 router.get('/material/costume', function (req, res) {
-    var SQL = `SELECT id, tag FROM material_tags WHERE type=3 ORDER BY tag DESC`;
+    var SQL = `SELECT id, tag FROM material_tags WHERE type=3 ORDER BY id DESC`;
     DB.query(SQL, function (err, tags){
         if (err) {
             res.locals['tags'] = [];
@@ -932,7 +932,7 @@ router.post('/material/costume/setState',function(req,res){
 
 // 角色管理：页面
 router.get('/material/sprite', function (req, res) {
-    var SQL = `SELECT id, tag FROM material_tags WHERE type=2 ORDER BY tag DESC`;
+    var SQL = `SELECT id, tag FROM material_tags WHERE type=2 ORDER BY id DESC`;
     DB.query(SQL, function (err, tags){
         if (err) {
             res.locals['tags'] = [];
@@ -993,6 +993,79 @@ router.post('/material/sprite/del', function (req, res) {
 
         res.status(200).send({status:'ok', msg: '操作成功'});
     });
+});
+// 角色管理：导入角色：作品数据
+router.get('/material/sprite/worklist', function (req, res) {
+    var _title = "";
+    if (req.query['t'] != undefined && req.query['t'] !=""){
+        _title = ` AND title LIKE '%${req.query['t']}%' `;
+    }
+
+    var SQL =`SELECT count(id) AS c FROM scratch WHERE authorid=${req.session.userid} ${_title}`;
+    DB.query(SQL, function(err, count){
+        if (err || count.length==0 || count[0].c==0) {
+            res.status(200).send({'count':0,'data':[]});
+            return;
+        }
+        
+        //获取当前数据集合
+        var page = parseInt(req.query['page']);
+        var limit = parseInt(req.query['limit']);
+        var SQL =`SELECT id,title FROM scratch WHERE authorid=${req.session.userid} ${_title} ORDER BY time DESC LIMIT ${(page-1)*limit}, ${limit}`;
+        DB.query(SQL, function (err, data) {
+            if (err) {
+                res.status(200).send({'count':0,'data':[]});
+            } else {
+                res.status(200).send({'count':count[0].c,'data':data});
+            }
+        });
+    });
+});
+// 角色管理：导入角色：导入{tagid: _tagId, workid:select_data.id}
+router.post('/material/sprite/import', function (req, res) {
+    // 1、获取作品src
+    var SELECT = `SELECT src FROM scratch WHERE id=${req.body.workid} LIMIT 1`;
+    DB.query(SELECT, function(err,SRC){
+        if (err || SRC.length == 0){
+            res.status(200).send({status: 'x', msg: '再试一次'});
+            return;
+        }
+
+        // 组合角色数据 values="(),(),()"
+        let spriteCount = 0;
+        let values="";
+        let targets = JSON.parse(SRC[0].src).targets;
+        for (var i=0; i<targets.length; i++) {
+            if (!targets[i].isStage) {
+                let json={};
+                json["costumes"] = targets[i]["costumes"];
+                json["sounds"] =  targets[i]["sounds"];
+
+                if (values != ""){
+                    values += ",";
+                }
+
+                values += `(${req.body.tagid}, '${targets[i].name}', '${JSON.stringify(json).replace(/'/g, '’')}')`;
+
+                
+                spriteCount++;
+            }
+        }
+
+        if (spriteCount == 0) {
+            res.status(200).send({status: 'ok', msg: '作品中无角色数据'});
+        }
+
+        var SQL = `INSERT INTO material_sprite(tagId, name, json) VALUES ${values}`
+        DB.query(SQL, function (err, D) {
+            if (err) {
+                res.status(200).send({status:'x', msg: '操作失败，请再试一次' });
+                return;
+            }
+
+            res.status(200).send({status: 'ok', msg: `操作成功，导入角色数：${spriteCount}`});
+        });
+    })
 });
 // 角色管理：修改名称
 router.post('/material/sprite/modName', function (req, res) {
@@ -1277,7 +1350,7 @@ router.post('/material/sprite/setSound/add', function (req, res) {
 
 // 声音管理：页面
 router.get('/material/sound', function (req, res) {
-    var SQL = `SELECT id, tag FROM material_tags WHERE type=4 ORDER BY tag DESC`;
+    var SQL = `SELECT id, tag FROM material_tags WHERE type=4 ORDER BY id DESC`;
     DB.query(SQL, function (err, tags){
         if (err) {
             res.locals['tags'] = [];

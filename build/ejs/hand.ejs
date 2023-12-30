@@ -11,8 +11,8 @@
       mdui-dialog="{target: '#search'}"><i class="mdui-icon material-icons">feedback</i></a>
     <% if (login==false) { %><a href="/user/login" class="mdui-btn mdui-ripple webkit-app-region-no md3botton">登录/注册</a>
       <% } else { %><a class="mdui-btn mdui-btn-icon webkit-app-region-no  mdui-hoverable mdui-ripple md3botton"
-          mdui-menu="{target: '#userlist'}"><img class=" md3botton mdui-img-fluid "
-            src="/api/usertx?id=<%= userid %>" style="pointer-events: none;" /></a>
+          mdui-menu="{target: '#userlist'}"><img class=" md3botton mdui-img-fluid " src="/api/usertx?id=<%= userid %>"
+            style="pointer-events: none;" /></a>
         <ul class="mdui-menu md3botton" id="userlist">
           <li class="mdui-menu-item"><a href="/user?id=<%= userid %>" class="mdui-ripple md3botton"
               ondragstart="return false">
@@ -85,7 +85,7 @@
   </ul>
 </div>
 <div class="mdui-dialog  md3botton" id="search">
-  <div class="mdui-dialog-title">反馈 </div>
+  <div class="mdui-dialog-title">反馈</div>
   <div class="mdui-dialog-content">涉及代码请去Github
     Discussions，站务请去兔小巢(测试阶段不会受理大型站务问题)，涉及漏洞、安全问题请加QQ1847261658或1847261658@qq.com</div>
   <div class="mdui-dialog-actions">
@@ -144,8 +144,8 @@
   }
   jQuery(document).ready(function () {
     getCDNinfo();
-    
-   if(<%= login %>==true){window.clarity("identify", "<%= username %>", "ourworld-user-<%= userid %>", window.location.pathname, "<%= nickname %>")}
+
+    if (<%= login %>==true){ window.clarity("identify", "<%= username %>", "ourworld-user-<%= userid %>", window.location.pathname, "<%= nickname %>") }
   });
 </script>
 <script>
@@ -204,8 +204,8 @@
 
 <script>
   markdevice = function () {
-    
-    window.clarity("identify", "<%= username %>", "ourworld-user-<%= userid %>",window.location.pathname, "<%= nickname %>")
-  automsg('已尝试标记这个设备')
+
+    window.clarity("identify", "<%= username %>", "ourworld-user-<%= userid %>", window.location.pathname, "<%= nickname %>")
+    automsg('已尝试标记这个设备')
   }
 </script>
