@@ -43,7 +43,7 @@ router.get('/data', function (req, res) {
     });
 });
 // 添加一条头图
-router.post('/add', function (req, res) {    
+router.get('/add', function (req, res) {    
     var SQL = `INSERT INTO ads (title, i) VALUES ('请设置头图的具体内容', 99); `;
     DB.query(SQL, function(err,d){
         if (err || d.affectedRows==0){
@@ -61,8 +61,8 @@ router.post('/add', function (req, res) {
 });
 
 // 删除一条头图
-router.post('/del', function (req, res) {
-    var SQL = `DELETE FROM ads WHERE id=${req.body.id}`;
+router.get('/del', function (req, res) {
+    var SQL = `DELETE FROM ads WHERE id=${req.query.id}`;
     DB.query(SQL, function(err,d){
         if (err || d.affectedRows==0){
             res.status(200).send({'status':'x', msg:'数据错误，请再试一次'});
@@ -70,16 +70,16 @@ router.post('/del', function (req, res) {
         }
 
         // 删除对应的图片
-        fs.unlink(`./data/ads/${req.body.id}`, function (err) { if(err){} });
+        fs.unlink(`./data/ads/${req.query.id}`, function (err) { if(err){} });
 
         res.status(200).send({'status':'ok', msg:'操作成功'});
     })
 });
 
 // 修改头图状态：最多能显示6条头图
-router.post('/setState', function (req, res) {
-    if (req.body.s == 0){//取消显示
-        SQL = `UPDATE ads SET state=0 WHERE id=${req.body.id}`;
+router.get('/setState', function (req, res) {
+    if (req.query.s == 0){//取消显示
+        SQL = `UPDATE ads SET state=0 WHERE id=${req.query.id}`;
         DB.query(SQL, function(err,d){
             if (err || d.affectedRows==0){
                 res.status(200).send({'status':'x', msg:'数据错误，请再试一次'});
@@ -101,7 +101,7 @@ router.post('/setState', function (req, res) {
                 return;
             }
        
-            SQL = `UPDATE ads SET state=1 WHERE id=${req.body.id}`;
+            SQL = `UPDATE ads SET state=1 WHERE id=${req.query.id}`;
             DB.query(SQL, function(err,d){
                 if (err || d.affectedRows==0){
                     res.status(200).send({'status':'x', msg:'数据错误，请再试一次'});
@@ -115,9 +115,9 @@ router.post('/setState', function (req, res) {
 });
 
 // 修改头图信息
-router.post('/setValue', function (req, res) {
-    var UPDATE = `UPDATE ads SET ${req.body.f}=? WHERE id=${ req.body.id} LIMIT 1`;
-    var SET = [req.body.v]
+router.get('/setValue', function (req, res) {
+    var UPDATE = `UPDATE ads SET ${req.query.f}=? WHERE id=${ req.query.id} LIMIT 1`;
+    var SET = [req.query.v]
     DB.qww(UPDATE, SET, function (err, d) {
         if (err) {
             res.status(200).send( { 'status': 'x', 'msg': '再试一次' });
@@ -128,7 +128,7 @@ router.post('/setValue', function (req, res) {
     });
 });
 //修改头图图片：功能
-router.post('/setImg', function (req, res) {
+router.get('/setImg', function (req, res) {
     if (!req['files']['file']) {
         res.status(200).send({status: 'x',msg: '文件上传失败,请再试一次'});
         return;
@@ -136,14 +136,14 @@ router.post('/setImg', function (req, res) {
     
     //保存文件到正确位置
     tmppath = req['files']['file']['path'];
-    newpath = `${global.dirname}/data/ads/${req.body.id}`;
+    newpath = `${global.dirname}/data/ads/${req.query.id}`;
     fs.rename(tmppath, newpath,function (err) {
         if(err){
             res.status(200).send({status: 'x',msg: '文件上传失败,请再试一次'});
             return;
         }
         
-        var SQL = `UPDATE ads SET img=1 WHERE id=${req.body.id}`
+        var SQL = `UPDATE ads SET img=1 WHERE id=${req.query.id}`
         DB.query(SQL, function(err, d){
             if(err){
                 res.status(200).send({status: 'x',msg: '文件上传失败,请再试一次'});

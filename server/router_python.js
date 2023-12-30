@@ -29,11 +29,11 @@ router.get("/", function (req, res) {
   });
 
 //翻页：Python作品列表：数据
-router.post("/view/getPythonProjects", function (req, res) {
-    var curr = parseInt(req.body.curr); //当前要显示的页码
-    var limit = parseInt(req.body.limit); //每页显示的作品数
+router.get("/view/getPythonProjects", function (req, res) {
+    var curr = parseInt(req.query.curr); //当前要显示的页码
+    var limit = parseInt(req.query.limit); //每页显示的作品数
     var type = "view_count";
-    if (req.body.type == "new") {
+    if (req.query.type == "new") {
       type = "time";
     }
   
@@ -50,19 +50,19 @@ router.post("/view/getPythonProjects", function (req, res) {
   });
 
 //搜索：Scratch项目列表：数据//只搜索标题
-router.post("/view/seachPythonProjects", function (req, res) {
-    if (!req.body.txt) {
+router.get("/view/seachPythonProjects", function (req, res) {
+    if (!req.query.txt) {
       res.status(200).send([]);
       return;
     }
     var tabelName = "python";
     var searchinfo = "title";
-    if (req.body.searchall == "true") {
+    if (req.query.searchall == "true") {
       searchinfo = "src";
     }
     //var SQL = `SELECT id, title FROM ${tabelName} WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
     var SQL = `SELECT ${tabelName}.id, ${tabelName}.title, ${tabelName}.state,${tabelName}.authorid,${tabelName}.description, user.nickname,user.motto FROM ${tabelName} JOIN user ON ${tabelName}.authorid = user.id WHERE ${tabelName}.state>0 AND (${searchinfo} LIKE ?)`;
-    var WHERE = [`%${req.body.txt}%`];
+    var WHERE = [`%${req.query.txt}%`];
     DB.qww(SQL, WHERE, function (err, data) {
       if (err) {
         res.status(200).send([]);
@@ -79,7 +79,7 @@ router.get('/play', function (req, res) {
         });
 
 //项目点赞
-router.post('/play/like', function (req, res) {
+router.get('/play/like', function (req, res) {
     if (!res.locals.login){
         res.status(200).send( {'status': 'failed','msg': '请先登录'});
         return;
@@ -135,7 +135,7 @@ router.post('/play/like', function (req, res) {
     });
 });
 //项目收藏
-router.post('/play/favo', function (req, res) {
+router.get('/play/favo', function (req, res) {
     if (!res.locals.login){
         res.status(200).send( {'status': 'failed','msg': '请先登录'});
         return;
@@ -202,10 +202,10 @@ router.get('/old', function (req, res) {
 	res.render('ejs/python/python_edit_old.ejs');
 })
 // 从数据库获取作品
-router.post('/getWork', function (req, res) {
+router.get('/getWork', function (req, res) {
     var projectid = 0;
-    if (req.body.id && req.body.id>1){
-        projectid = req.body.id;
+    if (req.query.id && req.query.id>1){
+        projectid = req.query.id;
     }
 
     if (projectid == 0 || projectid == 1){ // 默认作品
@@ -256,16 +256,16 @@ router.post('/getWork', function (req, res) {
 });
 
 // python 保存
-router.post('/save', function (req, res) {
+router.get('/save', function (req, res) {
     if (!req.session.userid){
         res.status(200).send({status: "x", msg: "请先登录" });
         return;
     }
 
     // 新作品
-	if (req.body.id == '0'){
+	if (req.query.id == '0'){
 		var INSERT =`INSERT INTO python (authorid, title,src) VALUES (${req.session.userid}, ?, ?)`;
-		var SET = [req.body.title,req.body.data]
+		var SET = [req.query.title,req.query.data]
 		DB.qww(INSERT, SET, function (err, newPython) {
 			if (err || newPython.affectedRows==0) {
 				res.status(200).send({status: "x", msg: "保存失败" });
@@ -279,11 +279,11 @@ router.post('/save', function (req, res) {
 	}
 
     // 旧作品
-    var UPDATE =`UPDATE python SET ? WHERE id=${req.body.id} AND authorid=${req.session.userid} LIMIT 1`;
+    var UPDATE =`UPDATE python SET ? WHERE id=${req.query.id} AND authorid=${req.session.userid} LIMIT 1`;
     var SET = {
-        title:req.body.title,
-        src:req.body.data,
-        description:req.body.description
+        title:req.query.title,
+        src:req.query.data,
+        description:req.query.description
     }
     DB.qww(UPDATE, SET, function (err, u) {
         if (err) {
@@ -295,14 +295,14 @@ router.post('/save', function (req, res) {
     })
 });
 
-router.post('/publish', function (req, res) {
+router.get('/publish', function (req, res) {
     if (!req.session.userid){
         res.status(200).send({status: "x", msg: "请先登录" });
         return;
     }
 
-	var state = req.body.s=="0"? 1:0;
-	var UPDATE = `UPDATE python SET state=${state} WHERE id=${req.body.id} AND authorid=${req.session.userid} LIMIT 1`;
+	var state = req.query.s=="0"? 1:0;
+	var UPDATE = `UPDATE python SET state=${state} WHERE id=${req.query.id} AND authorid=${req.session.userid} LIMIT 1`;
 	DB.query(UPDATE, function (err, u) {
 		if (err) {
 			res.status(200).send({status: "x", msg: "操作失败！"});
@@ -316,7 +316,7 @@ router.post('/publish', function (req, res) {
 
 
 // python 优秀作品
-router.post('/YxLibrary_count', function (req, res) {
+router.get('/YxLibrary_count', function (req, res) {
     var SQL = `SELECT count(id) AS c FROM python WHERE state=2`;
     DB.query(SQL, function (err, COUNT){
         if (err) {
@@ -328,9 +328,9 @@ router.post('/YxLibrary_count', function (req, res) {
     });
 })
 //显示Python项目列表：数据，流加载模式
-router.post('/YxLibrary_data', function (req, res) {
+router.get('/YxLibrary_data', function (req, res) {
     //获取当前数据集合：以被浏览次数降序排列，每次取16个
-    var page = parseInt(req.body.page);
+    var page = parseInt(req.query.page);
     SQL = `SELECT python.id, python.authorid, python.view_count, python.time, python.title, python.description, user.nickname AS author_nickname FROM python `+
     ` LEFT JOIN user ON user.id=python.authorid `+
     ` WHERE python.state=2 ORDER BY python.view_count DESC LIMIT ${(page-1)*16},${16}`;
@@ -354,7 +354,7 @@ router.all('*', function (req, res, next) {
 	next();
 });
 
-router.post('/MyLibrary_count', function (req, res) {
+router.get('/MyLibrary_count', function (req, res) {
     var SQL = `SELECT count(id) AS c FROM python WHERE authorid=${req.session.userid}`;
     DB.query(SQL, function (err, COUNT){
         if (err) {
@@ -365,9 +365,9 @@ router.post('/MyLibrary_count', function (req, res) {
         }
     });
 })
-router.post('/MyLibrary_data', function (req, res) {
+router.get('/MyLibrary_data', function (req, res) {
     //获取当前数据集合：以被浏览次数降序排列，每次取16个
-    var page = parseInt(req.body.page);
+    var page = parseInt(req.query.page);
     SQL = `SELECT id, state, time, title FROM python WHERE authorid=${req.session.userid} ORDER BY time DESC LIMIT ${(page-1)*16},${16}`;
     DB.query(SQL, function (err, data) {
         if (err) {

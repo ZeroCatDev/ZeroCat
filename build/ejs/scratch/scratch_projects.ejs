@@ -79,7 +79,7 @@
 			, jump: function (obj, first) {
 				$.ajax({
 					'url': '/scratch/view/getScratchProjects',
-					'type': 'POST',
+					'type': 'GET',
 					'data': { curr: obj.curr, limit: obj.limit, type: thetype },
 					'success': function (d) {
 						if (d.length) {
@@ -133,7 +133,7 @@
 
 		$.ajax({
 			'url': '/scratch/view/seachScratchProjects',
-			'type': 'POST',
+			'type': 'GET',
 			'data': { t: 's', txt: txt, searchall: document.getElementById("search_src").checked },
 			'success': function (d) {
 				if (d.length) {

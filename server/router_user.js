@@ -62,10 +62,10 @@ router.get("/repw", function (req, res) {
 });
 
 //登录
-router.post("/login", function (req, res) {
+router.get("/login", function (req, res) {
   request.post(
     {
-      url:`${process.env.reverify}?secret=${process.env.resecret}&response=${req.body.re}`,
+      url:`${process.env.reverify}?secret=${process.env.resecret}&response=${req.query.re}`,
     },
     function (err, httpResponse, body) {
       if (err) {
@@ -80,10 +80,10 @@ router.post("/login", function (req, res) {
       }
 
       if (
-        !req.body.pw ||
-        !I.userpwTest(req.body.pw) ||
-        !req.body.un ||
-        !I.usernameTest(req.body.un)
+        !req.query.pw ||
+        !I.userpwTest(req.query.pw) ||
+        !req.query.un ||
+        !I.usernameTest(req.query.un)
       ) {
         res.status(200).send({ status: "账号或密码错误" });
         return;
@@ -98,7 +98,7 @@ router.post("/login", function (req, res) {
         }
 
         var User = USER[0];
-        pw = I.md5(I.md5(req.body.pw) + req.body.un);
+        pw = I.md5(I.md5(req.query.pw) + req.query.un);
         if (User["pwd"] != pw) {
           res.status(200).send({ status: "账号或密码错误" });
         } else if (User["state"] == 2) {
@@ -169,10 +169,10 @@ router.get("/logout", function (req, res) {
 });
 
 //注册
-router.post("/register", function (req, res) {
+router.get("/register", function (req, res) {
   request.post(
     {
-      url:`${process.env.reverify}?secret=${process.env.resecret}&response=${req.body.re}`,
+      url:`${process.env.reverify}?secret=${process.env.resecret}&response=${req.query.re}`,
     },
     function (err, httpResponse, body) {
       if (err) {
@@ -195,10 +195,10 @@ router.post("/register", function (req, res) {
           return;
         }
 
-        //if (!req.body.pw|| !I.userpwTest(req.body.pw) || !req.body.un|| !I.usernameTest(req.body.un)){ res.status(200).send( { 'status':'账号或密码格式错误' });return;}
-        //if (I.phoneTest(req.body.un)){res.status(200).send( { 'status':'手机号不能直接用于注册账号' });return;}
+        //if (!req.query.pw|| !I.userpwTest(req.query.pw) || !req.query.un|| !I.usernameTest(req.query.un)){ res.status(200).send( { 'status':'账号或密码格式错误' });return;}
+        //if (I.phoneTest(req.query.un)){res.status(200).send( { 'status':'手机号不能直接用于注册账号' });return;}
 
-        var username = req.body.un;
+        var username = req.query.un;
         SQL = `SELECT id FROM user WHERE username='${username}' LIMIT 1`;
         DB.query(SQL, function (err, User) {
           if (err) {
@@ -211,7 +211,7 @@ router.post("/register", function (req, res) {
           }
 
           //对密码进行加密
-          //var pw = req.body.pw;
+          //var pw = req.query.pw;
           var randonpw = I.randomString(10);
           var randonpw = randonpw + "@O";
           //console.log(randonpw);
@@ -221,7 +221,7 @@ router.post("/register", function (req, res) {
           //console.log(pw);
           //新用户注册 //loginInfo = [{'t': new Date(),'ip':req.ip,'agent':req.headers["user-agent"]}];
           //var nickname = username.substring(username.length-5);
-          var nickname = req.body.pw;
+          var nickname = req.query.pw;
           //console.log(nickname);
           var INSERT = `INSERT INTO user (username,pwd,nickname) VALUES ('${username}','${pw}','${nickname}')`;
           DB.query(INSERT, function (err, newUser) {
@@ -349,10 +349,10 @@ router.post("/register", function (req, res) {
   );
 });
 //找回密码
-router.post("/repw", function (req, res) {
+router.get("/repw", function (req, res) {
   request.post(
     {
-      url:`${process.env.reverify}?secret=${process.env.resecret}&response=${req.body.re}`,
+      url:`${process.env.reverify}?secret=${process.env.resecret}&response=${req.query.re}`,
     },
     function (err, httpResponse, body) {
       if (err) {
@@ -365,7 +365,7 @@ router.post("/repw", function (req, res) {
         res.status(200).send({ status: "验证码错误" });
         return;
       }
-      var username = req.body.un;
+      var username = req.query.un;
       SQL = `SELECT * FROM user WHERE username='${username}' LIMIT 1`;
       DB.query(SQL, function (err, User) {
         if (err) {
@@ -467,10 +467,10 @@ router.post("/repw", function (req, res) {
 });
 
 //找回密码
-router.post("/torepw", function (req, res) {
+router.get("/torepw", function (req, res) {
   request.post(
     {
-      url:`${process.env.reverify}?secret=${process.env.resecret}&response=${req.body.re}`,
+      url:`${process.env.reverify}?secret=${process.env.resecret}&response=${req.query.re}`,
     },
     function (err, httpResponse, body) {
       if (err) {
@@ -483,9 +483,9 @@ router.post("/torepw", function (req, res) {
         res.status(200).send({ status: "验证码错误" });
         return;
       }
-      //console.log(req.body.token);
+      //console.log(req.query.token);
       var user1 = jwt.verify(
-        req.body.token,
+        req.query.token,
         process.env.jwttoken,
         function (err, decoded) {
           if (err) {
@@ -497,8 +497,8 @@ router.post("/torepw", function (req, res) {
         }
       );
       //console.log(userid);
-      //console.log(req.body.pw);
-      var newPW = I.md5(I.md5(req.body.pw) + username);
+      //console.log(req.query.pw);
+      var newPW = I.md5(I.md5(req.query.pw) + username);
       //console.log(newPW);
 
       SET = { pwd: newPW };
