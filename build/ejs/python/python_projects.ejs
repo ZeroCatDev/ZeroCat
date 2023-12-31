@@ -79,7 +79,7 @@
 			, jump: function (obj, first) {
 				$.ajax({
 					'url': '/python/view/getPythonProjects',
-					'type': 'GET',
+					'type': 'POST',
 					'data': { curr: obj.curr, limit: obj.limit, type: thetype },
 					'success': function (d) {
 						if (d.length) {
@@ -135,7 +135,7 @@
 
 		$.ajax({
 			'url': '/python/view/seachPythonProjects',
-			'type': 'GET',
+			'type': 'POST',
 			'data': { t: 'p', txt: txt, searchall: document.getElementById("python_src").checked },
 			'success': function (d) {
 				if (d.length) {

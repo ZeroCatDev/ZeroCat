@@ -29,11 +29,11 @@ router.get("/", function (req, res) {
   });
 });
 //翻页：Scratch作品列表：数据
-router.get("/view/getScratchProjects", function (req, res) {
-  var curr = parseInt(req.query.curr); //当前要显示的页码
-  var limit = parseInt(req.query.limit); //每页显示的作品数
+router.post("/view/getScratchProjects", function (req, res) {
+  var curr = parseInt(req.body.curr); //当前要显示的页码
+  var limit = parseInt(req.body.limit); //每页显示的作品数
   var type = "view_count";
-  if (req.query.type == "new") {
+  if (req.body.type == "new") {
     type = "time";
   }
 
@@ -50,19 +50,19 @@ router.get("/view/getScratchProjects", function (req, res) {
 });
 
 //搜索：Scratch项目列表：数据//只搜索标题
-router.get("/view/seachScratchProjects", function (req, res) {
-  if (!req.query.txt) {
+router.post("/view/seachScratchProjects", function (req, res) {
+  if (!req.body.txt) {
     res.status(200).send([]);
     return;
   }
   var tabelName = "scratch";
   var searchinfo = "title";
-  if (req.query.searchall == "true") {
+  if (req.body.searchall == "true") {
     searchinfo = "src";
   }
   //var SQL = `SELECT id, title FROM ${tabelName} WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
   var SQL = `SELECT ${tabelName}.id, ${tabelName}.title, ${tabelName}.state,${tabelName}.authorid,${tabelName}.description, user.nickname,user.motto FROM ${tabelName} JOIN user ON ${tabelName}.authorid = user.id WHERE ${tabelName}.state>0 AND (${searchinfo} LIKE ?)`;
-  var WHERE = [`%${req.query.txt}%`];
+  var WHERE = [`%${req.body.txt}%`];
   DB.qww(SQL, WHERE, function (err, data) {
     if (err) {
       res.status(200).send([]);
@@ -150,7 +150,7 @@ router.get("/play/project/:filename", function (req, res) {
   });
 });
 //移动端项目点赞：不需要登录即可直接点赞
-router.get("/play/like", function (req, res) {
+router.post("/play/like", function (req, res) {
   var pid = req.body["pid"];
 
   //scratch表like_count+1
@@ -165,7 +165,7 @@ router.get("/play/like", function (req, res) {
   });
 });
 //项目收藏
-router.get("/play/favo", function (req, res) {
+router.post("/play/favo", function (req, res) {
   if (!res.locals.login) {
     res.status(200).send({ status: "failed", msg: "请先登录" });
     return;
@@ -230,7 +230,7 @@ router.get("/play/favo", function (req, res) {
 });
 
 //项目开源、闭源
-router.get("/play/openSrc", function (req, res) {
+router.post("/play/openSrc", function (req, res) {
   if (!res.locals.login) {
     res.status(200).send({ status: "failed", msg: "请先登录" });
     return;
@@ -270,7 +270,7 @@ router.get("/edit", function (req, res) {
 //支持两种方案加载默认作品
 //1、从指定文件加载
 //2、从数据库加载
-router.get("/project/:projectid", function (req, res) {
+router.post("/project/:projectid", function (req, res) {
   ////console.log('服务器：获取作品JSON源代码');
   var projectid = 0;
   if (req.params.projectid) {
@@ -361,13 +361,13 @@ router.get("/assets/:filename", function (req, res) {
 });
 
 //保存作品：标题
-router.get("/saveProjcetTitle", function (req, res) {
+router.post("/saveProjcetTitle", function (req, res) {
   if (!res.locals.login) {
     res.status(404);
     return;
   }
-  var UPDATE = `UPDATE scratch SET title=? WHERE id=${req.query.id} AND authorid=${req.session.userid} LIMIT 1`;
-  var VAL = [`${req.query.title}`];
+  var UPDATE = `UPDATE scratch SET title=? WHERE id=${req.body.id} AND authorid=${req.session.userid} LIMIT 1`;
+  var VAL = [`${req.body.title}`];
   DB.qww(UPDATE, VAL, function (err, SCRATCH) {
     if (err) {
       res.status(404).send({ status: "err" }); //返回内容可有可无，，因为客户端没处理
@@ -410,7 +410,7 @@ router.put("/projects/:projectid", function (req, res) {
   });
 });
 //保存作品：缩略图
-router.get("/thumbnail/:projectid", function (req, res) {
+router.post("/thumbnail/:projectid", function (req, res) {
   ////console.log('开始保存缩略图：'+req.params.projectid);
 
   // 请求的头部为 'Content-Type': 'image/png'时，用req.on接收文件
@@ -440,14 +440,14 @@ router.get("/thumbnail/:projectid", function (req, res) {
   });
 });
 //分享作品：
-router.get("/shareProject/:projectid", function (req, res) {
+router.post("/shareProject/:projectid", function (req, res) {
   if (!res.locals.login) {
     res.status(200).send({ status: "x" });
     return;
   }
 
   var s = 0;
-  if (req.query.s == 1) {
+  if (req.body.s == 1) {
     s = 1;
   }
 
@@ -464,7 +464,7 @@ router.get("/shareProject/:projectid", function (req, res) {
 });
 
 //保存新作品：保存源代码及作品名称。req.body为项目JSON源代码,?title=作品名称
-router.get("/projects", function (req, res) {
+router.post("/projects", function (req, res) {
   //console.log("服务器：新建作品JSON源代码");
 
   if (!req.body) {
@@ -490,7 +490,7 @@ router.get("/projects", function (req, res) {
   });
 });
 //新作品：保存作品素材
-router.get("/assets/:filename", function (req, res) {
+router.post("/assets/:filename", function (req, res) {
   var strFileName = "./data/material/asset/" + req.params.filename;
   fs.exists(strFileName, function (bExists) {
     //if (bExists) {
@@ -606,25 +606,25 @@ router.get("/test_getBlockLinkToServer", (req, res, next) => {
 });
 
 // 获取我的作品列表
-// req.query.t:0：未分享/1：已分享 /100：全部 /200：收藏
-router.get("/getMyProjectLibrary", function (req, res) {
+// req.body.t:0：未分享/1：已分享 /100：全部 /200：收藏
+router.post("/getMyProjectLibrary", function (req, res) {
   if (res.locals["userid"] == "") {
     res.status(200).send({ status: "err", data: [] });
   }
 
   var WHERE = "";
-  if (req.query.t == 0) {
+  if (req.body.t == 0) {
     WHERE = " AND state=0";
-  } else if (req.query.t == 1) {
+  } else if (req.body.t == 1) {
     // 包括1发而的、2推荐的
     WHERE = " AND state>0";
   }
 
-  if (req.query.f && req.query.f != "") {
-    WHERE += ` AND title LIKE '%${req.query.f}%'`;
+  if (req.body.f && req.body.f != "") {
+    WHERE += ` AND title LIKE '%${req.body.f}%'`;
   }
 
-  var SELECT = `SELECT id, title, time, state FROM scratch WHERE authorid=${req.session["userid"]} ${WHERE} ORDER BY time DESC LIMIT ${req.query.l},${req.query.n}`; //正式版本中，需要限定作者本身的作品
+  var SELECT = `SELECT id, title, time, state FROM scratch WHERE authorid=${req.session["userid"]} ${WHERE} ORDER BY time DESC LIMIT ${req.body.l},${req.body.n}`; //正式版本中，需要限定作者本身的作品
   DB.query(SELECT, function (err, SCRATCH) {
     if (err) {
       res.status(200).send({ status: "err", data: [] });
@@ -635,11 +635,11 @@ router.get("/getMyProjectLibrary", function (req, res) {
 });
 
 // 获取优秀作品列表
-router.get("/getYxProjectLibrary", function (req, res) {
+router.post("/getYxProjectLibrary", function (req, res) {
   var SELECT =
     ` SELECT s.id, s.title, s.view_count, s.authorid, u.nickname FROM scratch s ` +
     " LEFT JOIN user u ON u.id=s.authorid " +
-    ` WHERE s.state=2 ORDER BY s.view_count DESC LIMIT ${req.query.l},${req.query.n}`;
+    ` WHERE s.state=2 ORDER BY s.view_count DESC LIMIT ${req.body.l},${req.body.n}`;
   DB.query(SELECT, function (err, SCRATCH) {
     if (err) {
       res.status(200).send({ status: "err", data: [] });
@@ -651,24 +651,24 @@ router.get("/getYxProjectLibrary", function (req, res) {
 
 // 获取背景
 // 组件获取条件 tag：是否获取分类; f: 搜索字符串; t: 分类; l: 已经获取的背景数; n: 每次获取的背景数，默认为20个
-router.get("/getBackdropLibrary", function (req, res) {
+router.post("/getBackdropLibrary", function (req, res) {
   var WHERE = "";
-  if (req.query.t != 0) {
-    WHERE = " AND tagId=" + req.query.t;
+  if (req.body.t != 0) {
+    WHERE = " AND tagId=" + req.body.t;
   }
 
-  if (req.query.f && req.query.f != "") {
-    WHERE += ` AND name LIKE '%${req.query.f}%'`;
+  if (req.body.f && req.body.f != "") {
+    WHERE += ` AND name LIKE '%${req.body.f}%'`;
   }
 
-  var SELECT = `SELECT id, name, md5, info0, info1, info2  FROM material_backdrop WHERE state=1 ${WHERE} ORDER BY name DESC LIMIT ${req.query.l},${req.query.n}`;
+  var SELECT = `SELECT id, name, md5, info0, info1, info2  FROM material_backdrop WHERE state=1 ${WHERE} ORDER BY name DESC LIMIT ${req.body.l},${req.body.n}`;
   DB.query(SELECT, function (err, Backdrop) {
     if (err) {
       res.status(200).send({ status: "err", data: [], tags: [] });
       return;
     }
 
-    if (req.query.tag == 0) {
+    if (req.body.tag == 0) {
       res.status(200).send({ status: "ok", data: Backdrop, tags: [] });
       return;
     }
@@ -687,7 +687,7 @@ router.get("/getBackdropLibrary", function (req, res) {
 });
 
 // 随机获取一个背景
-router.get("/getRandomBackdrop", function (req, res) {
+router.post("/getRandomBackdrop", function (req, res) {
   const SELECT =
     `SELECT name, md5, info0, info1, info2 FROM material_backdrop` +
     ` JOIN (SELECT MAX(id) AS maxId, MIN(id) AS minId FROM material_backdrop WHERE state=1) AS m ` +
@@ -704,26 +704,26 @@ router.get("/getRandomBackdrop", function (req, res) {
 
 // 获取造型
 // 组件获取条件 tag：是否获取分类; f: 搜索字符串; t: 分类; l: 已经获取的背景数; n: 每次获取的背景数，默认为32个
-router.get("/getCostumeLibrary", function (req, res) {
+router.post("/getCostumeLibrary", function (req, res) {
   // //console.log(req.body);
 
   var WHERE = "";
-  if (req.query.t != 0) {
-    WHERE = " AND tagId=" + req.query.t;
+  if (req.body.t != 0) {
+    WHERE = " AND tagId=" + req.body.t;
   }
 
-  if (req.query.f && req.query.f != "") {
-    WHERE += ` AND name LIKE '%${req.query.f}%'`;
+  if (req.body.f && req.body.f != "") {
+    WHERE += ` AND name LIKE '%${req.body.f}%'`;
   }
 
-  var SELECT = `SELECT id, name, md5, info0, info1, info2  FROM material_costume WHERE state=1 ${WHERE} ORDER BY name DESC LIMIT ${req.query.l},${req.query.n}`;
+  var SELECT = `SELECT id, name, md5, info0, info1, info2  FROM material_costume WHERE state=1 ${WHERE} ORDER BY name DESC LIMIT ${req.body.l},${req.body.n}`;
   DB.query(SELECT, function (err, Backdrop) {
     if (err) {
       res.status(200).send({ status: "err", data: [], tags: [] });
       return;
     }
 
-    if (req.query.tag == 0) {
+    if (req.body.tag == 0) {
       res.status(200).send({ status: "ok", data: Backdrop, tags: [] });
       return;
     }
@@ -742,7 +742,7 @@ router.get("/getCostumeLibrary", function (req, res) {
 });
 
 // 随机获取一个造型
-router.get("/getRandomCostume", function (req, res) {
+router.post("/getRandomCostume", function (req, res) {
   const SELECT =
     `SELECT name, md5, info0, info1, info2 FROM material_costume` +
     ` JOIN (SELECT MAX(id) AS maxId, MIN(id) AS minId FROM material_costume WHERE state=1) AS m ` +
@@ -759,24 +759,24 @@ router.get("/getRandomCostume", function (req, res) {
 
 // 获取声音
 // 组件获取条件 tag：是否获取分类; f: 搜索字符串; t: 分类; l: 已经获取的背景数; n: 每次获取的背景数，默认为32个
-router.get("/getSoundLibrary", function (req, res) {
+router.post("/getSoundLibrary", function (req, res) {
   var WHERE = "";
-  if (req.query.t != 0) {
-    WHERE = " AND tagId=" + req.query.t;
+  if (req.body.t != 0) {
+    WHERE = " AND tagId=" + req.body.t;
   }
 
-  if (req.query.f && req.query.f != "") {
-    WHERE += ` AND name LIKE '%${req.query.f}%'`;
+  if (req.body.f && req.body.f != "") {
+    WHERE += ` AND name LIKE '%${req.body.f}%'`;
   }
 
-  var SELECT = `SELECT id, name, md5, format, rate, sampleCount FROM material_sound WHERE state=1 ${WHERE} ORDER BY name DESC LIMIT ${req.query.l},${req.query.n}`;
+  var SELECT = `SELECT id, name, md5, format, rate, sampleCount FROM material_sound WHERE state=1 ${WHERE} ORDER BY name DESC LIMIT ${req.body.l},${req.body.n}`;
   DB.query(SELECT, function (err, Backdrop) {
     if (err) {
       res.status(200).send({ status: "err", data: [], tags: [] });
       return;
     }
 
-    if (req.query.tag == 0) {
+    if (req.body.tag == 0) {
       res.status(200).send({ status: "ok", data: Backdrop, tags: [] });
       return;
     }
@@ -794,7 +794,7 @@ router.get("/getSoundLibrary", function (req, res) {
   });
 });
 // 随机获取一个声音
-router.get("/getRandomSound", function (req, res) {
+router.post("/getRandomSound", function (req, res) {
   const SELECT =
     `SELECT name, md5, format, rate, sampleCount FROM material_sound` +
     ` JOIN (SELECT MAX(id) AS maxId, MIN(id) AS minId FROM material_sound WHERE state=1) AS m ` +
@@ -811,24 +811,24 @@ router.get("/getRandomSound", function (req, res) {
 
 // 获取角色
 // 组件获取条件 tag：是否获取分类; f: 搜索字符串; t: 分类; l: 已经获取的素材数; n: 每次获取的素材数，默认为32个
-router.get("/getSpriteLibrary", function (req, res) {
+router.post("/getSpriteLibrary", function (req, res) {
   var WHERE = "";
-  if (req.query.t != 0) {
-    WHERE = " AND tagId=" + req.query.t;
+  if (req.body.t != 0) {
+    WHERE = " AND tagId=" + req.body.t;
   }
 
-  if (req.query.f && req.query.f != "") {
-    WHERE += ` AND name LIKE '%${req.query.f}%'`;
+  if (req.body.f && req.body.f != "") {
+    WHERE += ` AND name LIKE '%${req.body.f}%'`;
   }
 
-  var SELECT = `SELECT id, name, json FROM material_sprite WHERE state=1 ${WHERE} ORDER BY name DESC LIMIT ${req.query.l},${req.query.n}`;
+  var SELECT = `SELECT id, name, json FROM material_sprite WHERE state=1 ${WHERE} ORDER BY name DESC LIMIT ${req.body.l},${req.body.n}`;
   DB.query(SELECT, function (err, Backdrop) {
     if (err) {
       res.status(200).send({ status: "err", data: [], tags: [] });
       return;
     }
 
-    if (req.query.tag == 0) {
+    if (req.body.tag == 0) {
       res.status(200).send({ status: "ok", data: Backdrop, tags: [] });
       return;
     }
@@ -846,7 +846,7 @@ router.get("/getSpriteLibrary", function (req, res) {
   });
 });
 // 随机获取一个角色
-router.get("/getRandomSprite", function (req, res) {
+router.post("/getRandomSprite", function (req, res) {
   const SELECT =
     `SELECT name, json FROM material_sprite` +
     ` JOIN (SELECT MAX(id) AS maxId, MIN(id) AS minId FROM material_sprite WHERE state=1) AS m ` +
@@ -862,7 +862,7 @@ router.get("/getRandomSprite", function (req, res) {
 });
 
 //Scratch启动时，自动获取一次登录信息
-router.get("/getSession", (req, res) => {
+router.post("/getSession", (req, res) => {
   if (!res.locals.login) {
     var new_session = {
       userid: 0,
@@ -882,7 +882,7 @@ router.get("/getSession", (req, res) => {
   res.status(200).send(JSON.stringify(new_session));
 });
 //从Scratch中退出
-router.get("/logout", function (req, res) {
+router.post("/logout", function (req, res) {
   logout(req, res);
   var login_info = [{ username: "OurWorldExampleUser", success: 1 }];
   res.status(200).send(login_info);

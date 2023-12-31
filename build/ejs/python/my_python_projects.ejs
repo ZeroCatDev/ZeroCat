@@ -51,7 +51,7 @@
 			, jump: function (obj, first) {
 				$.ajax({
 					'url': '/my/getPythonProjects',
-					'type': 'GET',
+					'type': 'POST',
 					'data': { curr: obj.curr, limit: obj.limit, state: state },
 					'success': function (d) {
 						if (d.length) {

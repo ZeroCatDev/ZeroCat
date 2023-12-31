@@ -72,10 +72,10 @@ router.get('/python', function (req, res) {
     });
 });  
 //显示Scratch项目列表：数据，{curr:obj.curr, limit:obj.limit,state:state}
-router.get('/getScratchProjects', function (req, res) {
-    var curr = parseInt(req.query.curr);     //当前要显示的页码
-    var limit = parseInt(req.query.limit);   //每页显示的作品数
-    var state = parseInt(req.query.state);   //每页显示的作品状态
+router.post('/getScratchProjects', function (req, res) {
+    var curr = parseInt(req.body.curr);     //当前要显示的页码
+    var limit = parseInt(req.body.limit);   //每页显示的作品数
+    var state = parseInt(req.body.state);   //每页显示的作品状态
 
     var SQL = `SELECT id, title,view_count,description FROM scratch WHERE authorid=${req.session.userid} AND state=${state} ORDER BY view_count DESC LIMIT ${(curr-1)*limit}, ${limit}`;
     DB.query(SQL, function (err, data) {
@@ -88,10 +88,10 @@ router.get('/getScratchProjects', function (req, res) {
 });
 
 //显示Scratch项目列表：数据，{curr:obj.curr, limit:obj.limit,state:state}
-router.get('/getPythonProjects', function (req, res) {
-    var curr = parseInt(req.query.curr);     //当前要显示的页码
-    var limit = parseInt(req.query.limit);   //每页显示的作品数
-    var state = parseInt(req.query.state);   //每页显示的作品状态
+router.post('/getPythonProjects', function (req, res) {
+    var curr = parseInt(req.body.curr);     //当前要显示的页码
+    var limit = parseInt(req.body.limit);   //每页显示的作品数
+    var state = parseInt(req.body.state);   //每页显示的作品状态
 
     var SQL = `SELECT id, title,view_count,description FROM python WHERE authorid=${req.session.userid} AND state=${state} ORDER BY view_count DESC LIMIT ${(curr-1)*limit}, ${limit}`;
     DB.query(SQL, function (err, data) {
@@ -104,7 +104,7 @@ router.get('/getPythonProjects', function (req, res) {
 });
 
 //分享Scratch项目
-router.get('/scratch/share', function (req, res) {
+router.post('/scratch/share', function (req, res) {
     var SQL = `UPDATE scratch SET state=1 WHERE id=${ req.body['id']} AND authorid=${req.session.userid} LIMIT 1`;
     DB.query(SQL, function (err, d) {
         if (err) {
@@ -117,7 +117,7 @@ router.get('/scratch/share', function (req, res) {
 });
 
 //分享Scratch项目
-router.get('/python/share', function (req, res) {
+router.post('/python/share', function (req, res) {
     var SQL = `UPDATE python SET state=1 WHERE id=${ req.body['id']} AND authorid=${req.session.userid} LIMIT 1`;
     DB.query(SQL, function (err, d) {
         if (err) {
@@ -130,7 +130,7 @@ router.get('/python/share', function (req, res) {
 });
 
 //简介
-router.get('/scratch/setdescription', function (req, res) {
+router.post('/scratch/setdescription', function (req, res) {
     var SET= {description:req.body['description']};
     var SQL = `UPDATE scratch SET ? WHERE id=${ req.body['id']} AND authorid=${req.session.userid} LIMIT 1`;
     DB.qww(SQL,SET, function (err, d) {
@@ -144,7 +144,7 @@ router.get('/scratch/setdescription', function (req, res) {
 });
 
 //简介
-router.get('/python/setdescription', function (req, res) {
+router.post('/python/setdescription', function (req, res) {
     var SET= {description:req.body['description']};
     var SQL = `UPDATE python SET ? WHERE id=${ req.body['id']} AND authorid=${req.session.userid} LIMIT 1`;
     DB.qww(SQL,SET, function (err, d) {
@@ -159,7 +159,7 @@ router.get('/python/setdescription', function (req, res) {
 
 
 //取消分享Scratch项目
-router.get('/scratch/noshare', function (req, res) {
+router.post('/scratch/noshare', function (req, res) {
     var SQL = `UPDATE scratch SET state=0 WHERE id=${ req.body['id']} AND authorid=${req.session.userid} LIMIT 1`;
     DB.query(SQL, function (err, d) {
         if (err) {
@@ -172,7 +172,7 @@ router.get('/scratch/noshare', function (req, res) {
 });
 
 //取消分享Scratch项目
-router.get('/python/noshare', function (req, res) {
+router.post('/python/noshare', function (req, res) {
     var SQL = `UPDATE python SET state=0 WHERE id=${ req.body['id']} AND authorid=${req.session.userid} LIMIT 1`;
     DB.query(SQL, function (err, d) {
         if (err) {
@@ -188,7 +188,7 @@ router.get('/python/noshare', function (req, res) {
 
 
 //删除Scratch项目
-router.get('/scratch/del', function (req, res) {
+router.post('/scratch/del', function (req, res) {
     var DEL = `DELETE FROM scratch WHERE id=${ req.body['id']} AND authorid=${req.session.userid} LIMIT 1`;
     DB.query(DEL, function (err, d) {
         if (err) {
@@ -210,7 +210,7 @@ router.get('/scratch/del', function (req, res) {
 });
 
 //删除Scratch项目
-router.get('/python/del', function (req, res) {
+router.post('/python/del', function (req, res) {
     var DEL = `DELETE FROM python WHERE id=${ req.body['id']} AND authorid=${req.session.userid} LIMIT 1`;
     DB.query(DEL, function (err, d) {
         if (err) {
@@ -249,7 +249,7 @@ router.get('/info', function (req, res) {
     });
 });
 //修改头像
-router.get('/set/avatar', function (req, res) {
+router.post('/set/avatar', function (req, res) {
    //保存文件到正确位置
    if (!req['files']['file']) {
        res.status(200).send( {'status':'文件上传失败'} );
@@ -291,7 +291,7 @@ router.get('/set/avatar', function (req, res) {
    });
 });
 //修改个人信息
-router.get('/set/userinfo', function (req, res) {
+router.post('/set/userinfo', function (req, res) {
     var UPDATE = `UPDATE user SET ? WHERE id=${req.session.userid} LIMIT 1`;
     var SET = {
         'nickname':req.body['nickname'],
@@ -326,7 +326,7 @@ router.get('/set/userinfo', function (req, res) {
       });
 });
 //修改密码：动作
-router.get('/set/pw', function (req, res) {
+router.post('/set/pw', function (req, res) {
     var oldPW = I.md5(I.md5(req.body['oldpw'])+req.session.username);
     //console.log(oldPW)
     //console.log(req.body['oldpw'])

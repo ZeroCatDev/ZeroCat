@@ -106,14 +106,14 @@ router.get('/user/data', function(req, res) {
     });
 });
 //管理员重置用户密码
-router.get('/user_setpwd', function (req, res) {
-    if (!req.query.pw || !req.query.un|| !I.userpwTest(req.query.pw)){
+router.post('/user_setpwd', function (req, res) {
+    if (!req.body.pw || !req.body.un|| !I.userpwTest(req.body.pw)){
         res.status(200).send({"status":"failed","msg":"再试一次"});
         return;
     }
 
     //对密码进行加密
-    let pw = I.md5(I.md5(req.query.pw)+req.query.un);
+    let pw = I.md5(I.md5(req.body.pw)+req.body.un);
     var UPDATE = `UPDATE user SET pwd='${pw}' WHERE username='${req.body['un']}' LIMIT 1`;
     DB.query(UPDATE, function (err, d) {
         if (err) {
@@ -124,13 +124,13 @@ router.get('/user_setpwd', function (req, res) {
     });
 });
 //用户管理：功能.0解封 2封号
-router.get('/user_setstate',function(req,res){
+router.post('/user_setstate',function(req,res){
     var state = 0;
     if (req.body['s'] == undefined || req.body['s'] !=0) {
         state = 2;//未知时，都当作封号处理
     }
     //var state = parseInt(req.body['s']);
-    var UPDATE = `UPDATE user SET state=${state} WHERE id=${req.query.id} LIMIT 1`;
+    var UPDATE = `UPDATE user SET state=${state} WHERE id=${req.body.id} LIMIT 1`;
     DB.query(UPDATE, function(err,d){
         if(err){
             res.status(200).send({"status":"failed","msg":"再试一次"})
@@ -141,13 +141,13 @@ router.get('/user_setstate',function(req,res){
     })
 });
 //用户管理：创建新用户，功能
-router.get('/user_new',function(req,res){ 
-    if (!req.query.un|| !I.usernameTest(req.query.un)){
+router.post('/user_new',function(req,res){ 
+    if (!req.body.un|| !I.usernameTest(req.body.un)){
         res.status(200).send({"status":"failed","msg":"再试一次"});
         return;
     }
     //检查账号是否已存在
-    var SQL = `SELECT id FROM user WHERE username='${req.query.un}' LIMIT 1`;
+    var SQL = `SELECT id FROM user WHERE username='${req.body.un}' LIMIT 1`;
     DB.query(SQL, function (err, User) {
         if (err) {
             res.status(200).send( msg_fail);
@@ -159,10 +159,10 @@ router.get('/user_new',function(req,res){
         }
 
         //对密码进行加密:默认密码为用户手机号后8位
-        var nn = req.query.un.substring(req.query.un.length-6);//昵称
-        var pw = nn;//req.query.un.substring(req.query.un.length-6);//初始密码
-        pw = I.md5(I.md5(pw)+req.query.un);
-        SQL = `INSERT INTO user (username,pwd,nickname) VALUES ('${req.query.un}','${pw}','${nn}')`;
+        var nn = req.body.un.substring(req.body.un.length-6);//昵称
+        var pw = nn;//req.body.un.substring(req.body.un.length-6);//初始密码
+        pw = I.md5(I.md5(pw)+req.body.un);
+        SQL = `INSERT INTO user (username,pwd,nickname) VALUES ('${req.body.un}','${pw}','${nn}')`;
         DB.query(SQL, function (err, newUser) {
             if (err) {
                 res.status(200).send( { 'status': 'fail', 'msg': '再试一次' });
@@ -181,9 +181,9 @@ router.get('/user_new',function(req,res){
     });
 });
 //用户管理：批量创建新用户，功能
-router.get('/user_new100',function(req,res){ 
-    const qz = req.query.qz;
-    const sl = req.query.sl;
+router.post('/user_new100',function(req,res){ 
+    const qz = req.body.qz;
+    const sl = req.body.sl;
     var reg = /^(?:\d+|[a-zA-Z]+){4,8}$/;
     if (!reg['test'](qz)) {
         res.status(200).send({status: 'x', msg:'前缀格式不正确'});
@@ -220,9 +220,9 @@ router.get('/user_new100',function(req,res){
 });
 
 //用户管理：开启、关闭用户注册通道
-router.get('/user/setRegist',function(req,res){
+router.post('/user/setRegist',function(req,res){
     let v=1;
-    if (req.query.v != 1){
+    if (req.body.v != 1){
         v=0
     }
 
@@ -286,9 +286,9 @@ router.get('/works/scratch/data', function(req, res) {
     });
 });
 //作品管理：设置作品的标题
-router.get('/works/scratch/changeTitle',function(req,res){
-    var UPDATE = `UPDATE scratch SET title=? WHERE id=${req.query.id} LIMIT 1`;
-    var SET = [`${req.query.t}`]
+router.post('/works/scratch/changeTitle',function(req,res){
+    var UPDATE = `UPDATE scratch SET title=? WHERE id=${req.body.id} LIMIT 1`;
+    var SET = [`${req.body.t}`]
     DB.qww(UPDATE, SET, function(err,d){
         if(err){
             res.status(200).send({"status":"failed","msg":"再试一次"})
@@ -299,14 +299,14 @@ router.get('/works/scratch/changeTitle',function(req,res){
     })
 });
 //作品管理：设置作品的发布状态
-router.get('/works/scratch/setState',function(req,res){
-    if (req.query.s == undefined || (req.query.s < 0 || 2 < req.query.s)) {
+router.post('/works/scratch/setState',function(req,res){
+    if (req.body.s == undefined || (req.body.s < 0 || 2 < req.body.s)) {
         s = 0;//未知时，都当作取消推荐处理
     }else{
-        s = req.query.s;
+        s = req.body.s;
     }
 
-    var UPDATE = `UPDATE scratch SET state=${s} WHERE id=${req.query.id} LIMIT 1`;
+    var UPDATE = `UPDATE scratch SET state=${s} WHERE id=${req.body.id} LIMIT 1`;
     DB.query(UPDATE, function(err,d){
         if(err){
             res.status(200).send({"status":"failed","msg":"再试一次"})
@@ -317,13 +317,13 @@ router.get('/works/scratch/setState',function(req,res){
     })
 });
 //作品管理：复制作品为默认作品
-router.get('/works/scratch/setDefaultWork',function(req,res){
-    if (!req.query.id || req.query.id == 1) { // 客服端传参数问题
+router.post('/works/scratch/setDefaultWork',function(req,res){
+    if (!req.body.id || req.body.id == 1) { // 客服端传参数问题
         res.status(200).send({status:"ok", msg:"操作成功"});
         return;
     }
 
-    const SELECT = `SELECT title, src FROM scratch WHERE id=${req.query.id}`;
+    const SELECT = `SELECT title, src FROM scratch WHERE id=${req.body.id}`;
     DB.query(SELECT, function(err,d){
         if(err || d.length==0){
             res.status(200).send({status:"x", msg:"再试一次"});
@@ -392,9 +392,9 @@ router.get('/works/python/data', function(req, res) {
     });
 });
 //作品管理：Python 设置作品的标题
-router.get('/works/python/changeTitle',function(req,res){
-    var UPDATE = `UPDATE python SET title=? WHERE id=${req.query.id} LIMIT 1`;
-    var SET = [`${req.query.t}`]
+router.post('/works/python/changeTitle',function(req,res){
+    var UPDATE = `UPDATE python SET title=? WHERE id=${req.body.id} LIMIT 1`;
+    var SET = [`${req.body.t}`]
     DB.qww(UPDATE, SET, function(err,d){
         if(err){
             res.status(200).send({status:"x", msg:"再试一次"})
@@ -405,14 +405,14 @@ router.get('/works/python/changeTitle',function(req,res){
     })
 });
 //作品管理：Python设置作品的发布状态
-router.get('/works/python/setState',function(req,res){
-    if (req.query.s == undefined || (req.query.s < 0 || 2 < req.query.s)) {
+router.post('/works/python/setState',function(req,res){
+    if (req.body.s == undefined || (req.body.s < 0 || 2 < req.body.s)) {
         s = 0;//未知时，都当作取消推荐处理
     }else{
-        s = req.query.s;
+        s = req.body.s;
     }
 
-    var UPDATE = `UPDATE python SET state=${s} WHERE id=${req.query.id} LIMIT 1`;
+    var UPDATE = `UPDATE python SET state=${s} WHERE id=${req.body.id} LIMIT 1`;
     DB.query(UPDATE, function(err,d){
         if(err){
             res.status(200).send({status:"x", msg:"再试一次"})
@@ -423,13 +423,13 @@ router.get('/works/python/setState',function(req,res){
     })
 });
 //作品管理：Python复制作品为默认作品
-router.get('/works/python/setDefaultWork',function(req,res){
-    if (!req.query.id || req.query.id == 1) { // 客服端传参数问题
+router.post('/works/python/setDefaultWork',function(req,res){
+    if (!req.body.id || req.body.id == 1) { // 客服端传参数问题
         res.status(200).send({status:"ok", msg:"操作成功"});
         return;
     }
 
-    const SELECT = `SELECT title, src FROM python WHERE id=${req.query.id}`;
+    const SELECT = `SELECT title, src FROM python WHERE id=${req.body.id}`;
     DB.query(SELECT, function(err,d){
         if(err || d.length==0){
             res.status(200).send({status:"x", msg:"再试一次"});
@@ -481,19 +481,19 @@ router.get('/material/tag/data', function(req, res) {
     });
 });
 // 素材分类管理：添加
-router.get('/material/tag/add', function (req, res) {
-    var type = parseInt(req.query.t);
+router.post('/material/tag/add', function (req, res) {
+    var type = parseInt(req.body.t);
     if (!type || (type < 1 || 4 < type)) {// 1背景、2角色、3造型、4声音
         res.status(200).send({status:"x", msg: "素材类型参数错误"});
         return;
     }
 
-    if (!req.query.v || req.query.v == ''){
+    if (!req.body.v || req.body.v == ''){
         res.status(200).send({status:"x", msg: "标签名错误"});
         return;
     }
 
-    SQL = `INSERT INTO material_tags (type, tag) VALUES ('${type}', '${req.query.v}')`;
+    SQL = `INSERT INTO material_tags (type, tag) VALUES ('${type}', '${req.body.v}')`;
     DB.query(SQL, function (err, newTag) {
         if (err) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
@@ -504,14 +504,14 @@ router.get('/material/tag/add', function (req, res) {
     });
 });
 // 素材分类管理：修改
-router.get('/material/tag/mod', function (req, res) {
-    if (!req.query.v || req.query.v == ''){
+router.post('/material/tag/mod', function (req, res) {
+    if (!req.body.v || req.body.v == ''){
         res.status(200).send({status:"x", msg: "标签名错误"});
         return;
     }
 
     SQL = `UPDATE material_tags SET tag=? WHERE id=?`;
-    var VAL = [`${req.query.v}`,  req.query.id];
+    var VAL = [`${req.body.v}`,  req.body.id];
     DB.qww(SQL, VAL, function (err, TAG) {
         if (err) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
@@ -522,9 +522,9 @@ router.get('/material/tag/mod', function (req, res) {
     });
 });
 // 素材分类管理：删除
-router.get('/material/tag/del', function (req, res) {
+router.post('/material/tag/del', function (req, res) {
     // 判断此标签下是否有素材：只能删除空标签
-    var type = parseInt(req.query.t);
+    var type = parseInt(req.body.t);
     var tabelname = '';// 1背景、2角色、3造型、4声音
     if (type == 1 ) { tabelname = "material_backdrop";} else 
     if (type == 2 ) { tabelname = "material_sprite";} else 
@@ -536,7 +536,7 @@ router.get('/material/tag/del', function (req, res) {
     } 
 
 
-    var VAL = [req.query.id];
+    var VAL = [req.body.id];
     var SQL = `SELECT id FROM ${tabelname} WHERE tagId=? LIMIT 1`;
     DB.qww(SQL, VAL, function (err, MATE) {
         if (err) {
@@ -611,9 +611,9 @@ router.get('/material/backdrop/data', function(req, res) {
     });
 });
 // 背景管理：添加
-router.get('/material/backdrop/add', function(req, res) {
+router.post('/material/backdrop/add', function(req, res) {
     var newFileName = random_32ID_With_Time_Tag();
-    const SQL = `INSERT INTO material_backdrop (tagId, md5) VALUES ('${req.query.tagId}', '${newFileName}.png')`;
+    const SQL = `INSERT INTO material_backdrop (tagId, md5) VALUES ('${req.body.tagId}', '${newFileName}.png')`;
     DB.query(SQL, function (err, newTag) {
         if (err) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
@@ -629,7 +629,7 @@ router.get('/material/backdrop/add', function(req, res) {
     });
 });
 // 背景管理：修改素材
-router.get('/material/backdrop/modImage', function (req, res) {
+router.post('/material/backdrop/modImage', function (req, res) {
     if (!req['files']['file']) {
         res.status(200).send({status: 'x', msg: '文件上传失败,请再试一次'});
         return;
@@ -645,7 +645,7 @@ router.get('/material/backdrop/modImage', function (req, res) {
     }
 
     
-    let md5 = req.query.md5;
+    let md5 = req.body.md5;
     const oldExt = md5.substring(md5.length-3);
     if (oldExt == newExt){ // 后缀未变，直接替换
         const newpath = `./data/material/asset/${md5}`;
@@ -661,7 +661,7 @@ router.get('/material/backdrop/modImage', function (req, res) {
         const newpath = `./data/material/asset/${md5}`;
         fs.rename(tmppath, newpath, function (err) { if(err){}});
 
-        SQL = `UPDATE material_backdrop SET md5=? WHERE id=${req.query.id}`;
+        SQL = `UPDATE material_backdrop SET md5=? WHERE id=${req.body.id}`;
         VAL = [md5];
         DB.qww(SQL, VAL, function (err, R) {
             if (err) {
@@ -674,14 +674,14 @@ router.get('/material/backdrop/modImage', function (req, res) {
     }
 });
 // 背景管理：修改名称
-router.get('/material/backdrop/modName', function (req, res) {
-    if (!req.query.v || req.query.v == ''){
+router.post('/material/backdrop/modName', function (req, res) {
+    if (!req.body.v || req.body.v == ''){
         res.status(200).send({status:"x", msg: "名称错误"});
         return;
     }
 
     var SQL = `UPDATE material_backdrop SET name=? WHERE id=?`;
-    var VAL = [req.query.v, req.query.id];
+    var VAL = [req.body.v, req.body.id];
     DB.qww(SQL, VAL, function (err, Mate) {
         if (err) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
@@ -692,14 +692,14 @@ router.get('/material/backdrop/modName', function (req, res) {
     });
 });
 // 背景管理：修改尺寸
-router.get('/material/backdrop/modMateSize', function (req, res) {
-    let infoValue = parseInt(req.query.v);
-    if (req.query.t == 'info0' || req.query.t == 'info1'){
+router.post('/material/backdrop/modMateSize', function (req, res) {
+    let infoValue = parseInt(req.body.v);
+    if (req.body.t == 'info0' || req.body.t == 'info1'){
         if (!infoValue || infoValue<1 || 9999<infoValue) {
             res.status(200).send({status:"x", msg: "参数错误：宽、高只能在 1~9999 之间"});
             return;
         }    
-    } else if (req.query.t == 'info2'){
+    } else if (req.body.t == 'info2'){
         if (!infoValue || infoValue<1 || 2<infoValue) {
             res.status(200).send({status:"x", msg: "参数错误！显示方式：1=铺开显示；2=原图显示"});
             return;
@@ -709,8 +709,8 @@ router.get('/material/backdrop/modMateSize', function (req, res) {
         return;
     }
 
-    const SQL = `UPDATE material_backdrop SET ${req.query.t}=${infoValue} WHERE id=?`;
-    var VAL = [req.query.id];
+    const SQL = `UPDATE material_backdrop SET ${req.body.t}=${infoValue} WHERE id=?`;
+    var VAL = [req.body.id];
     DB.qww(SQL, VAL, function (err, Mate) {
         if (err) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
@@ -721,8 +721,8 @@ router.get('/material/backdrop/modMateSize', function (req, res) {
     });
 });
 // 背景管理：删除：未删除其文件，仅仅删除数据库记录
-router.get('/material/backdrop/del', function (req, res) {
-    var VAL = [req.query.id];
+router.post('/material/backdrop/del', function (req, res) {
+    var VAL = [req.body.id];
     var SQL = `DELETE FROM material_backdrop WHERE id=?`;
     DB.qww(SQL, VAL, function (err, TAG) {
         if (err) {
@@ -734,13 +734,13 @@ router.get('/material/backdrop/del', function (req, res) {
     });
 });
 // 背景管理：状态管理
-router.get('/material/backdrop/setState',function(req,res){
+router.post('/material/backdrop/setState',function(req,res){
     let v = 0; //默认都当作 停用 处理
-    if (req.query.v && req.query.v ==1) {
+    if (req.body.v && req.body.v ==1) {
         v = 1;
     }
 
-    var UPDATE = `UPDATE material_backdrop SET state=${v} WHERE id=${req.query.id} LIMIT 1`;
+    var UPDATE = `UPDATE material_backdrop SET state=${v} WHERE id=${req.body.id} LIMIT 1`;
     DB.query(UPDATE, function(err,d){
         if(err){
             res.status(200).send({status:"x", msg:"再试一次"})
@@ -788,9 +788,9 @@ router.get('/material/costume/data', function(req, res) {
     });
 });
 // 造型管理：添加
-router.get('/material/costume/add', function(req, res) {
+router.post('/material/costume/add', function(req, res) {
     var newFileName = random_32ID_With_Time_Tag();
-    const SQL = `INSERT INTO material_costume (tagId, md5) VALUES ('${req.query.tagId}', '${newFileName}.png')`;
+    const SQL = `INSERT INTO material_costume (tagId, md5) VALUES ('${req.body.tagId}', '${newFileName}.png')`;
     DB.query(SQL, function (err, newTag) {
         if (err) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
@@ -806,7 +806,7 @@ router.get('/material/costume/add', function(req, res) {
     });
 });
 // 造型管理：修改素材文件
-router.get('/material/costume/modImage', function (req, res) {
+router.post('/material/costume/modImage', function (req, res) {
     if (!req['files']['file']) {
         res.status(200).send({status: 'x', msg: '文件上传失败,请再试一次'});
         return;
@@ -822,7 +822,7 @@ router.get('/material/costume/modImage', function (req, res) {
     }
 
     
-    let md5 = req.query.md5;
+    let md5 = req.body.md5;
     const oldExt = md5.substring(md5.length-3);
     if (oldExt == newExt){ // 后缀未变，直接替换
         const newpath = `./data/material/asset/${md5}`;
@@ -838,7 +838,7 @@ router.get('/material/costume/modImage', function (req, res) {
         const newpath = `./data/material/asset/${md5}`;
         fs.rename(tmppath, newpath, function (err) { if(err){}});
 
-        SQL = `UPDATE material_costume SET md5=? WHERE id=${req.query.id}`;
+        SQL = `UPDATE material_costume SET md5=? WHERE id=${req.body.id}`;
         VAL = [md5];
         DB.qww(SQL, VAL, function (err, R) {
             if (err) {
@@ -851,14 +851,14 @@ router.get('/material/costume/modImage', function (req, res) {
     }
 });
 // 造型管理：修改名称
-router.get('/material/costume/modName', function (req, res) {
-    if (!req.query.v || req.query.v == ''){
+router.post('/material/costume/modName', function (req, res) {
+    if (!req.body.v || req.body.v == ''){
         res.status(200).send({status:"x", msg: "名称错误"});
         return;
     }
 
     var SQL = `UPDATE material_costume SET name=? WHERE id=?`;
-    var VAL = [req.query.v, req.query.id];
+    var VAL = [req.body.v, req.body.id];
     DB.qww(SQL, VAL, function (err, Mate) {
         if (err) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
@@ -869,14 +869,14 @@ router.get('/material/costume/modName', function (req, res) {
     });
 });
 // 造型管理：修改素材属性：尺寸
-router.get('/material/costume/modMateSize', function (req, res) {
-    let infoValue = parseInt(req.query.v);
-    if (req.query.t == 'info0' || req.query.t == 'info1'){
+router.post('/material/costume/modMateSize', function (req, res) {
+    let infoValue = parseInt(req.body.v);
+    if (req.body.t == 'info0' || req.body.t == 'info1'){
         if (!infoValue || infoValue<1 || 9999<infoValue) {
             res.status(200).send({status:"x", msg: "参数错误：宽、高只能在 1~9999 之间"});
             return;
         }    
-    } else if (req.query.t == 'info2'){
+    } else if (req.body.t == 'info2'){
         if (!infoValue || infoValue<1 || 2<infoValue) {
             res.status(200).send({status:"x", msg: "参数错误！显示方式：1=铺开显示；2=原图显示"});
             return;
@@ -886,8 +886,8 @@ router.get('/material/costume/modMateSize', function (req, res) {
         return;
     }
 
-    const SQL = `UPDATE material_costume SET ${req.query.t}=${infoValue} WHERE id=?`;
-    var VAL = [req.query.id];
+    const SQL = `UPDATE material_costume SET ${req.body.t}=${infoValue} WHERE id=?`;
+    var VAL = [req.body.id];
     DB.qww(SQL, VAL, function (err, Mate) {
         if (err) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
@@ -898,9 +898,9 @@ router.get('/material/costume/modMateSize', function (req, res) {
     });
 });
 // 造型管理：删除素材,未删除其文件，仅仅删除数据库记录
-router.get('/material/costume/del', function (req, res) {
+router.post('/material/costume/del', function (req, res) {
     // 需要判断是否在角色中有被使用到，有被角色使用到时，不能删除
-    var VAL = [req.query.id];
+    var VAL = [req.body.id];
     var SQL = `DELETE FROM material_costume WHERE id=?`;
     DB.qww(SQL, VAL, function (err, TAG) {
         if (err) {
@@ -912,13 +912,13 @@ router.get('/material/costume/del', function (req, res) {
     });
 });
 // 造型管理：素材状态管理
-router.get('/material/costume/setState',function(req,res){
+router.post('/material/costume/setState',function(req,res){
     let v = 0; //默认都当作 停用 处理
-    if (req.query.v && req.query.v ==1) {
+    if (req.body.v && req.body.v ==1) {
         v = 1;
     }
 
-    var UPDATE = `UPDATE material_costume SET state=${v} WHERE id=${req.query.id} LIMIT 1`;
+    var UPDATE = `UPDATE material_costume SET state=${v} WHERE id=${req.body.id} LIMIT 1`;
     DB.query(UPDATE, function(err,d){
         if(err){
             res.status(200).send({status:"x", msg:"再试一次"})
@@ -967,10 +967,10 @@ router.get('/material/sprite/data', function(req, res) {
     });
 });
 // 角色管理：添加
-router.get('/material/sprite/add', function(req, res) {    
+router.post('/material/sprite/add', function(req, res) {    
     const sprite = require("./lib/scratch_default_sprite.js");// 默认角色
     const SQL = `INSERT INTO material_sprite (tagId, json) VALUES (?, ?)`;
-    const VAL = [req.query.tagId, sprite]
+    const VAL = [req.body.tagId, sprite]
     DB.qww(SQL, VAL, function (err, R) {
         if (err) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
@@ -981,9 +981,9 @@ router.get('/material/sprite/add', function(req, res) {
     });
 });
 // 角色管理：删除素材,未删除其文件，仅仅删除数据库记录
-router.get('/material/sprite/del', function (req, res) {
+router.post('/material/sprite/del', function (req, res) {
     // 需要判断是否在角色中有被使用到，有被角色使用到时，不能删除
-    var VAL = [req.query.id];
+    var VAL = [req.body.id];
     var SQL = `DELETE FROM material_sprite WHERE id=?`;
     DB.qww(SQL, VAL, function (err, TAG) {
         if (err) {
@@ -1022,9 +1022,9 @@ router.get('/material/sprite/worklist', function (req, res) {
     });
 });
 // 角色管理：导入角色：导入{tagid: _tagId, workid:select_data.id}
-router.get('/material/sprite/import', function (req, res) {
+router.post('/material/sprite/import', function (req, res) {
     // 1、获取作品src
-    var SELECT = `SELECT src FROM scratch WHERE id=${req.query.workid} LIMIT 1`;
+    var SELECT = `SELECT src FROM scratch WHERE id=${req.body.workid} LIMIT 1`;
     DB.query(SELECT, function(err,SRC){
         if (err || SRC.length == 0){
             res.status(200).send({status: 'x', msg: '再试一次'});
@@ -1045,7 +1045,7 @@ router.get('/material/sprite/import', function (req, res) {
                     values += ",";
                 }
 
-                values += `(${req.query.tagid}, '${targets[i].name}', '${JSON.stringify(json).replace(/'/g, '’')}')`;
+                values += `(${req.body.tagid}, '${targets[i].name}', '${JSON.stringify(json).replace(/'/g, '’')}')`;
 
                 
                 spriteCount++;
@@ -1068,14 +1068,14 @@ router.get('/material/sprite/import', function (req, res) {
     })
 });
 // 角色管理：修改名称
-router.get('/material/sprite/modName', function (req, res) {
-    if (!req.query.v || req.query.v == ''){
+router.post('/material/sprite/modName', function (req, res) {
+    if (!req.body.v || req.body.v == ''){
         res.status(200).send({status:"x", msg: "名称错误"});
         return;
     }
 
     var SQL = `UPDATE material_sprite SET name=? WHERE id=?`;
-    var VAL = [req.query.v, req.query.id];
+    var VAL = [req.body.v, req.body.id];
     DB.qww(SQL, VAL, function (err, Mate) {
         if (err) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
@@ -1086,13 +1086,13 @@ router.get('/material/sprite/modName', function (req, res) {
     });
 });
 // 角色管理：素材状态管理
-router.get('/material/sprite/setState',function(req,res){
+router.post('/material/sprite/setState',function(req,res){
     let v = 0; //默认都当作 停用 处理
-    if (req.query.v && req.query.v ==1) {
+    if (req.body.v && req.body.v ==1) {
         v = 1;
     }
 
-    var UPDATE = `UPDATE material_sprite SET state=${v} WHERE id=${req.query.id} LIMIT 1`;
+    var UPDATE = `UPDATE material_sprite SET state=${v} WHERE id=${req.body.id} LIMIT 1`;
     DB.query(UPDATE, function(err,d){
         if(err){
             res.status(200).send({status:"x", msg:"再试一次"})
@@ -1122,10 +1122,10 @@ router.get('/material/sprite/setCostume/data', function(req, res) {
 });
 // 角色管理：造型管理：删除素材,未删除其文件，仅仅删除数据库记录
 // 参数：{id: _id, index: obj.data.index, md5: obj.data.md5ext}
-router.get('/material/sprite/setCostume/del', function (req, res) {
+router.post('/material/sprite/setCostume/del', function (req, res) {
     // 需要判断是否在角色中有被使用到，有被角色使用到时，不能删除
     var SQL = `SELECT json FROM material_sprite WHERE id=?`;
-    var VAL = [req.query.id];
+    var VAL = [req.body.id];
     DB.qww(SQL, VAL, function (err, D) {
         if (err || D.length == 0) {
             res.status(200).send({status:'x', msg: '数据错误，请再试一次' });
@@ -1139,15 +1139,15 @@ router.get('/material/sprite/setCostume/del', function (req, res) {
         }
 
         // 判断要移除的造型是否存在
-        var costume = json.costumes[req.query.index];
-        if (!costume || costume.md5ext != req.query.md5) {
+        var costume = json.costumes[req.body.index];
+        if (!costume || costume.md5ext != req.body.md5) {
             res.status(200).send({status:'x', msg: '数据错误，请再试一次' });
             return;
         }
 
         // 移除造型 并 保存
-        json.costumes.splice(req.query.index, 1);
-        SQL = `UPDATE material_sprite SET json='${JSON.stringify(json)}' WHERE id=${req.query.id}`;
+        json.costumes.splice(req.body.index, 1);
+        SQL = `UPDATE material_sprite SET json='${JSON.stringify(json)}' WHERE id=${req.body.id}`;
         DB.query(SQL,function (err, D1) {
             if (err) {
                 res.status(200).send({status:'x', msg: '数据错误，请再试一次' });
@@ -1185,12 +1185,12 @@ router.get('/material/sprite/setCostume/select', function (req, res) {
 });
 // 角色管理：造型管理：添加
 // {sid: 角色ID, cid: 将被添加的造型ID}
-router.get('/material/sprite/setCostume/add', function (req, res) {
+router.post('/material/sprite/setCostume/add', function (req, res) {
     // 取造型数据
     let SQL = `SELECT c.name, c.md5, c.info0, c.info1, c.info2, s.json FROM material_costume c` +
             ` LEFT JOIN material_sprite s ON (s.id=?) ` +
             ` WHERE c.id=?`;
-    let VAL = [req.query.sid, req.query.cid] 
+    let VAL = [req.body.sid, req.body.cid] 
     DB.qww(SQL, VAL, function (err, D) {
         if (err || D.length==0) {
             res.status(200).send({status:'x', msg: '数据错误，请再试一次' });
@@ -1213,7 +1213,7 @@ router.get('/material/sprite/setCostume/add', function (req, res) {
         let json = JSON.parse(D[0].json);
         json.costumes.push(newCostume);
 
-        SQL = `UPDATE material_sprite SET json='${JSON.stringify(json)}' WHERE id=${req.query.sid}`
+        SQL = `UPDATE material_sprite SET json='${JSON.stringify(json)}' WHERE id=${req.body.sid}`
         DB.query(SQL, function (err, D) {
             if (err) {
                 res.status(200).send({status:'x', msg: '数据错误，请再试一次' });
@@ -1245,10 +1245,10 @@ router.get('/material/sprite/setSound/data', function(req, res) {
 });
 // 角色管理：声音管理：删除素材,未删除其文件，仅仅删除数据库记录
 // 参数：{id: _id, index: obj.data.index, md5: obj.data.md5ext}
-router.get('/material/sprite/setSound/del', function (req, res) {
+router.post('/material/sprite/setSound/del', function (req, res) {
     // 需要判断是否在角色中有被使用到，有被角色使用到时，不能删除
     var SQL = `SELECT json FROM material_sprite WHERE id=?`;
-    var VAL = [req.query.id];
+    var VAL = [req.body.id];
     DB.qww(SQL, VAL, function (err, D) {
         if (err || D.length == 0) {
             res.status(200).send({status:'x', msg: '数据错误，请再试一次' });
@@ -1262,15 +1262,15 @@ router.get('/material/sprite/setSound/del', function (req, res) {
         }
 
         // 判断要移除的声音是否存在
-        var sound = json.sounds[req.query.index];
-        if (!sound || sound.md5ext != req.query.md5) {
+        var sound = json.sounds[req.body.index];
+        if (!sound || sound.md5ext != req.body.md5) {
             res.status(200).send({status:'x', msg: '数据错误，请再试一次' });
             return;
         }
 
         // 移除 并 保存
-        json.sounds.splice(req.query.index, 1);
-        SQL = `UPDATE material_sprite SET json='${JSON.stringify(json)}' WHERE id=${req.query.id}`;
+        json.sounds.splice(req.body.index, 1);
+        SQL = `UPDATE material_sprite SET json='${JSON.stringify(json)}' WHERE id=${req.body.id}`;
         DB.query(SQL,function (err, D1) {
             if (err) {
                 res.status(200).send({status:'x', msg: '数据错误，请再试一次' });
@@ -1308,12 +1308,12 @@ router.get('/material/sprite/setSound/select', function (req, res) {
 });
 // 角色管理：声音管理：添加
 // {sid: 角色ID, cid: 将被添加的声音ID}
-router.get('/material/sprite/setSound/add', function (req, res) {
+router.post('/material/sprite/setSound/add', function (req, res) {
     // 取声音数据
     let SQL = `SELECT c.name, c.md5, c.format, c.rate, c.sampleCount, s.json FROM material_sound c` +
             ` LEFT JOIN material_sprite s ON (s.id=?) ` +
             ` WHERE c.id=?`;
-    let VAL = [req.query.sid, req.query.cid] 
+    let VAL = [req.body.sid, req.body.cid] 
     DB.qww(SQL, VAL, function (err, D) {
         if (err || D.length==0) {
             res.status(200).send({status:'x', msg: '数据错误，请再试一次' });
@@ -1335,7 +1335,7 @@ router.get('/material/sprite/setSound/add', function (req, res) {
         let json = JSON.parse(D[0].json);
         json.sounds.push(newSound);
 
-        SQL = `UPDATE material_sprite SET json='${JSON.stringify(json)}' WHERE id=${req.query.sid}`
+        SQL = `UPDATE material_sprite SET json='${JSON.stringify(json)}' WHERE id=${req.body.sid}`
         DB.query(SQL, function (err, D) {
             if (err) {
                 res.status(200).send({status:'x', msg: '数据错误，请再试一次' });
@@ -1385,10 +1385,10 @@ router.get('/material/sound/data', function(req, res) {
     });
 });
 // 声音管理：添加
-router.get('/material/sound/add', function(req, res) {
+router.post('/material/sound/add', function(req, res) {
     // 仅仅支持wav格式的声音素材
     var newFileName = random_32ID_With_Time_Tag()+".wav";
-    const SQL = `INSERT INTO material_sound (tagId, md5) VALUES ('${req.query.tagId}', '${newFileName}')`;
+    const SQL = `INSERT INTO material_sound (tagId, md5) VALUES ('${req.body.tagId}', '${newFileName}')`;
     DB.query(SQL, function (err, newTag) {
         if (err) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
@@ -1404,7 +1404,7 @@ router.get('/material/sound/add', function(req, res) {
     });
 });
 // 声音管理：修改素材文件
-router.get('/material/sound/modWav', function (req, res) {
+router.post('/material/sound/modWav', function (req, res) {
     if (!req['files']['file']) {
         res.status(200).send({status: 'x', msg: '文件上传失败,请再试一次'});
         return;
@@ -1419,7 +1419,7 @@ router.get('/material/sound/modWav', function (req, res) {
     }
 
     const SQL = `SELECT md5 FROM material_sound WHERE id=?`;
-    const VAL = [req.query.id];
+    const VAL = [req.body.id];
     DB.qww(SQL, VAL, function (err, DATA) {
         if (err || DATA.length == 0) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
@@ -1435,14 +1435,14 @@ router.get('/material/sound/modWav', function (req, res) {
 
 });
 // 声音管理：修改名称
-router.get('/material/sound/modName', function (req, res) {
-    if (!req.query.v || req.query.v == ''){
+router.post('/material/sound/modName', function (req, res) {
+    if (!req.body.v || req.body.v == ''){
         res.status(200).send({status:"x", msg: "名称错误"});
         return;
     }
 
     var SQL = `UPDATE material_sound SET name=? WHERE id=?`;
-    var VAL = [req.query.v, req.query.id];
+    var VAL = [req.body.v, req.body.id];
     DB.qww(SQL, VAL, function (err, Mate) {
         if (err) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
@@ -1453,13 +1453,13 @@ router.get('/material/sound/modName', function (req, res) {
     });
 });
 // 声音管理：修改素材属性：rate/sampleCount
-router.get('/material/sound/modMateAttr', function (req, res) {
-    if (req.query.t != 'sampleCount'){
+router.post('/material/sound/modMateAttr', function (req, res) {
+    if (req.body.t != 'sampleCount'){
         res.status(200).send({status:"x", msg: "参数错误"});
         return;
     }
         
-    let infoValue = parseInt(req.query.v);
+    let infoValue = parseInt(req.body.v);
     if (!infoValue || infoValue<0 || 10000000<infoValue) {
         res.status(200).send({status:"x", msg: "参数错误：只能在 0~1000,0000 之间"});
         return;
@@ -1467,7 +1467,7 @@ router.get('/material/sound/modMateAttr', function (req, res) {
 
 
     const SQL = `UPDATE material_sound SET sampleCount=${infoValue} WHERE id=?`;
-    var VAL = [req.query.id];
+    var VAL = [req.body.id];
     DB.qww(SQL, VAL, function (err, Mate) {
         if (err) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
@@ -1478,9 +1478,9 @@ router.get('/material/sound/modMateAttr', function (req, res) {
     });
 });
 // 声音管理：删除素材,未删除其文件，仅仅删除数据库记录
-router.get('/material/sound/del', function (req, res) {
+router.post('/material/sound/del', function (req, res) {
     // 需要判断是否在角色中有被使用到，有被角色使用到时，不能删除
-    var VAL = [req.query.id];
+    var VAL = [req.body.id];
     var SQL = `DELETE FROM material_sound WHERE id=?`;
     DB.qww(SQL, VAL, function (err, TAG) {
         if (err) {
@@ -1492,13 +1492,13 @@ router.get('/material/sound/del', function (req, res) {
     });
 });
 // 声音管理：素材状态管理
-router.get('/material/sound/setState',function(req,res){
+router.post('/material/sound/setState',function(req,res){
     let v = 0; //默认都当作 停用 处理
-    if (req.query.v && req.query.v ==1) {
+    if (req.body.v && req.body.v ==1) {
         v = 1;
     }
 
-    var UPDATE = `UPDATE material_sound SET state=${v} WHERE id=${req.query.id} LIMIT 1`;
+    var UPDATE = `UPDATE material_sound SET state=${v} WHERE id=${req.body.id} LIMIT 1`;
     DB.query(UPDATE, function(err,d){
         if(err){
             res.status(200).send({status:"x", msg:"再试一次"})

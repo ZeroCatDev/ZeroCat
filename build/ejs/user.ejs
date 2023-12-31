@@ -83,7 +83,7 @@
 			, jump: function (obj, first) {
 				$.ajax({
 					'url': '/api/getUserScratchProjects',
-					'type': 'GET',
+					'type': 'POST',
 					'data': { curr: obj.curr, limit: obj.limit, userid: getQueryString('id') },
 					'success': function (d) {
 						if (d.length) {
@@ -124,7 +124,7 @@
 			, jump: function (obj, first) {
 				$.ajax({
 					'url': '/api/getUserPythonProjects',
-					'type': 'GET',
+					'type': 'POST',
 					'data': { curr: obj.curr, limit: obj.limit, userid: getQueryString('id') },
 					'success': function (d) {
 						if (d.length) {

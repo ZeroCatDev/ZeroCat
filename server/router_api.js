@@ -10,10 +10,10 @@ var DB = require("./lib/database.js");
 
 
 //显示Scratch项目列表：数据，{curr:obj.curr, limit:obj.limit,state:state}
-router.get('/getUserScratchProjects', function (req, res) {
-    var curr = parseInt(req.query.curr);     //当前要显示的页码
-    var limit = parseInt(req.query.limit);   //每页显示的作品数
-    var userid = parseInt(req.query.userid);     //
+router.post('/getUserScratchProjects', function (req, res) {
+    var curr = parseInt(req.body.curr);     //当前要显示的页码
+    var limit = parseInt(req.body.limit);   //每页显示的作品数
+    var userid = parseInt(req.body.userid);     //
     var SQL = `SELECT id, title,state,view_count,description FROM scratch WHERE authorid=${userid} AND state>0 ORDER BY view_count DESC LIMIT ${(curr-1)*limit}, ${limit}`;
     DB.query(SQL, function (err, data) {
         if (err) {
@@ -25,10 +25,10 @@ router.get('/getUserScratchProjects', function (req, res) {
 });
 
 //显示Scratch项目列表：数据，{curr:obj.curr, limit:obj.limit,state:state}
-router.get('/getUserPythonProjects', function (req, res) {
-    var curr = parseInt(req.query.curr);     //当前要显示的页码
-    var limit = parseInt(req.query.limit);   //每页显示的作品数
-    var userid = parseInt(req.query.userid);     //
+router.post('/getUserPythonProjects', function (req, res) {
+    var curr = parseInt(req.body.curr);     //当前要显示的页码
+    var limit = parseInt(req.body.limit);   //每页显示的作品数
+    var userid = parseInt(req.body.userid);     //
     var SQL = `SELECT id, title,state,view_count,description FROM python WHERE authorid=${userid} AND state>0 ORDER BY view_count DESC LIMIT ${(curr-1)*limit}, ${limit}`;
     DB.query(SQL, function (err, data) {
         if (err) {
@@ -95,7 +95,7 @@ router.get('/usertx', function (req, res) {
       });
 });
 
-router.get("/getuserinfo", function (req, res) {
+router.post("/getuserinfo", function (req, res) {
     //获取已分享的作品总数：1:普通作品，2：推荐的优秀作品
     
       SQL = `SELECT id,nickname, motto FROM user WHERE id = ${req.query.id};`;
