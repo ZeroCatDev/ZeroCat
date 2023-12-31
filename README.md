@@ -36,7 +36,7 @@ OurWorld 社区的源代码，包括前端与后端
 
 ## 安装
 
-这个项目使用 [node](http://nodejs.org) , [npm](https://npmjs.com), [docker](https://docker.com)，请确保你本地已经安装了它们。
+这个项目使用 [node](http://nodejs.org) , [npm](https://npmjs.com), [docker](https://docker.com)，请确保你本地已经安装了祂们
 
 ```sh
 $ npm install
