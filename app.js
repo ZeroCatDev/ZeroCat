@@ -166,7 +166,7 @@ app.all("*", function (req, res, next) {
       nickname: "",
       is_admin: 0,
     };
-    console.log("未找到JWT Token");
+    //console.log("未找到JWT Token");
     next();
   }
 });
