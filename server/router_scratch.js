@@ -114,8 +114,8 @@ router.get("/play", function (req, res) {
         ` user.nickname AS author_nickname,` +
         ` user.motto AS author_motto` +
         ` FROM scratch ` +
-        ` LEFT JOIN scratch_like ON (scratch_like.userid=${req.session.userid} AND scratch_like.projectid=${req.query.id}) ` +
-        ` LEFT JOIN scratch_favo ON (scratch_favo.userid=${req.session.userid} AND scratch_favo.projectid=${req.query.id}) ` +
+        ` LEFT JOIN scratch_like ON (scratch_like.userid=${res.locals.userid} AND scratch_like.projectid=${req.query.id}) ` +
+        ` LEFT JOIN scratch_favo ON (scratch_favo.userid=${res.locals.userid} AND scratch_favo.projectid=${req.query.id}) ` +
         ` LEFT JOIN user ON (user.id=scratch.authorid) ` +
         ` WHERE scratch.id=${req.query.id} AND scratch.state>=1 LIMIT 1`;
     }
@@ -128,7 +128,7 @@ router.get("/play", function (req, res) {
       }
 
       res.locals["is_author"] =
-        SCRATCH[0].authorid == req.session.userid ? true : false;
+        SCRATCH[0].authorid == res.locals.userid ? true : false;
       res.locals["project"] = SCRATCH[0];
       ////console.log(SCRATCH[0]);
       res.render("ejs/scratch/scratch_play.ejs");
@@ -172,7 +172,7 @@ router.post("/play/favo", function (req, res) {
   }
 
   var pid = req.body["pid"];
-  var SQL = `SELECT id FROM scratch_favo WHERE userid=${req.session.userid} AND projectid=${pid} LIMIT 1`;
+  var SQL = `SELECT id FROM scratch_favo WHERE userid=${res.locals.userid} AND projectid=${pid} LIMIT 1`;
   DB.query(SQL, function (err, FAVO) {
     if (err) {
       res.status(200).send({ status: "failed", msg: "数据错误，请再试一次" });
@@ -190,7 +190,7 @@ router.post("/play/favo", function (req, res) {
           return;
         }
 
-        var INSERT = `INSERT INTO scratch_favo (userid, projectid) VALUES (${req.session.userid}, ${pid})`;
+        var INSERT = `INSERT INTO scratch_favo (userid, projectid) VALUES (${res.locals.userid}, ${pid})`;
         DB.query(INSERT, function (err, FAVO) {
           if (err || FAVO.affectedRows == 0) {
             res
@@ -237,7 +237,7 @@ router.post("/play/openSrc", function (req, res) {
   }
 
   var pid = req.body["pid"];
-  var SQL = `SELECT state FROM scratch WHERE id=${pid} AND authorid=${req.session.userid} LIMIT 1`;
+  var SQL = `SELECT state FROM scratch WHERE id=${pid} AND authorid=${res.locals.userid} LIMIT 1`;
   DB.query(SQL, function (err, RECO) {
     if (err || RECO.length == 0) {
       res.status(200).send({ status: "failed", msg: "数据错误，请再试一次" });
@@ -297,11 +297,11 @@ router.post("/project/:projectid", function (req, res) {
       //2、开源的作品；
       //3、课堂用例、作业模板：购买课程后可以打开；
       //4、课堂作业作品：课程老师可以打开；
-      if (req.session["is_admin"] == 1) {
+      if (req.locals["is_admin"] == 1) {
         SQL = `SELECT * FROM scratch WHERE id=${projectid}`;
       } else {
-        SQL = `SELECT * FROM scratch WHERE id=${projectid} AND (authorid=${req.session.userid} OR state>0)`;
-        //(AND (courseid IN (SELECT courseid FROM student WHERE studentid=${req.session.userid} AND coursepayid>0)))
+        SQL = `SELECT * FROM scratch WHERE id=${projectid} AND (authorid=${res.locals.userid} OR state>0)`;
+        //(AND (courseid IN (SELECT courseid FROM student WHERE studentid=${res.locals.userid} AND coursepayid>0)))
       }
     }
   }
@@ -314,7 +314,7 @@ router.post("/project/:projectid", function (req, res) {
 
     if (SCRATCH.length == 0) {
       //4、课堂作业作品：课程老师可以打开；
-      SQL = `SELECT * FROM scratch WHERE id=${projectid} AND courseid!=0 AND (courseid IN (SELECT courseid FROM class WHERE teacherid=${req.session.userid}))`;
+      SQL = `SELECT * FROM scratch WHERE id=${projectid} AND courseid!=0 AND (courseid IN (SELECT courseid FROM class WHERE teacherid=${res.locals.userid}))`;
       DB.query(SQL, function (err, SCRATCH) {
         if (err || SCRATCH.length == 0) {
           res.status(200).send({ status: "作品不存在或无权打开" }); //需要Scratch内部处理
@@ -328,7 +328,7 @@ router.post("/project/:projectid", function (req, res) {
           }
         });
 
-        SCRATCH[0]["teacher_id"] = req.session.userid;
+        SCRATCH[0]["teacher_id"] = res.locals.userid;
         res.status(200).send({ status: "ok", src: SCRATCH[0] });
       });
 
@@ -366,7 +366,7 @@ router.post("/saveProjcetTitle", function (req, res) {
     res.status(404);
     return;
   }
-  var UPDATE = `UPDATE scratch SET title=? WHERE id=${req.body.id} AND authorid=${req.session.userid} LIMIT 1`;
+  var UPDATE = `UPDATE scratch SET title=? WHERE id=${req.body.id} AND authorid=${res.locals.userid} LIMIT 1`;
   var VAL = [`${req.body.title}`];
   DB.qww(UPDATE, VAL, function (err, SCRATCH) {
     if (err) {
@@ -392,7 +392,7 @@ router.put("/projects/:projectid", function (req, res) {
       return;
     }
 
-    if (SWork[0].authorid != req.session.userid) {
+    if (SWork[0].authorid != res.locals.userid) {
       res.status(404).send({});
       return;
     }
@@ -452,7 +452,7 @@ router.post("/shareProject/:projectid", function (req, res) {
   }
 
   //只能分享自己的作品
-  var UPDATE = `UPDATE scratch SET state=${s} WHERE id=${req.params.projectid} AND authorid=${req.session.userid} LIMIT 1`;
+  var UPDATE = `UPDATE scratch SET state=${s} WHERE id=${req.params.projectid} AND authorid=${res.locals.userid} LIMIT 1`;
   DB.query(UPDATE, function (err, U) {
     if (err) {
       res.status(200).send({ status: "x" });
@@ -475,7 +475,7 @@ router.post("/projects", function (req, res) {
   if (req.query.title) {
     title = req.query.title;
   }
-  var INSERT = `INSERT INTO scratch (authorid, title, src) VALUES (${req.session.userid}, ?, ?)`;
+  var INSERT = `INSERT INTO scratch (authorid, title, src) VALUES (${res.locals.userid}, ?, ?)`;
   var VAL = [title, `${JSON.stringify(req.body)}`];
   DB.qww(INSERT, VAL, function (err, newScratch) {
     if (err || newScratch.affectedRows == 0) {
@@ -624,7 +624,7 @@ router.post("/getMyProjectLibrary", function (req, res) {
     WHERE += ` AND title LIKE '%${req.body.f}%'`;
   }
 
-  var SELECT = `SELECT id, title, time, state FROM scratch WHERE authorid=${req.session["userid"]} ${WHERE} ORDER BY time DESC LIMIT ${req.body.l},${req.body.n}`; //正式版本中，需要限定作者本身的作品
+  var SELECT = `SELECT id, title, time, state FROM scratch WHERE authorid=${req.locals["userid"]} ${WHERE} ORDER BY time DESC LIMIT ${req.body.l},${req.body.n}`; //正式版本中，需要限定作者本身的作品
   DB.query(SELECT, function (err, SCRATCH) {
     if (err) {
       res.status(200).send({ status: "err", data: [] });
@@ -872,10 +872,10 @@ router.post("/getSession", (req, res) => {
     };
   } else {
     var new_session = {
-      userid: parseInt(req.session["userid"]),
-      username: req.session["username"],
-      nickname: req.session["nickname"],
-      avatar: `${process.env.qiniuurl}/user/${req.session.userid}.png`,
+      userid: parseInt(req.locals["userid"]),
+      username: req.locals["username"],
+      nickname: req.locals["nickname"],
+      avatar: `${process.env.qiniuurl}/user/${res.locals.userid}.png`,
     };
   }
 

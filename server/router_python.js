@@ -86,7 +86,7 @@ router.post('/play/like', function (req, res) {
     }
 
     var pid = req.body['pid'];
-    var SQL = `SELECT id FROM python_like WHERE userid=${req.session.userid} AND projectid=${pid} LIMIT 1`;
+    var SQL = `SELECT id FROM python_like WHERE userid=${res.locals.userid} AND projectid=${pid} LIMIT 1`;
     DB.query(SQL, function(err, LIKE){
         if (err){
             res.status(200).send( {'status': 'failed','msg': '数据错误，请再试一次'});
@@ -102,7 +102,7 @@ router.post('/play/like', function (req, res) {
                     return;  
                 }
 
-                var INSERT =`INSERT INTO python_like (userid, projectid) VALUES (${req.session.userid}, ${pid})`;
+                var INSERT =`INSERT INTO python_like (userid, projectid) VALUES (${res.locals.userid}, ${pid})`;
                 DB.query(INSERT, function(err, LIKE){
                     if (err || LIKE.affectedRows == 0){
                         res.status(200).send( {'status': 'failed','msg': '数据错误，请再试一次'});
@@ -142,7 +142,7 @@ router.post('/play/favo', function (req, res) {
     }
 
     var pid = req.body['pid'];
-    var SQL = `SELECT id FROM python_favo WHERE userid=${req.session.userid} AND projectid=${pid} LIMIT 1`;
+    var SQL = `SELECT id FROM python_favo WHERE userid=${res.locals.userid} AND projectid=${pid} LIMIT 1`;
     DB.query(SQL, function(err, FAVO){
         if (err){
             res.status(200).send( {'status': 'failed','msg': '数据错误，请再试一次'});
@@ -158,7 +158,7 @@ router.post('/play/favo', function (req, res) {
                     return;  
                 }
 
-                var INSERT =`INSERT INTO python_favo (userid, projectid) VALUES (${req.session.userid}, ${pid})`;
+                var INSERT =`INSERT INTO python_favo (userid, projectid) VALUES (${res.locals.userid}, ${pid})`;
                 DB.query(INSERT, function(err, FAVO){
                     if (err || FAVO.affectedRows == 0){
                         res.status(200).send( {'status': 'failed','msg': '数据错误，请再试一次'});
@@ -228,14 +228,12 @@ router.post('/getWork', function (req, res) {
         if (!res.locals.login){//未登录时，只能打开已发布的作品
             SQL = `SELECT * FROM python WHERE id=${projectid} AND state>0`;
         }else {
-            if (req.session['is_admin'] == 1) { 
-                SQL = `SELECT * FROM python WHERE id=${projectid}`;                
-            } else {
+           
                 //作品编辑：能够打开一个作品的几种权限：
                 //1、自己的作品；
                 //2、开源的作品；
-                SQL = `SELECT * FROM python WHERE id=${projectid} AND (authorid=${req.session.userid} OR state>0)`;
-            }
+                SQL = `SELECT * FROM python WHERE id=${projectid} AND (authorid=${res.locals.userid} OR state>0)`;
+            
             
         }
     }
@@ -257,14 +255,14 @@ router.post('/getWork', function (req, res) {
 
 // python 保存
 router.post('/save', function (req, res) {
-    if (!req.session.userid){
+    if (!res.locals.userid){
         res.status(200).send({status: "x", msg: "请先登录" });
         return;
     }
 
     // 新作品
 	if (req.body.id == '0'){
-		var INSERT =`INSERT INTO python (authorid, title,src) VALUES (${req.session.userid}, ?, ?)`;
+		var INSERT =`INSERT INTO python (authorid, title,src) VALUES (${res.locals.userid}, ?, ?)`;
 		var SET = [req.body.title,req.body.data]
 		DB.qww(INSERT, SET, function (err, newPython) {
 			if (err || newPython.affectedRows==0) {
@@ -279,7 +277,7 @@ router.post('/save', function (req, res) {
 	}
 
     // 旧作品
-    var UPDATE =`UPDATE python SET ? WHERE id=${req.body.id} AND authorid=${req.session.userid} LIMIT 1`;
+    var UPDATE =`UPDATE python SET ? WHERE id=${req.body.id} AND authorid=${res.locals.userid} LIMIT 1`;
     var SET = {
         title:req.body.title,
         src:req.body.data,
@@ -296,13 +294,13 @@ router.post('/save', function (req, res) {
 });
 
 router.post('/publish', function (req, res) {
-    if (!req.session.userid){
+    if (!res.locals.userid){
         res.status(200).send({status: "x", msg: "请先登录" });
         return;
     }
 
 	var state = req.body.s=="0"? 1:0;
-	var UPDATE = `UPDATE python SET state=${state} WHERE id=${req.body.id} AND authorid=${req.session.userid} LIMIT 1`;
+	var UPDATE = `UPDATE python SET state=${state} WHERE id=${req.body.id} AND authorid=${res.locals.userid} LIMIT 1`;
 	DB.query(UPDATE, function (err, u) {
 		if (err) {
 			res.status(200).send({status: "x", msg: "操作失败！"});
@@ -346,7 +344,7 @@ router.post('/YxLibrary_data', function (req, res) {
 
 
 router.all('*', function (req, res, next) {
-    if (!req.session.userid){
+    if (!res.locals.userid){
         res.status(200).send({status: "x", msg: "请先登录" });
         return;
     }
@@ -355,7 +353,7 @@ router.all('*', function (req, res, next) {
 });
 
 router.post('/MyLibrary_count', function (req, res) {
-    var SQL = `SELECT count(id) AS c FROM python WHERE authorid=${req.session.userid}`;
+    var SQL = `SELECT count(id) AS c FROM python WHERE authorid=${res.locals.userid}`;
     DB.query(SQL, function (err, COUNT){
         if (err) {
             res.status(200).send({status:'ok', total: 0});
@@ -368,7 +366,7 @@ router.post('/MyLibrary_count', function (req, res) {
 router.post('/MyLibrary_data', function (req, res) {
     //获取当前数据集合：以被浏览次数降序排列，每次取16个
     var page = parseInt(req.body.page);
-    SQL = `SELECT id, state, time, title FROM python WHERE authorid=${req.session.userid} ORDER BY time DESC LIMIT ${(page-1)*16},${16}`;
+    SQL = `SELECT id, state, time, title FROM python WHERE authorid=${res.locals.userid} ORDER BY time DESC LIMIT ${(page-1)*16},${16}`;
     DB.query(SQL, function (err, data) {
         if (err) {
             res.status(200).send({status:'ok', data:[]});

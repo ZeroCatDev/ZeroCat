@@ -1,6 +1,7 @@
 var express = require("express");
 var app = express();
 var http = require("http");
+const jwt = require("jsonwebtoken"); // 首先确保安装了jsonwebtoken库
 
 //环境变量
 require("dotenv").config();
@@ -18,13 +19,15 @@ const logger = winston.createLogger({
   ),
   defaultMeta: { service: "ourworld-service" },
   transports: [
-    process.env.AXIOM_TOKEN ? new AxiomTransport({
-      dataset: process.env.AXIOM_DATASET,
-      token: process.env.AXIOM_TOKEN,
-    }) : null,
+    process.env.AXIOM_TOKEN
+      ? new AxiomTransport({
+          dataset: process.env.AXIOM_DATASET,
+          token: process.env.AXIOM_TOKEN,
+        })
+      : null,
     new winston.transports.Console(),
   ],
-}); 
+});
 
 // 创建自定义Stream，将日志写入Winston
 const winstonStream = {
@@ -73,17 +76,7 @@ var corsOptions = {
 app.use(cors(corsOptions)); // 应用CORS配置函数
 
 //设置环境变量
-var session = require("express-session");
-app.use(
-  session({
-    secret: process.env.SessionSecret,
-    resave: false,
-    name: "OurWorld-session",
-    saveUninitialized: true,
-    cookie: { secure: false },
-  })
-);
-
+//var session = require("express-session"); app.use( session({ secret: process.env.SessionSecret, resave: false, name: "OurWorld-session", saveUninitialized: true, cookie: { secure: false }, }) );
 //express 的cookie的解析组件
 var cookieParser = require("cookie-parser");
 app.use(cookieParser(process.env.SessionSecret));
@@ -108,7 +101,7 @@ app.set("view engine", "ejs");
 var DB = require("./server/lib/database.js");
 
 //设置静态资源路径
-if (process.env.localstatic == 'true') {
+if (process.env.localstatic == "true") {
   app.use(process.env.staticurl, express.static(process.env.staticpath));
 }
 //全局变量
@@ -117,46 +110,78 @@ global.dirname = __dirname;
 //启动http(80端口)==================================
 http.createServer(app).listen(3000, "0.0.0.0", function () {
   console.log("Listening on http://localhost:3000");
-});
-//平台总入口
+}); // 平台总入口
 app.all("*", function (req, res, next) {
   //console.log(req.method +' '+ req.url + " IP:" + req.ip);
-  if (req.session["userid"] == undefined && req.signedCookies["userid"]) {
-    req.session["userid"] = req.signedCookies["userid"];
-    req.session["username"] = req.signedCookies["username"];
-    req.session["nickname"] = req.signedCookies["nickname"];
 
-    //判断系统管理员权限：此处写死，无需从数据库获取
-    req.session["is_admin"] = 0;
-    if (req.session["username"].indexOf(process.env.adminuser) == 0) {
-      if (req.session["username"] == process.env.adminuser) {
-        req.session["is_admin"] = 1;
+  const token = req.cookies.token || req.body.token || req.headers["token"]; // 获取JWT令牌
+
+  if (token) {
+    jwt.verify(token, process.env.jwttoken, (err, decodedToken) => {
+      // 解析并验证JWT
+      if (err) {
+        // 如果验证失败，清除本地登录状态
+        res.locals = {
+          login: false,
+          userid: "",
+          username: "",
+          nickname: "",
+          is_admin: 0,
+        };
+        //console.log("JWT验证失败: " + err.message);
       } else {
-        let no = parseInt(req.session["username"].substring(8));
-        if (0 <= no && no < 100) {
-          req.session["is_admin"] = 1;
+        // 如果验证成功，将用户信息存储在res.locals和session中
+        let userInfo = decodedToken;
+        res.locals.userid = userInfo.userid;
+        res.locals.username = userInfo.username;
+        res.locals.nickname = userInfo.nickname;
+        res.locals["is_admin"] = 0;
+        if (userInfo.username == process.env.adminuser) {
+          res.locals["is_admin"] = 1;
         }
+        //console.log("JWT验证成功: " + userInfo.username);
+        //console.log('调试用户信息(session)：'+res.locals.userid+','+res.locals.username+','+res.locals.nickname+','+res.locals.is_admin);
+
+
+        res.locals = {
+          login: true,
+          userid: res.locals.userid,
+          username: res.locals.username,
+          nickname: res.locals.nickname,
+          is_admin: res.locals["is_admin"],
+        };
+
+        //console.log('调试用户信息(locals )：'+res.locals.userid+','+res.locals.username+','+res.locals.nickname+','+res.locals.is_admin);
+
       }
-    }
-  }
 
-  if (req.session["userid"]) {
-    res.locals["login"] = true;
-    res.locals["userid"] = req.session["userid"];
-    res.locals["username"] = req.session["username"];
-    res.locals["nickname"] = req.session["nickname"];
-    res.locals["is_admin"] = req.session["is_admin"];
+      next();
+    });
   } else {
-    res.locals["login"] = false;
-    res.locals["userid"] = "";
-    res.locals["username"] = "";
-    res.locals["nickname"] = "";
-    res.locals["is_admin"] = 0;
+    // 如果未找到token，则清除本地登录状态
+    res.locals = {
+      login: false,
+      userid: "",
+      username: "",
+      nickname: "",
+      is_admin: 0,
+    };
+    console.log("未找到JWT Token");
+    next();
   }
-
-  next();
 });
 
+// 辅助函数：从请求头或请求体中获取JWT Token
+function getTokenFromRequest(req) {
+  if (req.headers.token && req.headers.token) {
+    return req.headers.token.split(" ")[1];
+  } else if (req.body && req.body.token) {
+    return req.body.token;
+  } else if (req.query && req.query.token) {
+    return req.query.token;
+  }
+  return null;
+}
 //首页
 app.get("/", function (req, res) {
   //获取已分享的作品总数：1:普通作品，2：推荐的优秀作品
@@ -184,7 +209,6 @@ app.get("/", function (req, res) {
 
     //  res.locals["ads"] = encodeURIComponent(JSON.stringify(ADS));
 
-      
     //});
     res.render("ejs/index.ejs");
   });

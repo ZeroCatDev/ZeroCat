@@ -65,7 +65,7 @@ router.get("/repw", function (req, res) {
 router.post("/login", function (req, res) {
   request.post(
     {
-      url:`${process.env.reverify}?secret=${process.env.resecret}&response=${req.body.re}`,
+      url: `${process.env.reverify}?secret=${process.env.resecret}&response=${req.body.re}`,
     },
     function (err, httpResponse, body) {
       if (err) {
@@ -104,9 +104,9 @@ router.post("/login", function (req, res) {
         } else if (User["state"] == 2) {
           res.status(200).send({ status: "您已经被封号，请联系管理员" });
         } else {
-          req.session["userid"] = User["id"];
-          req.session["username"] = User["username"];
-          req.session["nickname"] = User["nickname"];
+          res.locals["userid"] = User["id"];
+          res.locals["username"] = User["username"];
+          res.locals["nickname"] = User["nickname"];
           //console.log('已登录：**********************************');
 
           //判断系统管理员权限
@@ -116,14 +116,14 @@ router.post("/login", function (req, res) {
           //     req.session['is_admin'] = 0;
           // }
           //判断系统管理员权限：此处写死，无需从数据库获取
-          req.session["is_admin"] = 0;
-          if (req.session["username"].indexOf(process.env.adminuser) == 0) {
-            if (req.session["username"] == process.env.adminuser) {
-              req.session["is_admin"] = 1;
+          res.locals["is_admin"] = 0;
+          if (res.locals["username"].indexOf(process.env.adminuser) == 0) {
+            if (res.locals["username"] == process.env.adminuser) {
+              res.locals["is_admin"] = 1;
             } else {
-              let no = parseInt(req.session["username"].substring(8));
+              let no = parseInt(res.locals["username"].substring(8));
               if (0 <= no && no < 100) {
-                req.session["is_admin"] = 1;
+                res.locals["is_admin"] = 1;
               }
             }
           }
@@ -138,7 +138,11 @@ router.post("/login", function (req, res) {
             maxAge: 604800000,
             signed: true,
           });
-
+          res.cookie(
+            "token",
+            I.GenerateJwt(User["id"], User["username"], User["nickname"]),
+            { maxAge: 604800000 }
+          );
           res.status(200).send({
             status: "OK",
             userid: parseInt(User["id"]),
@@ -154,7 +158,7 @@ router.post("/login", function (req, res) {
 
 //退出
 var logout = function (req, res) {
-  req.session.destroy();
+  //req.session.destroy();
 
   res.locals["userid"] = null;
   res.locals["username"] = null;
@@ -162,6 +166,7 @@ var logout = function (req, res) {
   res.cookie("userid", "", { maxAge: 0, signed: true });
   res.cookie("username", "", { maxAge: 0, signed: true });
   res.cookie("nickname", "", { maxAge: 0, signed: true });
+  res.cookie("token", "", { maxAge: 0, signed: true });
 };
 router.get("/logout", function (req, res) {
   logout(req, res);
@@ -172,7 +177,7 @@ router.get("/logout", function (req, res) {
 router.post("/register", function (req, res) {
   request.post(
     {
-      url:`${process.env.reverify}?secret=${process.env.resecret}&response=${req.body.re}`,
+      url: `${process.env.reverify}?secret=${process.env.resecret}&response=${req.body.re}`,
     },
     function (err, httpResponse, body) {
       if (err) {
@@ -212,8 +217,7 @@ router.post("/register", function (req, res) {
 
           //对密码进行加密
           //var pw = req.body.pw;
-          var randonpw = I.randomString(10);
-          var randonpw = randonpw + "@O";
+          var randonpw = I.randomPassword(12);
           //console.log(randonpw);
           //console.log(username);
 
@@ -230,33 +234,12 @@ router.post("/register", function (req, res) {
               return;
             }
             var userid = newUser.insertId;
-            req.session["userid"] = userid;
-            req.session["username"] = username;
-            req.session["nickname"] = nickname;
-
-            req.session["jwt"] = jwt.sign(
-              { userid: userid, nickname: nickname, username: username },
-              "test"
-            );
-            //7天时长的毫秒数：604800000=7*24*60*60*1000
-            //res.cookie("userid", newUser.insertId, {  maxAge: 604800000,  signed: true,});
-            //res.cookie("username", username, { maxAge: 604800000, signed: true });
-            //res.cookie("nickname", nickname, { maxAge: 604800000, signed: true });
-            res.cookie(
-              "jwt",
-              jwt.sign(
-                { userid: userid, nickname: nickname, username: username },
-                "test"
-              ),
-              {
-                maxAge: 604800000,
-              }
-            );
-            oldpath = "./build/img/user_default_icon.png";
-            newpath = "./data/user/" + newUser.insertId + ".png";
-            let oldFile = fs["createReadStream"](oldpath);
-            let newFile = fs["createWriteStream"](newpath);
-            oldFile["pipe"](newFile);
+            // res.locals["userid"] = userid; res.locals["username"] = username; res.locals["nickname"] = nickname; res.locals["jwt"] = jwt.sign( { userid: userid, nickname: nickname, username: username }, "test" ); //7天时长的毫秒数：604800000=7*24*60*60*1000 //res.cookie("userid", newUser.insertId, {  maxAge: 604800000,  signed: true,}); //res.cookie("username", username, { maxAge: 604800000, signed: true }); //res.cookie("nickname", nickname, { maxAge: 604800000, signed: true }); res.cookie( "jwt", jwt.sign( { userid: userid, nickname: nickname, username: username }, "test" ), { maxAge: 604800000, } );
+            //oldpath = "./build/img/user_default_icon.png";
+            //newpath = "./data/user/" + newUser.insertId + ".png";
+            //let oldFile = fs["createReadStream"](oldpath);
+            //let newFile = fs["createWriteStream"](newpath);
+            //oldFile["pipe"](newFile);
 
             var nodemailer = require("nodemailer");
 
@@ -324,7 +307,7 @@ router.post("/register", function (req, res) {
                           </tbody>
                       </table>
                   </div>
-              </div>` ,
+              </div>`,
               },
               (err, data) => {
                 if (err) {
@@ -352,7 +335,7 @@ router.post("/register", function (req, res) {
 router.post("/repw", function (req, res) {
   request.post(
     {
-      url:`${process.env.reverify}?secret=${process.env.resecret}&response=${req.body.re}`,
+      url: `${process.env.reverify}?secret=${process.env.resecret}&response=${req.body.re}`,
     },
     function (err, httpResponse, body) {
       if (err) {
@@ -461,7 +444,6 @@ router.post("/repw", function (req, res) {
           }
         );
       });
-
     }
   );
 });
@@ -470,7 +452,7 @@ router.post("/repw", function (req, res) {
 router.post("/torepw", function (req, res) {
   request.post(
     {
-      url:`${process.env.reverify}?secret=${process.env.resecret}&response=${req.body.re}`,
+      url: `${process.env.reverify}?secret=${process.env.resecret}&response=${req.body.re}`,
     },
     function (err, httpResponse, body) {
       if (err) {
@@ -523,7 +505,7 @@ router.get("/walineget", function (req, res) {
   res.redirect(
     process.env.WalineServerURL +
       "/ui/profile?token=" +
-      I.jwt(req.session["username"])
+      I.jwt(res.locals["username"])
   );
 });
 
@@ -537,10 +519,10 @@ router.get("/tuxiaochao", function (req, res) {
   if (!process.env.txckey) {
     res.redirect("https://support.qq.com/product/" + process.env.txcid);
   }
-  uid = req.session["userid"].toString();
+  uid = res.locals["userid"].toString();
   var txcinfo =
     uid +
-    req.session["nickname"] +
+    res.locals["nickname"] +
     process.env.qiniuurl +
     "/user/" +
     uid +
@@ -551,17 +533,16 @@ router.get("/tuxiaochao", function (req, res) {
     "https://support.qq.com/product/" +
       process.env.txcid +
       "?openid=" +
-      req.session["userid"] +
+      res.locals["userid"] +
       "&nickname=" +
-      req.session["nickname"] +
+      res.locals["nickname"] +
       "&avatar=" +
       process.env.qiniuurl +
       "/user/" +
-      req.session["userid"] +
+      res.locals["userid"] +
       ".png&user_signature=" +
       cryptostr
   );
- 
 });
 
 module.exports = router;

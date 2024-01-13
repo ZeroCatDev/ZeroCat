@@ -2,9 +2,7 @@
 const crypto = require("crypto");
 var base64url = require("base64url");
 const { PasswordHash } = require("phpass");
-
-// 配置密钥
-var jwt = require("jsonwebtoken");
+const jwt = require("jsonwebtoken"); // 首先确保安装了jsonwebtoken库
 
 var fs = require("fs");
 
@@ -14,7 +12,6 @@ var config = new qiniu.conf.Config();
 var accessKey = process.env.qiniuaccessKey;
 var secretKey = process.env.qiniusecretKey;
 var mac = new qiniu.auth.digest.Mac(accessKey, secretKey);
-
 
 exports.qiniuupdate = function qiniuupdate(name, file) {
   var options = {
@@ -39,7 +36,7 @@ exports.qiniuupdate = function qiniuupdate(name, file) {
       }
       if (respInfo.statusCode == 200) {
         console.log(respBody);
-     //   fs.unlink(file, function (err) { if (err) { console.log("fe"); } });
+        //   fs.unlink(file, function (err) { if (err) { console.log("fe"); } });
       } else {
         console.log(respInfo.statusCode);
         console.log(respBody);
@@ -74,8 +71,9 @@ exports.phoneTest = function (No) {
 //常用数据结构
 exports.msg_fail = { status: "fail", msg: "请再试一次19" };
 
-exports.randomString = function randomString(len) {
-  len = len || 32;
+exports.randomPassword = function randomPassword(len) {
+  len = len || 12;
+  len = len - 4;
   var $chars =
     "ABCDEFGHJKMNPQRSTWXYZabcdefhijkmnprstwxyz2345678"; /****默认去掉了容易混淆的字符oOLl,9gq,Vv,Uu,I1****/
   var maxPos = $chars.length;
@@ -83,6 +81,7 @@ exports.randomString = function randomString(len) {
   for (var i = 0; i < len; i++) {
     pwd += $chars.charAt(Math.floor(Math.random() * maxPos));
   }
+  pwd = pwd + "@Aa1";
   return pwd;
 };
 
@@ -100,6 +99,17 @@ exports.jwt = function (data) {
 
   //  jwt = jwt_s + "." + jwt_v;
   console.log(token);
+  return token;
+};
+exports.GenerateJwt = function (id, email, nickname) {
+  token = jwt.sign(
+    {
+      userid: id,
+      username: email,
+      nickname: nickname,
+    },
+    process.env.jwttoken
+    , { expiresIn: '72h' });
   return token;
 };
 

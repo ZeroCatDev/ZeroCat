@@ -34,7 +34,7 @@ router.get('/scratch', function (req, res) {
         ` count(case when state=0 then 1 end) AS state0_count, `+
         ` count(case when state=1 then 1 end) AS state1_count, `+
         ` count(case when state=2 then 1 end) AS state2_count `+
-        ` FROM scratch WHERE authorid=${req.session.userid}`;
+        ` FROM scratch WHERE authorid=${res.locals['userid']}`;
     
     DB.query(SQL, function(err, data){
         if (err){
@@ -56,7 +56,7 @@ router.get('/python', function (req, res) {
         ` count(case when state=0 then 1 end) AS state0_count, `+
         ` count(case when state=1 then 1 end) AS state1_count, `+
         ` count(case when state=2 then 1 end) AS state2_count `+
-        ` FROM python WHERE authorid=${req.session.userid}`;
+        ` FROM python WHERE authorid=${res.locals.userid}`;
     
     DB.query(SQL, function(err, data){
         if (err){
@@ -77,7 +77,7 @@ router.post('/getScratchProjects', function (req, res) {
     var limit = parseInt(req.body.limit);   //每页显示的作品数
     var state = parseInt(req.body.state);   //每页显示的作品状态
 
-    var SQL = `SELECT id, title,view_count,description FROM scratch WHERE authorid=${req.session.userid} AND state=${state} ORDER BY view_count DESC LIMIT ${(curr-1)*limit}, ${limit}`;
+    var SQL = `SELECT id, title,view_count,description FROM scratch WHERE authorid=${res.locals.userid} AND state=${state} ORDER BY view_count DESC LIMIT ${(curr-1)*limit}, ${limit}`;
     DB.query(SQL, function (err, data) {
         if (err) {
             res.status(200).send([]);
@@ -93,7 +93,7 @@ router.post('/getPythonProjects', function (req, res) {
     var limit = parseInt(req.body.limit);   //每页显示的作品数
     var state = parseInt(req.body.state);   //每页显示的作品状态
 
-    var SQL = `SELECT id, title,view_count,description FROM python WHERE authorid=${req.session.userid} AND state=${state} ORDER BY view_count DESC LIMIT ${(curr-1)*limit}, ${limit}`;
+    var SQL = `SELECT id, title,view_count,description FROM python WHERE authorid=${res.locals.userid} AND state=${state} ORDER BY view_count DESC LIMIT ${(curr-1)*limit}, ${limit}`;
     DB.query(SQL, function (err, data) {
         if (err) {
             res.status(200).send([]);
@@ -105,7 +105,7 @@ router.post('/getPythonProjects', function (req, res) {
 
 //分享Scratch项目
 router.post('/scratch/share', function (req, res) {
-    var SQL = `UPDATE scratch SET state=1 WHERE id=${ req.body['id']} AND authorid=${req.session.userid} LIMIT 1`;
+    var SQL = `UPDATE scratch SET state=1 WHERE id=${ req.body['id']} AND authorid=${res.locals.userid} LIMIT 1`;
     DB.query(SQL, function (err, d) {
         if (err) {
             res.status(200).send(I.msg_fail);
@@ -118,7 +118,7 @@ router.post('/scratch/share', function (req, res) {
 
 //分享Scratch项目
 router.post('/python/share', function (req, res) {
-    var SQL = `UPDATE python SET state=1 WHERE id=${ req.body['id']} AND authorid=${req.session.userid} LIMIT 1`;
+    var SQL = `UPDATE python SET state=1 WHERE id=${ req.body['id']} AND authorid=${res.locals.userid} LIMIT 1`;
     DB.query(SQL, function (err, d) {
         if (err) {
             res.status(200).send(I.msg_fail);
@@ -132,7 +132,7 @@ router.post('/python/share', function (req, res) {
 //简介
 router.post('/scratch/setdescription', function (req, res) {
     var SET= {description:req.body['description']};
-    var SQL = `UPDATE scratch SET ? WHERE id=${ req.body['id']} AND authorid=${req.session.userid} LIMIT 1`;
+    var SQL = `UPDATE scratch SET ? WHERE id=${ req.body['id']} AND authorid=${res.locals.userid} LIMIT 1`;
     DB.qww(SQL,SET, function (err, d) {
         if (err) {
             res.status(200).send(I.msg_fail);
@@ -146,7 +146,7 @@ router.post('/scratch/setdescription', function (req, res) {
 //简介
 router.post('/python/setdescription', function (req, res) {
     var SET= {description:req.body['description']};
-    var SQL = `UPDATE python SET ? WHERE id=${ req.body['id']} AND authorid=${req.session.userid} LIMIT 1`;
+    var SQL = `UPDATE python SET ? WHERE id=${ req.body['id']} AND authorid=${res.locals.userid} LIMIT 1`;
     DB.qww(SQL,SET, function (err, d) {
         if (err) {
             res.status(200).send(I.msg_fail);
@@ -160,7 +160,7 @@ router.post('/python/setdescription', function (req, res) {
 
 //取消分享Scratch项目
 router.post('/scratch/noshare', function (req, res) {
-    var SQL = `UPDATE scratch SET state=0 WHERE id=${ req.body['id']} AND authorid=${req.session.userid} LIMIT 1`;
+    var SQL = `UPDATE scratch SET state=0 WHERE id=${ req.body['id']} AND authorid=${res.locals.userid} LIMIT 1`;
     DB.query(SQL, function (err, d) {
         if (err) {
             res.status(200).send(I.msg_fail);
@@ -173,7 +173,7 @@ router.post('/scratch/noshare', function (req, res) {
 
 //取消分享Scratch项目
 router.post('/python/noshare', function (req, res) {
-    var SQL = `UPDATE python SET state=0 WHERE id=${ req.body['id']} AND authorid=${req.session.userid} LIMIT 1`;
+    var SQL = `UPDATE python SET state=0 WHERE id=${ req.body['id']} AND authorid=${res.locals.userid} LIMIT 1`;
     DB.query(SQL, function (err, d) {
         if (err) {
             res.status(200).send(I.msg_fail);
@@ -189,7 +189,7 @@ router.post('/python/noshare', function (req, res) {
 
 //删除Scratch项目
 router.post('/scratch/del', function (req, res) {
-    var DEL = `DELETE FROM scratch WHERE id=${ req.body['id']} AND authorid=${req.session.userid} LIMIT 1`;
+    var DEL = `DELETE FROM scratch WHERE id=${ req.body['id']} AND authorid=${res.locals.userid} LIMIT 1`;
     DB.query(DEL, function (err, d) {
         if (err) {
             res.status(200).send(I.msg_fail);
@@ -211,7 +211,7 @@ router.post('/scratch/del', function (req, res) {
 
 //删除Scratch项目
 router.post('/python/del', function (req, res) {
-    var DEL = `DELETE FROM python WHERE id=${ req.body['id']} AND authorid=${req.session.userid} LIMIT 1`;
+    var DEL = `DELETE FROM python WHERE id=${ req.body['id']} AND authorid=${res.locals.userid} LIMIT 1`;
     DB.query(DEL, function (err, d) {
         if (err) {
             res.status(200).send(I.msg_fail);
@@ -234,7 +234,7 @@ router.post('/python/del', function (req, res) {
 //个人设置
 router.get('/info', function (req, res) {
     res.locals['curItem']['set'] = 'active';
-    var SQL = `SELECT * FROM user WHERE id=${req.session.userid} LIMIT 1`;
+    var SQL = `SELECT * FROM user WHERE id=${res.locals.userid} LIMIT 1`;
     DB.query(SQL, function (err, USER) {
         if (err || USER.length == 0) {
             res.render('ejs/404.ejs');
@@ -257,7 +257,7 @@ router.post('/set/avatar', function (req, res) {
    }
 
    tmppath = req['files']['file']['path'];
-   newpath = `./data/user/${req.session.userid}.png`;
+   newpath = `./data/user/${res.locals.userid}.png`;
    fs.rename(tmppath, newpath,function (err) {
        if (err) {
            res.status(200).send( {'status':'文件上传失败'} );
@@ -274,7 +274,7 @@ router.post('/set/avatar', function (req, res) {
            const hashValue = hash.digest('hex');
            // 上传到七牛云
            I.qiniuupdate(`user/${hashValue}.png`,newpath);
-           var UPDATE = `UPDATE user SET ? WHERE id=${req.session.userid} LIMIT 1`;
+           var UPDATE = `UPDATE user SET ? WHERE id=${res.locals.userid} LIMIT 1`;
            var SET = {
                'images':hashValue,
            };
@@ -292,7 +292,7 @@ router.post('/set/avatar', function (req, res) {
 });
 //修改个人信息
 router.post('/set/userinfo', function (req, res) {
-    var UPDATE = `UPDATE user SET ? WHERE id=${req.session.userid} LIMIT 1`;
+    var UPDATE = `UPDATE user SET ? WHERE id=${res.locals.userid} LIMIT 1`;
     var SET = {
         'nickname':req.body['nickname'],
         'motto': req.body['aboutme'],
@@ -304,12 +304,10 @@ router.post('/set/userinfo', function (req, res) {
             res.status(200).send( {'status':'请再试一次'});
             return;
         }
-      
-            req.session['nickname'] = req.body['nickname'];
+            
             res.locals['nickname'] = req.body['nickname'];
-            res.cookie('nickname', req.body['nickname'], { 'maxAge': 604800000, 'signed': true });
-        
-            var UPDATE = `UPDATE wl_Users SET ? WHERE email='${req.session.username}' LIMIT 1`;
+       
+            var UPDATE = `UPDATE wl_Users SET ? WHERE email='${res.locals.username}' LIMIT 1`;
             var SET = {
                 'display_name':req.body['nickname'],
             };
@@ -319,7 +317,7 @@ router.post('/set/userinfo', function (req, res) {
                     return;
                 }
                 
-        
+                res.cookie("token",I.GenerateJwt(res.locals["userid"],res.locals["username"],res.locals["nickname"]),{maxAge: 604800000,});
                 res.status(200).send( {'status': '个人信息修成成功'});
               });
      
@@ -327,17 +325,17 @@ router.post('/set/userinfo', function (req, res) {
 });
 //修改密码：动作
 router.post('/set/pw', function (req, res) {
-    var oldPW = I.md5(I.md5(req.body['oldpw'])+req.session.username);
+    var oldPW = I.md5(I.md5(req.body['oldpw'])+res.locals.username);
     //console.log(oldPW)
     //console.log(req.body['oldpw'])
-    //console.log(req.session.username)
+    //console.log(res.locals.username)
     //console.log(req.body['newpw'])
-    var newPW = I.md5(I.md5(req.body['newpw'])+req.session.username);
+    var newPW = I.md5(I.md5(req.body['newpw'])+res.locals.username);
     //console.log(newPW)
     //判断用户是手机账号用户、校区自己生成的账号
 
     SET = {pwd:newPW};
-    UPDATE = `UPDATE user SET ? WHERE id=${req.session.userid} AND pwd="${oldPW}" LIMIT 1`;
+    UPDATE = `UPDATE user SET ? WHERE id=${res.locals.userid} AND pwd="${oldPW}" LIMIT 1`;
     DB.qww(UPDATE, SET, function (err, u) {
         if (err) {
             res.status(200).send({'status': '请再试一次'});

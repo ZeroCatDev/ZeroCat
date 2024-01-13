@@ -70,7 +70,7 @@ router.get('/play', function (req, res) {
                 return;
             }
     
-            res.locals['is_author'] = (SCRATCH[0].authorid==req.session.userid)?true:false;
+            res.locals['is_author'] = (SCRATCH[0].authorid==res.locals.userid)?true:false;
             res.locals['project'] = SCRATCH[0];
             res.render('ejs/scratch/scratch_play.ejs');
         });
