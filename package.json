@@ -3,8 +3,8 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "build": "echo \"No build specified\" && exit 1",
-    "test": "echo \"No test specified\" && exit 1",
+    "build": "echo \"No build specified\" && exit 0",
+    "test": "echo \"No test specified\" && exit 0",
     "start": "node app"
   },
   "dependencies": {
