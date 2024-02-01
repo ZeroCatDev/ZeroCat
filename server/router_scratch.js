@@ -24,16 +24,16 @@ router.get("/", function (req, res) {
       res.locals.scratch_count = data[0].scratch_count;
     }
 
-      res.render("ejs/scratch/scratch_projects.ejs");
+      res.render("views/scratch/scratch_projects.ejs");
   
   });
 });
 //翻页：Scratch作品列表：数据
 router.post("/view/getScratchProjects", function (req, res) {
-  var curr = parseInt(req.body.curr); //当前要显示的页码
-  var limit = parseInt(req.body.limit); //每页显示的作品数
+  var curr = parseInt(req.body.curr) || parseInt(req.query.curr); //当前要显示的页码
+  var limit = parseInt(req.body.limit) || parseInt(req.query.limit); //每页显示的作品数
   var type = "view_count";
-  if (req.body.type == "new") {
+  if (req.body.type === "new" || req.query.type === "new"){
     type = "time";
   }
 
@@ -90,7 +90,7 @@ router.get("/play", function (req, res) {
   DB.query(SQL, function (err, U) {
     if (err || U.affectedRows == 0) {
       res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
-      res.render("ejs/404.ejs");
+      res.render("views/404.ejs");
       return;
     }
 
@@ -123,7 +123,7 @@ router.get("/play", function (req, res) {
     DB.query(SQL, function (err, SCRATCH) {
       if (err || SCRATCH.length == 0) {
         res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
-        res.render("ejs/404.ejs");
+        res.render("views/404.ejs");
         return;
       }
 
@@ -131,7 +131,7 @@ router.get("/play", function (req, res) {
         SCRATCH[0].authorid == res.locals.userid ? true : false;
       res.locals["project"] = SCRATCH[0];
       ////console.log(SCRATCH[0]);
-      res.render("ejs/scratch/scratch_play.ejs");
+      res.render("views/scratch/scratch_play.ejs");
     });
   });
 });
@@ -263,7 +263,7 @@ router.post("/play/openSrc", function (req, res) {
 
 //Scratch编程界面
 router.get("/edit", function (req, res) {
-  res.render("ejs/scratch/scratch_edit.ejs");
+  res.render("views/scratch/scratch_edit.ejs");
 });
 
 //Scratch内部调用一：获取作品数据：JSON源代码

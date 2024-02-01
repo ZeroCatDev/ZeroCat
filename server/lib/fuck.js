@@ -109,7 +109,7 @@ exports.GenerateJwt = function (id, email, nickname) {
       nickname: nickname,
     },
     process.env.jwttoken
-    , { expiresIn: '72h' });
+  );
   return token;
 };
 

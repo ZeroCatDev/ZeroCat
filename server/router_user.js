@@ -12,7 +12,7 @@ router.all("*", function (req, res, next) {
   next();
 });
 const request = require("request");
-
+var nodemailer = require("nodemailer");
 router.get("/", function (req, res) {
   //获取已分享的作品总数：1:普通作品，2：推荐的优秀作品
   var SQL =
@@ -33,12 +33,12 @@ router.get("/", function (req, res) {
     DB.query(SQL, function (err, USER) {
       if (err || USER.length == 0) {
         res.locals.tip = { opt: "flash", msg: "用户不存在" };
-        res.render("ejs/404.ejs");
+        res.render("views/404.ejs");
         return;
       }
       res.locals["user"] = USER[0];
       //console.log(USER);
-      res.render("ejs/user.ejs");
+      res.render("views/user.ejs");
     });
   });
 });
@@ -52,20 +52,20 @@ router.get("/login", function (req, res) {
       res.locals.reg = 1;
     }
 
-    res.render("ejs/login_or_register.ejs");
+    res.render("views/login_or_register.ejs");
   });
 });
 
 //登录、注册、找回密码三合一界面
 router.get("/repw", function (req, res) {
-  res.render("ejs/repw.ejs");
+  res.render("views/repw.ejs");
 });
 
 //登录
 router.post("/login", function (req, res) {
   request.post(
     {
-      url: `${process.env.reverify}?secret=${process.env.resecret}&response=${req.body.re}`,
+      url: process.env.reverify,form: {secret: process.env.resecret,response: req.body.re},
     },
     function (err, httpResponse, body) {
       if (err) {
@@ -177,7 +177,7 @@ router.get("/logout", function (req, res) {
 router.post("/register", function (req, res) {
   request.post(
     {
-      url: `${process.env.reverify}?secret=${process.env.resecret}&response=${req.body.re}`,
+      url:process.env.reverify,form: {secret: process.env.resecret,response: req.body.re}
     },
     function (err, httpResponse, body) {
       if (err) {
@@ -233,15 +233,7 @@ router.post("/register", function (req, res) {
               res.status(200).send({ status: "再试一次17" });
               return;
             }
-            var userid = newUser.insertId;
-            // res.locals["userid"] = userid; res.locals["username"] = username; res.locals["nickname"] = nickname; res.locals["jwt"] = jwt.sign( { userid: userid, nickname: nickname, username: username }, "test" ); //7天时长的毫秒数：604800000=7*24*60*60*1000 //res.cookie("userid", newUser.insertId, {  maxAge: 604800000,  signed: true,}); //res.cookie("username", username, { maxAge: 604800000, signed: true }); //res.cookie("nickname", nickname, { maxAge: 604800000, signed: true }); res.cookie( "jwt", jwt.sign( { userid: userid, nickname: nickname, username: username }, "test" ), { maxAge: 604800000, } );
-            //oldpath = "./build/img/user_default_icon.png";
-            //newpath = "./data/user/" + newUser.insertId + ".png";
-            //let oldFile = fs["createReadStream"](oldpath);
-            //let newFile = fs["createWriteStream"](newpath);
-            //oldFile["pipe"](newFile);
-
-            var nodemailer = require("nodemailer");
+            var userid = newUser.insertId;    
 
             const transporter = nodemailer.createTransport({
               service: process.env.mailservice, //  邮箱
@@ -255,7 +247,7 @@ router.post("/register", function (req, res) {
             transporter.sendMail(
               {
                 // 发件人邮箱
-                from: process.env.mailfrom,
+                from: `${process.env.siteneme}"社区注册消息" <${process.env.mailfrom}>`,
                 // 邮件标题
                 subject: process.env.siteneme + "社区注册消息",
                 // 目标邮箱
@@ -335,7 +327,7 @@ router.post("/register", function (req, res) {
 router.post("/repw", function (req, res) {
   request.post(
     {
-      url: `${process.env.reverify}?secret=${process.env.resecret}&response=${req.body.re}`,
+      url: process.env.reverify,form: {secret: process.env.resecret,response: req.body.re},
     },
     function (err, httpResponse, body) {
       if (err) {
@@ -360,9 +352,8 @@ router.post("/repw", function (req, res) {
         var jwttoken = jwt.sign(
           { userid: user["id"], username: user["username"] },
           process.env.jwttoken,
-          { expiresIn: "1h" }
+          { expiresIn: 60 * 10 }
         );
-        var nodemailer = require("nodemailer");
         //console.log(jwttoken);
         const transporter = nodemailer.createTransport({
           service: process.env.mailservice, //  邮箱
@@ -376,9 +367,9 @@ router.post("/repw", function (req, res) {
         transporter.sendMail(
           {
             // 发件人邮箱
-            from: process.env.mailfrom,
+            from: `${process.env.siteneme}"密码重置消息" <${process.env.mailfrom}>`,
             // 邮件标题
-            subject: process.env.siteneme + "重置密码消息",
+            subject: process.env.siteneme + "密码重置消息",
             // 目标邮箱
             to: username,
             // 邮件内容
@@ -452,7 +443,7 @@ router.post("/repw", function (req, res) {
 router.post("/torepw", function (req, res) {
   request.post(
     {
-      url: `${process.env.reverify}?secret=${process.env.resecret}&response=${req.body.re}`,
+      url: process.env.reverify,form: {secret: process.env.resecret,response: req.body.re},
     },
     function (err, httpResponse, body) {
       if (err) {
@@ -491,7 +482,7 @@ router.post("/torepw", function (req, res) {
           return;
         }
 
-        res.status(200).send({ status: "ok" });
+        res.status(200).send({ status: "您的密码已更新" });
       });
       // Continue with your program
     }
@@ -519,30 +510,37 @@ router.get("/tuxiaochao", function (req, res) {
   if (!process.env.txckey) {
     res.redirect("https://support.qq.com/product/" + process.env.txcid);
   }
-  uid = res.locals["userid"].toString();
-  var txcinfo =
-    uid +
-    res.locals["nickname"] +
-    process.env.qiniuurl +
-    "/user/" +
-    uid +
-    ".png" +
-    process.env.txckey;
-  var cryptostr = cryptojs.MD5(txcinfo).toString();
-  res.redirect(
-    "https://support.qq.com/product/" +
-      process.env.txcid +
-      "?openid=" +
-      res.locals["userid"] +
-      "&nickname=" +
+  
+  SQL = `SELECT images FROM user WHERE id = ${res.locals["userid"]};`;
+  
+  DB.query(SQL, function (err, USER) {
+    if (err || USER.length == 0) {
+      res.locals.tip = { opt: "flash", msg: "用户不存在" };
+      res.render("views/404.ejs");
+      return;
+    }
+    uid = res.locals["userid"].toString();
+    var txcinfo =
+      uid +
       res.locals["nickname"] +
-      "&avatar=" +
-      process.env.qiniuurl +
-      "/user/" +
-      res.locals["userid"] +
-      ".png&user_signature=" +
-      cryptostr
-  );
+      process.env.qiniuurl+'/user/'+USER[0].images+'.png'+
+      process.env.txckey;
+    var cryptostr = cryptojs.MD5(txcinfo).toString();
+    
+    res.redirect(
+      "https://support.qq.com/product/" +
+        process.env.txcid +
+        "?openid=" +
+        res.locals["userid"] +
+        "&nickname=" +
+        res.locals["nickname"] +
+        "&avatar="+process.env.qiniuurl+'/user/'+USER[0].images+'.png'+
+        "&user_signature=" +
+        cryptostr
+    );
+
+  });
+  
 });
 
 module.exports = router;

@@ -12,12 +12,12 @@ var DB = require("./lib/database.js");
 
 router.all('*', function(req, res, next) {
     if (!res.locals.login){
-        res.render('ejs/404.ejs');
+        res.render('views/404.ejs');
         return;
     }
 
 	if ( res.locals['is_admin'] != 1) {
-        res.render('ejs/404.ejs');
+        res.render('views/404.ejs');
         return;
     }
 
@@ -25,11 +25,11 @@ router.all('*', function(req, res, next) {
 });
 //平台首页
 router.get('/', function (req, res) {    
-    res.render('ejs/admin/admin_index.ejs');
+    res.render('views/admin/admin_index.ejs');
 });
 //平台默认首页
 router.get('/default', function (req, res) {    
-    res.render('ejs/admin/admin_default.ejs');
+    res.render('views/admin/admin_default.ejs');
 
 });
 
@@ -57,7 +57,7 @@ router.get('/info', function (req, res) {
             res.locals['sprite_count'] = d[0].sprite_count;
         }
 
-        res.render('ejs/admin/admin_info.ejs');
+        res.render('views/admin/admin_info.ejs');
     })
 });
 
@@ -71,7 +71,7 @@ router.get('/user', function (req, res) {
         } else {
             res.locals.regist = 1
         }
-        res.render('ejs/admin/admin_user.ejs');
+        res.render('views/admin/admin_user.ejs');
     });
 });
 //用户管理：数据。0正常用户，2封号用户
@@ -240,7 +240,7 @@ router.post('/user/setRegist',function(req,res){
 
 //作品管理：Scratch页面
 router.get('/works/scratch', function (req, res) {
-    res.render('ejs/admin/admin_works_scratch.ejs');
+    res.render('views/admin/admin_works_scratch.ejs');
 });
 //作品管理：Scratch数据
 router.get('/works/scratch/data', function(req, res) {
@@ -346,7 +346,7 @@ router.post('/works/scratch/setDefaultWork',function(req,res){
 
 //作品管理：Python页面
 router.get('/works/python', function (req, res) {
-    res.render('ejs/admin/admin_works_python.ejs');
+    res.render('views/admin/admin_works_python.ejs');
 });
 //作品管理：Python数据
 router.get('/works/python/data', function(req, res) {
@@ -460,7 +460,7 @@ router.post('/works/python/setDefaultWork',function(req,res){
 
 // 素材分类管理：数据
 router.get('/material/tag', function(req, res) { 
-    res.render('ejs/admin/admin_tag.ejs');
+    res.render('views/admin/admin_tag.ejs');
 });
 // 素材分类管理：数据
 router.get('/material/tag/data', function(req, res) { 
@@ -584,7 +584,7 @@ router.get('/material/backdrop', function (req, res) {
             res.locals['tags'] = tags;
         }
 
-        res.render('ejs/admin/admin_material_backdrop.ejs');
+        res.render('views/admin/admin_material_backdrop.ejs');
     });   
 });
 // 背景管理：数据
@@ -761,7 +761,7 @@ router.get('/material/costume', function (req, res) {
             res.locals['tags'] = tags;
         }
 
-        res.render('ejs/admin/admin_material_costume.ejs');
+        res.render('views/admin/admin_material_costume.ejs');
     }); 
 });
 // 造型管理：数据
@@ -940,7 +940,7 @@ router.get('/material/sprite', function (req, res) {
             res.locals['tags'] = tags;
         }
 
-        res.render('ejs/admin/admin_material_sprite.ejs');
+        res.render('views/admin/admin_material_sprite.ejs');
     }); 
 });
 // 角色管理：页面数据
@@ -1106,7 +1106,7 @@ router.post('/material/sprite/setState',function(req,res){
 // 角色管理：造型管理 页面
 router.get('/material/sprite/setCostume', function (req, res) {
     res.locals._id = req.query['id'];
-    res.render('ejs/admin/admin_material_sprite_costume.ejs');
+    res.render('views/admin/admin_material_sprite_costume.ejs');
 });
 // 角色管理：造型管理 页面数据
 router.get('/material/sprite/setCostume/data', function(req, res) {
@@ -1229,7 +1229,7 @@ router.post('/material/sprite/setCostume/add', function (req, res) {
 // 角色管理：声音管理 页面
 router.get('/material/sprite/setSound', function (req, res) {
     res.locals._id = req.query['id'];
-    res.render('ejs/admin/admin_material_sprite_sound.ejs');
+    res.render('views/admin/admin_material_sprite_sound.ejs');
 });
 // 角色管理：声音管理 页面 数据
 router.get('/material/sprite/setSound/data', function(req, res) {
@@ -1358,7 +1358,7 @@ router.get('/material/sound', function (req, res) {
             res.locals['tags'] = tags;
         }
 
-        res.render('ejs/admin/admin_material_sound.ejs');
+        res.render('views/admin/admin_material_sound.ejs');
     }); 
 });
 // 声音管理：数据

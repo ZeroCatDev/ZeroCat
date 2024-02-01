@@ -46,7 +46,7 @@ router.get('/scratch', function (req, res) {
             res.locals.state1_count = data[0].state1_count;
             res.locals.state2_count = data[0].state2_count;
         }
-        res.render('ejs/scratch/my_scratch_projects.ejs');
+        res.render('views/scratch/my_scratch_projects.ejs');
     });
 });  
 
@@ -68,7 +68,7 @@ router.get('/python', function (req, res) {
             res.locals.state1_count = data[0].state1_count;
             res.locals.state2_count = data[0].state2_count;
         }
-        res.render('ejs/python/my_python_projects.ejs');
+        res.render('views/python/my_python_projects.ejs');
     });
 });  
 //显示Scratch项目列表：数据，{curr:obj.curr, limit:obj.limit,state:state}
@@ -237,7 +237,7 @@ router.get('/info', function (req, res) {
     var SQL = `SELECT * FROM user WHERE id=${res.locals.userid} LIMIT 1`;
     DB.query(SQL, function (err, USER) {
         if (err || USER.length == 0) {
-            res.render('ejs/404.ejs');
+            res.render('views/404.ejs');
             return;
         }
 
@@ -245,7 +245,7 @@ router.get('/info', function (req, res) {
         res.locals['birth'] = USER[0]['birthday'];
         res.locals['motto'] = USER[0]['motto'];
 
-        res.render('ejs/my_info.ejs');
+        res.render('views/my_info.ejs');
     });
 });
 //修改头像

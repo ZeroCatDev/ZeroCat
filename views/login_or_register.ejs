@@ -2,7 +2,10 @@
 <html lang="zh-cmn-Hans">
 
 <% if (login) { %>
-  <script>window.location.href = '/';</script>
+  <script>
+    
+//var token = document.cookie.replace( /(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/, "$1", ); window.location.href = 'http://localhost:3000/auth/callback?token='+token;
+window.location.href = '/'</script>
   <% } %>
 
     <head>
@@ -53,7 +56,7 @@
                     </div>
 
 
-<div id="recaptcha-div-login"></div>
+<div id="recaptcha-div-login-page"></div>
                     
               
 
@@ -88,7 +91,7 @@
                         <i class="mdui-icon material-icons">account_circle</i>
                         <input class="mdui-textfield-input" id='reg_password' type="text" placeholder="昵称" />
                       </div>
-                     <div id="recaptcha-div-signup"></div>
+                     <div id="recaptcha-div-reg-page"></div>
                  
                       <div style="height: 50px;"><button class="mdui-btn mdui-ripple md3botton" onclick="switchPage('login-page')"
                           >已有账户?</button></div>
@@ -114,7 +117,7 @@
                           <i class="mdui-icon material-icons">email</i>
                           <input class="mdui-textfield-input" id='getPW_username' type="text" placeholder="邮箱" />
                         </div>
-                        <div id="recaptcha-div-findpw"></div>
+                        <div id="recaptcha-div-getPW-page<script></script>"></div>
                       <br /><br />
 
                         <button type="button" onclick="getPW()" class="mdui-btn mdui-color-theme-accent mdui-ripple"
@@ -197,3 +200,4 @@
 </html>
 <script src="<%= process.env.reurl %>?onload=onloadCallback" async defer></script>
 
+<script>rekey='<%= process.env.rekey %>'</script>

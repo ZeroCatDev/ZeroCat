@@ -94,8 +94,8 @@ app.use(multipart({ uploadDir: "./data/upload_tmp" }));
 var compress = require("compression");
 app.use(compress());
 
-app.set("views", __dirname + "/build");
-app.set("view engine", "ejs");
+app.set("views", __dirname + "/");
+app.set("view engine", "views");
 
 //数据库
 var DB = require("./server/lib/database.js");
@@ -119,7 +119,7 @@ app.all("*", function (req, res, next) {
   if (token) {
     jwt.verify(token, process.env.jwttoken, (err, decodedToken) => {
       // 解析并验证JWT
-      if (err) {
+      if (err) {6
         // 如果验证失败，清除本地登录状态
         res.locals = {
           login: false,
@@ -166,7 +166,7 @@ app.all("*", function (req, res, next) {
       nickname: "",
       is_admin: 0,
     };
-    //console.log("未找到JWT Token");
+    console.log("未找到JWT Token");
     next();
   }
 });
@@ -210,7 +210,7 @@ app.get("/", function (req, res) {
     //  res.locals["ads"] = encodeURIComponent(JSON.stringify(ADS));
 
     //});
-    res.render("ejs/index.ejs");
+    res.render("views/index.ejs");
   });
 });
 
@@ -235,19 +235,19 @@ var apiserver = require("./server/router_api.js");
 app.use("/api", apiserver);
 
 app.get("/about", function (req, res, next) {
-  res.render("ejs/about.ejs");
+  res.render("views/about.ejs");
 });
 app.get("/comparer", function (req, res, next) {
-  res.render("ejs/comparer.ejs");
+  res.render("views/comparer.ejs");
 });
 app.get("/asdm", function (req, res, next) {
-  res.render("ejs/asdm.ejs");
+  res.render("views/asdm.ejs");
 });
 app.get("/share", function (req, res, next) {
-  res.render("ejs/share.ejs");
+  res.render("views/share.ejs");
 });
 app.get("/home", function (req, res, next) {
-  res.render("ejs/home.ejs");
+  res.render("views/home.ejs");
 });
 //python路由
 var router_python = require("./server/router_python.js");
@@ -264,5 +264,5 @@ process.on("uncaughtException", function (err) {
 //放在最后，友好的处理地址不存在的访问
 app.all("*", function (req, res, next) {
   res.locals.tipType = "访问错误";
-  res.render("ejs/404.ejs");
+  res.render("views/404.ejs");
 });
