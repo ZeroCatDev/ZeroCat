@@ -11,94 +11,46 @@
 	<link rel="shortcut icon" href="<%= process.env.staticurl %>/img/siteicon.png">
 	<meta name="description" content="<%= process.env.slogan %>">
 	<meta name="keyword" content="<%= process.env.slogan %>">
-
 	<link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
-
-
-	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css">
-	
-	
-<%- process.env.includecode %><% include linkfile.ejs %></head>
-
-
+	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css"> <%- process.env.includecode %>
+		<% include linkfile.ejs %>
+</head>
 
 <body class="mdui-theme-accent-blue mdui-loaded ">
-	
-	<% include hand.ejs %>
-	<mdui-layout-main><br/><br/>
-		<div class="mdui-container"> 
-
-				<mdui-card clickable >
-					<img src="<%= process.env.staticurl %>/img/toutu.png" style="pointer-events: none;max-width: 100%;" />
-
-
-				</mdui-card>
-			<br />
-			<mdui-card  variant="filled" clickable style="min-width: 100%;">
-			<div style="padding: 16px;"  >
-					<div style="font-size: 32px;">OurWorld</div>
-					<div style="font-size: 12px;opacity: .54;">以代码之极，追银河无际</div>
-				</div>
-				<div class="mdui-card-actions">
-			<mdui-button variant="filled" href="/user/login">立刻加入</mdui-button>
-	<mdui-button variant="elevated" href="/about">了解更多</mdui-button>
-
-					
-						<mdui-button-icon class="mdui-float-right" icon="expand_more"></mdui-button-icon>
-				
-				</div>
-				</mdui-card>
-
-				<br />
-
-
-
-			<div class="mdui-row" id="scratch_projects">  
-				<div class="mdui-col-md-4 mdui-col-sm-6 mdui-col-xs-12">
-			
-						<mdui-card href="/scratch" variant="filled" clickable ondragstart="return false">
-							<mdui-card>
-								<img src="<%= process.env.staticurl %>/img/owscratch.png"
-									style="pointer-events: none;width: 100%;" />
-								
-							</mdui-card>
-							<div style="padding: 16px;"  >
+	<% include hand.ejs %> <mdui-layout-main><br /><br />
+			<div class="mdui-container"> <mdui-card clickable> <img src="<%= process.env.staticurl %>/img/toutu.png"
+						style="pointer-events: none;max-width: 100%;" /> </mdui-card> <br /> <mdui-card variant="filled"
+					clickable style="min-width: 100%;">
+					<div style="padding: 16px;">
+						<div style="font-size: 32px;">OurWorld</div>
+						<div style="font-size: 12px;opacity: .54;">以代码之极，追银河无际</div>
+					</div>
+					<div class="mdui-card-actions"> <mdui-button variant="filled" href="/user/login">立刻加入</mdui-button>
+						<mdui-button variant="elevated" href="/about">了解更多</mdui-button> <mdui-button-icon
+							class="mdui-float-right" icon="expand_more"></mdui-button-icon> </div>
+				</mdui-card> <br />
+				<div class="mdui-row" id="scratch_projects">
+					<div class="mdui-col-md-4 mdui-col-sm-6 mdui-col-xs-12"> <mdui-card href="/scratch" variant="filled"
+							clickable ondragstart="return false"> <mdui-card> <img
+									src="<%= process.env.staticurl %>/img/owscratch.png"
+									style="pointer-events: none;width: 100%;" /> </mdui-card>
+							<div style="padding: 16px;">
 								<div style="font-size: 24px;">Scratch分区</div>
 								<div style="font-size: 14px;opacity: .54;">图形化编程</div>
 							</div>
-						</mdui-card>
-	
+						</mdui-card> </div>
+					<div class="mdui-col-md-4 mdui-col-sm-6 mdui-col-xs-12"> <mdui-card href="/python" variant="filled"
+							clickable ondragstart="return false"> <mdui-card> <img
+									src="<%= process.env.staticurl %>/img/owpython.png"
+									style="pointer-events: none;width: 100%;" /> </mdui-card>
+							<div style="padding: 16px;">
+								<div style="font-size: 24px;">Python分区</div>
+								<div style="font-size: 14px;opacity: .54;">适合新手的代码编程语言</div>
+							</div>
+						</mdui-card> </div>
 				</div>
-
-				<div class="mdui-col-md-4 mdui-col-sm-6 mdui-col-xs-12">
-			
-					<mdui-card href="/python" variant="filled" clickable ondragstart="return false">
-						<mdui-card>
-							<img src="<%= process.env.staticurl %>/img/owpython.png"
-								style="pointer-events: none;width: 100%;" />
-							
-						</mdui-card>
-						<div style="padding: 16px;"  >
-							<div style="font-size: 24px;">Python分区</div>
-							<div style="font-size: 14px;opacity: .54;">适合新手的代码编程语言</div>
-						</div>
-					</mdui-card>
-
 			</div>
-			</div>
-			
-
-
-			
-
-
-
-
-
-
-		</div></mdui-layout-main>
-
+		</mdui-layout-main>
 </body>
-
 <script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
 <script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
