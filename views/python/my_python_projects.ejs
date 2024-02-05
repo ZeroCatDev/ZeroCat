@@ -151,7 +151,7 @@
 				text: '确认',
 				onClick: function (inst) {
 					AjaxFn('/my/python/share', { 'id': id }, function (res) {
-						mdui.snackbar(res['msg']);
+						automsg(res['msg']);
 						if ('success' == res['status']) {
 							layer.close(index);
 							window.location.reload();
@@ -170,7 +170,7 @@
 				text: '确认',
 				onClick: function (inst) {
 					AjaxFn('/my/python/noshare', { 'id': id }, function (res) {
-						mdui.snackbar(res['msg']);
+						automsg(res['msg']);
 						if ('success' == res['status']) {
 							layer.close(index);
 							window.location.reload();
@@ -187,7 +187,7 @@
 		mdui.prompt('简介', '请输入简介',
 			function (value) {
 				AjaxFn('/my/python/setdescription', { 'id': id, description: value }, function (res) {
-					mdui.snackbar(res['msg']);
+					automsg(res['msg']);
 					if ('success' == res['status']) {
 						layer.close(index);
 						window.location.reload();
@@ -217,7 +217,7 @@
 				text: '确认',
 				onClick: function (inst) {
 					AjaxFn('/my/python/del', { 'id': id }, function (res) {
-						mdui.snackbar(res['msg']);
+						automsg(res['msg']);
 						if ('success' == res['status']) {
 							$(that).parent().parent().html("");
 							layer.close(index);

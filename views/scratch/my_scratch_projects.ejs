@@ -153,7 +153,7 @@
 				text: '确认',
 				onClick: function (inst) {
 					AjaxFn('/my/scratch/share', { 'id': id }, function (res) {
-						mdui.snackbar(res['msg']);
+						automsg(res['msg']);
 						if ('success' == res['status']) {
 							//layer.close(index);
 							//window.location.reload();
@@ -169,7 +169,7 @@
 		mdui.prompt('简介', '请输入简介',
 			function (value) {
 				AjaxFn('/my/scratch/setdescription', { 'id': id, description: value }, function (res) {
-					mdui.snackbar(res['msg']);
+					automsg(res['msg']);
 					if ('success' == res['status']) {
 						layer.close(index);
 						window.location.reload();
@@ -198,7 +198,7 @@
 				text: '确认',
 				onClick: function (inst) {
 					AjaxFn('/my/scratch/noshare', { 'id': id }, function (res) {
-						mdui.snackbar(res['msg']);
+						automsg(res['msg']);
 						if ('success' == res['status']) {
 							layer.close(index);
 							window.location.reload();
@@ -218,7 +218,7 @@
 				text: '确认',
 				onClick: function (inst) {
 					AjaxFn('/my/scratch/del', { 'id': id }, function (res) {
-						mdui.snackbar(res['msg']);
+						automsg(res['msg']);
 						if ('success' == res['status']) {
 							$(that).parent().parent().html("");
 							layer.close(index);

@@ -118,7 +118,7 @@
 						`);
 							} document.getElementById("python_type").classList.remove('mdui-hidden');
 						} else {
-							mdui.snackbar({ buttonText: '关闭', message: "无满足条件的作品" });
+							automsg({ buttonText: '关闭', message: "无满足条件的作品" });
 						}
 					}
 				});
@@ -173,7 +173,7 @@ d[i].description = '暂无简介'
 					} document.getElementById("python_type").classList.add('mdui-hidden');
 					document.getElementById("python_change_page").innerHTML = '<button class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-theme-accent" onclick="Python(python_type)">取消搜索</button>';
 				} else {
-					mdui.snackbar({ buttonText: '关闭', message: "无满足条件的作品" });
+					automsg({ buttonText: '关闭', message: "无满足条件的作品" });
 				}
 			}
 		});

@@ -108,7 +108,7 @@
 							}
 						} else {
 							$("#scratch_projects").html(`<p class="mdui-text-center">没有找到Scratch作品</p>`);
-							mdui.snackbar({ buttonText: '关闭', message: "无满足条件的作品" });
+							automsg({ buttonText: '关闭', message: "无满足条件的作品" });
 						}
 					}
 				});
@@ -157,7 +157,7 @@
 						} else {
 							$("#python_projects").html(`<p class="mdui-text-center">没有找到Python作品</p>`);
 
-							mdui.snackbar({ buttonText: '关闭', message: "无满足条件的作品" });
+							automsg({ buttonText: '关闭', message: "无满足条件的作品" });
 						}
 					}
 				});

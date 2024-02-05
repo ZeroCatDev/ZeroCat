@@ -2,11 +2,13 @@
 <script src="https://npm.elemecdn.com/mdui@1.0.2/dist/js/mdui.min.js"></script>
 <script src="https://npm.elemecdn.com/jquery@3.2.1/dist/jquery.min.js"></script>
 <link rel="stylesheet" href="<%= process.env.staticurl %>/mdui2/mdui.css">
-<script> function automsg(msg) {
-        mdui.snackbar({
-
-            buttonText: '关闭',
-            message: msg,
-        });
-    };</script>
+<script> 
+    
+    
+    function automsg(msg) {
+  if (typeof msg === 'string') {
+    msg = { message: msg };
+  }
+  mdui.snackbar(msg);
+}</script>
 

@@ -33,7 +33,7 @@ var _table_render = table.render({
             ,accept: 'images'
             ,data: {id: function(){return _img_id;}}
             ,done: function(res, index, upload){
-                mdui.snackbar(res.msg);
+                automsg(res.msg);
                 if ('ok' == res.status){
                     $(this.item).attr('src', `/ads/${_img_id}?t=` + Math.random());
                 }
@@ -45,7 +45,7 @@ var _table_render = table.render({
 table.on('toolbar(TableOne)', function (obj) {
     if (obj.event === 'add') {
         AjaxFn('/ads/add', {}, function (res){
-            mdui.snackbar(res.msg);
+            automsg(res.msg);
             if ('ok' == res.status){
                 _table_render.reload({page: {curr: 1}});
             }
@@ -59,7 +59,7 @@ table.on('tool(TableOne)', function (obj) {
         _img_id = obj.data.id;
     } else if (obj.event === 'setState') {
         AjaxFn('/ads/setState', {'id': obj.data.id,'s':$(this).data('state')}, function (res){
-            mdui.snackbar(res.msg);
+            automsg(res.msg);
             if ('ok' == res.status){
                 _table_render.reload({page: {curr: 1}});
             }
@@ -67,7 +67,7 @@ table.on('tool(TableOne)', function (obj) {
     }else if (obj.event === 'del') {
         layer.confirm(`确定要删除【${obj.data.title}】？`,{title:'重要提示',shadeClose:true}, function (index) {
             AjaxFn('/ads/del', {'id': obj.data.id}, function (res){
-                mdui.snackbar(res.msg);
+                automsg(res.msg);
                 if ('ok' == res.status){
                     layer.close(index);
                     _table_render.reload({page: {curr: 1}});
@@ -77,7 +77,7 @@ table.on('tool(TableOne)', function (obj) {
     } else if (obj.event === 'add1000'){
         layer.confirm(`给【${obj.data.org_name}】增加 1000 个自研课程招生名额？`,{title:'重要提示',shadeClose:true}, function (index) {
             AjaxFn('/admin/org_setMaxStudentCount', {'id': obj.data.id}, function (res){
-                mdui.snackbar(res['msg']);
+                automsg(res['msg']);
                 if ('ok' == res['status']){
                     layer.close(index);
                     _table_render.reload();
@@ -92,15 +92,15 @@ table.on('edit(TableOne)', function(obj){
     var value = obj.value //得到修改后的值
     //,data = obj.data //得到所在行所有键值
     ,field = obj.field; //得到字段
-    if (value==''){ mdui.snackbar({buttonText: '关闭', message: '不能为空'}); return; }
+    if (value==''){ automsg({buttonText: '关闭', message: '不能为空'}); return; }
     if (field=='i'){
         if (!numberTest(value)){
-            mdui.snackbar({buttonText: '关闭', message: '请输入数字'});
+            automsg({buttonText: '关闭', message: '请输入数字'});
             return;
         }
     }
 
     AjaxFn('/ads/setValue', {'id':obj.data.id, 'f':field, 'v':value}, function (res){
-        mdui.snackbar(res.msg);
+        automsg(res.msg);
     })
 });
