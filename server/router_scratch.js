@@ -297,7 +297,7 @@ router.post("/project/:projectid", function (req, res) {
       //2、开源的作品；
       //3、课堂用例、作业模板：购买课程后可以打开；
       //4、课堂作业作品：课程老师可以打开；
-      if (req.locals["is_admin"] == 1) {
+      if (res.locals["is_admin"] == 1) {
         SQL = `SELECT * FROM scratch WHERE id=${projectid}`;
       } else {
         SQL = `SELECT * FROM scratch WHERE id=${projectid} AND (authorid=${res.locals.userid} OR state>0)`;
@@ -624,7 +624,7 @@ router.post("/getMyProjectLibrary", function (req, res) {
     WHERE += ` AND title LIKE '%${req.body.f}%'`;
   }
 
-  var SELECT = `SELECT id, title, time, state FROM scratch WHERE authorid=${req.locals["userid"]} ${WHERE} ORDER BY time DESC LIMIT ${req.body.l},${req.body.n}`; //正式版本中，需要限定作者本身的作品
+  var SELECT = `SELECT id, title, time, state FROM scratch WHERE authorid=${res.locals["userid"]} ${WHERE} ORDER BY time DESC LIMIT ${req.body.l},${req.body.n}`; //正式版本中，需要限定作者本身的作品
   DB.query(SELECT, function (err, SCRATCH) {
     if (err) {
       res.status(200).send({ status: "err", data: [] });
@@ -872,9 +872,9 @@ router.post("/getSession", (req, res) => {
     };
   } else {
     var new_session = {
-      userid: parseInt(req.locals["userid"]),
-      username: req.locals["username"],
-      nickname: req.locals["nickname"],
+      userid: parseInt(res.locals["userid"]),
+      username: res.locals["username"],
+      nickname: res.locals["nickname"],
       avatar: `${process.env.qiniuurl}/user/${res.locals.userid}.png`,
     };
   }

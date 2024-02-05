@@ -22,77 +22,69 @@
 
 
 
-<body class="mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
+<body class="mdui-theme-accent-blue mdui-loaded ">
+	
 	<% include hand.ejs %>
-		<div class="mdui-container" style="margin:40px auto"> 
-			<div class="mdui-card  mdui-ripple mdui-hoverable" style='border-radius: 20px;'>
-				<div class="mdui-card-media">
-					<img src="<%= process.env.staticurl %>/img/toutu.png" style="pointer-events: none;" />
+	<mdui-layout-main><br/><br/>
+		<div class="mdui-container"> 
+
+				<mdui-card clickable >
+					<img src="<%= process.env.staticurl %>/img/toutu.png" style="pointer-events: none;max-width: 100%;" />
 
 
-				</div>
-			</div><br />
-			<div class="mdui-card mdui-ripple mdui-hoverable" style='border-radius: 20px;'>
-				<div class="mdui-card-primary">
-					<div class="mdui-card-primary-title">OurWorld</div>
-					<div class="mdui-card-primary-subtitle">以代码之极，追银河无际</div>
+				</mdui-card>
+			<br />
+			<mdui-card  variant="filled" clickable style="min-width: 100%;">
+			<div style="padding: 16px;"  >
+					<div style="font-size: 32px;">OurWorld</div>
+					<div style="font-size: 12px;opacity: .54;">以代码之极，追银河无际</div>
 				</div>
 				<div class="mdui-card-actions">
-					<button class="mdui-btn mdui-ripple" style='border-radius: 15px;'
-						onclick='window.open("/user/login","_self")'>立刻加入</button>
-					<button class="mdui-btn mdui-ripple" style='border-radius: 15px;'
-						onclick='window.open("/about","_self")'>了解更多</button>
+			<mdui-button variant="filled" href="/user/login">立刻加入</mdui-button>
+	<mdui-button variant="elevated" href="/about">了解更多</mdui-button>
 
-					<button class="mdui-btn mdui-btn-icon mdui-float-right">
-						<i class="mdui-icon material-icons">expand_more</i>
-					</button>
+					
+						<mdui-button-icon class="mdui-float-right" icon="expand_more"></mdui-button-icon>
+				
 				</div>
-			</div>
+				</mdui-card>
 
-			<br />
+				<br />
 
 
 
 			<div class="mdui-row" id="scratch_projects">  
-				<div class="mdui-col-md-4 mdui-col-sm-6 mdui-col-xs-12" style="margin:0px 0px 10px 0px">
-					<a href="/scratch" ondragstart="return false">
-						<div class="mdui-card mdui-ripple mdui-hoverable" style='border-radius: 20px;'>
-							<div class="mdui-card-media">
+				<div class="mdui-col-md-4 mdui-col-sm-6 mdui-col-xs-12">
+			
+						<mdui-card href="/scratch" variant="filled" clickable ondragstart="return false">
+							<mdui-card>
 								<img src="<%= process.env.staticurl %>/img/owscratch.png"
-									style="pointer-events: none;" />
-								<div class="mdui-card-menu">
-									<button class="mdui-btn mdui-btn-icon mdui-text-color-white">
-										<i class="mdui-icon material-icons">link</i>
-									</button>
-								</div>
+									style="pointer-events: none;width: 100%;" />
+								
+							</mdui-card>
+							<div style="padding: 16px;"  >
+								<div style="font-size: 24px;">Scratch分区</div>
+								<div style="font-size: 14px;opacity: .54;">图形化编程</div>
 							</div>
-							<div class="mdui-card-primary">
-								<div class="mdui-card-primary-title">Scratch分区</div>
-								<div class="mdui-card-primary-subtitle">图形化编程</div>
-							</div>
-						</div>
-					</a>
+						</mdui-card>
+	
 				</div>
 
-				<div class="mdui-col-md-4 mdui-col-sm-6 mdui-col-xs-12" style="margin:0px 0px 10px 0px">
-					<a href="/python" ondragstart="return false">
-						<div class="mdui-card mdui-ripple mdui-hoverable" style='border-radius: 20px;'>
-							<div class="mdui-card-media">
-								<img src="<%= process.env.staticurl %>/img/owpython.png"
-									style="pointer-events: none;" />
-								<div class="mdui-card-menu">
-									<button class="mdui-btn mdui-btn-icon mdui-text-color-white">
-										<i class="mdui-icon material-icons">link</i>
-									</button>
-								</div>
-							</div>
-							<div class="mdui-card-primary">
-								<div class="mdui-card-primary-title">Python分区</div>
-								<div class="mdui-card-primary-subtitle">适合新手的代码编程语言</div>
-							</div>
+				<div class="mdui-col-md-4 mdui-col-sm-6 mdui-col-xs-12">
+			
+					<mdui-card href="/python" variant="filled" clickable ondragstart="return false">
+						<mdui-card>
+							<img src="<%= process.env.staticurl %>/img/owpython.png"
+								style="pointer-events: none;width: 100%;" />
+							
+						</mdui-card>
+						<div style="padding: 16px;"  >
+							<div style="font-size: 24px;">Python分区</div>
+							<div style="font-size: 14px;opacity: .54;">适合新手的代码编程语言</div>
 						</div>
-					</a>
-				</div>
+					</mdui-card>
+
+			</div>
 			</div>
 			
 
@@ -104,31 +96,9 @@
 
 
 
-		</div>
+		</div></mdui-layout-main>
 
 </body>
 
 <script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
 <script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
-<!--<script>
-
-	var ads_img = $("#top_ads");
-	var ads_arr = JSON.parse(decodeURIComponent(`< % = ads % >`));
-
-	var curAdsIndex = -1;
-	if (ads_arr.length) {
-		function setTopBG() {
-			curAdsIndex++;
-			if (curAdsIndex >= ads_arr.length) { curAdsIndex = 0; }
-			ads_img.attr('src', `/ads/${ads_arr[curAdsIndex].id}`);
-		}
-		setTopBG();
-		setInterval(setTopBG, 5000)
-		function goADS() {
-			if (curAdsIndex != -1 && (ads_arr[curAdsIndex].content != '无')) {
-				window.open(ads_arr[curAdsIndex].content);
-			}
-		}
-	} else {
-	}
-</script>-->

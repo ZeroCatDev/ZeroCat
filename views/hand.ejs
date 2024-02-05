@@ -1,29 +1,92 @@
+<script src="<%= process.env.staticurl %>/mdui2/mdui.global.js"></script>
+<mdui-navigation-rail alignment="start">
+  <mdui-button-icon icon="menu" slot="top" class="open-tools"></mdui-button-icon>
+  <mdui-fab lowered icon="add" slot="top" class="open-add"></mdui-fab>
+  <mdui-button-icon icon="account_circle" slot="bottom" class="open-user"></mdui-button-icon>
+
+  <mdui-navigation-rail-item icon="home" href="/">主页</mdui-navigation-rail-item>
+  <mdui-navigation-rail-item icon="code" href="/scratch">Scratch</mdui-navigation-rail-item>
+  <mdui-navigation-rail-item icon="code" href="/python">Python</mdui-navigation-rail-item>
+</mdui-navigation-rail>
+
+
+
+<mdui-navigation-drawer class="user-drawer" modal close-on-esc close-on-overlay-click>
+
+  <mdui-list>
+    <% if (login==false) { %> <mdui-list-item rounded href="/user/login">注册</mdui-list-item> <mdui-list-item rounded
+        href="/user/login">登录</mdui-list-item>
+      <% } else { %>
+        <mdui-list-item rounded active href="/user?id=<%= userid %>"> <mdui-avatar slot="icon" src="/api/usertx?id=<%= userid %>"></mdui-avatar>
+          <%= nickname %>
+        </mdui-list-item>
+        <mdui-list-item rounded href="/my/scratch">Scratch作品</mdui-list-item>
+        <mdui-list-item rounded href="/my/python">Python作品</mdui-list-item>
+        <mdui-list-item rounded href="/my/info">个人信息</mdui-list-item>
+        <% } %>
+          <mdui-list-item rounded class="close-user">关闭</mdui-list-item>
+  </mdui-list>
+
+</mdui-navigation-drawer>
+
+<mdui-navigation-drawer class="create-project-drawer" modal close-on-esc close-on-overlay-click>
+
+  <mdui-list>
+    <mdui-list-item rounded href="/scratch/edit">创建Scratch项目</mdui-list-item>
+    <mdui-list-item rounded href="/python/edit">创建Python项目</mdui-list-item>
+    <mdui-list-item rounded class="close-add">取消</mdui-list-item>
+  </mdui-list>
+
+</mdui-navigation-drawer>
+
+<mdui-navigation-drawer class="tools-drawer" modal close-on-esc close-on-overlay-click>
+
+  <mdui-list>
+    <mdui-list-item rounded mdui-dialog="{target: '#search'}" icon="send">反馈</mdui-list-item>
+    <mdui-list-item rounded href="/asdm" icon="content_copy">Scratch下载镜像</mdui-list-item>
+    <mdui-list-item rounded href="/comparer" icon="build">项目比较器</mdui-list-item>
+    <mdui-list-item rounded icon="brightness_4" id="switch-theme">切换主题</mdui-list-item>
+
+    <mdui-list-item rounded>当前CDN节点: <span id="cdn">[未知]</span></mdui-list-item><mdui-list-item rounded>你的ip: <span
+        id="ip">[未知]</span></mdui-list-item><mdui-list-item rounded>你的所在国家/地区: <span
+        id="loc">[未知]</span></mdui-list-item>
+
+    <mdui-list-item rounded> 2023 © <%= process.env.siteneme %></mdui-list-item>
+    <mdui-list-item rounded href="https://wuyuan.dev">由 孙悟元 开发</mdui-list-item>
+    <mdui-list-item rounded class="close-tools" icon="arrow_left">关闭</mdui-list-item>
+  </mdui-list>
+
+</mdui-navigation-drawer>
+
+
+<script>
+  const CreateProjectDrawer = document.querySelector(".create-project-drawer");
+  const openAddButton = document.querySelector(".open-add");
+  const closeAddButton = document.querySelector(".close-add");
+
+  openAddButton.addEventListener("click", () => CreateProjectDrawer.open = true);
+  closeAddButton.addEventListener("click", () => CreateProjectDrawer.open = false);
+
+  const UserDrawer = document.querySelector(".user-drawer");
+  const openUserButton = document.querySelector(".open-user");
+  const closeUserButton = document.querySelector(".close-user");
+
+  openUserButton.addEventListener("click", () => UserDrawer.open = true);
+  closeUserButton.addEventListener("click", () => UserDrawer.open = false);
+
+
+  const ToolsDrawer = document.querySelector(".tools-drawer");
+  const openToolsButton = document.querySelector(".open-tools");
+  const closeToolsButton = document.querySelector(".close-tools");
+
+  openToolsButton.addEventListener("click", () => ToolsDrawer.open = true);
+  closeToolsButton.addEventListener("click", () => ToolsDrawer.open = false);
+</script>
+
+
+
 <link id="layui_theme_css" rel="stylesheet">
-<div class="appbar mdui-appbar mdui-appbar-fixed webkit-app-region">
-  <div class="mdui-toolbar mdui-color-white"><button href="javascript:;"
-      class="mdui-btn mdui-btn-icon mdui-ripple webkit-app-region-no" id="toggle"
-      mdui-drawer="{target: '#drawer',swipe: true}"><i class="mdui-icon material-icons">menu</i></button><a
-      class="webkit-app-region-no" href="/"><span class="mdui-typo-title">
-        <%= process.env.siteneme %>
-      </span></a>
-    <div class="mdui-toolbar-spacer"></div> <a class="mdui-btn mdui-btn-icon mdui-ripple  webkit-app-region-no"
-      mdui-dialog="{target: '#search'}"> <i class="mdui-icon material-icons">feedback</i> </a> <a href="/user/login"
-      class="mdui-btn mdui-ripple webkit-app-region-no md3botton" id="userbox">登录/注册</a>
-    <ul class="mdui-menu md3botton" id="userlist">
-      <li class="mdui-menu-item"><a href=" /login" class="mdui-ripple md3botton" id="usernick"
-          ondragstart="return false">未登录 </a></li>
-      <li class="mdui-menu-item"><a href="/my/scratch" class="mdui-ripple md3botton" ondragstart="return false"><i
-            class="mdui-menu-item-icon mdui-icon material-icons">insert_drive_file</i>Scratch作品 </a></li>
-      <li class="mdui-menu-item"><a href="/my/python" class="mdui-ripple md3botton" ondragstart="return false"><i
-            class="mdui-menu-item-icon mdui-icon material-icons">insert_drive_file</i>python作品 </a></li>
-      <li class="mdui-menu-item"><a href="/my/info" class="mdui-ripple md3botton" ondragstart="return false"><i
-            class="mdui-menu-item-icon mdui-icon material-icons">remove_red_eye</i>个人信息 </a></li>
-      <li class="mdui-divider"></li>
-      <li class="mdui-menu-item"><a href="/user/logout" class="mdui-ripple md3botton" ondragstart="return false"><i
-            class="mdui-menu-item-icon mdui-icon material-icons">close</i>退出 </a></li>
-    </ul>
-  </div>
-</div>
+
 <div class="mdui-drawer mdui-drawer-close" id="drawer">
   <ul class="mdui-list"><a class="mdui-list-item mdui-ripple" href="/"><i
         class="mdui-list-item-icon mdui-icon material-icons">desktop_windows</i>
@@ -59,7 +122,7 @@
           </a><a class="mdui-list-item mdui-ripple" href="/comparer"><i
               class="mdui-list-item-icon mdui-icon material-icons">build</i>
             <div class="mdui-list-item-content">项目比较器</div>
-          </a><a class="mdui-list-item mdui-ripple" href="https://github.com/OurWorlddev"><i
+          </a><a class="mdui-list-item mdui-ripple" href="https://github.com/OurWorlddev" icon="people"><i
               class="mdui-list-item-icon mdui-icon material-icons">web</i>
             <div class="mdui-list-item-content">Github</div>
           </a><a class="mdui-list-item mdui-ripple"
@@ -93,11 +156,15 @@
 
 <script>if (localStorage.darkTheme) {
     document.body.classList.add("mdui-theme-layout-dark");
+    document.body.classList.add("mdui-theme-dark");
+    document.documentElement.classList.add("mdui-theme-dark");
     document.body.setAttribute("dark", "");
     $("#layui_theme_css").attr("href", "<%= process.env.staticurl %>/css/layui-theme-dark.css");
   }
   document.getElementById("switch-theme").addEventListener("click", () => {
     document.body.classList.toggle("mdui-theme-layout-dark");
+    document.body.classList.toggle("mdui-theme-dark");
+    document.documentElement.classList.toggle("mdui-theme-dark");
     document.body.toggleAttribute("dark");
     if (document.body.hasAttribute("dark")) {
       localStorage.darkTheme = true;
@@ -107,6 +174,7 @@
       $("#layui_theme_css").removeAttr("href");
     }
   });
+  mdui.setColorScheme('#2087fd');
 </script>
 <script>
   getCDNinfo = function () {
@@ -179,6 +247,9 @@
     word-break: break-all;
   }
 </style>
+<!-- Filled -->
+<link href="<%= process.env.staticurl %>/font1.css" rel="stylesheet">
+
 <script>// 控制台安全提示
   //window.console.log('%c%s', 'color: red; background: yellow; font-size: 72px;', '警告！');
   //window.console.log('%c%s', 'color: red; background: yellow; font-size: 24px;', '如果你在接受远程控制，请立刻退出，不要急着看下面的内容');
