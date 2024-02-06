@@ -18,44 +18,39 @@
 	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css">
 	<% include ../linkfile.ejs %>
 
-<%- process.env.includecode %></head>
+		<%- process.env.includecode %>
+			<link rel="stylesheet" href="<%= process.env.staticurl %>/css/projectspage.css">
 
-
+</head>
 
 <body class="mdui-theme-light mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
 	<% include ../hand.ejs %>
 		<div class="mdui-container" style="margin:40px auto">
 			<div class="mdui-row">
-				<div class="mdui-typo-display-1">Scratch</div><!--<div class="mdui-typo-title">最新项目</div>-->
-				<div class="mdui-textfield mdui-textfield-floating-label">
-					<label class="mdui-textfield-label">回车搜索</label>
-					<input class="mdui-textfield-input " type="text" id='scratch_search_txt'>
-				</div> <label class="mdui-checkbox">
-					<input type="checkbox" id="search_src" type="checkbox" />
-					<i class="mdui-checkbox-icon"></i>
-					内容搜索
-				</label><button class="mdui-btn mdui-color-theme-accent mdui-ripple md3botton" style="margin:0px 0px 0px 10px;"
-					onclick="Scratch_Search()">搜索</button>
-				<div id="scratch_box">
-					<div class="mdui-tab mdui-color-theme" mdui-tab id="scratch_type">
-						<a class="mdui-ripple md3botton" onclick="Scratch('new');scratch_type='new'" 
-							id="scratch_tab_new">
-							<i class="mdui-icon material-icons">fiber_new</i>
-							<label>最新</label>
-						</a>
-						<a class="mdui-ripple md3botton" onclick="Scratch('hot');scratch_type='hot'" 
-							id="scratch_tab_hot">
-							<i class="mdui-icon material-icons">whatshot</i>
-							<label>最热</label>
-						</a>
+				<h1>Scratch</h1><!--<div class="mdui-typo-title">最新项目</div>-->
+				<br />
+				<mdui-text-field label="键入并回车以搜索" id='scratch_search_txt' clearable>
+					<mdui-button-icon slot="icon" icon="search"></mdui-button-icon>
+				</mdui-text-field>
 
-					</div>
+
+				<mdui-button icon="search" onclick="Scratch_Search()">搜索</mdui-button>
+				<mdui-checkbox id="search_src">内容搜索</mdui-checkbox>
+
+				<div id="scratch_box">
+					<mdui-tabs value="new" id="scratch_type">
+						<mdui-tab value="new" icon="fiber_new"
+							onclick="Scratch('new');scratch_type='new'">最新</mdui-tab>
+						<mdui-tab value="hot" icon="whatshot"
+							onclick="Scratch('hot');scratch_type='hot'">最热</mdui-tab>
+					</mdui-tabs>
+
 					<div class="mdui-row" id="scratch_projects"></div>
 					<div style="display:flex; justify-content:center;">
 						<div id="scratch_change_page"></div>
 					</div>
 				</div>
-			
+
 			</div>
 		</div>
 
@@ -91,27 +86,22 @@
 									tzzt = '<i class="mdui-icon material-icons">stars</i>'
 								}
 								$("#scratch_projects").append(`
-								<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
-<div class="">
-    <div class="mdui-card mdui-hoverable" style='border-radius: 15px 15px 15px 15px;'>
-        <a href="/scratch/play?id=${d[i].id}" target="_self" ondragstart="return false">
-            <div class="mdui-card-media mdui-ripple mdui-hoverable" style='border-radius: 15px 15px 15px 15px;'>
-                <img src="<%= process.env.qiniuurl%>/scratch_slt/${d[i].id}" style="pointer-events: none;" />
-                <div class="mdui-card-media-covered mdui-card-media-covered-gradient">
-                    <div class="mdui-card-primary">
-                        <div class="mdui-card-primary-title substr">${tzzt}${d[i].title}</div>
-                    </div>
-                </div>
-            </div>   </a>
-            <div class="mdui-card-header mdui-ripple" onclick="window.open('/user?id=${d[i].authorid}','_self')" >
-                <img class="mdui-card-header-avatar" src="/api/usertx?id=${d[i].authorid}" />
-                <div class="mdui-card-header-title">${d[i].nickname}</div>
-                <div class="mdui-card-header-subtitle">${d[i].motto}</div>
-            </div>
-     
-    </div>
-</div></div>	
-						`);
+<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
+<mdui-card variant="outlined" clickable ondragstart="return false" style="user-select:none">
+	<mdui-card clickable href="/scratch/play?id=${d[i].id}">
+		<img src="<%= process.env.qiniuurl%>/scratch_slt/${d[i].id}"
+			style="pointer-events: none;width: 100%;" />
+		<div class="card-media-covered">
+				<div class="card-media-covered-text">${tzzt}${d[i].title}</div>
+		</div>
+	</mdui-card>
+	<div href='/user?id=${d[i].authorid}' style="padding: 16px;">
+		<img class="card-avatar" src="/api/usertx?id=${d[i].authorid}" />
+		<div class="card-user card-user-name">${d[i].nickname}</div>
+		<div class="card-user card-user-motto">${d[i].motto}</div>
+	</div>
+</mdui-card>
+</div>`);
 							} document.getElementById("scratch_type").classList.remove('mdui-hidden');
 						} else {
 							automsg({ buttonText: '关闭', message: "无满足条件的作品" });
@@ -140,35 +130,31 @@
 					$("#scratch_projects").html("");
 
 					for (var i = 0; i < d.length; i++) {
-						tzzt=''
+						tzzt = ''
 						if (d[i].state == 2) {
 
 							tzzt = '<i class="mdui-icon material-icons">stars</i>'
 						}
 						$("#scratch_projects").append(`
 						<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
-<div class="">
-    <div class="mdui-card mdui-hoverable" style='border-radius: 15px 15px 15px 15px;'>
-        <a href="/scratch/play?id=${d[i].id}" target="_self" ondragstart="return false">
-            <div class="mdui-card-media mdui-ripple mdui-hoverable" style='border-radius: 15px 15px 15px 15px;'>
-                <img src="<%= process.env.qiniuurl%>/scratch_slt/${d[i].id}" style="pointer-events: none;" />
-                <div class="mdui-card-media-covered mdui-card-media-covered-gradient">
-                    <div class="mdui-card-primary">
-                        <div class="mdui-card-primary-title substr">${tzzt}${d[i].title}</div>
-                    </div>
-                </div>
-            </div>   </a>
-            <div class="mdui-card-header mdui-ripple" onclick="window.open('/user?id=${d[i].authorid}','_self')" >
-                <img class="mdui-card-header-avatar" src="/api/usertx?id=${d[i].authorid}" />
-                <div class="mdui-card-header-title">${d[i].nickname}</div>
-                <div class="mdui-card-header-subtitle">${d[i].motto}</div>
-            </div>
-     
-    </div>
-</div></div>	
+<mdui-card variant="outlined" clickable ondragstart="return false" style="user-select:none">
+	<mdui-card clickable href="/scratch/play?id=${d[i].id}">
+		<img src="<%= process.env.qiniuurl%>/scratch_slt/${d[i].id}"
+			style="pointer-events: none;width: 100%;" />
+		<div class="card-media-covered">
+				<div class="card-media-covered-text">${tzzt}${d[i].title}</div>
+		</div>
+	</mdui-card>
+	<div href='/user?id=${d[i].authorid}' style="padding: 16px;">
+		<img class="card-avatar" src="/api/usertx?id=${d[i].authorid}" />
+		<div class="card-user card-user-name">${d[i].nickname}</div>
+		<div class="card-user card-user-motto">${d[i].motto}</div>
+	</div>
+</mdui-card>
+</div>
 						`);
 					} document.getElementById("scratch_type").classList.add('mdui-hidden');
-					document.getElementById("scratch_change_page").innerHTML = `<button class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-theme-accent" onclick="Scratch(scratch_type)">取消搜索</button>`;
+					document.getElementById("scratch_change_page").innerHTML = `<mdui-button onclick="Scratch(scratch_type)">取消搜索</mdui-button>`;
 				} else {
 					automsg({ buttonText: '关闭', message: "无满足条件的作品" });
 				}

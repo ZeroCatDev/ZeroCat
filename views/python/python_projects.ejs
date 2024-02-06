@@ -14,7 +14,7 @@
 
 	<link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
 
-
+	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/projectspage.css">
 	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css">
 	<% include ../linkfile.ejs %>
 
@@ -26,29 +26,26 @@
 	<% include ../hand.ejs %>
 		<div class="mdui-container" style="margin:40px auto">
 			<div class="mdui-row">
+				<h1>Python</h1><!--<div class="mdui-typo-title">最新项目</div>-->
+				<br />
 
-				<div class="mdui-typo-display-1">Python</div>
-				<div class="mdui-textfield mdui-textfield-floating-label">
-					<label class="mdui-textfield-label">回车搜索</label>
-					<input class="mdui-textfield-input " type="text" id='python_search_txt'>
-				</div> <label class="mdui-checkbox">
-					<input id="python_src" type="checkbox" />
-					<i class="mdui-checkbox-icon"></i>
-					内容搜索
-				</label><button class="mdui-btn mdui-color-theme-accent mdui-ripple md3botton" style="margin:0px 0px 0px 10px;"
-					onclick="Python_Search()">搜索</button>
+
+
+				<mdui-text-field label="键入并回车以搜索" id='python_search_txt' clearable>
+					<mdui-button-icon slot="icon" icon="search"></mdui-button-icon>
+				</mdui-text-field>
+
+
+				<mdui-button icon="search" onclick="Python_Search()">搜索</mdui-button>
+				<mdui-checkbox id="python_src">内容搜索</mdui-checkbox>
+
 				<div id="python_box">
-					<div class="mdui-tab mdui-color-theme" mdui-tab id="python_type">
-						<a class="mdui-ripple md3botton" onclick="Python('new');python_type='new'" >
-							<i class="mdui-icon material-icons">fiber_new</i>
-							<label>最新</label>
-						</a>
-						<a class="mdui-ripple md3botton" onclick="Python('hot');python_type='hot'" >
-							<i class="mdui-icon material-icons">whatshot</i>
-							<label>最热</label>
-						</a>
-
-					</div>
+					<mdui-tabs value="new" id="python_type">
+						<mdui-tab value="new" icon="fiber_new"
+							onclick="Python('new');python_type='new'">最新</mdui-tab>
+						<mdui-tab value="hot" icon="whatshot"
+							onclick="Python('hot');python_type='hot'">最热</mdui-tab>
+					</mdui-tabs>
 					<div class="mdui-row" id="python_projects"></div>
 					<div style="display:flex; justify-content:center;">
 						<div id="python_change_page"></div>
@@ -96,22 +93,24 @@
 									d[i].description = '暂无简介'
 }
 								$("#python_projects").append(`
-								<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
-<div class="">
-    <div class="mdui-card mdui-hoverable" style='border-radius: 15px 15px 15px 15px;'>
-    
-		<div class="mdui-card-primary mdui-ripple mdui-hoverable" onclick='window.open("/python/play?id=${d[i].id}","_self")'  style='border-radius: 15px 15px 15px 15px;'>
-            <div class="mdui-card-primary-title substr">${tzzt}${d[i].title}</div>
-            <div class="mdui-card-primary-subtitle substr">${d[i].description}</div>
-        </div>
-            <div class="mdui-card-header mdui-ripple" onclick='window.open("/user?id=${d[i].authorid}","_self")'>
-                <img class="mdui-card-header-avatar" src="/api/usertx?id=${d[i].authorid}" />
-                <div class="mdui-card-header-title">${d[i].nickname}</div>
-                <div class="mdui-card-header-subtitle">${d[i].motto}</div>
-            </div>
-     
-    </div>
-</div></div>	
+								
+				<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
+					<mdui-card variant="outlined" href='/python/play?id=${d[i].id}' clickable ondragstart="return false" style="user-select:none;width: 100%;overflow: hidden">
+						<div class="card-main">
+								<div class="substr card-main-text" >${tzzt}${d[i].title}</div>
+								<div class="substr card-main-subtitle">${d[i].description}</div>
+							</div>
+						<div style="padding: 16px;">
+							<img class="card-avatar" src="/api/usertx?id=${d[i].authorid}" />
+							<div class="card-user card-user-name">${d[i].nickname}</div>
+							<div class="card-user card-user-motto">${d[i].motto}</div>
+						</div>
+					</mdui-card>
+					</div>
+
+
+
+
 
 
 
@@ -153,25 +152,22 @@ d[i].description = '暂无简介'
 }
 						$("#python_projects").append(`
 						<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
-<div class="">
-    <div class="mdui-card mdui-hoverable" style='border-radius: 15px 15px 15px 15px;'>
-    
-		<div class="mdui-card-primary mdui-ripple mdui-hoverable" onclick='window.open("/python/play?id=${d[i].id}","_self")'  style='border-radius: 15px 15px 15px 15px;'>
-            <div class="mdui-card-primary-title substr">${tzzt}${d[i].title}</div>
-            <div class="mdui-card-primary-subtitle substr">${d[i].description}</div>
-        </div>
-            <div class="mdui-card-header mdui-ripple" onclick='window.open("/user?id=${d[i].authorid}","_self")'>
-                <img class="mdui-card-header-avatar" src="/api/usertx?id=${d[i].authorid}" />
-                <div class="mdui-card-header-title">${d[i].nickname}</div>
-                <div class="mdui-card-header-subtitle">${d[i].motto}</div>
-            </div>
-     
-    </div>
-</div></div>	
+					<mdui-card variant="outlined" href='/python/play?id=${d[i].id}' clickable ondragstart="return false" style="user-select:none;width: 100%;overflow: hidden">
+						<div class="card-main">
+								<div class="substr card-main-text" >${tzzt}${d[i].title}</div>
+								<div class="substr card-main-subtitle">${d[i].description}</div>
+							</div>
+						<div style="padding: 16px;">
+							<img class="card-avatar" src="/api/usertx?id=${d[i].authorid}" />
+							<div class="card-user card-user-name">${d[i].nickname}</div>
+							<div class="card-user card-user-motto">${d[i].motto}</div>
+						</div>
+					</mdui-card>
+					</div>
 
 						`);
 					} document.getElementById("python_type").classList.add('mdui-hidden');
-					document.getElementById("python_change_page").innerHTML = '<button class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-theme-accent" onclick="Python(python_type)">取消搜索</button>';
+					document.getElementById("python_change_page").innerHTML = '<mdui-button onclick="Python(python_type)">取消搜索</mdui-button>';
 				} else {
 					automsg({ buttonText: '关闭', message: "无满足条件的作品" });
 				}

@@ -17,7 +17,8 @@
     <% if (login==false) { %> <mdui-list-item rounded href="/user/login">注册</mdui-list-item> <mdui-list-item rounded
         href="/user/login">登录</mdui-list-item>
       <% } else { %>
-        <mdui-list-item rounded active href="/user?id=<%= userid %>"> <mdui-avatar slot="icon" src="/api/usertx?id=<%= userid %>"></mdui-avatar>
+        <mdui-list-item rounded active href="/user?id=<%= userid %>"> <mdui-avatar slot="icon"
+            src="/api/usertx?id=<%= userid %>"></mdui-avatar>
           <%= nickname %>
         </mdui-list-item>
         <mdui-list-item rounded href="/my/scratch">Scratch作品</mdui-list-item>
@@ -86,60 +87,6 @@
 
 
 
-<link id="layui_theme_css" rel="stylesheet">
-
-<div class="mdui-drawer mdui-drawer-close" id="drawer">
-  <ul class="mdui-list"><a class="mdui-list-item mdui-ripple" href="/"><i
-        class="mdui-list-item-icon mdui-icon material-icons">desktop_windows</i>
-      <div class="mdui-list-item-content">首页</div>
-    </a>
-    <% if (login==false) { %><a class="mdui-list-item mdui-ripple" href="/user/login"><i
-          class="mdui-list-item-icon mdui-icon material-icons">insert_drive_file</i>
-        <div class="mdui-list-item-content">登录/注册</div>
-      </a>
-      <% } else { %><a class="mdui-list-item mdui-ripple" href="/my/scratch"><i
-            class="mdui-list-item-icon mdui-icon material-icons">star</i>
-          <div class="mdui-list-item-content">Scratch作品</div>
-        </a><a class="mdui-list-item mdui-ripple" href="/my/python"><i
-            class="mdui-list-item-icon mdui-icon material-icons">star</i>
-          <div class="mdui-list-item-content">Python作品</div>
-        </a><a class="mdui-list-item mdui-ripple" href="/my/info"><i
-            class="mdui-list-item-icon mdui-icon material-icons">account_circle</i>
-          <div class="mdui-list-item-content">个人信息</div>
-        </a><a class="mdui-list-item mdui-ripple" href="/about"><i
-            class="mdui-list-item-icon mdui-icon material-icons">info</i>
-          <div class="mdui-list-item-content">关于</div>
-        </a>
-        <% } %><a class="mdui-list-item mdui-ripple" mdui-dialog="{target: '#search'}"><i
-              class="mdui-list-item-icon mdui-icon material-icons">send</i>
-            <div class="mdui-list-item-content">反馈</div>
-          </a>
-          <li class="mdui-subheader">工具</li><a class="mdui-list-item mdui-ripple" href="/asdm"><i
-              class="mdui-list-item-icon mdui-icon material-icons">content_copy</i>
-            <div class="mdui-list-item-content">Scratch下载镜像</div>
-          </a><a class="mdui-list-item mdui-ripple" href="https://wuyuan.dev/scratch_packager/"><i
-              class="mdui-list-item-icon mdui-icon material-icons">move_to_inbox</i>
-            <div class="mdui-list-item-content">多平台打包工具</div>
-          </a><a class="mdui-list-item mdui-ripple" href="/comparer"><i
-              class="mdui-list-item-icon mdui-icon material-icons">build</i>
-            <div class="mdui-list-item-content">项目比较器</div>
-          </a><a class="mdui-list-item mdui-ripple" href="https://github.com/OurWorlddev" icon="people"><i
-              class="mdui-list-item-icon mdui-icon material-icons">web</i>
-            <div class="mdui-list-item-content">Github</div>
-          </a><a class="mdui-list-item mdui-ripple"
-            href="https://umami.190823.xyz/share/B0pMXh8TOb9W6Eyd/<%= process.env.siteneme %>%E7%A4%BE%E5%8C%BA"><i
-              class="mdui-list-item-icon mdui-icon material-icons">trending_up</i>
-            <div class="mdui-list-item-content">统计数据</div>
-          </a>
-          <li class="mdui-subheader">设置</li><a class="mdui-list-item mdui-ripple" id="switch-theme"><i
-              class="mdui-list-item-icon mdui-icon material-icons">brightness_4</i>
-            <div class="mdui-list-item-content">切换主题</div>
-          </a>
-          <div class="mdui-card-content"> 当前CDN节点: </br><span id="cdn">[未知]</span></br> 你的ip: </br><span
-              id="ip">[未知]</span></br> 你的所在国家/地区: </br><span id="loc">[未知]</span></br></br>© 2023 <%=
-              process.env.siteneme %><br />Powered by <a href="https://wuyuan.dev">孙悟元</a></div>
-  </ul>
-</div>
 <div class="mdui-dialog  md3botton" id="search">
   <div class="mdui-dialog-title">反馈</div>
   <div class="mdui-dialog-content">涉及代码请去Github
@@ -176,8 +123,7 @@
     }
   });
   mdui.setColorScheme('#2087fd');
-</script>
-<script>
+
   getCDNinfo = function () {
     jQuery.ajax({
       url: "/cdn-cgi/trace",
@@ -200,9 +146,38 @@
 
     if (<%= login %> == true ) { window.clarity("identify", "<%= username %>", "ourworld-user-<%= userid %>", window.location.pathname, "<%= nickname %>") }
   });
-</script>
-<script>
+
   qiniuurl = "<%= process.env.qiniuurl %>"
+  
+  markdevice = function () {
+
+window.clarity("identify", "<%= username %>", "ourworld-user-<%= userid %>", window.location.pathname, "<%= nickname %>")
+automsg('已尝试标记这个设备')
+}
+</script>
+<script src="https://registry.npmmirror.com/jwt-decode/4.0.0/files/build/cjs/index.js"></script>
+<script>
+function userinfo() {
+const token = getCookie('token');
+const decoded = jwtDecode(token);
+if (decoded && decoded.userid) {
+  $('#usernick').text(decoded.nickname);
+  $('#usernick').attr("href", "/user?id=" + decoded.userid);
+
+  $('#userbox').html('<img class=" md3botton mdui-img-fluid " src="/api/usertx?id=' + decoded.userid + '" style="pointer-events: none;" />')
+  $('#userbox').attr('mdui-menu', '{target: "#userlist"}');
+  $('#userbox').attr('class', 'mdui-btn mdui-btn-icon webkit-app-region-no  mdui-hoverable mdui-ripple md3botton');
+  $('#userbox').attr('href', '#');
+
+
+}
+}
+userinfo()
+function getCookie(name) {
+const value = "; " + document.cookie;
+const parts = value.split("; " + name + "=");
+if (parts.length === 2) return parts.pop().split(";").shift();
+}
 </script>
 <style>
   .mdui-color-white {
@@ -258,33 +233,4 @@
   //window.console.log('%c%s', 'color: red; background: yellow; font-size: 24px;', '请永远不要在这里粘贴或输入任何文字，不论他们告诉你这有多安全，管理员不需要查看控制台获取你的日志，OurWorld无法使用控制台进行调试或操作，任何希望你使用"检查"或F12按钮打开这里的人都是骗子，请立刻关掉这个网页并在官方渠道反馈(右上角头像旁反馈按钮)');
 </script>
 
-<script>
-  markdevice = function () {
-
-    window.clarity("identify", "<%= username %>", "ourworld-user-<%= userid %>", window.location.pathname, "<%= nickname %>")
-    automsg('已尝试标记这个设备')
-  }
-</script>
-<script src="https://registry.npmmirror.com/jwt-decode/4.0.0/files/build/cjs/index.js"></script>
-<script>
-  function userinfo() {
-    const token = getCookie('token');
-    const decoded = jwtDecode(token);
-    if (decoded && decoded.userid) {
-      $('#usernick').text(decoded.nickname);
-      $('#usernick').attr("href", "/user?id=" + decoded.userid);
-
-      $('#userbox').html('<img class=" md3botton mdui-img-fluid " src="/api/usertx?id=' + decoded.userid + '" style="pointer-events: none;" />')
-      $('#userbox').attr('mdui-menu', '{target: "#userlist"}');
-      $('#userbox').attr('class', 'mdui-btn mdui-btn-icon webkit-app-region-no  mdui-hoverable mdui-ripple md3botton');
-      $('#userbox').attr('href', '#');
-
-
-    }
-  }
-  userinfo()
-  function getCookie(name) {
-    const value = "; " + document.cookie;
-    const parts = value.split("; " + name + "=");
-    if (parts.length === 2) return parts.pop().split(";").shift();
-  }</script>
+<script></script>
