@@ -27,85 +27,75 @@
 
 <body class="mdui-theme-light mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
 	<% include ../hand.ejs %>
-		<div class="mdui-container" style="margin:40px auto">
-			<div>
-				<div class="mdui-card mdui-hoverable md3botton">
-					<div class="layui-row">
-						<div id="container_play" style="display: none;">
-							<div id="wrapper"> <canvas id="stage"></canvas>
-								<div id="monitors"></div>
-								<div id="asking-box"> <label id="question" for="answer">Question</label> <input
-										type="text" id="answer"> </div>
-							</div>
+		<div class="mdui-container" >
+			<mdui-card style="width: 100%;" variant="outlined">
+
+
+				<div id="container_play" style="display: none;">
+					<div id="wrapper"> <canvas id="stage"></canvas>
+						<div id="monitors"></div>
+						<div id="asking-box">
+							<label id="question" for="answer">问题</label> <input type="text" id="answer">
 						</div>
-					</div>
-					<span id="loading-progress" style="display: none;"></span>
-					<div id="container_main">
-						<div id="project_slt"
-							style="background-image: url(<%= process.env.qiniuurl %>/scratch_slt/<%=project.id%>);">
-							<div class="green-flag-box mdui-ripple mdui-valign" style="width: 100%;height: 100%;">
-								<div class="mdui-center">
-									<img class="green-flag"
-										src="<%= process.env.staticurl %>/scratchstatic/assets/2e0c4790f8f9cf28e3c346b9cef0fcb6.svg">
-									<div style="font-size: small; width: 88px;text-align: center;">点击运行</div>
-								</div>
-							</div>
-						</div>
-					</div>
-					<div class="layui-row scratch-player-bottom">
-						<button id="greenFlag" class="mdui-btn mdui-color-theme-accent mdui-ripple md3botton"
-							onclick="greenFlag()" style="display: none;">开始</button>
-						<button id="stopAll" class="mdui-btn mdui-color-red mdui-ripple md3botton" onclick="stopAll()"
-							style="display: none;">停止</button>
 					</div>
 				</div>
-			</div><br />
-			<div class="mdui-card-primary-title">
+
+				<span id="loading-progress" style="display: none;"></span>
+				<div id="container_main">
+					<div id="project_slt"
+						style="background-image: url(<%= process.env.qiniuurl %>/scratch_slt/<%=project.id%>);">
+						<div class="green-flag-box mdui-ripple mdui-valign first-green-flag" class="first-green-flag"
+							style="width: 100%;height: 100%;">
+							<div class="mdui-center">
+								<img class="green-flag"
+									src="<%= process.env.staticurl %>/scratchstatic/assets/2e0c4790f8f9cf28e3c346b9cef0fcb6.svg">
+								<div style="font-size: small; width: 88px;text-align: center;">点击运行</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</mdui-card>
+			<mdui-button onclick="greenFlag()" variant="filled" icon="play_arrow">运行</mdui-button>
+
+			<mdui-button id="stopAll" onclick="stopAll()" variant="tonal" icon="clear">停止</mdui-button>
+			<br />
+			<div style="font-size: 24px;line-height: 36px">
 				<%= project.title %>
 			</div>
-			<div class="mdui-card-primary-subtitle" style="word-wrap:break-word;">
+			<div style="font-size: 14px;line-height: 24px;opacity: .54;">
 				<%= project.description %>
 			</div>
-			<a href="/user?id=<%= project.authorid %>">
-				<div class="mdui-card  mdui-hoverable mdui-ripple  md3botton">
-					<div class="mdui-card-header"> <img class="mdui-card-header-avatar"
-							src="<%= process.env.qiniuurl%>/user/<%=project.authorid%>.png" />
-						<div class="mdui-card-header-title">
-							<%= project.author_nickname %>
-						</div>
-						<div class="mdui-card-header-subtitle">
-							<%= project.author_motto %>
-						</div>
-					</div>
-				</div>
-			</a>
-			<br />
-			<div class="mdui-chip"> <span class="mdui-chip-icon"> <i class="mdui-icon material-icons">&#xe8a6;</i>
-				</span> <span class="mdui-chip-title">
-					浏览量: <span class="waline-pageview-count" /> </span> </div>
+			<mdui-list>
+				<mdui-list-item id="authorinfo" rounded active headline="<%= project.author_nickname %>" description="<%= project.author_motto %>" headline-line="1"
+					description-line="1" href="/user?id=<%= project.authorid %>"><mdui-avatar id="authoravatar" slot="icon"
+						src="/api/usertx?id=<%=project.authorid%>"></mdui-avatar>
+				</mdui-list-item>
+			</mdui-list>
+		
+			<mdui-chip icon="play_circle"><span>浏览量: <span class="waline-pageview-count">加载中</span></span></mdui-chip>
+			<mdui-chip icon="code">Scratch</mdui-chip><br/>
+			<mdui-button variant="filled" class="copylink" icon="content_copy">复制链接</mdui-button>
+			<mdui-button variant="filled"  icon="content_copy" id="open-analysis-dialog" onclick='projectanalysis(projectjson)'>分析</mdui-button>
 
-			<div id="waline-users"></div> <button class="mdui-btn mdui-ripple  copylink  md3botton">复制链接</button>
-			<button class="mdui-btn mdui-ripple md3botton"
-				onclick='location.href=("/scratch/edit#<%= project.id%>")'>创作页打开</button>
-			<button class="mdui-btn mdui-ripple md3botton" onclick='projectanalysis(projectjson)' mdui-dialog="{target: '#example-4'}">分析</button>
+			<mdui-button variant="text" href="/scratch/edit#<%= project.id%>" target="_blank">创作页打开</mdui-button>
+			
 			<div class="social-share"></div>
 			<script src="https://cdn.staticfile.org/echarts/5.3.2/echarts.min.js"></script>
 
 
-    <div class="mdui-dialog mdui-color-white" id="example-4">
-		<center><div id="main1" style="width: 650px; height: 550px">请加载完毕后再使用分析</div></center><center><div id="r"></div></center>
-    </div>
-
-			<div class="mdui-dialog" id="qrcode">
-				<div class="mdui-dialog-title">反馈 </div>
-				<div class="wechat-qrcode">
-				</div>
-				<div class="mdui-dialog-actions">
-					<button class="mdui-btn mdui-ripple" mdui-dialog-close>关闭</button>
-				</div>
-			</div>
-
-
+			<mdui-dialog close-on-overlay-click close-on-esc class="analysis-dialog" >
+				<span slot="headline"><%= project.title %> 的分析</span>
+				<span slot="description">由 OurWorld 统计</span>
+				<div id="main1" style="width: 450px; height: 400px">请加载完毕后再使用分析</div>
+		
+				<div id="r"></div>
+			</mdui-dialog>
+			<script>
+				const analysisdialog = document.querySelector(".analysis-dialog");
+				const openanalysisButton = document.querySelector("#open-analysis-dialog");
+			  
+				openanalysisButton.addEventListener("click", () => analysisdialog.open = true);
+			  </script>
 
 			<div id="waline"></div>
 			<script type="module">
@@ -128,6 +118,7 @@
 				});
 			</script>
 			<input type="hidden" id="works_id" value="<%= project.id %>">
+		</div>
 </body>
 
 <script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
@@ -181,11 +172,7 @@
 		};
 		const data = genData(50);
 		option = {
-			title: {
-				text: h.info,
-				subtext: "由OurWorld统计 总积木数：" + data.total,
-				left: "center",
-			},
+			
 			tooltip: {
 				trigger: "item",
 				formatter: "{a} <br/>{b} : {c} ({d}%)",
@@ -194,8 +181,8 @@
 				type: "scroll",
 				orient: "vertical",
 				right: 10,
-				top: 20,
-				bottom: 20,
+				top: 10,
+				bottom: 10,
 				data: data.legendData,
 			},
 			series: [
@@ -235,11 +222,11 @@
 			console.log(infotext);
 			document.getElementById('r').innerHTML =
 				// "不含圆形积木数:"+h.noreturn+"<br>"+
-				"<div class='mdui-chip mdui-ripple mdui-color-white mdui-hoverable'><span class='mdui-chip-title'>变量数:" + infotext.variables + "个</span></div>"
-				+ "<div class='mdui-chip mdui-ripple mdui-color-white mdui-hoverable'><span class='mdui-chip-title'>列表数:" + infotext.lists + "个</span></div>"
-				+ "<div class='mdui-chip mdui-ripple mdui-color-white mdui-hoverable'><span class='mdui-chip-title'>广播数:" + infotext.broadcasts + "个</span></div>"
-				+ "<div class='mdui-chip mdui-ripple mdui-color-white mdui-hoverable'><span class='mdui-chip-title'>总块数:" + infotext.blocks + "块</span></div>"
-				+ "<div class='mdui-chip mdui-ripple mdui-color-white mdui-hoverable'><span class='mdui-chip-title'>插件数:" + infotext.extensions + "个</span></div>";
+				"<mdui-chip>变量数:" + infotext.variables + "个</mdui-chip>"
+				+ "<mdui-chip>列表数:" + infotext.lists + "个</mdui-chip>"
+				+ "<mdui-chip>广播数:" + infotext.broadcasts + "个</mdui-chip>"
+				+ "<mdui-chip>总块数:" + infotext.blocks + "块</mdui-chip>"
+				+ "<mdui-chip>插件数:" + infotext.extensions + "个</mdui-chip>";
 			return {
 				legendData: legendData,
 				seriesData: seriesData,

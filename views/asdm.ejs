@@ -18,26 +18,20 @@
 
 
         <div class="mdui-container" style="margin:40px auto">
-            <div class="mdui-typo-display-1">
-                <%= process.env.siteneme %>
-            </div>
-            <p>公益Scratch桌面版镜像</p>
+            <h2 class="mdui-typo-display-1">
+                公益Scratch桌面版镜像
+            </h2>
             <p class="mt-2 font-weight-bold">
-                该版本镜像于 <span id="release-date">一周以内</span>，Scratch 版本为 <span id="scratch-version">未知</span>。
+                该版本镜像于 <span id="release-date">加载中</span>，Scratch 版本为 <span id="scratch-version">加载中</span>。
             </p>
-            <a href="#" class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-theme-accent disabled md3botton"
-                id="windows-download-btn">
-                Windows 下载
-            </a>
-            <a href="#" class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-theme-accent disabled md3botton"
-                id="macos-download-btn">
-                MacOS 下载
-            </a>
+       
+            <mdui-button href="#" id="windows-download-btn">Windows 下载</mdui-button>
+            <mdui-button href="#" id="macos-download-btn">MacOS 下载</mdui-button>
+
             <br /><br />
-            <a href="https://ourworldorg.github.io/AutoScratchDesktopMirror/"
-                class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-theme-accent md3botton" >
-                无法下载?查看完整版以切换镜像源
-            </a>
+            <mdui-button href="https://asdm.wuyuan.dev/">一直加载中？无法下载？</mdui-button>
+
+           
         </div>
 
         <script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
@@ -55,7 +49,7 @@
         var windowsDownloadBtn = document.getElementById('windows-download-btn');
         var macosDownloadBtn = document.getElementById('macos-download-btn');
 
-        axios.get('https://api.github.com/repos/<%= process.env.siteneme %>Org/AutoScratchDesktopMirror/releases/latest')
+        axios.get('https://api.github.com/repos/OurWorldOrg/AutoScratchDesktopMirror/releases/latest')
             .then(function (response) {
                 var data = response.data;
                 var windowsAsset = data.assets.find(function (asset) {

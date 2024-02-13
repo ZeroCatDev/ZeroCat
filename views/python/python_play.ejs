@@ -16,61 +16,50 @@
 <body class="mdui-theme-light mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
 
 	<% include ../hand.ejs %>
-		<div class="mdui-container" style="margin:40px auto">
-			<div>
-				<div class="mdui-card mdui-hoverable" style="border-radius: 15px;">
-					<div style="display: flex; position: absolute; top:8px; right:0; z-index: 99999;">
-						<div style="margin:auto 10px;">
-							<button class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-theme-accent" id="run-code"
-								onclick="run_it()" style="border-radius: 10px;">运行</button>
-						</div>
-						<div style="margin:auto 10px auto 0;">
-							<button class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-red-accent"
-								onclick="run_clear()" style="border-radius: 10px;">清除</button>
-						</div>
-					</div>
+		<div class="mdui-container" >
+			<mdui-card style="width: 100%;" variant="outlined">
 
-					<div class="layui-row">
-
-						<div id="canvas_box" style="height:calc(50vh);">
-							<div id="mycanvas"></div>
-						</div>
-
-
-						<div class=""
-							style="padding: 0; margin:0;background-color: rgba(0, 0, 0, 0);height:calc(20vh);">
-							<textarea id="output" style="height: 100%;width: 100%;" disabled>终端打印输出区</textarea>
-						</div>
-					</div>
+				<div style="display: flex; position: absolute; top:8px; right:0; z-index: 99999;">
 				</div>
-			</div>
-			<div class=" mdui-hidden">
+				<div id="canvas_box" style="height:calc(50vh);">
+					<div id="pythoncanvas"></div>
+				</div>
+				<div style="padding: 0; margin:0;background-color: rgba(0, 0, 0, 0);height:calc(20vh);">
+					<textarea id="output" style="height: 100%;width: 100%;" disabled>终端打印输出区</textarea>
+				</div>
+			</mdui-card>
+
+
+
+
+			<mdui-button id="run-code" onclick="run_it()" variant="filled" icon="play_arrow">运行</mdui-button>
+
+			<mdui-button onclick="run_clear()" variant="tonal" icon="clear">清除</mdui-button>
+
+
+			<div style="display: none;">
 				<textarea id="code_textarea"></textarea>
 			</div>
 			<br />
-			<div class="mdui-card-primary-title" id="work_title">
+			<div style="font-size: 24px;
+			line-height: 36px" id="work_title">
 
 			</div>
-			<div class="mdui-card-primary-subtitle" id="work_update">
+			<div style="font-size: 14px;
+			line-height: 24px;
+			opacity: .54;" id="work_update">
 				项目简介
 			</div>
-			<div id="touserurl">
-				<div class="mdui-card mdui-hoverable mdui-ripple " style="border-radius: 15px;">
-					<div class="mdui-card-header"> <img class="mdui-card-header-avatar" src="/" id="authorimg" />
-						<div class="mdui-card-header-title" id="authorname">
-							用户名
-						</div>
-						<div class="mdui-card-header-subtitle" id="authormotto">个人简介</div>
-					</div>
-				</div>
-			</div>
-			<br />
-			<div class="mdui-chip"> <span class="mdui-chip-icon"> <i class="mdui-icon material-icons">&#xe8a6;</i>
-				</span> <span class="mdui-chip-title">
-					浏览量: <span class="waline-pageview-count" /> </span> </div>
+			<mdui-list>
+				<mdui-list-item id="authorinfo" rounded active headline="加载中" description="加载中" headline-line="1"
+					description-line="1" href="#"><mdui-avatar id="authoravatar" slot="icon"
+						src="/api/usertx?id=1"></mdui-avatar>
+				</mdui-list-item>
+			</mdui-list>
+			<mdui-chip icon="play_circle"><span>浏览量: <span class="waline-pageview-count">加载中</span> </span></mdui-chip>
+			<mdui-chip icon="code" id="projectstate">Python</mdui-chip><mdui-chip icon="code">Python</mdui-chip><br />
+			<mdui-button variant="text" onclick='tocode()'>查看代码</mdui-button>
 
-			<div id="waline-users"></div>
-			<button class="mdui-btn mdui-ripple" onclick='tocode()' style="border-radius: 15px;">查看代码</button>
 			<div class="social-share"></div>
 
 
@@ -93,8 +82,12 @@
 					],
 					dark: 'body[dark]',
 				});
+
+
+
 			</script>
 
+		</div>
 </body>
 
 </html>

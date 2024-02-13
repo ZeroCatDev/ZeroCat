@@ -14,15 +14,14 @@
 	<link rel="stylesheet" type="text/css" href="<%= process.env.staticurl %>/layui/css/layui.css">
 	<link type="text/css" rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css" />
 	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/waline.css" />
-	
+	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/projectspage.css">
+
 <%- process.env.includecode %><% include linkfile.ejs %></head>
 
 <body class="mdui-theme-light mdui-theme-primary-blue mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
 	<% include hand.ejs %>
 
-		<div class="mdui-container" style="margin:40px auto">
-
-
+		<div class="mdui-container">
 			<img class="mdui-img-circle" src="/api/usertx?id=<%= user.id %>"
 				style="height: 70px;" />
 			<div class="mdui-typo-display-2">
@@ -95,15 +94,16 @@
 									tzzt = '<div class="mdui-card-primary-subtitle">精选作品</div>'
 								}
 								$("#scratch_projects").append(`
-							<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
-							<a href="/scratch/play?id=${d[i].id}" class="mdui-ripple"  ondragstart="return false"> 
-				<div class="mdui-card mdui-ripple" style='border-radius: 15px 15px 15px 15px;'>
-					<div class="mdui-card-media">
-						<img src="<%= process.env.qiniuurl%>/scratch_slt/${d[i].id}" style="pointer-events: none;"/>
-						<div class="mdui-card-media-covered mdui-card-media-covered-gradient">
-							<div class="mdui-card-primary">${tzzt}
-								<div class="mdui-card-primary-title">${d[i].title}</div>
-						</div></div></div></div></a></div>	
+								<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
+<mdui-card variant="outlined" clickable ondragstart="return false" style="user-select:none;width: 100%;overflow: hidden" href="/scratch/play?id=${d[i].id}">
+	
+		<img src="<%= process.env.qiniuurl%>/scratch_slt/${d[i].id}"
+			style="pointer-events: none;width: 100%;" />
+		<div class="card-media-covered">
+				<div class="card-media-covered-text">${tzzt}${d[i].title}</div>
+		</div>
+</mdui-card>
+</div>
 						`);
 							}
 						} else {
@@ -135,22 +135,14 @@
 
 									tzzt = '<a class="mdui-color-amber">[精选作品]</a>'
 								}
-								$("#python_projects").append(`
-							<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
-								<div class="mdui-card mdui-hoverable" style='border-radius: 15px 15px 15px 15px;'>
-    
-	<div class="mdui-card-primary  mdui-ripple mdui-hoverable" onclick='window.open("/python/play?id=${d[i].id}","_self")'>
-		<div class="mdui-card-primary-title substr">${d[i].title}</div>
-		<div class="mdui-card-primary-subtitle substr">${tzzt}${d[i].description}</div>
-	</div>
-	  
- 
-</div></div>	
-
-						
-
-	
-
+								$("#python_projects").append(`	<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
+					<mdui-card variant="outlined" href='/python/play?id=${d[i].id}' clickable ondragstart="return false" style="user-select:none;width: 100%;overflow: hidden">
+						<div class="card-main">
+								<div class="substr card-main-text" >${tzzt}${d[i].title}</div>
+								<div class="substr card-main-subtitle">${d[i].description}</div>
+							</div>
+					</mdui-card>
+					</div>
 						`);
 
 							}
@@ -176,24 +168,4 @@
 	}
 </script>
 
-</html><style>
-	.md3botton {
-		border-radius: 15px;
-	}
-
-	.mdui-dialog-prompt {
-		border-radius: 15px;
-	}
-
-
-
-	.substr {
-		white-space: nowrap;
-		overflow: hidden;
-	}
-
-	.mdui-tooltip {
-		word-wrap: break-word;
-		word-break: break-all;
-	}
-</style>
+</htm

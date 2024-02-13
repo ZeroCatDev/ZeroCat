@@ -49,9 +49,8 @@
                   </div>
 
 
-
-                  <div class="<%= process.env.reclass %>" data-sitekey="<%= process.env.rekey %>">
-                  </div>
+                  <div id="recaptcha-div-rePW-page"></div>
+               
 
 
 
@@ -80,4 +79,15 @@
     <script type="text/javascript" src="<%= process.env.staticurl %>/js/login.js"></script>
 
 </html>
-<script src="<%= process.env.reurl %>" async defer></script>
+<script src="<%= process.env.reurl %>?compat=recaptcha&onload=repwonloadCallback" async defer></script>
+
+<script>
+rekey='<%= process.env.rekey %>'
+
+function repwonloadCallback() {
+grecaptcha.render("#recaptcha-div-rePW-page", {
+    sitekey: rekey,
+  });
+ 
+}
+</script>
