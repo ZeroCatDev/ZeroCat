@@ -91,7 +91,7 @@
 								tzzt = ''
 								if (d[i].state == 2) {
 
-									tzzt = '<div class="mdui-card-primary-subtitle">精选作品</div>'
+									tzzt = '<mdui-icon name="star"></mdui-icon>'
 								}
 								$("#scratch_projects").append(`
 								<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
@@ -133,9 +133,9 @@
 								tzzt = ''
 								if (d[i].state == 2) {
 
-									tzzt = '<a class="mdui-color-amber">[精选作品]</a>'
+									tzzt = '<mdui-icon name="star"></mdui-icon>'
 								}
-								$("#python_projects").append(`	<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
+								$("#python_projects").append(`<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
 					<mdui-card variant="outlined" href='/python/play?id=${d[i].id}' clickable ondragstart="return false" style="user-select:none;width: 100%;overflow: hidden">
 						<div class="card-main">
 								<div class="substr card-main-text" >${tzzt}${d[i].title}</div>
