@@ -236,3 +236,24 @@ href="<%= process.env.staticurl %>/vs/editor/editor.main.css"
 
 </html>
 <script>qiniuurl = '<%= process.env.qiniuurl %>'</script>
+<script>if (localStorage.darkTheme) {
+  document.body.classList.add("mdui-theme-layout-dark");
+  document.body.classList.add("mdui-theme-dark");
+  document.documentElement.classList.add("mdui-theme-dark");
+  document.body.setAttribute("dark", "");
+  $("#layui_theme_css").attr("href", "<%= process.env.staticurl %>/css/layui-theme-dark.css");
+}
+document.getElementById("switch-theme").addEventListener("click", () => {
+  document.body.classList.toggle("mdui-theme-layout-dark");
+  document.body.classList.toggle("mdui-theme-dark");
+  document.documentElement.classList.toggle("mdui-theme-dark");
+  document.body.toggleAttribute("dark");
+  if (document.body.hasAttribute("dark")) {
+    localStorage.darkTheme = true;
+    $("#layui_theme_css").attr("href", "<%= process.env.staticurl %>/css/layui-theme-dark.css");
+  } else {
+    delete localStorage.darkTheme;
+    $("#layui_theme_css").removeAttr("href");
+  }
+});
+mdui.setColorScheme('#2087fd');</script>
