@@ -12,21 +12,22 @@
 
 	<link rel="stylesheet" type="text/css" href="<%= process.env.staticurl %>/layui/css/layui.css">
 	<link type="text/css" rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css" />
+	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/projectspage.css">
 
 	<% include ../linkfile.ejs %>
-<%- process.env.includecode %></head>
+		<%- process.env.includecode %>
+</head>
 
 <body class="mdui-theme-light mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
 	<% include ../hand.ejs %>
 		<div class="mdui-container">
-			<div class="mdui-tab mdui-color-theme" mdui-tab>
-				<a class="mdui-ripple md3botton" onclick="project_state0()" ><i
-						class="mdui-icon material-icons">lock_outline</i>未分享的作品</a>
-				<a class="mdui-ripple md3botton" onclick="project_state1()" ><i
-						class="mdui-icon material-icons">share</i>已分享的作品</a>
-				<a class="mdui-ripple md3botton" onclick="project_state2()" ><i
-						class="mdui-icon material-icons">star</i>精选作品</a>
-			</div>
+			<mdui-tabs value="0">
+				<mdui-tab value="0" icon="lock_outline" onclick="project_state0()">未分享的作品</mdui-tab>
+				<mdui-tab value="1" icon="share" onclick="project_state1()">已分享的作品</mdui-tab>
+				<mdui-tab value="2" icon="star" onclick="project_state2()">精选作品</mdui-tab>
+
+			  </mdui-tabs>
+		
 			<div class="mdui-row" style="margin-top: 10px;" id="box_projects" ondragstart="return false">
 			</div>
 			<div style="display:flex; justify-content:center;">
@@ -59,28 +60,25 @@
 							if (state == 0) {
 								for (var i = 0; i < d.length; i++) {
 									$("#box_projects").append(`
-									<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
-<div class='mdui-hoverable md3botton' >
-				<div class="mdui-card mdui-ripple  md3botton" >
-					<div class="mdui-card-primary">
-            <div class="mdui-card-primary-title">${d[i].title}</div>
-            <div class="mdui-card-primary-subtitle substr"  mdui-tooltip="{content: '${d[i].description}[${d[i].view_count}浏览]', delay: 500}">${d[i].description}[${d[i].view_count}浏览]</div>
-        </div>
-          
-					
-					<div class="mdui-card-actions">
-						<button class="mdui-btn mdui-ripple mdui-ripple-white md3botton" onclick="delProject(this,${d[i].id})">删除</button>
-		<button class="mdui-btn mdui-ripple mdui-ripple-white md3botton" onclick="sharePythonProject(${d[i].id})">分享</button><button class="mdui-btn mdui-ripple mdui-ripple-white md3botton"
-					onclick="SetScratchProjectDescription(${d[i].id},'${d[i].description}')">修改简介</button>
-		<button class="mdui-btn mdui-ripple mdui-ripple-white md3botton" onclick='location.href=("/python/edit#${d[i].id}")'>修改</button>
+				
+			
+			
+			
+			<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
+					<mdui-card variant="outlined" clickable ondragstart="return false" style="user-select:none;width: 100%;overflow: hidden">
+						<div class="card-main">
+								<div class="substr card-main-text" >${d[i].title}</div>
+								<div class="substr card-main-subtitle">${d[i].description}[${d[i].view_count}浏览]</div>
+							</div>
+						<div style="padding: 16px;">
+							<mdui-button onclick="delProject(this,${d[i].id})">删除</mdui-button>	
+							<mdui-button onclick="shareProject(${d[i].id})">分享</mdui-button>	
+							<mdui-button onclick="SetProjectDescription(${d[i].id},'${d[i].description}')">简介</mdui-button>	
+							<mdui-button onclick='location.href=("/python/edit#${d[i].id}")'>编辑</mdui-button>
+						</div>
+					</mdui-card>
 					</div>
-			
-</div></div>
-			</div>
-			
-			
-			
-			
+
 			
 			
 			
@@ -90,30 +88,26 @@
 								};
 							} else {
 								for (var i = 0; i < d.length; i++) {
-									$("#box_projects").append(`
-									<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
-<div class='mdui-hoverable md3botton' >
-				<div class="mdui-card mdui-ripple  md3botton" >
-					<div class="mdui-card-primary" onclick='window.open("/python/play?id=${d[i].id}","_self")'>
-            <div class="mdui-card-primary-title">${d[i].title}</div>
-            <div class="mdui-card-primary-subtitle substr"  mdui-tooltip="{content: '${d[i].description}[${d[i].view_count}浏览]', delay: 500}">${d[i].description}[${d[i].view_count}浏览]</div>
-        </div>
-          
-					
-					<div class="mdui-card-actions">
-						<button class="mdui-btn mdui-ripple mdui-ripple-white md3botton" onclick="delProject(this,${d[i].id})">删除</button>
-						<button class="mdui-btn mdui-ripple mdui-ripple-white md3botton" onclick="nosharePythonProject(${d[i].id})">取消分享</button><button class="mdui-btn mdui-ripple mdui-ripple-white md3botton"
-					onclick="SetScratchProjectDescription(${d[i].id},'${d[i].description}')">修改简介</button>
-		<button class="mdui-btn mdui-ripple mdui-ripple-white md3botton" onclick='location.href=("/python/edit#${d[i].id}")'>修改</button>
+									$("#box_projects").append(`<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
+					<mdui-card variant="outlined" clickable ondragstart="return false" style="user-select:none;width: 100%;overflow: hidden">
+						<div class="card-main">
+								<div class="substr card-main-text" >${d[i].title}</div>
+								<div class="substr card-main-subtitle">${d[i].description}[${d[i].view_count}浏览]</div>
+							</div>
+						<div style="padding: 16px;">
+							<mdui-button onclick="delProject(this,${d[i].id})">删除</mdui-button>	
+							<mdui-button onclick="noshareProject(${d[i].id})">取消分享</mdui-button>	
+							<mdui-button onclick="SetProjectDescription(${d[i].id},'${d[i].description}')">简介</mdui-button>	
+							<mdui-button onclick='location.href=("/python/edit#${d[i].id}")'>编辑</mdui-button>
+						</div>
+					</mdui-card>
 					</div>
-			
-</div></div>
 			
 			`);
 								}
 							}
 						} else {
-							$("#box_projects").append(`<div class="layui-col-md12 layui-col-sm12 layui-col-xs12"><div class="is_null">	<a class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-theme-accent" href="/python/edit">创作一个作品</a></div></div>`);
+							$("#box_projects").append(`<mdui-button href='/python/edit'>创建作品</mdui-button>`);
 						}
 					}
 				});
@@ -142,111 +136,74 @@
 	//默认执行一次
 	project_state0();
 	//分享作品
-	function sharePythonProject(id) {
-		mdui.dialog({
-			title: '确认分享作品?',
-			content: '请确认操作',
-			cssClass: 'md3botton',
-			buttons: [{ text: '取消' }, {
-				text: '确认',
-				onClick: function (inst) {
-					AjaxFn('/my/python/share', { 'id': id }, function (res) {
-						automsg(res['msg']);
-						if ('success' == res['status']) {
-							layer.close(index);
-							window.location.reload();
-						}
-					})
-				}
-			}]
-		});
-	};
-	function nosharePythonProject(id) {
-		mdui.dialog({
-			title: '确认取消分享作品?',
-			content: '请确认操作,取消分享精选作品将自动取消精选',
-			cssClass: 'md3botton',
-			buttons: [{ text: '取消' }, {
-				text: '确认',
-				onClick: function (inst) {
-					AjaxFn('/my/python/noshare', { 'id': id }, function (res) {
-						automsg(res['msg']);
-						if ('success' == res['status']) {
-							layer.close(index);
-							window.location.reload();
-						}
-					})
-				}
-			}]
-		});
-	};
-
-	function SetScratchProjectDescription(id, defaultinfo) {
-
-		// 多行文本框
-		mdui.prompt('简介', '请输入简介',
-			function (value) {
-				AjaxFn('/my/python/setdescription', { 'id': id, description: value }, function (res) {
+	function shareProject(id) {
+		mdui.confirm({
+			headline: "确认分享作品?",
+			description: "请确认操作",
+			confirmText: "确认",
+			cancelText: "取消",
+			onConfirm: () =>
+				AjaxFn('/my/python/share', { 'id': id }, function (res) {
 					automsg(res['msg']);
 					if ('success' == res['status']) {
-						layer.close(index);
 						window.location.reload();
 					}
-				})
-			},
-			function (value) {
-				//mdui.alert('你输入了：' + value + '，点击了取消按钮');
-			},
-			{
-				type: 'textarea',
-				defaultValue: defaultinfo,
-				confirmText: '确认',
-				cancelText: '取消',
-				maxlength: '1000'
+				}),
+			
+		});
 
-			}
-		);
+	};
+	function noshareProject(id) {
+		mdui.confirm({
+			headline: "确认取消分享作品?",
+			description: "请确认操作",
+			confirmText: "确认",
+			cancelText: "取消",
+			onConfirm: () =>
+				AjaxFn('/my/python/noshare', { 'id': id }, function (res) {
+					automsg(res['msg']);
+					if ('success' == res['status']) {
+						window.location.reload();
+					}
+				}),
+			
+		});
+	};
+
+	function SetProjectDescription(id, defaultinfo) {
+		mdui.prompt({
+      headline: "简介",
+      description: "请输入简介",
+      confirmText: "确认",
+      cancelText: "取消",
+	  textFieldOptions:{value: defaultinfo},
+      onConfirm: (value) => AjaxFn('/my/python/setdescription', { 'id': id, description: value }, function (res) {
+					automsg(res['msg']);
+					if ('success' == res['status']) {
+						window.location.reload();
+					}
+				}),
+      onCancel: () => console.log("canceled"),
+    });
+		
 	};
 	//删除作品
 	function delProject(that, id) {
-		mdui.dialog({
-			title: '确认删除作品?',
-			content: '请确认操作',
-			cssClass: 'md3botton',
-			buttons: [{ text: '取消' }, {
-				text: '确认',
-				onClick: function (inst) {
-					AjaxFn('/my/python/del', { 'id': id }, function (res) {
-						automsg(res['msg']);
-						if ('success' == res['status']) {
-							$(that).parent().parent().html("");
-							layer.close(index);
-						}
-					})
-				}
-			}]
+		mdui.confirm({
+			headline: "确认删除作品?",
+			description: "请确认操作",
+			confirmText: "确认",
+			cancelText: "取消",
+			onConfirm: () =>
+				AjaxFn('/my/python/del', { 'id': id }, function (res) {
+					automsg(res['msg']);
+					if ('success' == res['status']) {
+						window.location.reload();
+					}
+				}),
+			
 		});
 	};
 </script>
 
 </html>
-<style>
-	.md3botton {
-		border-radius: 15px;
-	}
-
-	.mdui-dialog-prompt {
-		border-radius: 15px;
-	}
-
-
-	.substr {
-		white-space: nowrap;
-		overflow: hidden;
-	}
-
-	.mdui-tooltip {
-		word-wrap: break-word;
-		word-break: break-all;
-	}
-</style>
