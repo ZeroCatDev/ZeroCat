@@ -1,23 +1,5 @@
-<!DOCTYPE html>
-<html lang="zh">
+<%- include('./html-head.ejs', {pageTitle: '个人中心'}); %>
 
-<head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-	<title>个人中心 - <%= process.env.siteneme %>
-	</title>
-	<link rel="shortcut icon" href="<%= process.env.staticurl %>/img/siteicon.png">
-	<meta name="description" content="<%= process.env.slogan %>">
-	<meta name="keyword" content="<%= process.env.slogan %>">
-	<link rel="stylesheet" type="text/css" href="<%= process.env.staticurl %>/layui/css/layui.css">
-
-	<%- process.env.includecode %>
-		<% include linkfile.ejs %>
-</head>
-
-<body class="mdui-theme-light mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
-	<% include hand.ejs %>
-		<div class="mdui-container"><br />
 			<div class="mdui-typo-display-2">
 				<%= nickname %>
 			</div>
@@ -86,11 +68,8 @@
 
 
 
-		</div>
-		<script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
-		<script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
-		<script type="text/javascript" src="<%= process.env.staticurl %>/js/gter.js"></script>
-		<script type="text/javascript" src="<%= process.env.staticurl %>/js/main.js"></script>
-</body>
 
-</html>
+		<script type="text/javascript" src="<%= process.env.staticurl %>/js/gter.js"></script>
+		
+
+		<%- include('./html-footer.ejs', {page: 'myinfo'}); %>

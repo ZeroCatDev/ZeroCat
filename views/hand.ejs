@@ -1,4 +1,3 @@
-<script src="<%= process.env.staticurl %>/mdui2/mdui.global.js"></script>
 <mdui-navigation-rail alignment="start" class="pc">
   <mdui-button-icon icon="menu" slot="top" class="open-tools" ></mdui-button-icon>
   <mdui-fab lowered icon="add" slot="top" class="open-add"></mdui-fab>
@@ -8,14 +7,11 @@
   <mdui-navigation-rail-item icon="code" href="/scratch" value="/scratch">Scratch</mdui-navigation-rail-item>
   <mdui-navigation-rail-item icon="code" href="/python" value="/python">Python</mdui-navigation-rail-item>
 </mdui-navigation-rail>
-
-
 <mdui-bottom-app-bar scroll-behavior="hide" scroll-threshold="30" class="mobile">
   <mdui-button-icon icon="menu" class="open-tools"></mdui-button-icon>
   <mdui-button-icon icon="home" href="/"></mdui-button-icon>
   <mdui-button-icon icon="account_circle" class="open-user"></mdui-button-icon>
   <mdui-button-icon icon="code" class="open-types"></mdui-button-icon>
-
   <div style="flex-grow: 1"></div>
   <mdui-fab icon="add" class="open-add"></mdui-fab>
 </mdui-bottom-app-bar>
@@ -46,8 +42,8 @@
 
   <mdui-list>
     <mdui-list-item rounded id="open-feedback-dialog" icon="send" description="发送反馈">反馈</mdui-list-item>
-    <mdui-list-item rounded href="/asdm" icon="content_copy" description="公益Scratch下载镜像">Scratch下载镜像</mdui-list-item>
-    <mdui-list-item rounded href="/comparer" icon="build" description="对比项目差异">项目比较器</mdui-list-item>
+    <mdui-list-item rounded href="/tools/asdm" icon="content_copy" description="公益Scratch下载镜像">Scratch下载镜像</mdui-list-item>
+    <mdui-list-item rounded href="/tools/comparer" icon="build" description="对比项目差异">项目比较器</mdui-list-item>
     <mdui-list-item rounded icon="brightness_4" id="switch-theme" description="切换light/dark">切换主题</mdui-list-item>
 
     <mdui-list-item rounded>当前CDN节点<span id="cdn" slot="description">[未知]</span></mdui-list-item>
@@ -128,85 +124,6 @@
 </script>
 
 
-
-<script>
-  if (localStorage.darkTheme) {
-    document.body.classList.add("mdui-theme-layout-dark");
-    document.body.classList.add("mdui-theme-dark");
-    document.documentElement.classList.add("mdui-theme-dark");
-    document.body.setAttribute("dark", "");
-    $("#layui_theme_css").attr("href", "<%= process.env.staticurl %>/css/layui-theme-dark.css");
-  }
-  document.getElementById("switch-theme").addEventListener("click", () => {
-    document.body.classList.toggle("mdui-theme-layout-dark");
-    document.body.classList.toggle("mdui-theme-dark");
-    document.documentElement.classList.toggle("mdui-theme-dark");
-    document.body.toggleAttribute("dark");
-    if (document.body.hasAttribute("dark")) {
-      localStorage.darkTheme = true;
-      $("#layui_theme_css").attr("href", "<%= process.env.staticurl %>/css/layui-theme-dark.css");
-    } else {
-      delete localStorage.darkTheme;
-      $("#layui_theme_css").removeAttr("href");
-    }
-  });
-  mdui.setColorScheme('#2087fd');
-
-  getCDNinfo = function () {
-    jQuery.ajax({
-      url: "/cdn-cgi/trace",
-      success: function (data, status) {
-        let areas = "Antananarivo, Madagascar - (TNR);Cape Town, South Africa - (CPT);Casablanca, Morocco - (CMN);Dar Es Salaam, Tanzania - (DAR);Djibouti City, Djibouti - (JIB);Durban, South Africa - (DUR);Johannesburg, South Africa - (JNB);Kigali, Rwanda - (KGL);Lagos, Nigeria - (LOS);Luanda, Angola - (LAD);Maputo, MZ - (MPM);Mombasa, Kenya - (MBA);Port Louis, Mauritius - (MRU);Réunion, France - (RUN);Bangalore, India - (BLR);Bangkok, Thailand - (BKK);Bandar Seri Begawan, Brunei - (BWN);Cebu, Philippines - (CEB);Chengdu, China - (CTU);Chennai, India - (MAA);Chittagong, Bangladesh - (CGP);Chongqing, China - (CKG);Colombo, Sri Lanka - (CMB);Dhaka, Bangladesh - (DAC);Dongguan, China - (SZX);Foshan, China - (FUO);Fuzhou, China - (FOC);Guangzhou, China - (CAN);Hangzhou, China - (HGH);Hanoi, Vietnam - (HAN);Hengyang, China - (HNY);Ho Chi Minh City, Vietnam - (SGN);Hong Kong - (HKG);Hyderabad, India - (HYD);Islamabad, Pakistan - (ISB);Jakarta, Indonesia - (CGK);Jinan, China - (TNA);Karachi, Pakistan - (KHI);Kathmandu, Nepal - (KTM);Kolkata, India - (CCU);Kuala Lumpur, Malaysia - (KUL);Lahore, Pakistan - (LHE);Langfang, China - (NAY);Luoyang, China - (LYA);Macau - (MFM);Malé, Maldives - (MLE);Manila, Philippines - (MNL);Mumbai, India - (BOM);Nagpur, India - (NAG);Nanning, China - (NNG);New Delhi, India - (DEL);Osaka, Japan - (KIX);Phnom Penh, Cambodia - (PNH);Qingdao, China - (TAO);Seoul, South Korea - (ICN);Shanghai, China - (SHA);Shenyang, China - (SHE);Shijiazhuang, China - (SJW);Singapore, Singapore - (SIN);Suzhou, China - (SZV);Taipei - (TPE);Thimphu, Bhutan - (PBH);Tianjin, China - (TSN);Tokyo, Japan - (NRT);Ulaanbaatar, Mongolia - (ULN);Vientiane, Laos - (VTE);Wuhan, China - (WUH);Wuxi, China - (WUX);Xi'an, China - (XIY);Yerevan, Armenia - (EVN);Zhengzhou, China - (CGO);Zuzhou, China - (CSX);Amsterdam, Netherlands - (AMS);Athens, Greece - (ATH);Barcelona, Spain - (BCN);Belgrade, Serbia - (BEG);Berlin, Germany - (TXL);Brussels, Belgium - (BRU);Bucharest, Romania - (OTP);Budapest, Hungary - (BUD);Chișinău, Moldova - (KIV);Copenhagen, Denmark - (CPH);Cork, Ireland -  (ORK);Dublin, Ireland - (DUB);Düsseldorf, Germany - (DUS);Edinburgh, United Kingdom - (EDI);Frankfurt, Germany - (FRA);Geneva, Switzerland - (GVA);Gothenburg, Sweden - (GOT);Hamburg, Germany - (HAM);Helsinki, Finland - (HEL);Istanbul, Turkey - (IST);Kyiv, Ukraine - (KBP);Lisbon, Portugal - (LIS);London, United Kingdom - (LHR);Luxembourg City, Luxembourg - (LUX);Madrid, Spain - (MAD);Manchester, United Kingdom - (MAN);Marseille, France - (MRS);Milan, Italy - (MXP);Moscow, Russia - (DME);Munich, Germany - (MUC);Nicosia, Cyprus - (LCA);Oslo, Norway - (OSL);Paris, France - (CDG);Prague, Czech Republic - (PRG);Reykjavík, Iceland - (KEF);Riga, Latvia - (RIX);Rome, Italy - (FCO);Saint Petersburg, Russia - (LED);Sofia, Bulgaria - (SOF);Stockholm, Sweden - (ARN);Tallinn, Estonia - (TLL);Thessaloniki, Greece - (SKG);Vienna, Austria - (VIE);Vilnius, Lithuania - (VNO);Warsaw, Poland - (WAW);Zagreb, Croatia - (ZAG);Zürich, Switzerland - (ZRH);Arica, Chile - (ARI);Asunción, Paraguay - (ASU);Bogotá, Colombia - (BOG);Buenos Aires, Argentina - (EZE);Curitiba, Brazil - (CWB);Fortaleza, Brazil - (FOR);Guatemala City, Guatemala - (GUA);Lima, Peru - (LIM);Medellín, Colombia - (MDE);Panama City, Panama - (PTY);Porto Alegre, Brazil - (POA);Quito, Ecuador - (UIO);Rio de Janeiro, Brazil - (GIG);São Paulo, Brazil - (GRU);Santiago, Chile - (SCL);Willemstad, Curaçao - (CUR);St. George's, Grenada - (GND);Amman, Jordan - (AMM);Baghdad, Iraq - (BGW);Baku, Azerbaijan - (GYD);Beirut, Lebanon - (BEY);Doha, Qatar - (DOH);Dubai, United Arab Emirates - (DXB);Kuwait City, Kuwait - (KWI);Manama, Bahrain - (BAH);Muscat, Oman - (MCT);Ramallah - (ZDM);Riyadh, Saudi Arabia - (RUH);Tel Aviv, Israel - (TLV);Ashburn, VA, United States - (IAD);Atlanta, GA, United States - (ATL);Boston, MA, United States - (BOS);Buffalo, NY, United States - (BUF);Calgary, AB, Canada - (YYC);Charlotte, NC, United States - (CLT);Chicago, IL, United States - (ORD);Columbus, OH, United States - (CMH);Dallas, TX, United States - (DFW);Denver, CO, United States - (DEN);Detroit, MI, United States - (DTW);Honolulu, HI, United States - (HNL);Houston, TX, United States - (IAH);Indianapolis, IN, United States - (IND);Jacksonville, FL, United States - (JAX);Kansas City, MO, United States - (MCI);Las Vegas, NV, United States - (LAS);Los Angeles, CA, United States - (LAX);McAllen, TX, United States - (MFE);Memphis, TN, United States - (MEM);Mexico City, Mexico - (MEX);Miami, FL, United States - (MIA);Minneapolis, MN, United States - (MSP);Montgomery, AL, United States - (MGM);Montréal, QC, Canada - (YUL);Nashville, TN, United States - (BNA);Newark, NJ, United States - (EWR);Norfolk, VA, United States - (ORF);Omaha, NE, United States - (OMA);Philadelphia, United States - (PHL);Phoenix, AZ, United States - (PHX);Pittsburgh, PA, United States - (PIT);Port-Au-Prince, Haiti - (PAP);Portland, OR, United States - (PDX);Queretaro, MX, Mexico - (QRO);Richmond, Virginia - (RIC);Sacramento, CA, United States - (SMF);Salt Lake City, UT, United States - (SLC);San Diego, CA, United States - (SAN);San Jose, CA, United States - (SJC);Saskatoon, SK, Canada - (YXE);Seattle, WA, United States - (SEA);St. Louis, MO, United States - (STL);Tampa, FL, United States - (TPA);Toronto, ON, Canada - (YYZ);Vancouver, BC, Canada - (YVR);Tallahassee, FL, United States - (TLH);Winnipeg, MB, Canada - (YWG);Adelaide, SA, Australia - (ADL);Auckland, New Zealand - (AKL);Brisbane, QLD, Australia - (BNE);Melbourne, VIC, Australia - (MEL);Noumea, New caledonia - (NOU);Perth, WA, Australia - (PER);Sydney, NSW, Australia - (SYD)".split(";");
-        let area = data.split("colo=")[1].split("\n")[0];
-        for (var i = 0; i < areas.length; i++) {
-          if (areas[i].indexOf(area) != -1) {
-            document.getElementById("cdn").innerHTML = areas[i];
-            document.getElementById("ip").innerHTML = data.split("ip=")[1].split("\n")[0];
-            document.getElementById("loc").innerHTML = data.split("loc=")[1].split("\n")[0];
-            break;
-          }
-        }
-      }
-    })
-  }
-  jQuery(document).ready(function () {
-    getCDNinfo();
-
-    if (<%= login %> == true ) { window.clarity("identify", "<%= username %>", "ourworld-user-<%= userid %>", window.location.pathname, "<%= nickname %>") }
-  });
-
-  qiniuurl = "<%= process.env.qiniuurl %>"
-
-  markdevice = function () {
-
-    window.clarity("identify", "<%= username %>", "ourworld-user-<%= userid %>", window.location.pathname, "<%= nickname %>")
-    automsg('已尝试标记这个设备')
-  }
-</script>
-<script src="https://registry.npmmirror.com/jwt-decode/4.0.0/files/build/cjs/index.js"></script>
-<script>
-  function userinfo() {
-    const token = getCookie('token');
-    const decoded = jwtDecode(token);
-    if (decoded && decoded.userid) {
-      $('#usernick').text(decoded.nickname);
-      $('#usernick').attr("href", "/user?id=" + decoded.userid);
-
-      $('#userbox').html('<img class=" md3botton mdui-img-fluid " src="/api/usertx?id=' + decoded.userid + '" style="pointer-events: none;" />')
-      $('#userbox').attr('mdui-menu', '{target: "#userlist"}');
-      $('#userbox').attr('class', 'mdui-btn mdui-btn-icon webkit-app-region-no  mdui-hoverable mdui-ripple md3botton');
-      $('#userbox').attr('href', '#');
-
-
-    }
-  }
-  userinfo()
-  function getCookie(name) {
-    const value = "; " + document.cookie;
-    const parts = value.split("; " + name + "=");
-    if (parts.length === 2) return parts.pop().split(";").shift();
-  }
-</script>
 <style>
   .mdui-color-white {
     background-color: #ffffff !important;

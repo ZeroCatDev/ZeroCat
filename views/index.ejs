@@ -1,24 +1,6 @@
-<!DOCTYPE html>
-<html lang="zh-cmn-Hans">
 
-<head>
-	<meta charset="utf-8">
-	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/waline.css" />
-	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-	<title>
-		<%= process.env.siteneme %>
-	</title>
-	<link rel="shortcut icon" href="<%= process.env.staticurl %>/img/siteicon.png">
-	<meta name="description" content="<%= process.env.slogan %>">
-	<meta name="keyword" content="<%= process.env.slogan %>">
-	<link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
-	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css"> <%- process.env.includecode %>
-		<% include linkfile.ejs %>
-</head>
-
-<body class="mdui-theme-light mdui-theme-accent-blue mdui-loaded ">
-	<% include hand.ejs %> <mdui-layout-main><br /><br />
-			<div class="mdui-container"> <mdui-card clickable> <img src="<%= process.env.staticurl %>/img/toutu.png"
+<%- include('html-head.ejs', {pageTitle: '首页'}); %>
+	<mdui-card clickable> <img src="<%= process.env.staticurl %>/img/toutu.png"
 						style="pointer-events: none;max-width: 100%;" /> </mdui-card> <br /> <mdui-card variant="filled"
 					clickable style="min-width: 100%;">
 					<div style="padding: 16px;">
@@ -49,8 +31,5 @@
 							</div>
 						</mdui-card> </div>
 				</div>
-			</div>
-		</mdui-layout-main>
-</body>
-<script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
+			
+<%- include('html-footer.ejs', {page: 'home'}); %>

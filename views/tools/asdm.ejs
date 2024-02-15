@@ -1,23 +1,5 @@
-<!DOCTYPE html>
-<html lang="zh-cmn-Hans">
+<%- include('../html-head.ejs', {pageTitle: 'Scratch镜像'}); %>
 
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>scratch镜像 - <%= process.env.siteneme %>
-    </title>
-    <link rel="shortcut icon" href="<%= process.env.staticurl %>/img/siteicon.png">
-    <meta name="description" content="<%= process.env.slogan %>">
-    <meta name="keyword" content="<%= process.env.slogan %>">
-
-    
-<%- process.env.includecode %><% include linkfile.ejs %></head>
-
-<body class="mdui-theme-light mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
-    <% include hand.ejs %> <!-- Vertical Navbar --> <!-- Main content --> <!-- Header --> <!-- Main -->
-
-
-        <div class="mdui-container" style="margin:40px auto">
             <h2 class="mdui-typo-display-1">
                 公益Scratch桌面版镜像
             </h2>
@@ -31,16 +13,8 @@
             <br /><br />
             <mdui-button href="https://asdm.wuyuan.dev/">一直加载中？无法下载？</mdui-button>
 
-           
-        </div>
+            <%- include('../html-footer.ejs', {page: 'mirror'}); %>
 
-        <script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
-        <script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
-        <!--		<script type="text/javascript" src="<%= process.env.staticurl %>/js/birthday.js"></script>-->
-
-        <script type="text/javascript" src="<%= process.env.staticurl %>/js/main.js"></script>
-        
-</body>
 <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -78,4 +52,3 @@
     });
 </script>
 
-</html>

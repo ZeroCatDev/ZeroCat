@@ -1,5 +1,4 @@
-<!DOCTYPE html>
-<html lang="zh-cmn-Hans">
+<%- include('html-head.ejs', {pageTitle: '登录/注册'}); %>
 
 <% if (login) { %>
   <script>
@@ -8,25 +7,6 @@
     window.location.href = '/'</script>
   <% } %>
 
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-      <title>登录/注册 - <%= process.env.siteneme %>
-      </title>
-      <link rel="shortcut icon" href="<%= process.env.staticurl %>/img/siteicon.png">
-      <meta name="description" content="<%= process.env.slogan %>">
-      <meta name="keyword" content="<%= process.env.slogan %>">
-
-      <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
-      <link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css">
-
-      <%- process.env.includecode %>
-        <% include linkfile.ejs %>
-    </head>
-
-    <body class="mdui-theme-light mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
-      <% include hand.ejs %>
-        <div class="layui-container" style="margin-top: 100px">
           <div class="layui-row">
 
             <style>
@@ -43,7 +23,7 @@
             <div class="layui-col-md6" style="padding: 30px 0 0 0px;">
               <div id='login-page'>
                 <div class="mdui-typo-display-2">
-                  <%= process.env.siteneme %> 登录
+                  <%= process.env.sitename %> 登录
                 </div>
 
                 <div class="reply-form" style="height: max-content;">
@@ -76,7 +56,7 @@
               <% if (reg==1) { %>
                 <div id='reg-page' style="display: none;">
                   <div class="mdui-typo-display-2">
-                    <%= process.env.siteneme %> 注册
+                    <%= process.env.sitename %> 注册
                   </div>
                   <div class="reply-form" style="height: max-content;">
 
@@ -105,7 +85,7 @@
                 <% } %>
                   <div id='getPW-page' style="display: none;">
                     <div class="mdui-typo-display-2">
-                      <%= process.env.siteneme %> 找回密码
+                      <%= process.env.sitename %> 找回密码
                     </div>
                     <div class="reply-form" style="height: max-content;">
                       <div>
@@ -125,14 +105,7 @@
           </div>
         </div>
     </body>
-    <!-- <div class="mdui-dialog" id="re" style='border-radius: 20px;'>
-      <div class="mdui-dialog-title">验证码</div>
 
-      <div class="mdui-dialog-actions">
-        <div class="<%= process.env.reclass %>" data-sitekey="<%= process.env.rekey %>" data-theme="dark"></div>
-        <button class="mdui-btn mdui-ripple" mdui-dialog-close style='border-radius: 15px;'>关闭</button>
-      </div>
-    </div>-->
     <div class="mdui-dialog" id="privacy" style='border-radius: 15px;'>
       <div class="mdui-dialog-title">您正在使用由孙悟元提供的服务</div>
       <div class="mdui-dialog-content">
@@ -151,7 +124,7 @@
           我同意将我的个人数据传输到中国以外的地区
         </label>
         <br /><br />
-        在<%= process.env.siteneme %>上,你需要遵守<a href="https://scratch.mit.edu/community_guidelines" target="_blank"
+        在<%= process.env.sitename %>上,你需要遵守<a href="https://scratch.mit.edu/community_guidelines" target="_blank"
             class="mdui-text-color-blue">社区行为准则(第三方站点)</a><br />
           <label class="mdui-checkbox">
             <input type="checkbox" id="zhunze-chick" />
@@ -166,7 +139,7 @@
             <i class="mdui-checkbox-icon"></i>
             我已阅读并同意用户协议
           </label>
-          <br /><br />对于技术手段绕过此页面的行为(视为对<%= process.env.siteneme %>
+          <br /><br />对于技术手段绕过此页面的行为(视为对<%= process.env.sitename %>
             的基础设施进行攻击)涉嫌违法(法入侵计算机系统),我们将保留追究法律责任的权利,且违规获得的账号不受保护,如果您同意以上内容,请点击“复选框”以完成注册流程.
       </div>
 
@@ -178,15 +151,8 @@
       </div>
     </div>
 
-    </div>
-    <script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
-    <script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
+    <%- include('./html-footer.ejs', {page: 'login'}); %>
     <script type="text/javascript" src="<%= process.env.staticurl %>/js/gter.js"></script>
-
-    <script type="text/javascript" src="<%= process.env.staticurl %>/js/main.js"></script>
-    <script type="text/javascript" src="<%= process.env.staticurl %>/js/login.js"></script>
-
-</html>
+        <script type="text/javascript" src="<%= process.env.staticurl %>/js/login.js"></script>
 <script src="<%= process.env.reurl %>?compat=recaptcha&onload=onloadCallback" async defer></script>
-
 <script>rekey = '<%= process.env.rekey %>'</script>

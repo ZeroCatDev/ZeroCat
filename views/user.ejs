@@ -1,27 +1,5 @@
-<!DOCTYPE html>
-<html lang="zh-cmn-Hans">
+<%- include('html-head.ejs', {pageTitle: user.nickname + '的个人主页'}); %>
 
-<head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-	<title>
-		<%= user.nickname %>的个人主页 - <%= process.env.siteneme %>
-	</title>
-	<link rel="shortcut icon" href="<%= process.env.staticurl %>/img/siteicon.png">
-	<meta name="description" content="<%= process.env.slogan %>">
-	<meta name="keyword" content="<%= process.env.slogan %>">
-
-	<link rel="stylesheet" type="text/css" href="<%= process.env.staticurl %>/layui/css/layui.css">
-	<link type="text/css" rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css" />
-	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/waline.css" />
-	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/projectspage.css">
-
-<%- process.env.includecode %><% include linkfile.ejs %></head>
-
-<body class="mdui-theme-light mdui-theme-primary-blue mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
-	<% include hand.ejs %>
-
-		<div class="mdui-container">
 			<img class="mdui-img-circle" src="/api/usertx?id=<%= user.id %>"
 				style="height: 70px;" />
 			<div class="mdui-typo-display-2">
@@ -65,12 +43,8 @@
 					dark: 'body[dark]',
 				});
 			</script>
-		</div>
+	<%- include('./html-footer.ejs', {page: 'user'}); %>
 
-</body>
-<script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/js/main.js"></script>
 <script>	var laypage = layui.laypage, layer = layui.layer;
 
 	function Scratch() {
@@ -168,4 +142,3 @@
 	}
 </script>
 
-</htm

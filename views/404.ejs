@@ -5,14 +5,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
   <title>
-    <%= process.env.siteneme %>
+    <%= process.env.sitename %>
   </title>
   <link rel="shortcut icon" href="<%= process.env.staticurl %>/img/siteicon.png">
   <meta name="description" content="<%= process.env.slogan %>">
   <meta name="keyword" content="<%= process.env.slogan %>">
   
 
-<%- process.env.includecode %><% include linkfile.ejs %></head>
+<% include linkfile.ejs %></head>
 
 <body class="mdui-theme-light mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
  <% include hand.ejs %>

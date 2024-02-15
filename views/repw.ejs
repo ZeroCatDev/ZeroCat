@@ -1,27 +1,10 @@
-<!DOCTYPE html>
-<html lang="zh-cmn-Hans">
+
+<%- include('./html-head.ejs', {pageTitle: '找回密码'}); %>
 
 <% if (login) { %>
   <script>window.location.href = '/';</script>
   <% } %>
 
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-      <title>找回密码 - <%= process.env.siteneme %>
-      </title>
-      <link rel="shortcut icon" href="<%= process.env.staticurl %>/img/siteicon.png">
-      <meta name="description" content="<%= process.env.slogan %>">
-      <meta name="keyword" content="<%= process.env.slogan %>">
-
-      <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
-      <link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css">
-      
-    <%- process.env.includecode %><% include linkfile.ejs %></head>
-
-    <body class="mdui-theme-light mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
-      <% include hand.ejs %>
-        <div class="layui-container" style="margin-top: 100px">
           <div class="layui-row">
 
             <style>
@@ -38,7 +21,7 @@
             <div class="layui-col-md6" style="padding: 30px 0 0 30px;">
               <div id='login-page'>
                 <div class="mdui-typo-display-2">
-                  <%= process.env.siteneme %> 重设密码
+                  <%= process.env.sitename %> 重设密码
                 </div>
 
                 <div class="reply-form" style="height: max-content;">
@@ -68,17 +51,16 @@
 
 
           </div>
-        </div>
-    </body>
+
+          <%- include('./html-footer.ejs', {page: 'login'}); %>
 
     <script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
     <script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
     <script type="text/javascript" src="<%= process.env.staticurl %>/js/gter.js"></script>
 
-    <script type="text/javascript" src="<%= process.env.staticurl %>/js/main.js"></script>
-    <script type="text/javascript" src="<%= process.env.staticurl %>/js/login.js"></script>
+        <script type="text/javascript" src="<%= process.env.staticurl %>/js/login.js"></script>
 
-</html>
+
 <script src="<%= process.env.reurl %>?compat=recaptcha&onload=repwonloadCallback" async defer></script>
 
 <script>

@@ -590,7 +590,7 @@ router.get("/getExtensionLibrary", (req, res, next) => {
       extensionURL: "/static/extensions/coco-math-extension.js",
       iconURL: "/static/extensions/cocoExt.jpg",
       insetIconURL: "/static/extensions/cocoLogo.png",
-      description: process.env.siteneme + "自定义扩展",
+      description: process.env.sitename + "自定义扩展",
       featured: true,
     },
   ];

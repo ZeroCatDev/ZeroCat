@@ -1,31 +1,5 @@
-<!DOCTYPE html>
-<html lang="zh-cmn-Hans">
+<%- include('../html-head.ejs', {pageTitle: 'Scratch'}); %>
 
-<head>
-	<meta charset="utf-8">
-	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/waline.css" />
-	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-	<title>
-		<%= process.env.siteneme %>
-	</title>
-	<link rel="shortcut icon" href="<%= process.env.staticurl %>/img/siteicon.png">
-	<meta name="description" content="<%= process.env.slogan %>">
-	<meta name="keyword" content="<%= process.env.slogan %>">
-
-	<link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
-
-
-	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css">
-	<% include ../linkfile.ejs %>
-
-		<%- process.env.includecode %>
-			<link rel="stylesheet" href="<%= process.env.staticurl %>/css/projectspage.css">
-
-</head>
-
-<body class="mdui-theme-light mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
-	<% include ../hand.ejs %>
-		<div class="mdui-container" >
 			<div class="mdui-row">
 				<h1>Scratch</h1><!--<div class="mdui-typo-title">最新项目</div>-->
 				<br />
@@ -52,13 +26,8 @@
 				</div>
 
 			</div>
-		</div>
 
-</body>
-
-<script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
-
+			<%- include('../html-footer.ejs', {page: 'scratch'}); %>
 
 
 <script>
@@ -165,4 +134,3 @@
 
 </script>
 
-</html>

@@ -4,15 +4,14 @@
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-	<title>错误 - <%= process.env.siteneme %></title>
+	<title>错误 - <%= process.env.sitename %></title>
 	<link rel="shortcut icon" href="<%= process.env.staticurl %>/img/siteicon.png">
 	<meta name="description" content="<%= process.env.slogan %>">
 	<meta name="keyword" content="<%= process.env.slogan %>">
 	<link rel="stylesheet" type="text/css" href="<%= process.env.staticurl %>/layui/css/layui.css">
-	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/waline.css" />
+		
 	
-	
-<%- process.env.includecode %><% include linkfile.ejs %></head>
+<% include linkfile.ejs %></head>
 
 <body class="mdui-theme-light mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
 	<% include hand.ejs %> <!-- Vertical Navbar --> <!-- Main content --> <!-- Header --> <!-- Main -->
@@ -36,8 +35,7 @@
 		<script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
 		<!--		<script type="text/javascript" src="<%= process.env.staticurl %>/js/birthday.js"></script>-->
 	
-		<script type="text/javascript" src="<%= process.env.staticurl %>/js/main.js"></script>
-		
+				
 </body>
 
 </html>

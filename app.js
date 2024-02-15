@@ -5,36 +5,44 @@ const jwt = require("jsonwebtoken"); // 首先确保安装了jsonwebtoken库
 
 //环境变量
 require("dotenv").config();
-// 日志部分
-var winston = require("winston");
-var morganlogger = require("morgan");
-const { WinstonTransport: AxiomTransport } = require("@axiomhq/axiom-node");
-const logger = winston.createLogger({
-  level: "info",
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.printf(({ message }) => {
-      return `${message}`;
-    })
-  ),
-  defaultMeta: { service: "ourworld-service" },
-  transports: [
-    process.env.AXIOM_TOKEN
-      ? new AxiomTransport({
-          dataset: process.env.AXIOM_DATASET,
-          token: process.env.AXIOM_TOKEN,
-        })
-      : null,
-    new winston.transports.Console(),
-  ],
-});
 
-// 创建自定义Stream，将日志写入Winston
-const winstonStream = {
-  write: (message) => {
-    logger.info(message.trim());
+// 日志部分
+const opentelemetry = require("@opentelemetry/sdk-node");
+const {
+  getNodeAutoInstrumentations,
+} = require("@opentelemetry/auto-instrumentations-node");
+const {
+  OTLPTraceExporter,
+} = require("@opentelemetry/exporter-trace-otlp-proto");
+const { BatchSpanProcessor } = require("@opentelemetry/sdk-trace-base");
+const { Resource } = require("@opentelemetry/resources");
+const {
+  SemanticResourceAttributes,
+} = require("@opentelemetry/semantic-conventions");
+// Initialize OTLP trace exporter with the URL and headers for the Axiom API
+const traceExporter = new OTLPTraceExporter(
+{
+    url: "https://api.axiom.co/v1/traces", // Axiom API endpoint for trace data
+    headers: {
+      Authorization: `Bearer ${process.env.AXIOM_TOKEN || 'xaat-11d3193a-3608-41ee-a015-d7884b4f6c71'}`, // Replace $API_TOKEN with your actual API token
+      "X-Axiom-Dataset": process.env.AXIOM_DATASET || 'wuyuan-telemetry', // Replace $DATASET with your dataset
+    },
   },
-};
+);
+// Define the resource attributes, in this case, setting the service name for the traces
+const resource = new Resource({
+  [SemanticResourceAttributes.SERVICE_NAME]: "node traces", // Name for the tracing service
+});
+// Create a NodeSDK instance with the configured span processor, resource, and auto-instrumentations
+const sdk = new opentelemetry.NodeSDK({
+  spanProcessor: new BatchSpanProcessor(traceExporter), // Use BatchSpanProcessor for batching and sending traces
+  resource: resource, // Attach the defined resource to provide additional context
+  instrumentations: [getNodeAutoInstrumentations()], // Automatically instrument common Node.js modules
+});
+// Start the OpenTelemetry SDK
+sdk.start();
+
+var morganlogger = require("morgan");
 morganlogger.token("colored-status", (req, res) => {
   const status = res.statusCode;
   let color;
@@ -50,19 +58,8 @@ morganlogger.token("colored-status", (req, res) => {
   return color + status + "\x1b[0m"; // 重置颜色
 });
 app.use(
-  morganlogger(":method :colored-status :response-time ms :remote-addr :url", {
-    stream: winstonStream,
-  })
+  morganlogger(":method :colored-status :response-time ms :remote-addr :url")
 );
-//console.clog = console.log;
-console.log = function (str) {
-  logger.info(str);
-  //console.clog(str);
-};
-console.error = function (str) {
-  logger.error(str);
-  //console.clog(str);
-};
 
 // cors配置
 var cors = require("cors");
@@ -119,7 +116,8 @@ app.all("*", function (req, res, next) {
   if (token) {
     jwt.verify(token, process.env.jwttoken, (err, decodedToken) => {
       // 解析并验证JWT
-      if (err) {6
+      if (err) {
+        6;
         // 如果验证失败，清除本地登录状态
         res.locals = {
           login: false,
@@ -142,7 +140,6 @@ app.all("*", function (req, res, next) {
         //console.log("JWT验证成功: " + userInfo.username);
         //console.log('调试用户信息(session)：'+res.locals.userid+','+res.locals.username+','+res.locals.nickname+','+res.locals.is_admin);
 
-
         res.locals = {
           login: true,
           userid: res.locals.userid,
@@ -152,7 +149,6 @@ app.all("*", function (req, res, next) {
         };
 
         //console.log('调试用户信息(locals )：'+res.locals.userid+','+res.locals.username+','+res.locals.nickname+','+res.locals.is_admin);
-
       }
 
       next();
@@ -237,17 +233,16 @@ app.use("/api", apiserver);
 app.get("/about", function (req, res, next) {
   res.render("views/about.ejs");
 });
-app.get("/comparer", function (req, res, next) {
-  res.render("views/comparer.ejs");
-});
-app.get("/asdm", function (req, res, next) {
-  res.render("views/asdm.ejs");
-});
 app.get("/share", function (req, res, next) {
   res.render("views/share.ejs");
 });
-app.get("/home", function (req, res, next) {
-  res.render("views/home.ejs");
+
+//工具
+app.get("/tools/comparer", function (req, res, next) {
+  res.render("views/tools/comparer.ejs");
+});
+app.get("/tools/asdm", function (req, res, next) {
+  res.render("views/tools/asdm.ejs");
 });
 //python路由
 var router_python = require("./server/router_python.js");

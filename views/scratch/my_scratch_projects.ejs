@@ -1,25 +1,5 @@
-<!DOCTYPE html>
-<html lang="zh-cmn-Hans">
+<%- include('../html-head.ejs', {pageTitle: 'Scratch'}); %>
 
-<head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-	<title>我的作品 - <%= process.env.siteneme %>
-	</title>
-	<link rel="shortcut icon" href="<%= process.env.staticurl %>/img/siteicon.png">
-	<meta name="description" content="<%= process.env.slogan %>">
-	<meta name="keyword" content="<%= process.env.slogan %>">
-
-	<link rel="stylesheet" type="text/css" href="<%= process.env.staticurl %>/layui/css/layui.css">
-	<link type="text/css" rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css" />
-	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/projectspage.css">
-
-	<% include ../linkfile.ejs %>
-<%- process.env.includecode %></head>
-
-<body class="mdui-theme-light mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
-	<% include ../hand.ejs %>
-		<div class="mdui-container">
 			<mdui-tabs value="0">
 				<mdui-tab value="0" icon="lock_outline" onclick="project_state0()">未分享的作品</mdui-tab>
 				<mdui-tab value="1" icon="share" onclick="project_state1()">已分享的作品</mdui-tab>
@@ -30,13 +10,11 @@
 			<div style="display:flex; justify-content:center;">
 				<div id="layui_change_page"></div>
 			</div>
-		</div>
+			<%- include('../html-footer.ejs', {page: 'scratch'}); %>
 
-</body>
 
 <script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
 <script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/js/main.js"></script>
 <script>
 	//翻页加载作品
 	var _laypage = layui.laypage;
@@ -199,7 +177,7 @@
 	};
 </script>
 
-</html>
+
 <style>
 	.md3botton {
 		border-radius: 15px;

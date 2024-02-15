@@ -1,27 +1,8 @@
-<!DOCTYPE html>
-<html lang="zh-cmn-Hans">
+<%- include('html-head.ejs', {pageTitle: '关于'}); %>
 
-<head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-	<title>关于 - <%= process.env.siteneme %></title>
-	<link rel="shortcut icon" href="<%= process.env.staticurl %>/img/siteicon.png">
-	<meta name="description" content="<%= process.env.slogan %>">
-	<meta name="keyword" content="<%= process.env.slogan %>">
-	<link rel="stylesheet" type="text/css" href="<%= process.env.staticurl %>/layui/css/layui.css">
-	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/waline.css" />
-	
-	
-<%- process.env.includecode %><% include linkfile.ejs %></head>
+		<div class="mdui-typo-display-1"><%= process.env.sitename %></div>
 
-<body class="mdui-theme-light mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
-	<% include hand.ejs %> <!-- Vertical Navbar --> <!-- Main content --> <!-- Header --> <!-- Main -->
-		
-
-	<div class="mdui-container">
-		<div class="mdui-typo-display-1"><%= process.env.siteneme %></div>
-
-		<div class="mdui-typo-subheading"><%= process.env.siteneme %>是一个重视个体的开源scratch论坛</div>
+		<div class="mdui-typo-subheading"><%= process.env.sitename %>是一个重视个体的开源scratch论坛</div>
 
 		<div class="mdui-typo">
 			<blockquote>
@@ -29,16 +10,6 @@
 			</p>
 			  <footer>——哔哩哔哩 是一刀斩哒</footer>
 			</blockquote>
-		  </div><p>目前网站正在测试，可能会搬各大论坛上的作品，所有作品版权归原作者所有，搬运仅用于测试项目稳定性，社区正式上线前会全部删除，目前社区用户上传的作品也会一并清除。社区开发会很慢，bug也会很多，别针之类的社区有十多人开发而<%= process.env.siteneme %>只有孙悟元一人，慢速更新请多包涵</p>
+		  </div><p>目前网站正在测试，可能会搬各大论坛上的作品，所有作品版权归原作者所有，搬运仅用于测试项目稳定性，社区正式上线前会全部删除，目前社区用户上传的作品也会一并清除。社区开发会很慢，bug也会很多，别针之类的社区有十多人开发而<%= process.env.sitename %>只有孙悟元一人，慢速更新请多包涵</p>
 		</p>
-		</div>
-
-		<script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
-		<script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
-		<!--		<script type="text/javascript" src="<%= process.env.staticurl %>/js/birthday.js"></script>-->
-	
-		<script type="text/javascript" src="<%= process.env.staticurl %>/js/main.js"></script>
-		
-</body>
-
-</html>
+		<%- include('./html-footer.ejs', {page: 'about'}); %>

@@ -4,14 +4,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Python编程 - <%= process.env.siteneme %>
+  <title>Python编程 - <%= process.env.sitename %>
   </title>
   <link rel="shortcut icon" href='<%= process.env.staticurl %>/img/siteicon.png'>
   <link rel="stylesheet" href='<%= process.env.staticurl %>/pythonstatic/css/style.css' />
-  <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
-  <link type="text/css" rel="stylesheet" href="<%= process.env.staticurl %>/pythonstatic/showWorks.css" />
+    <link type="text/css" rel="stylesheet" href="<%= process.env.staticurl %>/pythonstatic/showWorks.css" />
   <% include ../linkfile.ejs %>
-<%- process.env.includecode %><link
+<link
 rel="stylesheet"
 data-name="vs/editor/editor.main"
 href="<%= process.env.staticurl %>/vs/editor/editor.main.css"
@@ -33,7 +32,7 @@ href="<%= process.env.staticurl %>/vs/editor/editor.main.css"
     <div class="mdui-toolbar">
       <a class="mdui-btn mdui-btn-icon" id="toggle" href="/"><i class="mdui-icon material-icons">home</i></a>
       <a href="/"><span class="mdui-typo-title">
-          <%= process.env.siteneme %> Python编辑器
+          <%= process.env.sitename %> Python编辑器
         </span></a>
       <div class="mdui-toolbar-spacer"></div>
       <a href="javascript:;" onclick="javascript:location.reload();" class="mdui-btn mdui-btn-icon mdui-ripple"><i

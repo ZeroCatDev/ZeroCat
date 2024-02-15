@@ -1,18 +1,8 @@
-<!DOCTYPE html>
-<html lang="zh-cmn-Hans">
+<%- include('../html-head.ejs', {pageTitle: '比较器'}); %>
 
-<head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-	<title>比较器 - <%= process.env.siteneme %>
-	</title>
-	<link rel="shortcut icon" href="<%= process.env.staticurl %>/img/siteicon.png">
-	<meta name="description" content="<%= process.env.slogan %>">
-	<meta name="keyword" content="<%= process.env.slogan %>">
-	<link rel="stylesheet" type="text/css" href="<%= process.env.staticurl %>/layui/css/layui.css">
 
-	
-		<link href="https://cdn.StaticFile.org/MaterialDesign-Webfont/6.6.96/css/materialdesignicons.min.css"
+
+			<link href="https://cdn.StaticFile.org/MaterialDesign-Webfont/6.6.96/css/materialdesignicons.min.css"
 			rel="stylesheet">
 		<link href="https://cdn.StaticFile.org/MaterialDesign-Webfont/6.6.96/css/materialdesignicons.min.css"
 			rel="stylesheet">
@@ -386,17 +376,6 @@
 		<meta name="viewport"
 			content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
 
-<%- process.env.includecode %><% include linkfile.ejs %></head>
-
-<body class="mdui-theme-light mdui-theme-accent-blue mdui-loaded mdui-appbar-with-toolbar">
-	<% include hand.ejs %> <!-- Vertical Navbar --> <!-- Main content --> <!-- Header --> <!-- Main -->
-
-
-		<div class="mdui-container">
-
-
-
-
 
 
 
@@ -410,7 +389,7 @@
 						<v-file-input id="file2" truncate-length="22" label="scratch项目2"></v-file-input>
 						<v-btn color="secondary" elevation="2" class="mx-5" onclick="convertFiles()">开始比对</v-btn>
 						<div class="h6" id="show"></div><br><br>
-						<div>由 <%= process.env.siteneme %>(孙悟元) 定制(<a
+						<div>由 <%= process.env.sitename %>(孙悟元) 定制(<a
 								href="https://github.com/52black/scratch-source-comparer-web">源代码</a>) 原项目由 <a
 								href="https://github.com/Steve-xmh/scratch-source-comparer">Steve-xmh</a> 开发 由 <a
 								href="https://github.com/52black/scratch-source-comparer-web">what(40code)</a> 修改</a>
@@ -497,12 +476,5 @@
 				}
 			</script>
 
-			<script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
-			<script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
-			<!--		<script type="text/javascript" src="<%= process.env.staticurl %>/js/birthday.js"></script>-->
 
-			<script type="text/javascript" src="<%= process.env.staticurl %>/js/main.js"></script>
-		</div>
-</body>
-
-</html>
+			<%- include('../html-footer.ejs', {page: 'comparer'}); %>

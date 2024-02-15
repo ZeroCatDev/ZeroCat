@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-cmn-Hans">
+
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+	<title><%= process.env.sitename %> - <%= pageTitle %></title>
+	<link rel="shortcut icon" href="<%= process.env.staticurl %>/img/siteicon.png">
+	<meta name="description" content="<%= process.env.slogan %>">
+	<meta name="keyword" content="<%= process.env.slogan %>">
+
+    <link id="layui_theme_css" rel="stylesheet">
+    <link rel="stylesheet" href="https://npm.elemecdn.com/mdui@1.0.2/dist/css/mdui.min.css" />
+    <link rel="stylesheet" href="<%= process.env.staticurl %>/mdui2/mdui.css">
+    <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
+    <link rel="stylesheet" href="<%= process.env.staticurl %>/css/projectspage.css">
+    <link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css">
+    <link rel="stylesheet" href="<%= process.env.staticurl %>/css/waline.css" />
+</head>
+<style>
+:not(:defined) {
+    visibility: hidden;
+  }
+</style>
+<body class="mdui-theme-light mdui-theme-accent-blue mdui-loaded ">
+	<% include hand.ejs %>
+    <mdui-layout-main>
+        <br /><br />	
+        <div class="mdui-container ow-container">
