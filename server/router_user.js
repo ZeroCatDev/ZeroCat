@@ -247,9 +247,9 @@ router.post("/register", function (req, res) {
             transporter.sendMail(
               {
                 // 发件人邮箱
-                from: `${process.env.sitename}"社区注册消息" <${process.env.mailfrom}>`,
+                from: `${process.env.SiteName}"社区注册消息" <${process.env.mailfrom}>`,
                 // 邮件标题
-                subject: process.env.sitename + "社区注册消息",
+                subject: process.env.SiteName + "社区注册消息",
                 // 目标邮箱
                 to: username,
                 // 邮件内容
@@ -262,9 +262,9 @@ router.post("/register", function (req, res) {
                   <div class="box_4 flex-col" style="margin-top: 92px;display: flex;flex-direction: column;align-items: center;">
                       <div class="text-group_5 flex-col justify-between"
                           style="display: flex;flex-direction: column;align-items: center;margin: 0 20px;"><span class="text_1"
-                              style="font-size: 26px;font-family: PingFang-SC-Bold, PingFang-SC;font-weight: bold;color: #000000;line-height: 37px;text-align: center;">嘿！你在${process.env.sitename}申请了账户</span><span
+                              style="font-size: 26px;font-family: PingFang-SC-Bold, PingFang-SC;font-weight: bold;color: #000000;line-height: 37px;text-align: center;">嘿！你在${process.env.SiteName}申请了账户</span><span
                               class="text_2"
-                              style="font-size: 16px;font-family: PingFang-SC-Bold, PingFang-SC;font-weight: bold;color: #00000030;line-height: 22px;margin-top: 21px;text-align: center;">你在${process.env.sitename}申请了账户，这是你的账户信息</span>
+                              style="font-size: 16px;font-family: PingFang-SC-Bold, PingFang-SC;font-weight: bold;color: #00000030;line-height: 22px;margin-top: 21px;text-align: center;">你在${process.env.SiteName}申请了账户，这是你的账户信息</span>
                       </div>
                       <div class="box_2 flex-row"
                           style="margin: 0 20px;min-height: 128px;min-width: 600px;background: #F7F7F7;border-radius: 12px;margin-top: 34px;display: flex;flex-direction: column;align-items: flex-start;padding: 32px 16px;width: calc(100% - 40px);">
@@ -278,7 +278,7 @@ router.post("/register", function (req, res) {
                               style="display: flex;position: relative;border: 1px dashed #1289d82e;box-sizing: content-box;height: 0px;overflow: visible;width: 100%;">
                           <a class="text-wrapper_2 flex-col"
                               style="min-width: 106px;height: 38px;background: #1289d82e;border-radius: 32px;display: flex;align-items: center;justify-content: center;text-decoration: none;margin: auto;margin-top: 32px;"
-                              href="https://${process.env.sitedomain}"><span class="text_5" style="color: #068bf8;">立即登录</span></a>
+                              href="https://${process.env.SiteDomain}"><span class="text_5" style="color: #068bf8;">立即登录</span></a>
                       </div>
                       <table style="width:100%;font-weight:300;margin-bottom:10px;border-collapse:collapse">
                           <tbody>
@@ -286,9 +286,9 @@ router.post("/register", function (req, res) {
                                   <td style="width:3.2%;max-width:30px;"></td>
                                   <td style="max-width:540px;">
                                       <p style="text-align:center; margin:20px auto 14px auto;font-size:12px;color:#999;">
-                                          此为系统邮件,如需联系请联系${process.env.adminemail} <br /><a
+                                          此为系统邮件,如需联系请联系${process.env.SiteFeedbackEmail} <br /><a
                                               style="text-decoration:none;word-break:break-all;word-wrap:normal; color: #333;"
-                                              target="_blank"> 您收到这份邮件是因为您注册了${process.env.sitename}账户 </a></p>
+                                              target="_blank"> 您收到这份邮件是因为您注册了${process.env.SiteName}账户 </a></p>
                                       <p id="cTMail-rights"
                                           style="max-width: 100%; margin:auto;font-size:12px;color:#999;text-align:center;line-height:22px;">
                                           <img border="0" src="https://cdn.wuyuan.dev/img/qrcode_for_gh_a55736ccbcb4_258_6dxqg3_.jpg"
@@ -367,9 +367,9 @@ router.post("/repw", function (req, res) {
         transporter.sendMail(
           {
             // 发件人邮箱
-            from: `${process.env.sitename}"密码重置消息" <${process.env.mailfrom}>`,
+            from: `${process.env.SiteName}"密码重置消息" <${process.env.mailfrom}>`,
             // 邮件标题
-            subject: process.env.sitename + "密码重置消息",
+            subject: process.env.SiteName + "密码重置消息",
             // 目标邮箱
             to: username,
             // 邮件内容
@@ -382,9 +382,9 @@ router.post("/repw", function (req, res) {
             <div class="box_4 flex-col" style="margin-top: 92px;display: flex;flex-direction: column;align-items: center;">
                 <div class="text-group_5 flex-col justify-between"
                     style="display: flex;flex-direction: column;align-items: center;margin: 0 20px;"><span class="text_1"
-                        style="font-size: 26px;font-family: PingFang-SC-Bold, PingFang-SC;font-weight: bold;color: #000000;line-height: 37px;text-align: center;">嘿！你在${process.env.sitename}申请重置密码</span><span
+                        style="font-size: 26px;font-family: PingFang-SC-Bold, PingFang-SC;font-weight: bold;color: #000000;line-height: 37px;text-align: center;">嘿！你在${process.env.SiteName}申请重置密码</span><span
                         class="text_2"
-                        style="font-size: 16px;font-family: PingFang-SC-Bold, PingFang-SC;font-weight: bold;color: #00000030;line-height: 22px;margin-top: 21px;text-align: center;">你在${process.env.sitename}申请了重置密码，这是你的密码重置信息</span>
+                        style="font-size: 16px;font-family: PingFang-SC-Bold, PingFang-SC;font-weight: bold;color: #00000030;line-height: 22px;margin-top: 21px;text-align: center;">你在${process.env.SiteName}申请了重置密码，这是你的密码重置信息</span>
                 </div>
                 <div class="box_2 flex-row"
                     style="margin: 0 20px;min-height: 128px;min-width: 600px;background: #F7F7F7;border-radius: 12px;margin-top: 34px;display: flex;flex-direction: column;align-items: flex-start;padding: 32px 16px;width: calc(100% - 40px);">
@@ -398,11 +398,11 @@ router.post("/repw", function (req, res) {
                         style="display: flex;position: relative;border: 1px dashed #1289d82e;box-sizing: content-box;height: 0px;overflow: visible;width: 100%;">
                     <a class="text-wrapper_2 flex-col"
                         style="min-width: 106px;height: 38px;background: #1289d82e;border-radius: 32px;display: flex;align-items: center;justify-content: center;text-decoration: none;margin: auto;margin-top: 32px;"
-                        href="https://${process.env.sitedomain}/user/repw?token=${jwttoken}"><span class="text_5"
+                        href="https://${process.env.SiteDomain}/user/repw?token=${jwttoken}"><span class="text_5"
                             style="color: #068bf8;">重设密码</span></a>
                     <p style="text-align:center; margin:20px auto 5px auto;font-size:12px;color:#999;">也可以复制以下链接</p>
                     <p style="text-align:center; margin:0px auto 0px auto;font-size:12px;color:#999;word-break:break-all">
-                        https://${process.env.sitedomain}/user/repw?token=${jwttoken}</p>
+                        https://${process.env.SiteDomain}/user/repw?token=${jwttoken}</p>
                 </div>
                 <table style="width:100%;font-weight:300;margin-bottom:10px;border-collapse:collapse">
                     <tbody>
@@ -410,9 +410,9 @@ router.post("/repw", function (req, res) {
                             <td style="width:3.2%;max-width:30px;"></td>
                             <td style="max-width:540px;">
                                 <p style="text-align:center; margin:20px auto 14px auto;font-size:12px;color:#999;">
-                                    此为系统邮件,如需联系请联系${process.env.adminemail} <br /><a
+                                    此为系统邮件,如需联系请联系${process.env.SiteFeedbackEmail} <br /><a
                                         style="text-decoration:none;word-break:break-all;word-wrap:normal; color: #333;"
-                                        target="_blank"> 您收到这份邮件是因为您在${process.env.sitename}上申请重置密码</a></p>
+                                        target="_blank"> 您收到这份邮件是因为您在${process.env.SiteName}上申请重置密码</a></p>
                                 <p id="cTMail-rights"
                                     style="max-width: 100%; margin:auto;font-size:12px;color:#999;text-align:center;line-height:22px;">
                                     <img border="0" src="https://cdn.wuyuan.dev/img/qrcode_for_gh_a55736ccbcb4_258_6dxqg3_.jpg"

@@ -23,7 +23,7 @@
             <div class="layui-col-md6" style="padding: 30px 0 0 0px;">
               <div id='login-page'>
                 <div class="mdui-typo-display-2">
-                  <%= process.env.sitename %> 登录
+                  <%= process.env.SiteName %> 登录
                 </div>
 
                 <div class="reply-form" style="height: max-content;">
@@ -56,7 +56,7 @@
               <% if (reg==1) { %>
                 <div id='reg-page' style="display: none;">
                   <div class="mdui-typo-display-2">
-                    <%= process.env.sitename %> 注册
+                    <%= process.env.SiteName %> 注册
                   </div>
                   <div class="reply-form" style="height: max-content;">
 
@@ -85,7 +85,7 @@
                 <% } %>
                   <div id='getPW-page' style="display: none;">
                     <div class="mdui-typo-display-2">
-                      <%= process.env.sitename %> 找回密码
+                      <%= process.env.SiteName %> 找回密码
                     </div>
                     <div class="reply-form" style="height: max-content;">
                       <div>
@@ -109,7 +109,7 @@
     <div class="mdui-dialog" id="privacy" style='border-radius: 15px;'>
       <div class="mdui-dialog-title">您正在使用由孙悟元提供的服务</div>
       <div class="mdui-dialog-content">
-        我们可能会收集您的个人信息,具体参见<a href="<%= process.env.privacypolicyurl %>" target="_blank"
+        我们可能会收集您的个人信息,具体参见<a href="<%= process.env.SitePrivacyPolicy %>" target="_blank"
           class="mdui-text-color-blue">隐私策略</a><br />
         <label class="mdui-checkbox">
           <input type="checkbox" id="privacy-chick" />
@@ -124,7 +124,7 @@
           我同意将我的个人数据传输到中国以外的地区
         </label>
         <br /><br />
-        在<%= process.env.sitename %>上,你需要遵守<a href="https://scratch.mit.edu/community_guidelines" target="_blank"
+        在<%= process.env.SiteName %>上,你需要遵守<a href="https://scratch.mit.edu/community_guidelines" target="_blank"
             class="mdui-text-color-blue">社区行为准则(第三方站点)</a><br />
           <label class="mdui-checkbox">
             <input type="checkbox" id="zhunze-chick" />
@@ -132,14 +132,14 @@
             我已阅读并同意将会遵守社区行为准则
           </label>
           <br /><br />
-          你需要同意<a href="<%= process.env.termsofserviceurl %>" target="_blank"
+          你需要同意<a href="<%= process.env.SiteTermsofService %>" target="_blank"
             class="mdui-text-color-blue">用户协议</a><br />
           <label class="mdui-checkbox">
             <input type="checkbox" id="xiugai-chick" />
             <i class="mdui-checkbox-icon"></i>
             我已阅读并同意用户协议
           </label>
-          <br /><br />对于技术手段绕过此页面的行为(视为对<%= process.env.sitename %>
+          <br /><br />对于技术手段绕过此页面的行为(视为对<%= process.env.SiteName %>
             的基础设施进行攻击)涉嫌违法(法入侵计算机系统),我们将保留追究法律责任的权利,且违规获得的账号不受保护,如果您同意以上内容,请点击“复选框”以完成注册流程.
       </div>
 
