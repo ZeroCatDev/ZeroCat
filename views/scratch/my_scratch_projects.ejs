@@ -132,7 +132,7 @@
       description: "请输入简介",
       confirmText: "确认",
       cancelText: "取消",
-	  textFieldOptions:{value: defaultinfo},
+	  textFieldOptions:{value: defaultinfo,autosize : '1',maxlength: "1000" ,counter : '1'},
       onConfirm: (value) => AjaxFn('/my/scratch/setdescription', { 'id': id, description: value }, function (res) {
 					automsg(res['msg']);
 					if ('success' == res['status']) {
