@@ -3,7 +3,7 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "build": "npm i -g ncc && ncc build app.js",
+    "build": "npm i -g @vercel/ncc && ncc build app.js",
     "test": "echo \"No test specified\" && exit 0",
     "start": "node app"
   },
