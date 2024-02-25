@@ -91,8 +91,10 @@ app.use(multipart({ uploadDir: "./data/upload_tmp" }));
 var compress = require("compression");
 app.use(compress());
 
-app.set("views", __dirname + "/");
-app.set("view engine", "views");
+app.set("env", __dirname + "/.env");
+app.set("data", __dirname + "/data");
+app.set("views", __dirname + "/views");
+app.set("view engine", "ejs");
 
 //数据库
 var DB = require("./server/lib/database.js");
@@ -206,7 +208,7 @@ app.get("/", function (req, res) {
     //  res.locals["ads"] = encodeURIComponent(JSON.stringify(ADS));
 
     //});
-    res.render("views/index.ejs");
+    res.render("index.ejs");
   });
 });
 
@@ -231,18 +233,18 @@ var apiserver = require("./server/router_api.js");
 app.use("/api", apiserver);
 
 app.get("/about", function (req, res, next) {
-  res.render("views/about.ejs");
+  res.render("about.ejs");
 });
 app.get("/share", function (req, res, next) {
-  res.render("views/share.ejs");
+  res.render("share.ejs");
 });
 
 //工具
 app.get("/tools/comparer", function (req, res, next) {
-  res.render("views/tools/comparer.ejs");
+  res.render("tools/comparer.ejs");
 });
 app.get("/tools/asdm", function (req, res, next) {
-  res.render("views/tools/asdm.ejs");
+  res.render("tools/asdm.ejs");
 });
 //python路由
 var router_python = require("./server/router_python.js");
@@ -259,5 +261,5 @@ process.on("uncaughtException", function (err) {
 //放在最后，友好的处理地址不存在的访问
 app.all("*", function (req, res, next) {
   res.locals.tipType = "访问错误";
-  res.render("views/404.ejs");
+  res.render("404.ejs");
 });

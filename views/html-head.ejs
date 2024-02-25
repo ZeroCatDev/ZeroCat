@@ -23,50 +23,10 @@
   }
 </style>
 <body class="mdui-theme-light mdui-theme-accent-blue mdui-loaded " >
-<!--<script type="module">
-    const { appWindow } = window.__TAURI__.window;
-    document
-      .getElementById('titlebar-minimize')
-      .addEventListener('click', () => appWindow.minimize())
-    document
-      .getElementById('titlebar-maximize')
-      .addEventListener('click', () => appWindow.toggleMaximize())
-    document
-      .getElementById('titlebar-close')
-      .addEventListener('click', () => appWindow.close())</script>
+  <mdui-layout style='height: 100vh;'>
 
-
-<mdui-top-app-bar data-tauri-drag-region>
-
-    <div style="flex-grow: 1"></div>
-    
-    <mdui-segmented-button-group >
-      <mdui-segmented-button icon="minimize" id="titlebar-minimize"></mdui-segmented-button>
-      <mdui-segmented-button icon="crop_square" id="titlebar-maximize"></mdui-segmented-button>
-      <mdui-segmented-button icon="close" id="titlebar-close"></mdui-segmented-button>
-    </mdui-segmented-button-group>
-  </mdui-top-app-bar>-->
-  <mdui-navigation-rail alignment="start" class="pc">
-    <mdui-button-icon icon="menu" slot="top" class="open-tools" ></mdui-button-icon>
-    <mdui-fab lowered icon="add" slot="top" class="open-add"></mdui-fab>
-    <mdui-button-icon icon="account_circle" slot="bottom" class="open-user"></mdui-button-icon>
   
-    <mdui-navigation-rail-item icon="home" href="/" value="/">主页</mdui-navigation-rail-item>
-    <mdui-navigation-rail-item icon="code" href="/scratch" value="/scratch">Scratch</mdui-navigation-rail-item>
-    <mdui-navigation-rail-item icon="code" href="/python" value="/python">Python</mdui-navigation-rail-item>
-  </mdui-navigation-rail>
-  <mdui-bottom-app-bar scroll-behavior="hide" scroll-threshold="30" class="mobile">
-    <mdui-button-icon icon="menu" class="open-tools"></mdui-button-icon>
-    <mdui-button-icon icon="home" href="/"></mdui-button-icon>
-    <mdui-button-icon icon="account_circle" class="open-user"></mdui-button-icon>
-    <mdui-button-icon icon="code" class="open-types"></mdui-button-icon>
-    <div style="flex-grow: 1"></div>
-    <mdui-fab icon="add" class="open-add"></mdui-fab>
-  </mdui-bottom-app-bar>
-  
-  
-  
-  <mdui-navigation-drawer class="user-drawer" modal close-on-esc close-on-overlay-click>
+  <mdui-navigation-drawer class="user-drawer"  close-on-esc close-on-overlay-click>
     <mdui-list>
       <% if (login==false) { %> <mdui-list-item rounded href="/user/login">注册</mdui-list-item> <mdui-list-item rounded
           href="/user/login">登录</mdui-list-item>
@@ -86,7 +46,7 @@
   
   </mdui-navigation-drawer>
   
-  <mdui-navigation-drawer class="tools-drawer" modal close-on-esc close-on-overlay-click>
+  <mdui-navigation-drawer class="tools-drawer"  close-on-esc close-on-overlay-click>
   
     <mdui-list>
       <mdui-list-item rounded id="open-feedback-dialog" icon="send" description="发送反馈">反馈</mdui-list-item>
@@ -104,7 +64,7 @@
       <mdui-list-item rounded href="https://github.com/ourworlddev/" description="OurWorldDev" target="_blank">Github</mdui-list-item>
   
       <mdui-list-item rounded href="http://yhcoding.site/" description="友情链接" target="_blank">银河编程社区</mdui-list-item>
-      <mdui-list-item rounded href="https://www.rainyun.com/wuyuan_?s=ourworld" description="友情链接" target="_blank">雨云</mdui-list-item>>
+      <mdui-list-item rounded href="https://www.rainyun.com/wuyuan_?s=ourworld" description="友情链接" target="_blank">雨云</mdui-list-item>
   
   
       <mdui-list-item rounded class="close-tools" icon="arrow_left">关闭</mdui-list-item>
@@ -112,7 +72,7 @@
   
   </mdui-navigation-drawer>
   
-  <mdui-navigation-drawer class="types-drawer" modal close-on-esc close-on-overlay-click>
+  <mdui-navigation-drawer class="types-drawer"  close-on-esc close-on-overlay-click>
   
     <mdui-list>
       <mdui-list-item rounded href="/scratch" icon="code">Scratch分区</mdui-list-item>
@@ -121,6 +81,27 @@
     </mdui-list>
   
   </mdui-navigation-drawer>
+
+
+  <mdui-navigation-rail alignment="start" class="pc">
+    <mdui-button-icon icon="menu" slot="top" class="open-tools" ></mdui-button-icon>
+    <mdui-fab lowered icon="add" slot="top" class="open-add"></mdui-fab>
+    <mdui-button-icon icon="account_circle" slot="bottom" class="open-user"></mdui-button-icon>
+  
+    <mdui-navigation-rail-item icon="home" href="/" value="/">主页</mdui-navigation-rail-item>
+    <mdui-navigation-rail-item icon="code" href="/scratch" value="/scratch">Scratch</mdui-navigation-rail-item>
+    <mdui-navigation-rail-item icon="code" href="/python" value="/python">Python</mdui-navigation-rail-item>
+  </mdui-navigation-rail>
+  <mdui-bottom-app-bar scroll-behavior="hide" scroll-threshold="30" class="mobile">
+    <mdui-button-icon icon="menu" class="open-tools"></mdui-button-icon>
+    <mdui-button-icon icon="home" href="/"></mdui-button-icon>
+    <mdui-button-icon icon="account_circle" class="open-user"></mdui-button-icon>
+    <mdui-button-icon icon="code" class="open-types"></mdui-button-icon>
+    <div style="flex-grow: 1"></div>
+    <mdui-fab icon="add" class="open-add"></mdui-fab>
+  </mdui-bottom-app-bar>
+  
+  
   <mdui-dialog close-on-esc headline="创建新的项目" description="请选择项目类型" close-on-overlay-click id="newproject"><mdui-button
       href="/scratch/edit">Scratch</mdui-button><mdui-button href="/python/edit">Python</mdui-button></mdui-dialog>
   
@@ -243,6 +224,31 @@
       }
     }
   </style>
+<script type="module">
+  var tauributton = document.querySelector('#tauributton');
+
+  if (window.__TAURI__) {
+    tauributton.removeAttribute('style')
+  }
+  const { appWindow } = window.__TAURI__.window;
+  document
+    .getElementById('titlebar-minimize')
+    .addEventListener('click', () => appWindow.minimize())
+  document
+    .getElementById('titlebar-maximize')
+    .addEventListener('click', () => appWindow.toggleMaximize())
+  document
+    .getElementById('titlebar-close')
+    .addEventListener('click', () => appWindow.close())</script>
+<mdui-top-app-bar data-tauri-drag-region >
+
+    <div style="flex-grow: 1"></div>
+    
+    <mdui-segmented-button-group style="display: none;" id="tauributton">
+      <mdui-segmented-button icon="minimize" id="titlebar-minimize"></mdui-segmented-button>
+      <mdui-segmented-button icon="crop_square" id="titlebar-maximize"></mdui-segmented-button>
+      <mdui-segmented-button icon="close" id="titlebar-close"></mdui-segmented-button>
+    </mdui-segmented-button-group>
+  </mdui-top-app-bar>
     <mdui-layout-main>
-        <br /><br />	
         <div class="mdui-container ow-container">

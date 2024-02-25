@@ -88,7 +88,7 @@ router.get('/play', function (req, res) {
     DB.query(SQL, function(err,U){
         if (err|| U.affectedRows==0) {
             res.locals.tip = {'opt': 'flash', 'msg':'项目不存在或未发布'};
-            res.render('views/404.ejs');
+            res.render('404.ejs');
             return;
         }
         
@@ -103,13 +103,13 @@ router.get('/play', function (req, res) {
         DB.query(SQL, function (err, SCRATCH) {
             if (err|| SCRATCH.length==0) {
                 res.locals.tip = {'opt': 'flash', 'msg':'项目不存在或未发布'};
-                res.render('views/404.ejs');
+                res.render('404.ejs');
                 return;
             }
     
             res.locals['is_author'] = (SCRATCH[0].authorid==res.locals.userid)?true:false;
             res.locals['project'] = SCRATCH[0];
-            res.render('views/scratch/scratch_play.ejs');
+            res.render('scratch/scratch_play.ejs');
         });
     });
 });
@@ -122,7 +122,7 @@ router.get('/usertx', function (req, res) {
       DB.query(SQL, function (err, USER) {
         if (err || USER.length == 0) {
           res.locals.tip = { opt: "flash", msg: "用户不存在" };
-          res.render("views/404.ejs");
+          res.render("404.ejs");
           return;
         }
 
@@ -139,7 +139,7 @@ router.post("/getuserinfo", function (req, res) {
       DB.query(SQL, function (err, USER) {
         if (err || USER.length == 0) {
           res.locals.tip = { opt: "flash", msg: "用户不存在" };
-          res.render("views/404.ejs");
+          res.render("404.ejs");
           return;
         }
         res.status(200).send({status: 'ok',info:USER[0]});

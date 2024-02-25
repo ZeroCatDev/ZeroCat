@@ -33,12 +33,12 @@ router.get("/", function (req, res) {
     DB.query(SQL, function (err, USER) {
       if (err || USER.length == 0) {
         res.locals.tip = { opt: "flash", msg: "用户不存在" };
-        res.render("views/404.ejs");
+        res.render("404.ejs");
         return;
       }
       res.locals["user"] = USER[0];
       //console.log(USER);
-      res.render("views/user.ejs");
+      res.render("user.ejs");
     });
   });
 });
@@ -52,13 +52,13 @@ router.get("/login", function (req, res) {
       res.locals.reg = 1;
     }
 
-    res.render("views/login_or_register.ejs");
+    res.render("login_or_register.ejs");
   });
 });
 
 //登录、注册、找回密码三合一界面
 router.get("/repw", function (req, res) {
-  res.render("views/repw.ejs");
+  res.render("repw.ejs");
 });
 
 //登录
@@ -516,7 +516,7 @@ router.get("/tuxiaochao", function (req, res) {
   DB.query(SQL, function (err, USER) {
     if (err || USER.length == 0) {
       res.locals.tip = { opt: "flash", msg: "用户不存在" };
-      res.render("views/404.ejs");
+      res.render("404.ejs");
       return;
     }
     uid = res.locals["userid"].toString();

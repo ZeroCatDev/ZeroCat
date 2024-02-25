@@ -23,7 +23,7 @@ router.get("/", function (req, res) {
         res.locals.python_count = data[0].python_count;
       }
   
-        res.render("views/python/python_projects.ejs");
+        res.render("python/python_projects.ejs");
     
     });
   });
@@ -75,7 +75,7 @@ router.post("/view/seachPythonProjects", function (req, res) {
 //python项目展示界面
 router.get('/play', function (req, res) {
     
-            res.render('views/python/python_play.ejs');
+            res.render('python/python_play.ejs');
         });
 
 //项目点赞
@@ -195,11 +195,11 @@ router.post('/play/favo', function (req, res) {
 
 //python项目编辑界面：获取项目源代码
 router.get('/edit', function (req, res) {
-	res.render('views/python/python_edit.ejs');
+	res.render('python/python_edit.ejs');
 })
 //python兼容编辑器
 router.get('/old', function (req, res) {
-	res.render('views/python/python_edit_old.ejs');
+	res.render('python/python_edit_old.ejs');
 })
 // 从数据库获取作品
 router.post('/getWork', function (req, res) {

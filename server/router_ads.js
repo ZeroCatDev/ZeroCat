@@ -17,7 +17,7 @@ router.all('*', function(req, res, next) {
 });
 
 router.get('/', function (req, res) {    
-    res.render('views/ads/index.ejs');
+    res.render('ads/index.ejs');
 });
 
 // 返回一个机构的头图

@@ -24,7 +24,7 @@ router.get("/", function (req, res) {
       res.locals.scratch_count = data[0].scratch_count;
     }
 
-      res.render("views/scratch/scratch_projects.ejs");
+      res.render("scratch/scratch_projects.ejs");
   
   });
 });
@@ -90,7 +90,7 @@ router.get("/play", function (req, res) {
   DB.query(SQL, function (err, U) {
     if (err || U.affectedRows == 0) {
       res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
-      res.render("views/404.ejs");
+      res.render("404.ejs");
       return;
     }
 
@@ -123,7 +123,7 @@ router.get("/play", function (req, res) {
     DB.query(SQL, function (err, SCRATCH) {
       if (err || SCRATCH.length == 0) {
         res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
-        res.render("views/404.ejs");
+        res.render("404.ejs");
         return;
       }
 
@@ -131,7 +131,7 @@ router.get("/play", function (req, res) {
         SCRATCH[0].authorid == res.locals.userid ? true : false;
       res.locals["project"] = SCRATCH[0];
       ////console.log(SCRATCH[0]);
-      res.render("views/scratch/scratch_play.ejs");
+      res.render("scratch/scratch_play.ejs");
     });
   });
 });
@@ -263,7 +263,7 @@ router.post("/play/openSrc", function (req, res) {
 
 //Scratch编程界面
 router.get("/edit", function (req, res) {
-  res.render("views/scratch/scratch_edit.ejs");
+  res.render("scratch/scratch_edit.ejs");
 });
 
 //Scratch内部调用一：获取作品数据：JSON源代码
