@@ -6,332 +6,130 @@
     <title>
         <%= process.env.SiteName %>分享页面
     </title>
-<% include('linkfile.ejs') %></head>
+</head>
 
-<body><a href="https://ourworld.wuyuan.dev">
-        <article class="movie-card"> <img src="<%= process.env.staticurl %>/img/owshare.png" alt="wallpaper" />
-            <div class="content">
-                <h1>
-                    <%= process.env.SiteName %>
-                </h1>
-                <div class="infos"> <span>以代码之极，追银河无际</span> </div>
-                <p class="synopsis">
-                    <%= process.env.SiteName %>
-                        是一个全新的Scratch与Python社区<br />致力于为初学者提供一个安全、有趣、有效的创作环境。<br />官网:https://ourworld.wuyuan.dev
-                </p>
-                <div class="icons"> <svg width="25" height="25" viewBox="0 0 25 25" fill="none"
-                        xmlns="http://www.w3.org/2000/svg">
-                        <path
-                            d="M12.7439 22.3037L11.2939 20.9837C6.1439 16.3137 2.7439 13.2237 2.7439 9.45374C2.7439 6.36374 5.1639 3.95374 8.2439 3.95374C9.9839 3.95374 11.6539 4.76374 12.7439 6.03374C13.8339 4.76374 15.5039 3.95374 17.2439 3.95374C20.3239 3.95374 22.7439 6.36374 22.7439 9.45374C22.7439 13.2237 19.3439 16.3137 14.1939 20.9837L12.7439 22.3037Z"
-                            fill="white"></path>
-                    </svg> <svg width="25" height="25" viewBox="0 0 25 25" fill="none"
-                        xmlns="http://www.w3.org/2000/svg">
-                        <path
-                            d="M7.1439 21.3537C6.81056 21.4871 6.4939 21.4581 6.1939 21.2667C5.8939 21.0754 5.7439 20.7961 5.7439 20.4287V5.95374C5.7439 5.40374 5.9399 4.93274 6.3319 4.54074C6.7239 4.14874 7.19456 3.95307 7.7439 3.95374H17.7439C18.2939 3.95374 18.7649 4.14974 19.1569 4.54174C19.5489 4.93374 19.7446 5.4044 19.7439 5.95374V20.4287C19.7439 20.7954 19.5939 21.0747 19.2939 21.2667C18.9939 21.4587 18.6772 21.4877 18.3439 21.3537L12.7439 18.9537L7.1439 21.3537Z"
-                            fill="white"></path>
-                    </svg> <svg width="25" height="25" viewBox="0 0 25 25" fill="none"
-                        xmlns="http://www.w3.org/2000/svg">
-                        <path
-                            d="M9.7439 19.9537V17.9537H21.7439V19.9537H9.7439ZM9.7439 13.9537V11.9537H21.7439V13.9537H9.7439ZM9.7439 7.95374V5.95374H21.7439V7.95374H9.7439ZM5.7439 20.9537C5.1939 20.9537 4.7229 20.7577 4.3309 20.3657C3.9389 19.9737 3.74323 19.5031 3.7439 18.9537C3.7439 18.4037 3.9399 17.9327 4.3319 17.5407C4.7239 17.1487 5.19456 16.9531 5.7439 16.9537C6.2939 16.9537 6.7649 17.1497 7.1569 17.5417C7.5489 17.9337 7.74457 18.4044 7.7439 18.9537C7.7439 19.5037 7.5479 19.9747 7.1559 20.3667C6.7639 20.7587 6.29323 20.9544 5.7439 20.9537ZM5.7439 14.9537C5.1939 14.9537 4.7229 14.7577 4.3309 14.3657C3.9389 13.9737 3.74323 13.5031 3.7439 12.9537C3.7439 12.4037 3.9399 11.9327 4.3319 11.5407C4.7239 11.1487 5.19456 10.9531 5.7439 10.9537C6.2939 10.9537 6.7649 11.1497 7.1569 11.5417C7.5489 11.9337 7.74457 12.4044 7.7439 12.9537C7.7439 13.5037 7.5479 13.9747 7.1559 14.3667C6.7639 14.7587 6.29323 14.9544 5.7439 14.9537ZM5.7439 8.95374C5.1939 8.95374 4.7229 8.75774 4.3309 8.36574C3.9389 7.97374 3.74323 7.50307 3.7439 6.95374C3.7439 6.40374 3.9399 5.93274 4.3319 5.54074C4.7239 5.14874 5.19456 4.95307 5.7439 4.95374C6.2939 4.95374 6.7649 5.14974 7.1569 5.54174C7.5489 5.93374 7.74457 6.4044 7.7439 6.95374C7.7439 7.50374 7.5479 7.97474 7.1559 8.36674C6.7639 8.75874 6.29323 8.9544 5.7439 8.95374Z"
-                            fill="white"></path>
-                    </svg> </div>
-            </div>
-        </article>
-    </a> <!-- partial --> </body>
+<body>
+    <div class="cursor"></div>
+    <div class="shapes">
+      <div class="shape shape-1"></div>
+      <div class="shape shape-2"></div>
+      <div class="shape shape-3"></div>
+    </div>
+    <div class="content">
+      <h1>Hello there!</h1>
+    </div></body>
 
 </html>
 <style>
-    @import url("https://fonts.googleapis.com/css2?family=Rubik:wght@400;700&display=swap");
+  body {
+  font-family: Montserrat, sans-serif;
+  font-weight: 900;
+}
+body, body * {
+  cursor: none;
+}
 
-    /*=================*/
-    /*     Values      */
-    /*=================*/
-    :root {
-        --color-gray-50: #f8fafc;
-        --color-gray-100: #f1f5f9;
-        --color-gray-200: #e1e7ef;
-        --color-gray-300: #cbd5e1;
-        --color-gray-400: #94a3b8;
-        --color-gray-500: #65758b;
-        --color-gray-600: #48566a;
-        --color-gray-700: #344256;
-        --color-gray-800: #1d283a;
-        --color-gray-900: #0f1729;
-        --color-gray-950: #020617;
-        --color-primary-50: #f0f9ff;
-        --color-primary-100: #e0f3ff;
-        --color-primary-200: #b8e6ff;
-        --color-primary-300: #7ad5ff;
-        --color-primary-400: #33c2ff;
-        --color-primary-500: #00a7f5;
-        --color-primary-600: #0085c7;
-        --color-primary-700: #006aa3;
-        --color-primary-800: #005a8a;
-        --color-primary-900: #004e7a;
-        --color-primary-950: #003152;
-        --color-danger-50: #fff0f0;
-        --color-danger-100: #ffe0e0;
-        --color-danger-200: #ffc7c7;
-        --color-danger-300: #ffa3a3;
-        --color-danger-400: #ff6b6b;
-        --color-danger-500: #f53d3d;
-        --color-danger-600: #f31212;
-        --color-danger-700: #d60000;
-        --color-danger-800: #b30000;
-        --color-danger-900: #9e0000;
-        --color-danger-950: #4d0000;
-        --color-success-50: #f0fff4;
-        --color-success-100: #dbffe8;
-        --color-success-200: #b3ffcd;
-        --color-success-300: #75ffa8;
-        --color-success-400: #34f47a;
-        --color-success-500: #0bda57;
-        --color-success-600: #00b843;
-        --color-success-700: #009436;
-        --color-success-800: #007a2f;
-        --color-success-900: #006629;
-        --color-success-950: #003315;
-        --color-gold-50: #fffde6;
-        --color-gold-100: #fffac2;
-        --color-gold-200: #fff18a;
-        --color-gold-300: #ffe047;
-        --color-gold-400: #ffcf0f;
-        --color-gold-500: #f0b400;
-        --color-gold-600: #cc8b00;
-        --color-gold-700: #a86200;
-        --color-gold-800: #944f00;
-        --color-gold-900: #853e00;
-        --color-gold-950: #471f00;
-        --spacing-01: 4px;
-        --spacing-02: 8px;
-        --spacing-03: 12px;
-        --spacing-04: 16px;
-        --spacing-05: 20px;
-        --spacing-06: 24px;
-        --spacing-07: 28px;
-        --spacing-08: 32px;
-        --spacing-09: 40px;
-    }
+.shapes {
+  position: relative;
+  height: 100vh;
+  width: 100vw;
+  background: #2128bd;
+  overflow: hidden;
+}
 
-    /*=========================*/
-    /*      Sass Functions     */
-    /*=========================*/
-    /*=================*/
-    /*      Theme      */
-    /*=================*/
-    :root {
-        color-scheme: light dark;
-        --font-color-default: var(--color-gray-700);
-        --  font-color-strong: var(--color-gray-900);
-        --font-color-light: var(--color-gray-400);
-        --background-page: var(--color-gray-50);
-        --border-light: 1px solid var(--font-color-light);
-        --border-strong: 2px solid var(--font-color-strong);
-        --border-radius-sm: var(--spacing-01);
-        --border-radius-md: var(--spacing-02);
-        --border-radius-lg: var(--spacing-03);
-        --shadow-color-hsl: 222 47% 11%;
-        --shadow-opacity: 0.15;
-        --shadow-color: hsl(var(--shadow-color-hsl) / var(--shadow-opacity));
-        --shadow-sm: 0px 4px 6px var(--shadow-color);
-        --shadow-md: 0px 8px 12px var(--shadow-color), 0px 1px 3px var(--shadow-color);
-        --shadow-lg: 0px 16px 24px var(--shadow-color), 0px 2px 6px var(--shadow-color);
-        --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
-        --ease-out: cubic-bezier(0, 0, 0.2, 1);
-        --ease-in: cubic-bezier(0.4, 0, 1, 1);
-    }
+.shape {
+  will-change: transform;
+  position: absolute;
+  border-radius: 50%;
+}
+.shape.shape-1 {
+  background: #005ffe;
+  width: 650px;
+  height: 650px;
+  margin: -325px 0 0 -325px;
+}
+.shape.shape-2 {
+  background: #ffe5e3;
+  width: 440px;
+  height: 440px;
+  margin: -220px 0 0 -220px;
+}
+.shape.shape-3 {
+  background: #ffcc57;
+  width: 270px;
+  height: 270px;
+  margin: -135px 0 0 -135px;
+}
 
-    @media (prefers-color-scheme: dark) {
-        :root {
-            --font-color-default: var(--color-gray-200);
-            --font-color-strong: var(--color-gray-50);
-            --font-color-light: var(--color-gray-500);
-            --background-page: var(--color-gray-900);
-            --shadow-color-hsl: 0 0% 0%;
-            --shadow-opacity: 0.8;
-        }
-    }
+.content {
+  top: 0;
+  left: 0;
+  position: absolute;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  width: 100vw;
+  background: #fff;
+  mix-blend-mode: screen;
+}
 
-    /*=======================*/
-    /*      Global Style     */
-    /*=======================*/
-    html,
-    body {
-        height: 100%;
-    }
+h1 {
+  font-size: 100px;
+  color: #000;
+  margin: 0;
+  text-align: center;
+}
+@media (min-width: 419px) {
+  h1 {
+    font-size: 100px;
+    font-size: calc((0.0989119683 * 100vw + (58.5558852621px)));
+  }
+}
+@media (min-width: 1430px) {
+  h1 {
+    font-size: 200px;
+  }
+}
 
-    * {
-        padding: 0;
-        margin: 0;
-        box-sizing: border-box;
-    }
+.cursor {
+  position: fixed;
+  background: #2128bd;
+  width: 20px;
+  height: 20px;
+  margin: -10px 0 0 -10px;
+  border-radius: 50%;
+  will-change: transform;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+      -ms-user-select: none;
+          user-select: none;
+  pointer-events: none;
+  z-index: 10000;
+}
 
-    html {
-        font-size: 62.5%;
-    }
+::-moz-selection {
+  color: #fff;
+  background: #2128bd;
+}
 
-    body {
-        display: grid;
-        place-items: center;
-        font-family: "Rubik", sans-serif;
-        font-size: 170%;
-        background: var(--background-page);
-        color: var(--font-color-default);
-        line-height: 1.5;
-    }
-
-    h1,
-    h2,
-    h3,
-    h4,
-    h5,
-    h6,
-    strong {
-        color: var(--font-color-strong);
-    }
-
-    h1 {
-        font-size: 3rem;
-        margin-block: 2em 0.5em;
-    }
-
-    h2 {
-        font-size: 2rem;
-        margin-block: 1.5em 0.25em;
-    }
-
-    h3 {
-        margin-block: 1.5em 0.25em;
-    }
-
-    section {
-        width: min(80vmin, 800px);
-    }
-
-    /* Global CSS and Sass mixins defined in codepen.io/jsulpis/pen/ExdxLgM */
-    .movie-card {
-        --transition-duration: 700ms;
-        color: white;
-        position: relative;
-        border-radius: 0.6em;
-        overflow: hidden;
-        font-size: 120%;
-        height: min(21em, 90vh);
-        max-width: 90vw;
-        aspect-ratio: 16/9;
-        box-shadow: var(--shadow-lg), var(--shadow-lg), var(--shadow-lg);
-        transition: transform var(--transition-duration);
-    }
-
-    .movie-card::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background: radial-gradient(circle at 80% -150%, transparent 60%, rgba(0, 0, 0, 0.5));
-        transition: box-shadow var(--transition-duration);
-        mix-blend-mode: overlay;
-    }
-
-    img {
-        height: 100%;
-        width: 100%;
-        transition: transform var(--transition-duration);
-        object-fit: cover;
-        object-position: center;
-    }
-
-    .content {
-        z-index: 1;
-        position: absolute;
-        bottom: min(2.5em, 6vmin);
-        left: min(3em, 8vmin);
-        right: min(3em, 8vmin);
-        text-align: left;
-        transition: transform var(--transition-duration) var(--ease-in-out);
-    }
-
-    .content>* {
-        position: relative;
-        will-change: transform;
-    }
-
-    h1 {
-        font-size: 1.8em;
-        color: inherit;
-        margin: 0;
-    }
-
-    .infos {
-        font-size: 0.8em;
-        font-weight: bold;
-        color: #eee;
-        display: flex;
-        gap: 0.35em;
-        align-items: flex-end;
-    }
-
-    .infos span {
-        line-height: 1;
-    }
-
-    .synopsis {
-        font-size: 0.8em;
-        line-height: 1.4;
-        margin-block: 0.75em;
-        transition-delay: calc(var(--transition-duration) / 8);
-        transition-property: opacity, transform;
-        transition-duration: calc(var(--transition-duration) / 2);
-    }
-
-    .icons {
-        display: flex;
-        gap: 0.5em;
-    }
-
-    .icons svg {
-        height: 1.2em;
-        width: auto;
-        transition-property: opacity, transform;
-        transition-duration: calc(var(--transition-duration) / 2);
-        transition-delay: 0s;
-    }
-
-    .movie-card:hover {
-        transform: scale(1.03);
-    }
-
-    .movie-card:hover img {
-        transform: scale(1.03);
-    }
-
-    .movie-card:hover .synopsis {
-        transition-duration: var(--transition-duration);
-        transition-delay: calc(var(--transition-duration) / 3);
-    }
-
-    .movie-card:hover .icons svg:nth-child(1) {
-        transition-delay: calc(var(--transition-duration) / 1.8);
-    }
-
-    .movie-card:hover .icons svg:nth-child(2) {
-        transition-delay: calc(var(--transition-duration) / 1.6);
-    }
-
-    .movie-card:hover .icons svg:nth-child(3) {
-        transition-delay: calc(var(--transition-duration) / 1.4);
-    }
-
-    .movie-card:not(:hover) .synopsis {
-        opacity: 0;
-        transform: translateY(1em);
-    }
-
-    .movie-card:not(:hover) .icons svg {
-        opacity: 0;
-        transform: translateY(50%);
-    }
-
-    .movie-card:not(:hover) .content {
-        transform: translateY(calc(100% - 4.5em));
-    }
+::selection {
+  color: #fff;
+  background: #2128bd;
+}
 </style>
+<script>document.body.addEventListener("mousemove", evt => {
+    const mouseX = evt.clientX;
+    const mouseY = evt.clientY;
+  
+    gsap.set(".cursor", {
+      x: mouseX,
+      y: mouseY });
+  
+  
+    gsap.to(".shape", {
+      x: mouseX,
+      y: mouseY,
+      stagger: -0.1 });
+  
+  });</script>

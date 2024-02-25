@@ -147,4 +147,22 @@ router.post("/getuserinfo", function (req, res) {
       });
     });
 
+//平台概况
+router.get('/info', function (req, res) {   
+  var SQL = `SELECT `+
+             ` (SELECT count(id) FROM user) AS user_count, `+ 
+             ` (SELECT count(id) FROM scratch) AS scratch_count, ` +
+             ` (SELECT count(id) FROM python) AS python_count, ` +
+             ` (SELECT count(id) FROM material_backdrop) AS backdrop_count, `+
+             ` (SELECT count(id) FROM material_sprite) AS sprite_count `;
+  DB.query(SQL, function(err,d){
+      if (err||d.length==0){
+        res.send({user: 0 , scratch:0,python: 0,project: 0});
+
+      }
+
+      res.send({user: d[0].user_count , scratch:d[0].scratch_count,python: d[0].python_count,project: d[0].scratch_count +d[0].python_count});
+  })
+});
+
 module.exports = router;

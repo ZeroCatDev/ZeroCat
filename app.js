@@ -182,34 +182,9 @@ function getTokenFromRequest(req) {
 }
 //首页
 app.get("/", function (req, res) {
-  //获取已分享的作品总数：1:普通作品，2：推荐的优秀作品
-  var SQL =
-    `SELECT ` +
-    ` (SELECT count(id) FROM scratch WHERE state>0 ) AS scratch_count, ` +
-    ` (SELECT count(id) FROM python WHERE state>0 ) AS python_count `;
-  DB.query(SQL, function (err, data) {
-    if (err) {
-      // console.error('数据库操作出错：');
-      res.locals.scratch_count = 0;
-      res.locals.python_count = 0;
-    } else {
-      res.locals.scratch_count = data[0].scratch_count;
-      res.locals.python_count = data[0].python_count;
-    }
 
-    // 获取首页头图
-    //SQL = `SELECT id, content FROM ads WHERE state=1 ORDER BY i ASC`;
-    //DB.query(SQL, function (err, ADS) {
-    //  if (err) {
-    //    console.error(err);
-    //    ADS = [];
-    //  }
-
-    //  res.locals["ads"] = encodeURIComponent(JSON.stringify(ADS));
-
-    //});
-    res.render("index.ejs");
-  });
+        res.render('index.ejs');
+    
 });
 
 //放在最后，确保路由时能先执行app.all=====================
