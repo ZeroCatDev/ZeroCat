@@ -16,6 +16,9 @@
     <link rel="stylesheet" href="<%= process.env.staticurl %>/css/projectspage.css">
     <link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css">
     <link rel="stylesheet" href="<%= process.env.staticurl %>/css/waline.css" />
+
+    <meta name="view-transition" content="same-origin">
+
 </head>
 <style>
 :not(:defined) {
@@ -86,7 +89,7 @@
   <mdui-navigation-rail alignment="start" class="pc">
     <mdui-button-icon icon="menu" slot="top" class="open-tools" ></mdui-button-icon>
     <mdui-fab lowered icon="add" slot="top" class="open-add"></mdui-fab>
-    <mdui-button-icon icon="account_circle" slot="bottom" class="open-user"></mdui-button-icon>
+    <mdui-button-icon icon="<% if (login==false) { %>login<% } else { %>account_circle<% } %>" slot="bottom" class="open-user"></mdui-button-icon>
   
     <mdui-navigation-rail-item icon="home" href="/" value="/">主页</mdui-navigation-rail-item>
     <mdui-navigation-rail-item icon="code" href="/scratch" value="/scratch">Scratch</mdui-navigation-rail-item>
@@ -95,7 +98,7 @@
   <mdui-bottom-app-bar scroll-behavior="hide" scroll-threshold="30" class="mobile">
     <mdui-button-icon icon="menu" class="open-tools"></mdui-button-icon>
     <mdui-button-icon icon="home" href="/"></mdui-button-icon>
-    <mdui-button-icon icon="account_circle" class="open-user"></mdui-button-icon>
+    <mdui-button-icon icon="<% if (login==false) { %>login<% } else { %>account_circle<% } %>" class="open-user"></mdui-button-icon>
     <mdui-button-icon icon="code" class="open-types"></mdui-button-icon>
     <div style="flex-grow: 1"></div>
     <mdui-fab icon="add" class="open-add"></mdui-fab>
@@ -201,6 +204,7 @@
       word-wrap: break-word;
       word-break: break-all;
     }
+   
   </style>
   <!-- Filled -->
   <link href="<%= process.env.staticurl %>/font1.css" rel="stylesheet">
@@ -223,6 +227,11 @@
         display: none !important
       }
     }
+    .cover1{
+    background: rgb(0 0 0 / 0%);
+    backdrop-filter: blur(10px);
+}
+
   </style>
 <script type="module">
   var tauributton = document.querySelector('#tauributton');
@@ -240,7 +249,7 @@
   document
     .getElementById('titlebar-close')
     .addEventListener('click', () => appWindow.close())</script>
-<mdui-top-app-bar data-tauri-drag-region >
+<mdui-top-app-bar data-tauri-drag-region class="cover1">
 
     <div style="flex-grow: 1"></div>
     
