@@ -37,9 +37,12 @@
 	function Python(thetype) {
 		laypage.render({
 			elem: 'python_change_page'
-			, count: <%= python_count %>
+			, count: '<%= python_count %>'
 	, limit: 16
 			, theme: '#448aff'
+			,     layout: ['count', 'prev', 'page', 'next', 'limit', 'refresh', 'skip']
+			,     limits: [8, 16, 32]
+
 			, jump: function (obj, first) {
 				$.ajax({
 					'url': '/python/view/getPythonProjects',

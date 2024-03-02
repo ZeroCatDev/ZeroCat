@@ -17,7 +17,39 @@
   mdui.setColorScheme('#2087fd');
 </script>
 
+<mdui-dialog id="webdialog" fullscreen width="1000">
+  <mdui-top-app-bar slot="header">
+    <mdui-button-icon icon="close" onclick="webdialog.open = false"></mdui-button-icon>
+    <mdui-top-app-bar-title ></mdui-top-app-bar-title>
+    <div style="flex-grow: 1"></div>
+    <mdui-button-icon icon="fullscreen" onclick="webdialog.fullscreen = !webdialog.fullscreen" id="webdialogfull"></mdui-button-icon>
+    <mdui-button-icon icon="open_in_new" onclick="window.open(`${webdialogiframe.src}`)" id="webdialogfull"></mdui-button-icon>
 
+  </mdui-top-app-bar>
+  <iframe
+frameborder="0"
+id="webdialogiframe"
+style="height: 90vh;width: 95vw;border-radius: 15px;"
+>
+<p>
+<a href="https://developer.mozilla.org/zh-CN/docs/Glossary">
+此设备无法使用此功能
+</a>
+</p>
+</iframe>
+  </mdui-dialog>
+
+  
+  <script>
+  const webdialog = document.querySelector("#webdialog");
+  const webdialogiframe = document.querySelector("#webdialogiframe");
+
+
+  function openWebdialog(src) {
+    webdialogiframe.src = src
+    webdialog.open = true
+  }
+  </script>
 <script>
   if (localStorage.darkTheme) {
     document.body.classList.add("mdui-theme-layout-dark");

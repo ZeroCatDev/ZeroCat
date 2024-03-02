@@ -90,7 +90,7 @@
 <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/python_play.js"></script>
 <script>var $config = {
 		title: _work_title, // 标题，默认读取 document.title 或者 <meta name="title" content="share.js" />
-		description: `${_work_title} 是<%= process.env.SiteName %>上的Python作品`, // 描述, 默认读取head标签：<meta name="description" content="PHP弱类型的实现原理分析" />
+		description: `${_work_title} 是<%= process.env.SiteName %>上的Python作品`, 
 		image: `<%= process.env.qiniuurl%>/scratch_slt/${_work_id}`, // 图片, 默认取网页中第一个img标签
 		wechatqrcodeTitle: "微信扫一扫分享", // 微信二维码提示文字
 		wechatqrcodeHelper: '<p>打开扫一扫</p><p>在手机上打开即可分享至朋友圈。</p>',

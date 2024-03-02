@@ -1,6 +1,6 @@
 <%- include('../html-head.ejs', {pageTitle: 'Scratch'}); %>
 
-			<div class="mdui-row">
+			<div class="mdui-row 111111111111">
 				<h1>Scratch</h1><!--<div class="mdui-typo-title">最新项目</div>-->
 				<br />
 				<mdui-text-field variant="outlined" label="键入并回车以搜索" id='scratch_search_txt' clearable>
@@ -37,9 +37,11 @@
 	function Scratch(thetype) {
 		laypage.render({
 			elem: 'scratch_change_page'
-			, count: <%= scratch_count %>
-	, limit: 8
+			, count: '<%= scratch_count %>'
+	        , limit: 8
 			, theme: '#448aff'
+			,     layout: ['count', 'prev', 'page', 'next', 'limit', 'refresh', 'skip']
+			,     limits: [8, 16, 32]
 			, jump: function (obj, first) {
 				$.ajax({
 					'url': '/scratch/view/getScratchProjects',

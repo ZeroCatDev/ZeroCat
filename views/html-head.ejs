@@ -9,7 +9,7 @@
 	<meta name="description" content="<%= process.env.SiteSlogan %>">
 	<meta name="keyword" content="<%= process.env.SiteSlogan %>">
 
-    <link id="layui_theme_css" rel="stylesheet">
+    
     <link rel="stylesheet" href="https://npm.elemecdn.com/mdui@1.0.2/dist/css/mdui.min.css" />
     <link rel="stylesheet" href="<%= process.env.staticurl %>/mdui2/mdui.css">
     <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
@@ -18,6 +18,8 @@
     <link rel="stylesheet" href="<%= process.env.staticurl %>/css/waline.css" />
 
     <meta name="view-transition" content="same-origin">
+    <link id="layui_theme_css" rel="stylesheet">
+
     <script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
 
 </head>
@@ -150,7 +152,7 @@
   <mdui-dialog close-on-overlay-click close-on-esc class="feedback-dialog" icon="feedback" headline="反馈"
     description="涉及代码请去提issues,站务请去兔小巢,涉及漏洞、安全问题请加QQ1847261658">
     <mdui-list>
-      <mdui-list-item rounded href="/user/tuxiaochao">兔小巢</mdui-list-item>
+      <mdui-list-item rounded onclick="openWebdialog('/user/tuxiaochao')">兔小巢</mdui-list-item>
       <mdui-list-item rounded href="https://github.com/OurWorldDev/OurWorld/issues">Github Issues</mdui-list-item>
     </mdui-list>
   </mdui-dialog>
@@ -250,7 +252,11 @@
   document
     .getElementById('titlebar-close')
     .addEventListener('click', () => appWindow.close())</script>
-<mdui-top-app-bar data-tauri-drag-region class="cover1">
+<mdui-top-app-bar data-tauri-drag-region class="cover1" 
+    scroll-behavior="elevate"
+scroll-target="mdui-layout-main"
+
+>
 
     <div style="flex-grow: 1"></div>
     
@@ -261,4 +267,4 @@
     </mdui-segmented-button-group>
   </mdui-top-app-bar>
     <mdui-layout-main>
-        <div class="mdui-container ow-container">
+        <div class="mdui-container ow-container" style="border-radius: 15px;">
