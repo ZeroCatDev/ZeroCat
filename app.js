@@ -24,8 +24,8 @@ const traceExporter = new OTLPTraceExporter(
 {
     url: "https://api.axiom.co/v1/traces", // Axiom API endpoint for trace data
     headers: {
-      Authorization: `Bearer ${process.env.AXIOM_TOKEN || 'xaat-11d3193a-3608-41ee-a015-d7884b4f6c71'}`, // Replace $API_TOKEN with your actual API token
-      "X-Axiom-Dataset": process.env.AXIOM_DATASET || 'wuyuan-telemetry', // Replace $DATASET with your dataset
+      Authorization: `Bearer ${process.env.AXIOM_TOKEN}`,// || 'xaat-11d3193a-3608-41ee-a015-d7884b4f6c71'}`, // Replace $API_TOKEN with your actual API token
+      "X-Axiom-Dataset": process.env.AXIOM_DATASET// || 'wuyuan-telemetry', // Replace $DATASET with your dataset
     },
   },
 );
