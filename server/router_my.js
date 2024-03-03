@@ -273,7 +273,7 @@ router.post('/set/avatar', function (req, res) {
        chunks.on('end', () => {
            const hashValue = hash.digest('hex');
            // 上传到七牛云
-           I.qiniuupdate(`user/${hashValue}.png`,newpath);
+           I.S3update(`user/${hashValue}.png`,newpath,res.locals.username);
            var UPDATE = `UPDATE user SET ? WHERE id=${res.locals.userid} LIMIT 1`;
            var SET = {
                'images':hashValue,

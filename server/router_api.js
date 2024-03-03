@@ -127,7 +127,7 @@ router.get('/usertx', function (req, res) {
         }
 
   
-        res.redirect(302, process.env.qiniuurl+'/user/'+USER[0].images+'.png');
+        res.redirect(302, process.env.S3staticurl+'/user/'+USER[0].images+'.png');
       });
 });
 

@@ -430,7 +430,7 @@ router.post("/thumbnail/:projectid", function (req, res) {
         //console.log(err);
         //console.log("保存缩略图失败：" + strFileName);
       } else {
-        I.qiniuupdate("scratch_slt/" + req.params.projectid, strFileName);
+        I.S3update("scratch_slt/" + req.params.projectid, strFileName,res.locals.username);
 
         ////console.log('保存缩略图成功：'+strFileName);
         res.status(200).send({ status: "ok" });
@@ -510,7 +510,7 @@ router.post("/assets/:filename", function (req, res) {
             res.send(404);
             //console.log("素材保存失败：" + strFileName);
           } else {
-            I.qiniuupdate("material/asset/" + req.params.filename, strFileName);
+            I.S3update("material/asset/" + req.params.filename, strFileName,res.locals.username);
 
             //console.log("素材保存成功：" + strFileName);
             res.status(200).send({ status: "ok" });
@@ -875,7 +875,7 @@ router.post("/getSession", (req, res) => {
       userid: parseInt(res.locals["userid"]),
       username: res.locals["username"],
       nickname: res.locals["nickname"],
-      avatar: `${process.env.qiniuurl}/user/${res.locals.userid}.png`,
+      avatar: `${process.env.S3staticurl}/user/${res.locals.userid}.png`,
     };
   }
 

@@ -17,7 +17,7 @@
 		<span id="loading-progress" style="display: none;"></span>
 		<div id="container_main">
 			<div id="project_slt"
-				style="background-image: url(<%= process.env.qiniuurl %>/scratch_slt/<%=project.id%>);">
+				style="background-image: url(<%= process.env.S3staticurl %>/scratch_slt/<%=project.id%>);">
 				<div class="green-flag-box mdui-ripple mdui-valign first-green-flag" class="first-green-flag"
 					style="width: 100%;height: 100%;">
 					<div class="mdui-center">
@@ -116,13 +116,13 @@
 		<script>var $config = {
 				title: '<%= project.title %>', // 标题，默认读取 document.title 或者 <meta name="title" content="share.js" />
 				description: '<%= project.title %> 是 <%= project.author_nickname %> 在<%= process.env.SiteName %>上的作品', // 描述, 默认读取head标签：<meta name="description" content="PHP弱类型的实现原理分析" />
-				image: '<%= process.env.qiniuurl%>/scratch_slt/<%= project.id %>', // 图片, 默认取网页中第一个img标签
+				image: '<%= process.env.S3staticurl%>/scratch_slt/<%= project.id %>', // 图片, 默认取网页中第一个img标签
 				wechatqrcodeTitle: "微信扫一扫分享", // 微信二维码提示文字
 				wechatqrcodeHelper: '<p>打开扫一扫</p><p>在手机上打开即可分享至朋友圈。</p>',
 			};
 
 			socialShare('.social-share', $config)</script>
-		<script>qiniuurl = '<%= process.env.qiniuurl %>'</script>
+		<script>S3staticurl = '<%= process.env.S3staticurl %>'</script>
 
 		<script>
 			function projectanalysis() {

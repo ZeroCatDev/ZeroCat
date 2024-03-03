@@ -6,43 +6,35 @@ const jwt = require("jsonwebtoken"); // 首先确保安装了jsonwebtoken库
 
 var fs = require("fs");
 
-//七牛云有关
-var qiniu = require("qiniu");
-var config = new qiniu.conf.Config();
-var accessKey = process.env.qiniuaccessKey;
-var secretKey = process.env.qiniusecretKey;
-var mac = new qiniu.auth.digest.Mac(accessKey, secretKey);
 
-exports.qiniuupdate = function qiniuupdate(name, file) {
-  var options = {
-    scope: process.env.qiniubucket,
-    expires: 7200,
-  };
-  var putPolicy = new qiniu.rs.PutPolicy(options);
-  var uploadToken = putPolicy.uploadToken(mac);
-  var localFile = file;
-  var formUploader = new qiniu.form_up.FormUploader(config);
-  var putExtra = new qiniu.form_up.PutExtra();
-  var key = name;
-  // 文件上传
-  formUploader.putFile(
-    uploadToken,
-    key,
-    localFile,
-    putExtra,
-    function (respErr, respBody, respInfo) {
-      if (respErr) {
-        throw respErr;
-      }
-      if (respInfo.statusCode == 200) {
-        console.log(respBody);
-        //   fs.unlink(file, function (err) { if (err) { console.log("fe"); } });
-      } else {
-        console.log(respInfo.statusCode);
-        console.log(respBody);
-      }
-    }
-  );
+const { S3Client, PutObjectCommand } =require('@aws-sdk/client-s3');
+
+// Create an S3 client
+//
+// You must copy the endpoint from your B2 bucket details
+// and set the region to match.
+const s3 = new S3Client({
+  endpoint: process.env.S3endpoint,
+  region: process.env.S3region
+});
+
+// Create a bucket and upload something into it
+
+
+exports.S3update = function S3update(name, file,username) {
+  console.log(name);
+try {
+  s3.send(new PutObjectCommand({
+    Bucket: process.env.S3bucket,
+    Key: name,
+    Body: fs.readFileSync(file)
+  }));
+
+  console.log(`用户 ${username} 成功上传了文件 ${process.env.S3bucket}/${name}`);
+} catch (err) {
+  console.log("S3 update Error: ", err);
+}
+  
 };
 
 //以md5的格式创建一个哈希值

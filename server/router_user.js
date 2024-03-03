@@ -309,7 +309,7 @@ router.post("/register", function (req, res) {
                 }
               }
             );
-            var INSERT = `INSERT INTO wl_Users (id,display_name,email,password,type,url,avatar) VALUES ('${userid}','${nickname}','${username}','nopassword','guest','/user?id=${userid}','${process.env.qiniuurl}/user/${userid}.png')`;
+            var INSERT = `INSERT INTO wl_Users (id,display_name,email,password,type,url,avatar) VALUES ('${userid}','${nickname}','${username}','nopassword','guest','/user?id=${userid}','${process.env.S3staticurl}/user/${userid}.png')`;
             DB.query(INSERT, function (err) {
               if (err) {
                 res.status(200).send({ status: "再试一次18" });
@@ -523,7 +523,7 @@ router.get("/tuxiaochao", function (req, res) {
     var txcinfo =
       uid +
       res.locals["nickname"] +
-      process.env.qiniuurl+'/user/'+USER[0].images+'.png'+
+      process.env.S3staticurl+'/user/'+USER[0].images+'.png'+
       process.env.txckey;
     var cryptostr = cryptojs.MD5(txcinfo).toString();
     
@@ -534,7 +534,7 @@ router.get("/tuxiaochao", function (req, res) {
         res.locals["userid"] +
         "&nickname=" +
         res.locals["nickname"] +
-        "&avatar="+process.env.qiniuurl+'/user/'+USER[0].images+'.png'+
+        "&avatar="+process.env.S3staticurl+'/user/'+USER[0].images+'.png'+
         "&user_signature=" +
         cryptostr
     );
