@@ -1,7 +1,5 @@
 //公用小函数库
 const crypto = require("crypto");
-var base64url = require("base64url");
-const { PasswordHash } = require("phpass");
 const jwt = require("jsonwebtoken"); // 首先确保安装了jsonwebtoken库
 
 var fs = require("fs");
@@ -79,17 +77,7 @@ exports.randomPassword = function randomPassword(len) {
 
 exports.jwt = function (data) {
   var token = jwt.sign(data, "test");
-  //  jwt_h = "eyJhbGciOiJIUzI1NiJ9";
 
-  //  jwt_p = base64url(data);
-  //  var crypto = require("crypto");
-  //  var jwt_s = jwt_h + "." + jwt_p;
-  //  console.log(jwt_s);
-  //  var jwt_v = base64url(
-  //    crypto.createHmac("SHA256", "test").update(jwt_s).digest("bytes")
-  //  );
-
-  //  jwt = jwt_s + "." + jwt_v;
   console.log(token);
   return token;
 };
@@ -103,9 +91,4 @@ exports.GenerateJwt = function (id, email, nickname) {
     process.env.jwttoken
   );
   return token;
-};
-
-exports.hashpw = function (data) {
-  var hashok = new PasswordHash().hashPassword(data);
-  return hashok;
 };
