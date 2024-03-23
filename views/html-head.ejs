@@ -9,13 +9,16 @@
 	<meta name="description" content="<%= process.env.SiteSlogan %>">
 	<meta name="keyword" content="<%= process.env.SiteSlogan %>">
 
-    
+  <script src="https://npm.elemecdn.com/mdui@1.0.2/dist/js/mdui.min.js"></script>
+
     <link rel="stylesheet" href="https://npm.elemecdn.com/mdui@1.0.2/dist/css/mdui.min.css" />
     <link rel="stylesheet" href="<%= process.env.staticurl %>/mdui2/mdui.css">
     <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
     <link rel="stylesheet" href="<%= process.env.staticurl %>/css/projectspage.css">
     <link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css">
     <link rel="stylesheet" href="<%= process.env.staticurl %>/css/waline.css" />
+
+
 
     <meta name="view-transition" content="same-origin">
     <link id="layui_theme_css" rel="stylesheet">
@@ -30,7 +33,7 @@
 </style>
 <body class="mdui-theme-light mdui-theme-accent-blue mdui-loaded " >
   <mdui-layout style='height: 100vh;'>
-
+    
   
   <mdui-navigation-drawer class="user-drawer"  close-on-esc close-on-overlay-click>
     <mdui-list>
@@ -57,7 +60,7 @@
     <mdui-list>
       <mdui-list-item rounded id="open-feedback-dialog" icon="send" description="发送反馈">反馈</mdui-list-item>
       <mdui-list-item rounded href="/tools/asdm" icon="content_copy" description="公益Scratch下载镜像">Scratch下载镜像</mdui-list-item>
-      <mdui-list-item rounded href="/tools/comparer" icon="build" description="对比项目差异">项目比较器</mdui-list-item>
+      <mdui-list-item rounded onclick="openWebdialog('https:\/\/b2.190823.xyz/ourworld/comparer.html')"  icon="build" description="对比项目差异">项目比较器</mdui-list-item>
       <mdui-list-item rounded icon="brightness_4" id="switch-theme" description="切换light/dark">切换主题</mdui-list-item>
   
       <mdui-list-item rounded>当前CDN节点<span id="cdn" slot="description">[未知]</span></mdui-list-item>
@@ -81,8 +84,8 @@
   <mdui-navigation-drawer class="types-drawer"  close-on-esc close-on-overlay-click>
   
     <mdui-list>
-      <mdui-list-item rounded href="/scratch" icon="code">Scratch分区</mdui-list-item>
-      <mdui-list-item rounded href="/python" icon="code">Python分区</mdui-list-item>
+      <mdui-list-item rounded href="/scratch" icon="code">Scratch</mdui-list-item>
+      <mdui-list-item rounded href="/python" icon="code">Python</mdui-list-item>
       <mdui-list-item rounded class="close-types" icon="arrow_left">关闭</mdui-list-item>
     </mdui-list>
   

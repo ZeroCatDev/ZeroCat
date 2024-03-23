@@ -134,9 +134,10 @@ router.get('/usertx', function (req, res) {
 router.post("/getuserinfo", function (req, res) {
     //获取已分享的作品总数：1:普通作品，2：推荐的优秀作品
     
-      SQL = `SELECT id,nickname, motto FROM user WHERE id = ${req.query.id || req.body.id};`;
-  
-      DB.query(SQL, function (err, USER) {
+    SQL = `SELECT id,nickname, motto,images,regTime FROM user WHERE id=?;`;
+    id = [req.query.id || req.body.id]
+
+      DB.qww(SQL,id, function (err, USER) {
         if (err || USER.length == 0) {
           res.locals.tip = { opt: "flash", msg: "用户不存在" };
           res.render("404.ejs");
@@ -147,6 +148,22 @@ router.post("/getuserinfo", function (req, res) {
       });
     });
 
+    router.get("/getuserinfo", function (req, res) {
+      //获取已分享的作品总数：1:普通作品，2：推荐的优秀作品
+      
+        SQL = `SELECT id,nickname, motto,images,regTime,tag FROM user WHERE id=?;`;
+    id = [req.query.id || req.body.id]
+  
+        DB.qww(SQL,id, function (err, USER) {
+          if (err || USER.length == 0) {
+            res.locals.tip = { opt: "flash", msg: "用户不存在" };
+            res.render("404.ejs");
+            return;
+          }
+          res.status(200).send({status: 'ok',info:USER[0]});
+    
+        });
+      });
 //平台概况
 router.get('/info', function (req, res) {   
   var SQL = `SELECT `+

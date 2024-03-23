@@ -1,47 +1,67 @@
 <%- include('./html-head.ejs', {pageTitle: '个人中心'}); %>
 
 			<div class="mdui-typo-display-2">
-				<%= nickname %>
+				个人信息
 			</div>
 			<div class="mdui-typo-headline-opacity">
-				<%= motto %>
+				您可以随时修改个人信息，可能要重新登录后本地生效
 			</div><br />
 
 
 
-
-
-
-			<div class="mdui-row">
-				<div class="mdui-textfield mdui-textfield-floating-label mdui-col-xs-2">
+			<mdui-tabs value="tab-1">
+				<mdui-tab value="tab-1">用户信息</mdui-tab>
+				<mdui-tab value="tab-2">头像</mdui-tab>
+				<mdui-tab value="tab-3">安全</mdui-tab>
+			  
+				<mdui-tab-panel slot="panel" value="tab-1">
+					<br/>
+					
+			<div>
+				<div class=" mdui-col-xs-2" style="  margin-bottom: 10px;
+				">
 					<mdui-text-field variant="outlined" id="my_nickname" maxlength="10" value="<%= nickname %>"
 						label="昵称"></mdui-text-field>
 
 				</div>
-				<div class="mdui-textfield mdui-textfield-floating-label mdui-col-xs-10">
-					<mdui-text-field variant="outlined" id="my_aboutme" maxlength="255" value="<%= motto %>"
-						label="简介"></mdui-text-field>
+	<br/>
+				<div class="mdui-col-xs-12" style="  margin-bottom: 10px;
+				">
+					<mdui-text-field variant="outlined" id="my_aboutme" maxlength="1000" value="<%= motto %>"
+						label="简介" autosize min-rows="2"></mdui-text-field>
 				</div>
+				<br/>		
+			<mdui-select variant="outlined" id="sex-chick" label="性别" class="mdui-col-xs-3" <% if (sex==1) { %>value="1" <% } %>
+				<% if (sex==0) { %>value="0" <% } %> >
+						<mdui-menu-item value="1">男</mdui-menu-item>
+						<mdui-menu-item value="0">女</mdui-menu-item>
+		</mdui-select>
 			</div>
-			<mdui-select variant="outlined" id="sex-chick" label="性别"  <% if (sex==1) { %>value="1" <% } %>
-					<% if (sex==0) { %>value="0" <% } %> style="width: 120px;">
-							<mdui-menu-item value="1">男</mdui-menu-item>
-							<mdui-menu-item value="0">女</mdui-menu-item>
-			</mdui-select>
 			<div style="float: right;">
 				<mdui-button href="/my/info">取消</mdui-button>
 				<mdui-button onclick="updataInfo()">确认</mdui-button>
 			</div>
+				</mdui-tab-panel>
+				<mdui-tab-panel slot="panel" value="tab-2"><br/>
+					<img class="mdui-img-circle mdui-m-l-2" src="/api/usertx?id=<%= userid %>"
+							style="height: 100px;width: auto;border-radius: 15px;" />
+							<br/>	<br/>
+						<mdui-button class="avatarUpload " lay-data="{exts:'png|jpg', size:1024}">修改头像</mdui-button>
+			</mdui-tab-panel><br/>
+				<mdui-tab-panel slot="panel" value="tab-3">	<br/>		<mdui-text-field variant="outlined" id='old_password'  type="password" 
+					label="原密码" autocomplete="off"></mdui-text-field><br/><br/>
+					<mdui-text-field variant="outlined" id='new_password'  type="password" 
+					label="新密码" autocomplete="off"></mdui-text-field><br/>
+					<div style="float: right;">
+						<mdui-button   onclick="updatePassword()">确认</mdui-button>
+					</div>
+			</mdui-tab-panel>
+			  </mdui-tabs>
 
 
 
-			<br /><br />
-			<img class="mdui-img-circle mdui-m-l-2" src="/api/usertx?id=<%= userid %>"
-					style="height: 100px;width: auto;border-radius: 15px;" />
-					<br/>	<br/>
-				<mdui-button class="avatarUpload " lay-data="{exts:'png|jpg', size:1024}">修改头像</mdui-button>
-	
-				<mdui-button class="open-password-dialog">修改密码</mdui-button>
+
+
 			<mdui-dialog class="password-dialog" 
 			headline="修改密码"
   description="请确保密码足够安全"

@@ -6,6 +6,8 @@
 <script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
 <script src="<%= process.env.staticurl %>/mdui2/mdui.global.js"></script>
 <script type="text/javascript" src="<%= process.env.staticurl %>/js/main.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.11/purify.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.1/marked.min.js"></script>
 
 <script>
   function automsg(msg) {
@@ -22,14 +24,15 @@
     <mdui-button-icon icon="close" onclick="webdialog.open = false"></mdui-button-icon>
     <mdui-top-app-bar-title ></mdui-top-app-bar-title>
     <div style="flex-grow: 1"></div>
-    <mdui-button-icon icon="fullscreen" onclick="webdialog.fullscreen = !webdialog.fullscreen" id="webdialogfull"></mdui-button-icon>
+    <mdui-button-icon icon="fullscreen" onclick="webdialog.fullscreen = !webdialog.fullscreen " id="webdialogfull"></mdui-button-icon>
     <mdui-button-icon icon="open_in_new" onclick="window.open(`${webdialogiframe.src}`)" id="webdialogfull"></mdui-button-icon>
 
   </mdui-top-app-bar>
   <iframe
 frameborder="0"
 id="webdialogiframe"
-style="height: 90vh;width: 95vw;border-radius: 15px;"
+style="min-height: calc(100vh - 208px);min-width: 497px;width: 100%;border-radius: 15px;"
+
 >
 <p>
 <a href="https://developer.mozilla.org/zh-CN/docs/Glossary">

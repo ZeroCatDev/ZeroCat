@@ -33,6 +33,7 @@
 					'success': function (d) {
 						if (d.length) {
 							$("#box_projects").html("");
+							scratchinfo = d
 							if (state == 0) {
 								for (var i = 0; i < d.length; i++) {
 									$("#box_projects").append(`
@@ -49,7 +50,7 @@
 </mdui-card><div class="mdui-card-actions">
 	<mdui-button onclick="delProject(this,${d[i].id})">删除</mdui-button>	
 							<mdui-button onclick="shareProject(${d[i].id})">分享</mdui-button>	
-							<mdui-button onclick="SetProjectDescription(${d[i].id},'${d[i].description}')">简介</mdui-button>	
+							<mdui-button onclick="SetProjectDescription(${i})">简介</mdui-button>	
 							<mdui-button onclick='location.href=("/scratch/edit#${d[i].id}")'>编辑</mdui-button>
 					</div>
 			
@@ -72,7 +73,7 @@
 </mdui-card><div class="mdui-card-actions">
 	<mdui-button onclick="delProject(this,${d[i].id})">删除</mdui-button>	
 							<mdui-button onclick="noshareProject(${d[i].id})">取消分享</mdui-button>	
-							<mdui-button onclick="SetProjectDescription(${d[i].id},'${d[i].description}')">简介</mdui-button>	
+							<mdui-button onclick="SetProjectDescription(${i})">简介</mdui-button>	
 							<mdui-button onclick='location.href=("/scratch/edit#${d[i].id}")'>编辑</mdui-button>
 					</div>
 </div>`);
@@ -125,15 +126,15 @@
 		});
 
 	};
-	function SetProjectDescription(id, defaultinfo) {
+	function SetProjectDescription(id) {
 
 		mdui.prompt({
       headline: "简介",
       description: "请输入简介",
       confirmText: "确认",
       cancelText: "取消",
-	  textFieldOptions:{value: defaultinfo,autosize : '1',maxlength: "1000" ,counter : '1'},
-      onConfirm: (value) => AjaxFn('/my/scratch/setdescription', { 'id': id, description: value }, function (res) {
+	  textFieldOptions:{value: scratchinfo[id].description || 'null',autosize : '1',maxlength: "1000" ,counter : '1'},
+      onConfirm: (value) => AjaxFn('/my/scratch/setdescription', { 'id': scratchinfo[id].id, description: value }, function (res) {
 					automsg(res['msg']);
 					if ('success' == res['status']) {
 						window.location.reload();

@@ -37,7 +37,7 @@ router.post("/view/getScratchProjects", function (req, res) {
     type = "time";
   }
 
-  var SQL = `SELECT scratch.id, scratch.title, scratch.state,scratch.authorid, user.nickname,user.motto FROM scratch JOIN user ON scratch.authorid = user.id WHERE scratch.state > 0 ORDER BY scratch.${type} DESC LIMIT ${
+  var SQL = `SELECT scratch.id, scratch.title, scratch.state,scratch.authorid,scratch.view_count, user.nickname,user.motto FROM scratch JOIN user ON scratch.authorid = user.id WHERE scratch.state > 0 ORDER BY scratch.${type} DESC LIMIT ${
     (curr - 1) * limit
   }, ${limit}`;
   DB.query(SQL, function (err, data) {
@@ -61,7 +61,7 @@ router.post("/view/seachScratchProjects", function (req, res) {
     searchinfo = "src";
   }
   //var SQL = `SELECT id, title FROM ${tabelName} WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
-  var SQL = `SELECT ${tabelName}.id, ${tabelName}.title, ${tabelName}.state,${tabelName}.authorid,${tabelName}.description, user.nickname,user.motto FROM ${tabelName} JOIN user ON ${tabelName}.authorid = user.id WHERE ${tabelName}.state>0 AND (${searchinfo} LIKE ?)`;
+  var SQL = `SELECT ${tabelName}.id, ${tabelName}.title, ${tabelName}.state,${tabelName}.authorid,${tabelName}.description,${tabelName}.view_count, user.nickname,user.motto FROM ${tabelName} JOIN user ON ${tabelName}.authorid = user.id WHERE ${tabelName}.state>0 AND (${searchinfo} LIKE ?)`;
   var WHERE = [`%${req.body.txt}%`];
   DB.qww(SQL, WHERE, function (err, data) {
     if (err) {

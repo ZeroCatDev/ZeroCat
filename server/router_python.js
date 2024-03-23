@@ -37,7 +37,7 @@ router.post("/view/getPythonProjects", function (req, res) {
       type = "time";
     }
   
-    var SQL = `SELECT python.id, python.title, python.state,python.authorid, python.description,user.nickname,user.motto FROM python JOIN user ON python.authorid = user.id WHERE python.state > 0 ORDER BY python.${type} DESC LIMIT ${
+    var SQL = `SELECT python.id, python.title, python.state,python.authorid, python.description,python.view_count,user.nickname,user.motto FROM python JOIN user ON python.authorid = user.id WHERE python.state > 0 ORDER BY python.${type} DESC LIMIT ${
       (curr - 1) * limit
     }, ${limit}`;
     DB.query(SQL, function (err, data) {
@@ -61,7 +61,7 @@ router.post("/view/seachPythonProjects", function (req, res) {
       searchinfo = "src";
     }
     //var SQL = `SELECT id, title FROM ${tabelName} WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
-    var SQL = `SELECT ${tabelName}.id, ${tabelName}.title, ${tabelName}.state,${tabelName}.authorid,${tabelName}.description, user.nickname,user.motto FROM ${tabelName} JOIN user ON ${tabelName}.authorid = user.id WHERE ${tabelName}.state>0 AND (${searchinfo} LIKE ?)`;
+    var SQL = `SELECT ${tabelName}.id, ${tabelName}.title, ${tabelName}.state,${tabelName}.authorid,${tabelName}.description,${tabelName}.view_count, user.nickname,user.motto FROM ${tabelName} JOIN user ON ${tabelName}.authorid = user.id WHERE ${tabelName}.state>0 AND (${searchinfo} LIKE ?)`;
     var WHERE = [`%${req.body.txt}%`];
     DB.qww(SQL, WHERE, function (err, data) {
       if (err) {
@@ -77,120 +77,6 @@ router.get('/play', function (req, res) {
     
             res.render('python/python_play.ejs');
         });
-
-//项目点赞
-router.post('/play/like', function (req, res) {
-    if (!res.locals.login){
-        res.status(200).send( {'status': 'failed','msg': '请先登录'});
-        return;
-    }
-
-    var pid = req.body['pid'];
-    var SQL = `SELECT id FROM python_like WHERE userid=${res.locals.userid} AND projectid=${pid} LIMIT 1`;
-    DB.query(SQL, function(err, LIKE){
-        if (err){
-            res.status(200).send( {'status': 'failed','msg': '数据错误，请再试一次'});
-            return;            
-        }
-        
-        if (LIKE.length==0){
-            //插入一条点赞记录、python表like_count+1
-            var UPDATE = `UPDATE python SET like_count=like_count+1 WHERE id=${pid} LIMIT 1`;
-            DB.query(UPDATE, function(err, PYTHON){
-                if (err|| PYTHON.changedRows==0){
-                    res.status(200).send( {'status': 'failed','msg': '数据错误，请再试一次'});
-                    return;  
-                }
-
-                var INSERT =`INSERT INTO python_like (userid, projectid) VALUES (${res.locals.userid}, ${pid})`;
-                DB.query(INSERT, function(err, LIKE){
-                    if (err || LIKE.affectedRows == 0){
-                        res.status(200).send( {'status': 'failed','msg': '数据错误，请再试一次'});
-                        return; 
-                    }
-
-                    res.status(200).send( {'status': '1','opt':1,'msg': '感谢点赞！'});
-                });
-            });
-        } else {
-            //删除一条点赞记录、python表like_count-1
-            var UPDATE = `UPDATE python SET like_count=like_count-1 WHERE id=${pid} LIMIT 1`;
-            DB.query(UPDATE, function(err, PYTHON){
-                if (err|| PYTHON.changedRows==0){
-                    res.status(200).send( {'status': 'failed','msg': '数据错误，请再试一次'});
-                    return;  
-                }
-
-                var INSERT =`DELETE FROM python_like WHERE id=${LIKE[0].id} LIMIT 1`;
-                DB.query(INSERT, function(err, LIKE){
-                    if (err || LIKE.affectedRows == 0){
-                        res.status(200).send( {'status': 'failed','msg': '数据错误，请再试一次'});
-                        return; 
-                    }
-
-                    res.status(200).send( {'status': '1','opt':-1,'msg': '操作成功'});
-                });
-            });
-        }
-    });
-});
-//项目收藏
-router.post('/play/favo', function (req, res) {
-    if (!res.locals.login){
-        res.status(200).send( {'status': 'failed','msg': '请先登录'});
-        return;
-    }
-
-    var pid = req.body['pid'];
-    var SQL = `SELECT id FROM python_favo WHERE userid=${res.locals.userid} AND projectid=${pid} LIMIT 1`;
-    DB.query(SQL, function(err, FAVO){
-        if (err){
-            res.status(200).send( {'status': 'failed','msg': '数据错误，请再试一次'});
-            return;            
-        }
-        
-        if (FAVO.length==0){
-            //插入一条收藏记录、python表favo_count+1
-            var UPDATE = `UPDATE python SET favo_count=favo_count+1 WHERE id=${pid} LIMIT 1`;
-            DB.query(UPDATE, function(err, PYTHON){
-                if (err|| PYTHON.changedRows==0){
-                    res.status(200).send( {'status': 'failed','msg': '数据错误，请再试一次'});
-                    return;  
-                }
-
-                var INSERT =`INSERT INTO python_favo (userid, projectid) VALUES (${res.locals.userid}, ${pid})`;
-                DB.query(INSERT, function(err, FAVO){
-                    if (err || FAVO.affectedRows == 0){
-                        res.status(200).send( {'status': 'failed','msg': '数据错误，请再试一次'});
-                        return; 
-                    }
-
-                    res.status(200).send( {'status': '1','opt':1,'msg': '感谢收藏！'});
-                });
-            });
-        } else {
-            //删除一条收藏记录、python表favo_count-1
-            var UPDATE = `UPDATE python SET favo_count=favo_count-1 WHERE id=${pid} LIMIT 1`;
-            DB.query(UPDATE, function(err, PYTHON){
-                if (err|| PYTHON.changedRows==0){
-                    res.status(200).send( {'status': 'failed','msg': '数据错误，请再试一次'});
-                    return;  
-                }
-
-                var INSERT =`DELETE FROM python_favo WHERE id=${FAVO[0].id} LIMIT 1`;
-                DB.query(INSERT, function(err, FAVO){
-                    if (err || FAVO.affectedRows == 0){
-                        res.status(200).send( {'status': 'failed','msg': '数据错误，请再试一次'});
-                        return; 
-                    }
-
-                    res.status(200).send( {'status': '1','opt':-1,'msg': '操作成功'});
-                });
-            });
-        }
-    });
-});
-
 
 
 //python项目编辑界面：获取项目源代码
