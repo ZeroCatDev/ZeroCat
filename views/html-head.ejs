@@ -23,7 +23,8 @@
     <meta name="view-transition" content="same-origin">
     <link id="layui_theme_css" rel="stylesheet">
 
-    <script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
+    <script type="text/javascript" src="https://npm.elemecdn.com/jquery@latest/dist/jquery.min.js"></script>
+    <script src="https://registry.npmmirror.com/js-cookie/3.0.5/files/dist/js.cookie.min.js"></script>
 
 </head>
 <style>
@@ -36,10 +37,8 @@
     
   
   <mdui-navigation-drawer class="user-drawer"  close-on-esc close-on-overlay-click>
-    <mdui-list>
-      <% if (login==false) { %> <mdui-list-item rounded href="/user/login">注册</mdui-list-item> <mdui-list-item rounded
-          href="/user/login">登录</mdui-list-item>
-        <% } else { %>
+    <mdui-list id="user-drawer-list">
+
           <mdui-list-item rounded active href="/user?id=<%= userid %>" description="查看个人主页"> 
             <mdui-avatar slot="icon"
               src="/api/usertx?id=<%= userid %>"></mdui-avatar>
@@ -49,10 +48,11 @@
           <mdui-list-item rounded href="/my/python" description="管理Python作品">Python</mdui-list-item>
           <mdui-list-item rounded href="/my/info" description="管理个人信息">个人信息</mdui-list-item>
           <mdui-list-item rounded href="/user/logout" description="退出此账户">退出</mdui-list-item>
-          <% } %>
+        
             <mdui-list-item rounded class="close-user" icon="arrow_left">关闭</mdui-list-item>
     </mdui-list>
-  
+  <script>if (Cookies.get('token') == undefined) {
+document.getElementById('user-drawer-list').innerHTML = '<mdui-list-item rounded href="/user/login">注册</mdui-list-item> <mdui-list-item rounded href="/user/login">登录</mdui-list-item>' }</script>
   </mdui-navigation-drawer>
   
   <mdui-navigation-drawer class="tools-drawer"  close-on-esc close-on-overlay-click>
@@ -60,18 +60,20 @@
     <mdui-list>
       <mdui-list-item rounded id="open-feedback-dialog" icon="send" description="发送反馈">反馈</mdui-list-item>
       <mdui-list-item rounded href="/tools/asdm" icon="content_copy" description="公益Scratch下载镜像">Scratch下载镜像</mdui-list-item>
-      <mdui-list-item rounded onclick="openWebdialog('https:\/\/b2.190823.xyz/ourworld/comparer.html')"  icon="build" description="对比项目差异">项目比较器</mdui-list-item>
+      <mdui-list-item rounded onclick="openWebdialog('https:\/\/b2.190823.xyz/ourworld/comparer.html')"  icon="compare" description="对比项目差异">项目比较器</mdui-list-item>
       <mdui-list-item rounded icon="brightness_4" id="switch-theme" description="切换light/dark">切换主题</mdui-list-item>
+      <mdui-list-item rounded icon="build" onclick="Cookies.remove('token');automsg('修复完成，请刷新')" description="修复前端问题">一键修复</mdui-list-item>
+
   
       <mdui-list-item rounded>当前CDN节点<span id="cdn" slot="description">[未知]</span></mdui-list-item>
       <mdui-list-item rounded>IP地址<span
           id="ip" slot="description">[未知]</span></mdui-list-item><mdui-list-item rounded>IP属地<span
           id="loc" slot="description">[未知]</span></mdui-list-item>
-  
+  <!-- 请注意：根据开源协议，您无权修改以下内容的文本，您需要保证以下内容保持原样提供给用户(例如在修改UI框架时修改样式时被允许的) -->
       <mdui-list-item rounded description="来自 OurWorld社区 项目" href="https://ourworld.wuyuan.dev" target="_blank">OurWorld</mdui-list-item>
       <mdui-list-item rounded href="https://wuyuan.dev" description="https://wuyuan.dev" target="_blank">由 孙悟元 开发</mdui-list-item>
       <mdui-list-item rounded href="https://github.com/ourworlddev/" description="OurWorldDev" target="_blank">Github</mdui-list-item>
-  
+  <!-- 以上 -->
       <mdui-list-item rounded href="http://yhcoding.site/" description="友情链接" target="_blank">银河编程社区</mdui-list-item>
       <mdui-list-item rounded href="https://www.rainyun.com/wuyuan_?s=ourworld" description="友情链接" target="_blank">雨云</mdui-list-item>
   

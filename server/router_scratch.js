@@ -135,6 +135,33 @@ router.get("/play", function (req, res) {
     });
   });
 });
+
+router.get("/projectinfo", function (req, res) {
+  SQL =
+  `SELECT scratch.id,scratch.authorid,scratch.time,scratch.view_count,scratch.like_count,` +
+  ` scratch.favo_count,scratch.title,scratch.state,scratch.description,` +
+  ` '' AS likeid, '' AS favoid,` +
+  ` user.nickname AS author_nickname,` +
+  ` user.images AS author_images,` +
+  ` user.motto AS author_motto` +
+  ` FROM scratch ` +
+  ` LEFT JOIN user ON (user.id=scratch.authorid) ` +
+  ` WHERE scratch.id=${req.query.id} AND scratch.state>=1 LIMIT 1`;
+  DB.query(SQL, function (err, SCRATCH) {
+    if (err || SCRATCH.length == 0) {
+      res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
+      res.render("404.ejs");
+      return;
+    }
+
+    res.locals["is_author"] =
+      SCRATCH[0].authorid == res.locals.userid ? true : false;
+
+    ////console.log(SCRATCH[0]);
+    res.json(SCRATCH[0])
+  });
+});
+
 //Scratch_play获取源代码数据部分
 router.get("/play/project/:filename", function (req, res) {
   var SQL = `SELECT src FROM scratch WHERE id=${req.params.filename} LIMIT 1`;

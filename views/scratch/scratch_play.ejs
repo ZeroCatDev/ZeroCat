@@ -33,21 +33,23 @@
 
 	<mdui-button id="stopAll" onclick="stopAll()" variant="tonal" icon="clear">停止</mdui-button>
 	<br />
-	<div style="font-size: 24px;line-height: 36px">
-		<%= project.title %>
+	<div style="font-size: 24px;line-height: 36px" id="projecttitle">
+		加载中
 	</div>
-	<div style="font-size: 14px;line-height: 24px;opacity: .54;">
-		<%= project.description %>
+	<div style="font-size: 14px;line-height: 24px;opacity: .54;" id="projectdescription">
+加载中
 	</div>
 	<mdui-list>
-		<mdui-list-item id="authorinfo" rounded active headline="<%= project.author_nickname %>"
-			description="<%= project.author_motto %>" headline-line="1" description-line="1"
-			href="/user?id=<%= project.authorid %>"><mdui-avatar id="authoravatar" slot="icon"
-				src="/api/usertx?id=<%=project.authorid%>"></mdui-avatar>
+		<mdui-list-item id="authorinfo" rounded active headline="加载中"
+			description="加载中" headline-line="1" description-line="1"
+			href=""><mdui-avatar id="authoravatar" slot="icon"
+				src=""></mdui-avatar>
 		</mdui-list-item>
 	</mdui-list>
 
-	<mdui-chip icon="play_circle"><span>浏览量: <span class="waline-pageview-count">加载中</span></span></mdui-chip>
+	<mdui-chip icon="play_circle" id="projectview">加载中</mdui-chip>
+	<mdui-chip icon="access_time" id="projecttime">加载中</mdui-chip>
+	<mdui-chip icon="code" id="projectstate">加载中</mdui-chip>
 	<mdui-chip icon="code">Scratch</mdui-chip><br />
 	<mdui-button variant="filled" class="copylink" icon="content_copy">复制链接</mdui-button>
 	<mdui-button variant="filled" icon="analytics" id="open-analysis-dialog"
@@ -56,7 +58,6 @@
 	<mdui-button variant="text" href="/scratch/edit#<%= project.id%>" target="_blank">创作页打开</mdui-button>
 
 	<div class="social-share"></div>
-	<script src="https://cdn.staticfile.net/echarts/5.3.2/echarts.min.js"></script>
 
 
 	<mdui-dialog close-on-overlay-click close-on-esc class="analysis-dialog">
@@ -103,112 +104,27 @@
 		<script type="text/javascript" src="<%= process.env.staticurl %>/js/scratch.vm.min.js"></script>
 		<script type="text/javascript" src="<%= process.env.staticurl %>/js/clipboard.min.js"></script>
 		<script>
-			_pid = '<%= project.id %>';
-			like_count = parseInt('<%=project.like_count%>');
-			favo_count = parseInt('<%=project.favo_count%>');
-			isLogin =<%= login %>;
+			
 		</script>
 		<script type="text/javascript" src="<%= process.env.staticurl %>/js/scratch_play.js"></script>
 
 		<script type="text/javascript" src="<%= process.env.staticurl %>/js/scratch-analysis-core.js"></script>
 
 
-		<script>var $config = {
-				title: '<%= project.title %>', // 标题，默认读取 document.title 或者 <meta name="title" content="share.js" />
-				description: '<%= project.title %> 是 <%= project.author_nickname %> 在<%= process.env.SiteName %>上的作品', // 描述, 默认读取head标签：<meta name="description" content="PHP弱类型的实现原理分析" />
-				image: '<%= process.env.S3staticurl%>/scratch_slt/<%= project.id %>', // 图片, 默认取网页中第一个img标签
-				wechatqrcodeTitle: "微信扫一扫分享", // 微信二维码提示文字
-				wechatqrcodeHelper: '<p>打开扫一扫</p><p>在手机上打开即可分享至朋友圈。</p>',
-			};
-
-			socialShare('.social-share', $config)</script>
-		<script>S3staticurl = '<%= process.env.S3staticurl %>'</script>
-
+		
 		<script>
-			function projectanalysis() {
-				var chartDom = document.getElementById("main1");
-				var myChart = echarts.init(chartDom);
-				var option;
-				var h = { context: getHead(JSON.parse(projectjson)), info: "<%= project.author_nickname %> 的作品 <%= project.title %> 的分析", infotext: getStats(JSON.parse(projectjson)) }
-				console.log(h)
-				var opcodes = {
-					looks: "外观",
-					control: "控制",
-					motion: "移动",
-					sound: "声音",
-					event: "事件",
-					sensing: "侦测",
-					operator: "运算",
-					procedures: "自定义",
-					argument: "参数",
-					data: "数据",
-					pen: "画笔",
-					other: "其它",
-				};
-				const data = genData(50);
-				option = {
+		_pid = '<%= project.id %>';
+			like_count = parseInt('<%=project.like_count%>');
+			favo_count = parseInt('<%=project.favo_count%>');
+			isLogin =<%= login %>;
+			S3staticurl = '<%= process.env.S3staticurl %>'
+		var $config = {
+    title: '<%= project.title %>', // 标题，默认读取 document.title 或者 <meta name="title" content="share.js" />
+    description: '<%= project.title %> 是 <%= project.author_nickname %> 在<%= process.env.SiteName %>上的作品', // 描述, 默认读取head标签：<meta name="description" content="PHP弱类型的实现原理分析" />
+    image: '<%= process.env.S3staticurl%>/scratch_slt/<%= project.id %>', // 图片, 默认取网页中第一个img标签
+    wechatqrcodeTitle: "微信扫一扫分享", // 微信二维码提示文字
+    wechatqrcodeHelper: '<p>打开扫一扫</p><p>在手机上打开即可分享至朋友圈。</p>',
+};</script>
+	<script src="https://npm.elemecdn.com/echarts@5.3.2/dist/echarts.min.js"></script>
 
-					tooltip: {
-						trigger: "item",
-						formatter: "{a} <br/>{b} : {c} ({d}%)",
-					},
-					legend: {
-						type: "scroll",
-						orient: "vertical",
-						right: 10,
-						top: 10,
-						bottom: 10,
-						data: data.legendData,
-					},
-					series: [
-						{
-							name: "类别",
-							type: "pie",
-							radius: "55%",
-							center: ["40%", "50%"],
-							data: data.seriesData,
-							emphasis: {
-								itemStyle: {
-									shadowBlur: 10,
-									shadowOffsetX: 0,
-									shadowColor: "rgba(0, 0, 0, 0.5)",
-								},
-							},
-						},
-					],
-				};
-				function genData(count) {
-					// prettier-ignore
-					const legendData = [];
-					const seriesData = [];
-					let o = Object.keys(h.context), s = 0;
-					for (var i = 0; i < o.length; i++) {
-						s += h.context[o[i]];
-					}
-					for (var i = 0; i < o.length; i++) {
-						var name = opcodes[o[i]] || o[i];
-						legendData.push(name);
-						seriesData.push({
-							name: name + '  ' + (h.context[o[i]] / s * 100).toFixed(1) + "%",
-							value: h.context[o[i]],
-						});
-					}
-					var infotext = h.infotext
-					console.log(infotext);
-					document.getElementById('r').innerHTML =
-						// "不含圆形积木数:"+h.noreturn+"<br>"+
-						"<mdui-chip>变量数:" + infotext.variables + "个</mdui-chip>"
-						+ "<mdui-chip>列表数:" + infotext.lists + "个</mdui-chip>"
-						+ "<mdui-chip>广播数:" + infotext.broadcasts + "个</mdui-chip>"
-						+ "<mdui-chip>总块数:" + infotext.blocks + "块</mdui-chip>"
-						+ "<mdui-chip>插件数:" + infotext.extensions + "个</mdui-chip>";
-					return {
-						legendData: legendData,
-						seriesData: seriesData,
-						total: s
-					};
-				}
-
-				option && myChart.setOption(option);
-			}
-		</script>
+<script src="<%= process.env.staticurl %>/page/scratch/playpage.js"></script>

@@ -1,11 +1,12 @@
 <%- include('html-head.ejs', {pageTitle: '登录/注册'}); %>
 
-<% if (login) { %>
-  <script>
 
-    //var token = document.cookie.replace( /(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/, "$1", ); window.location.href = 'http://localhost:3000/auth/callback?token='+token;
-    window.location.href = '/'</script>
-  <% } %>
+  <script>
+//var token = document.cookie.replace( /(?:(?:^|.*;\s*)token\s*\=\s*([^;]*).*$)|^.*$/, "$1", );
+if (Cookies.get('token')) {
+  window.location.href = '/';
+}
+</script>
 
           <div class="layui-row">
 
@@ -53,7 +54,6 @@
                 </div>
               </div>
 
-              <% if (reg==1) { %>
                 <div id='reg-page' style="display: none;">
                   <div class="mdui-typo-display-2">
                     <%= process.env.SiteName %> 注册
@@ -82,7 +82,6 @@
                     </div>
                   </div>
                 </div>
-                <% } %>
                   <div id='getPW-page' style="display: none;">
                     <div class="mdui-typo-display-2">
                       <%= process.env.SiteName %> 找回密码

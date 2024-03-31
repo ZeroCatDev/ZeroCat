@@ -244,7 +244,7 @@ href="<%= process.env.staticurl %>/vs/editor/editor.main.css"
 
 
 
-  <script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.min.js"></script>
+  <script type="text/javascript" src="https://npm.elemecdn.com/jquery@latest/dist/jquery.min.js"></script>
   <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/js/file-saver.js"></script>
   <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/skulpt.min.js"></script>
   <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/skulpt-stdlib.js"></script>
@@ -266,7 +266,7 @@ href="<%= process.env.staticurl %>/vs/editor/editor.main.css"
   document.body.classList.add("mdui-theme-dark");
   document.documentElement.classList.add("mdui-theme-dark");
   document.body.setAttribute("dark", "");
-  $("#layui_theme_css").attr("href", "<%= process.env.staticurl %>/css/layui-theme-dark.css");
+  $("#layui_theme_css").attr("href", S3staticurl+"/css/layui-theme-dark.css");
 }
 document.getElementById("switch-theme").addEventListener("click", () => {
   document.body.classList.toggle("mdui-theme-layout-dark");
@@ -275,7 +275,7 @@ document.getElementById("switch-theme").addEventListener("click", () => {
   document.body.toggleAttribute("dark");
   if (document.body.hasAttribute("dark")) {
     localStorage.darkTheme = true;
-    $("#layui_theme_css").attr("href", "<%= process.env.staticurl %>/css/layui-theme-dark.css");
+    $("#layui_theme_css").attr("href", S3staticurl+"/css/layui-theme-dark.css");
   } else {
     delete localStorage.darkTheme;
     $("#layui_theme_css").removeAttr("href");
