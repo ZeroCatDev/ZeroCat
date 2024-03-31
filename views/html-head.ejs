@@ -118,6 +118,10 @@ document.getElementById('user-drawer-list').innerHTML = '<mdui-list-item rounded
   
   
   <script>
+    
+$(function () {
+    
+
     document.querySelector('mdui-navigation-rail').setAttribute('value', window.location.pathname);
   
     const AddDialog = document.querySelector("#newproject");
@@ -150,6 +154,7 @@ document.getElementById('user-drawer-list').innerHTML = '<mdui-list-item rounded
       button.addEventListener("click", () => TypesDrawer.open = true);
     });
     closeTypesButton.addEventListener("click", () => TypesDrawer.open = false);
+  });
   </script>
   
   
