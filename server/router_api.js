@@ -4,7 +4,7 @@ var router = express.Router();
 var fs = require('fs');
 
 //功能函数集
-var I = require('./lib/fuck.js');
+var I = require('./lib/global.js');
 //数据库
 var DB = require("./lib/database.js");
 
@@ -127,7 +127,7 @@ router.get('/usertx', function (req, res) {
         }
 
   
-        res.redirect(302, process.env.S3staticurl+'/user/'+USER[0].images+'.png');
+        res.redirect(302, process.env.S3staticurl+'/user/'+USER[0].images);
       });
 });
 

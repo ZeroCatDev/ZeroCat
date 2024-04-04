@@ -16,7 +16,6 @@
     <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
     <link rel="stylesheet" href="<%= process.env.staticurl %>/css/projectspage.css">
     <link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css">
-    <link rel="stylesheet" href="<%= process.env.staticurl %>/css/waline.css" />
 
 
 
@@ -51,8 +50,7 @@
         
             <mdui-list-item rounded class="close-user" icon="arrow_left">关闭</mdui-list-item>
     </mdui-list>
-  <script>if (Cookies.get('token') == undefined) {
-document.getElementById('user-drawer-list').innerHTML = '<mdui-list-item rounded href="/user/login">注册</mdui-list-item> <mdui-list-item rounded href="/user/login">登录</mdui-list-item>' }</script>
+ 
   </mdui-navigation-drawer>
   
   <mdui-navigation-drawer class="tools-drawer"  close-on-esc close-on-overlay-click>
@@ -62,7 +60,7 @@ document.getElementById('user-drawer-list').innerHTML = '<mdui-list-item rounded
       <mdui-list-item rounded href="/tools/asdm" icon="content_copy" description="公益Scratch下载镜像">Scratch下载镜像</mdui-list-item>
       <mdui-list-item rounded onclick="openWebdialog('https:\/\/b2.190823.xyz/ourworld/comparer.html')"  icon="compare" description="对比项目差异">项目比较器</mdui-list-item>
       <mdui-list-item rounded icon="brightness_4" id="switch-theme" description="切换light/dark">切换主题</mdui-list-item>
-      <mdui-list-item rounded icon="build" onclick="Cookies.remove('token');automsg('修复完成，请刷新')" description="修复前端问题">一键修复</mdui-list-item>
+      <mdui-list-item rounded icon="build" description="慎重使用的工具" class="open-switch">更多选项</mdui-list-item>
 
   
       <mdui-list-item rounded>当前CDN节点<span id="cdn" slot="description">[未知]</span></mdui-list-item>
@@ -93,12 +91,17 @@ document.getElementById('user-drawer-list').innerHTML = '<mdui-list-item rounded
   
   </mdui-navigation-drawer>
 
+  <mdui-dialog close-on-esc headline="更多选项" description="高级选项，慎重使用" close-on-overlay-click class="switch-dialog">
+    <mdui-list>
+     <mdui-list-item rounded onclick="Cookies.remove('token');automsg('修复完成，请刷新')"  description="强制清除登录信息">修复登录问题</mdui-list-item>
+   </mdui-list></mdui-dialog>
+
 
   <mdui-navigation-rail alignment="start" class="pc">
-    <mdui-button-icon icon="menu" slot="top" class="open-tools" ></mdui-button-icon>
+    <mdui-button-icon icon="menu" slot="top" class="open-tools"></mdui-button-icon>
     <mdui-fab lowered icon="add" slot="top" class="open-add"></mdui-fab>
-    <mdui-button-icon icon="<% if (login==false) { %>login<% } else { %>account_circle<% } %>" slot="bottom" class="open-user"></mdui-button-icon>
-  
+    <mdui-button-icon icon="account_circle" slot="bottom" class="open-user"></mdui-button-icon>
+
     <mdui-navigation-rail-item icon="home" href="/" value="/">主页</mdui-navigation-rail-item>
     <mdui-navigation-rail-item icon="code" href="/scratch" value="/scratch">Scratch</mdui-navigation-rail-item>
     <mdui-navigation-rail-item icon="code" href="/python" value="/python">Python</mdui-navigation-rail-item>
@@ -106,74 +109,36 @@ document.getElementById('user-drawer-list').innerHTML = '<mdui-list-item rounded
   <mdui-bottom-app-bar scroll-behavior="hide" scroll-threshold="30" class="mobile">
     <mdui-button-icon icon="menu" class="open-tools"></mdui-button-icon>
     <mdui-button-icon icon="home" href="/"></mdui-button-icon>
-    <mdui-button-icon icon="<% if (login==false) { %>login<% } else { %>account_circle<% } %>" class="open-user"></mdui-button-icon>
+    <mdui-button-icon icon="account_circle" class="open-user"></mdui-button-icon>
     <mdui-button-icon icon="code" class="open-types"></mdui-button-icon>
     <div style="flex-grow: 1"></div>
     <mdui-fab icon="add" class="open-add"></mdui-fab>
   </mdui-bottom-app-bar>
   
   
-  <mdui-dialog close-on-esc headline="创建新的项目" description="请选择项目类型" close-on-overlay-click id="newproject"><mdui-button
-      href="/scratch/edit">Scratch</mdui-button><mdui-button href="/python/edit">Python</mdui-button></mdui-dialog>
+  <mdui-dialog close-on-esc headline="创建新的项目" close-on-overlay-click id="newproject" icon="add">
+       <mdui-list>
+        <mdui-list-item rounded href="/scratch/edit" description="在线Scratch编辑器">Scratch</mdui-list-item>
+        <mdui-list-item rounded href="/python/edit" description="在线Python编辑器">Python</mdui-list-item>
+      </mdui-list></mdui-dialog>
   
   
-  <script>
-    
-$(function () {
-    
-
-    document.querySelector('mdui-navigation-rail').setAttribute('value', window.location.pathname);
-  
-    const AddDialog = document.querySelector("#newproject");
-    const openAddButtons = document.querySelectorAll(".open-add");
-    openAddButtons.forEach(button => {
-      button.addEventListener("click", () => AddDialog.open = true);
-    });
-  
-    const UserDrawer = document.querySelector(".user-drawer");
-    const openUserButton = document.querySelectorAll(".open-user");
-    const closeUserButton = document.querySelector(".close-user");
-    openUserButton.forEach(button => {
-      button.addEventListener("click", () => UserDrawer.open = true);
-    });
-    closeUserButton.addEventListener("click", () => UserDrawer.open = false);
-  
-    const ToolsDrawer = document.querySelector(".tools-drawer");
-    const openToolsButton = document.querySelectorAll(".open-tools");
-    const closeToolsButton = document.querySelector(".close-tools");
-    openToolsButton.forEach(button => {
-      button.addEventListener("click", () => ToolsDrawer.open = true);
-    });
-    closeToolsButton.addEventListener("click", () => ToolsDrawer.open = false);
-  
-  
-    const TypesDrawer = document.querySelector(".types-drawer");
-    const openTypesButton = document.querySelectorAll(".open-types");
-    const closeTypesButton = document.querySelector(".close-types");
-    openTypesButton.forEach(button => {
-      button.addEventListener("click", () => TypesDrawer.open = true);
-    });
-    closeTypesButton.addEventListener("click", () => TypesDrawer.open = false);
-  });
-  </script>
   
   
   
   <mdui-dialog close-on-overlay-click close-on-esc class="feedback-dialog" icon="feedback" headline="反馈"
     description="涉及社区本身请提issues，站务请去兔小巢，涉及漏洞、安全问题请加QQ1847261658">
     <mdui-list>
-      <mdui-list-item rounded href="/user/tuxiaochao">兔小巢</mdui-list-item>
-      <mdui-list-item rounded href="https://support.qq.com/product/597800">兔小巢(不登录)</mdui-list-item>
-      <mdui-list-item rounded href="https://github.com/OurWorldDev/OurWorld/issues">Github Issues</mdui-list-item>
+      <mdui-list-item rounded href="/user/tuxiaochao" description="反馈站务问题，将自动登录您的社区账户">兔小巢</mdui-list-item>
+      <mdui-list-item rounded href="https://support.qq.com/product/597800" description="反馈站务问题">兔小巢(不登录)</mdui-list-item>
+      <mdui-list-item rounded href="https://url.wuyuan.dev/qiscord" description="Qiscord！(频道号sunwuyuan0)">QQ频道</mdui-list-item>
+
+      <mdui-list-item rounded href="https://github.com/OurWorldDev/OurWorld/issues" description="涉及社区本身的问题请在此处提出">Github Issues</mdui-list-item>
+      <mdui-list-item rounded href="https://wuyuan.dev" description="社区开发者">联系 孙悟元</mdui-list-item>
+
     </mdui-list>
   </mdui-dialog>
-  <script>
-    const FeedBackDialog = document.querySelector(".feedback-dialog");
-    const openanFeedBackButton = document.querySelector("#open-feedback-dialog");
-  
-    openanFeedBackButton.addEventListener("click", () => FeedBackDialog.open = true);
-  </script>
-  
+
   
   <style>
     .mdui-color-white {
@@ -220,7 +185,7 @@ $(function () {
     }
    
   </style>
-  <!-- Filled -->
+ 
   <link href="<%= process.env.staticurl %>/font1.css" rel="stylesheet">
   
   <script>// 控制台安全提示

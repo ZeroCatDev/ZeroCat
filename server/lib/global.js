@@ -19,7 +19,7 @@ const s3 = new S3Client({
 // Create a bucket and upload something into it
 
 
-exports.S3update = function S3update(name, file,username) {
+exports.S3update = function ow(name, file,username) {
   console.log(name);
 try {
   s3.send(new PutObjectCommand({
@@ -81,13 +81,9 @@ exports.jwt = function (data) {
   console.log(token);
   return token;
 };
-exports.GenerateJwt = function (id, email, nickname) {
+exports.GenerateJwt = function (json) {
   token = jwt.sign(
-    {
-      userid: id,
-      username: email,
-      nickname: nickname,
-    },
+    json,
     process.env.jwttoken
   );
   return token;

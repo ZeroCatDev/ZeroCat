@@ -47,6 +47,55 @@
 							style="height: 100px;width: auto;border-radius: 15px;" />
 							<br/>	<br/>
 						<mdui-button class="avatarUpload " lay-data="{exts:'png|jpg', size:1024}">修改头像</mdui-button>
+
+					<!--	<script src="https://registry.npmmirror.com/compressorjs/1.2.1/files/dist/compressor.js" crossorigin="anonymous"></script>
+
+
+						<input type="file" id="file" accept="image/*">
+
+<script>
+	
+	document.getElementById('file').addEventListener('change', (e) => {
+	  const file = e.target.files[0];
+	
+	  if (!file) {
+		return;
+	  }
+	
+	  new Compressor(file, {
+		mimeType: 'image/webp', // 设置输出图片的 MIME 类型
+		width: 2048,
+		height: 2048,
+		resize: 'cover',
+		
+		// The compression process is asynchronous,
+		// which means you have to access the `result` in the `success` hook function.
+		success(result) {
+		  const formData = new FormData();
+	
+		  // The third parameter is required for server
+		  formData.append('file', result, result.name);
+		  $.ajax({
+        url: '/my/set/avatar?1=1',
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false
+    }).done(function() {
+        console.log('Upload success');
+		automsg('头像修改成功')
+    });
+		  // Send the compressed image file to server with XMLHttpRequest.
+	console.log(result)
+		},
+		error(err) {
+			automsg('错误，请查看控制台')
+		  console.log(err.message);
+		},
+	  });
+	
+	});</script>-->
+
 			</mdui-tab-panel><br/>
 				<mdui-tab-panel slot="panel" value="tab-3">	<br/>		<mdui-text-field variant="outlined" id='old_password'  type="password" 
 					label="原密码" autocomplete="off"></mdui-text-field><br/><br/>
@@ -57,10 +106,6 @@
 					</div>
 			</mdui-tab-panel>
 			  </mdui-tabs>
-
-
-
-
 
 			<mdui-dialog class="password-dialog" 
 			headline="修改密码"

@@ -4,7 +4,7 @@ var router = express.Router();
 var fs = require('fs');
 
 //功能函数集
-var I = require('./lib/fuck.js');
+var I = require('./lib/global.js');
 
 //数据库
 var DB = require("./lib/database.js");

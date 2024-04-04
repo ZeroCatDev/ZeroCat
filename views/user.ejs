@@ -1,4 +1,6 @@
 <%- include('html-head.ejs', {pageTitle: user.nickname + '的个人主页'}); %>
+<link rel="stylesheet" href="<%= process.env.staticurl %>/css/waline.css" />
+
 <script type="text/javascript" src="<%= process.env.staticurl %>/js/userpage.js"></script>
 
 			<img class="mdui-img-circle" src=""
@@ -36,7 +38,7 @@
 
 			<div id="waline"></div>
 			<script type="module">
-				import { init } from '<%= process.env.staticurl %>/js/waline-c.mjs';
+				import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
 
 				init({
 					el: '#waline',

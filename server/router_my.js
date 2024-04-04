@@ -4,7 +4,7 @@ var router = express.Router();
 var fs = require('fs');
 var crypto = require('crypto');
 //功能函数集
-var I = require('./lib/fuck.js');
+var I = require('./lib/global.js');
 //数据库
 var DB = require("./lib/database.js");
 
@@ -257,7 +257,7 @@ router.post('/set/avatar', function (req, res) {
    }
 
    tmppath = req['files']['file']['path'];
-   newpath = `./data/user/${res.locals.userid}.png`;
+   newpath = `./data/user/${res.locals.userid}`;
    fs.rename(tmppath, newpath,function (err) {
        if (err) {
            res.status(200).send( {'status':'文件上传失败'} );
@@ -273,7 +273,7 @@ router.post('/set/avatar', function (req, res) {
        chunks.on('end', () => {
            const hashValue = hash.digest('hex');
            // 上传到七牛云
-           I.S3update(`user/${hashValue}.png`,newpath,res.locals.username);
+           I.S3update(`user/${hashValue}`,newpath,res.locals.username);
            var UPDATE = `UPDATE user SET ? WHERE id=${res.locals.userid} LIMIT 1`;
            var SET = {
                'images':hashValue,
@@ -317,7 +317,13 @@ router.post('/set/userinfo', function (req, res) {
                     return;
                 }
                 
-                res.cookie("token",I.GenerateJwt(res.locals["userid"],res.locals["username"],res.locals["nickname"]),{maxAge: 604800000,});
+                res.cookie("token",I.GenerateJwt({
+                    userid: res.locals["userid"],
+                    username: res.locals["username"],
+                    nickname: res.locals["nickname"],
+                    avatar: res.locals["avatar"],
+
+                  }),{maxAge: 604800000,});
                 res.status(200).send( {'status': '个人信息修成成功'});
               });
      

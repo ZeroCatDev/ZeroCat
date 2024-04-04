@@ -98,27 +98,82 @@ style="min-height: calc(100vh - 208px);min-width: 497px;width: 100%;border-radiu
 
   S3staticurl = "<%= process.env.S3staticurl %>"
 </script>
-<!--<script src="https://registry.npmmirror.com/jwt-decode/4.0.0/files/build/cjs/index.js"></script>
+<script src="https://registry.npmmirror.com/jwt-decode/4.0.0/files/build/cjs/index.js"></script>
   <script>
     function userinfo() {
-      const token = getCookie('token');
+      if (Cookies.get('token')){
+        try { 
+      const token = Cookies.get('token');
       const decoded = jwtDecode(token);
-      if (decoded && decoded.userid) {
-        $('#usernick').text(decoded.nickname);
-        $('#usernick').attr("href", "/user?id=" + decoded.userid);
-  
-        $('#userbox').html('<img class=" md3botton mdui-img-fluid " src="/api/usertx?id=' + decoded.userid + '" style="pointer-events: none;" />')
-        $('#userbox').attr('mdui-menu', '{target: "#userlist"}');
-        $('#userbox').attr('class', 'mdui-btn mdui-btn-icon webkit-app-region-no  mdui-hoverable mdui-ripple md3botton');
-        $('#userbox').attr('href', '#');
+      
+      $('.ow-username').text(decoded.username);
+$('.ow-userlink').attr("href", "/user?id=" + decoded.userid);
+$('.ow-usernick').text(decoded.nickname);
+$('.ow-userid').text(decoded.userid);
+$('.ow-useravatar').attr("src", "/api/usertx?id=" + decoded.userid);
+$('.ow-useravatar').attr("alt", decoded.nickname);
+        
       }
-    }
-    userinfo()
-    function getCookie(name) {
-      const value = "; " + document.cookie;
-      const parts = value.split("; " + name + "=");
-      if (parts.length === 2) return parts.pop().split(";").shift();
-    }
-  </script>-->
+      catch (error) {
+        console.log(error)
+      }
+      }}
 
+    $(function () {
+    userinfo()
+  })
+  </script>
+  <script>if (Cookies.get('token') == undefined) {
+    document.getElementById('user-drawer-list').innerHTML = '<mdui-list-item rounded href="/user/login">注册</mdui-list-item> <mdui-list-item rounded href="/user/login">登录</mdui-list-item><mdui-list-item rounded class="close-user" icon="arrow_left">关闭</mdui-list-item>' }
+    </script>
+  <script>
+    
+    $(function () {
+        
+    
+        document.querySelector('mdui-navigation-rail').setAttribute('value', window.location.pathname);
+      
+        const AddDialog = document.querySelector("#newproject");
+        const openAddButtons = document.querySelectorAll(".open-add");
+        openAddButtons.forEach(button => {
+          button.addEventListener("click", () => AddDialog.open = true);
+        });
+      
+        const UserDrawer = document.querySelector(".user-drawer");
+        const openUserButton = document.querySelectorAll(".open-user");
+        const closeUserButton = document.querySelector(".close-user");
+        openUserButton.forEach(button => {
+          button.addEventListener("click", () => UserDrawer.open = true);
+        });
+        closeUserButton.addEventListener("click", () => UserDrawer.open = false);
+      
+        const ToolsDrawer = document.querySelector(".tools-drawer");
+        const openToolsButton = document.querySelectorAll(".open-tools");
+        const closeToolsButton = document.querySelector(".close-tools");
+        openToolsButton.forEach(button => {
+          button.addEventListener("click", () => ToolsDrawer.open = true);
+        });
+        closeToolsButton.addEventListener("click", () => ToolsDrawer.open = false);
+
+        const SwitcDialog = document.querySelector(".switch-dialog");
+    const openanSwitcButton = document.querySelector(".open-switch");
+  
+    openanSwitcButton.addEventListener("click", () => SwitcDialog.open = true);
+       
+      
+      
+        const TypesDrawer = document.querySelector(".types-drawer");
+        const openTypesButton = document.querySelectorAll(".open-types");
+        const closeTypesButton = document.querySelector(".close-types");
+        openTypesButton.forEach(button => {
+          button.addEventListener("click", () => TypesDrawer.open = true);
+        });
+        closeTypesButton.addEventListener("click", () => TypesDrawer.open = false);
+
+        const FeedBackDialog = document.querySelector(".feedback-dialog");
+    const openanFeedBackButton = document.querySelector("#open-feedback-dialog");
+  
+    openanFeedBackButton.addEventListener("click", () => FeedBackDialog.open = true);
+      });
+      </script>
 </html>

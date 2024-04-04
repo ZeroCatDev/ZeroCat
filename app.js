@@ -126,6 +126,7 @@ app.all("*", function (req, res, next) {
           userid: "",
           username: "",
           nickname: "",
+          avatar: "",
           is_admin: 0,
         };
         //console.log("JWT验证失败: " + err.message);
@@ -135,6 +136,8 @@ app.all("*", function (req, res, next) {
         res.locals.userid = userInfo.userid;
         res.locals.username = userInfo.username;
         res.locals.nickname = userInfo.nickname;
+        res.locals.avatar = userInfo.avatar;
+
         res.locals["is_admin"] = 0;
         if (userInfo.username == process.env.adminuser) {
           res.locals["is_admin"] = 1;
@@ -147,6 +150,7 @@ app.all("*", function (req, res, next) {
           userid: res.locals.userid,
           username: res.locals.username,
           nickname: res.locals.nickname,
+          avatar: res.locals.avatar,
           is_admin: res.locals["is_admin"],
         };
 
@@ -162,6 +166,7 @@ app.all("*", function (req, res, next) {
       userid: "",
       username: "",
       nickname: "",
+      avatar: "",
       is_admin: 0,
     };
     //console.log("未找到JWT Token");

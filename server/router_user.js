@@ -6,7 +6,7 @@ var jwt = require("jsonwebtoken");
 //数据库
 var DB = require("./lib/database.js");
 //功能函数集
-var I = require("./lib/fuck.js");
+var I = require("./lib/global.js");
 let cryptojs = require("crypto-js");
 router.all("*", function (req, res, next) {
   next();
@@ -140,7 +140,12 @@ router.post("/login", function (req, res) {
           });
           res.cookie(
             "token",
-            I.GenerateJwt(User["id"], User["username"], User["nickname"]),
+            I.GenerateJwt({
+              userid: User["id"],
+              username: User["username"],
+              nickname: User["nickname"],
+              avatar: User["images"]
+            }),
             { maxAge: 604800000 }
           );
           res.status(200).send({
@@ -148,7 +153,7 @@ router.post("/login", function (req, res) {
             userid: parseInt(User["id"]),
             username: User["username"],
             nickname: User["nickname"],
-            avatar: `/user/${User["id"]}.png`,
+            avatar: User["images"],
           });
         }
       });

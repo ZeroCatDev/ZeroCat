@@ -4,7 +4,7 @@ var fs = require("fs");
 var DB = require("./lib/database.js"); // 数据库
 
 //功能函数集
-var I = require("./lib/fuck.js");
+var I = require("./lib/global.js");
 
 router.all("*", function (req, res, next) {
   next();
@@ -664,7 +664,7 @@ router.post("/getMyProjectLibrary", function (req, res) {
 // 获取优秀作品列表
 router.post("/getYxProjectLibrary", function (req, res) {
   var SELECT =
-    ` SELECT s.id, s.title, s.view_count, s.authorid, u.nickname FROM scratch s ` +
+    ` SELECT s.id, s.title, s.view_count, s.authorid, u.nickname, u.images FROM scratch s ` +
     " LEFT JOIN user u ON u.id=s.authorid " +
     ` WHERE s.state=2 ORDER BY s.view_count DESC LIMIT ${req.body.l},${req.body.n}`;
   DB.query(SELECT, function (err, SCRATCH) {
@@ -902,7 +902,7 @@ router.post("/getSession", (req, res) => {
       userid: parseInt(res.locals["userid"]),
       username: res.locals["username"],
       nickname: res.locals["nickname"],
-      avatar: `${process.env.S3staticurl}/user/${res.locals.userid}.png`,
+      avatar: `${process.env.S3staticurl}/user/${res.locals["avatar"]}`,
     };
   }
 
