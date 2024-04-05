@@ -124,8 +124,8 @@ app.all("*", function (req, res, next) {
         res.locals = {
           login: false,
           userid: "",
-          username: "",
-          nickname: "",
+          email: "",
+          display_name: "",
           avatar: "",
           is_admin: 0,
         };
@@ -134,27 +134,27 @@ app.all("*", function (req, res, next) {
         // 如果验证成功，将用户信息存储在res.locals和session中
         let userInfo = decodedToken;
         res.locals.userid = userInfo.userid;
-        res.locals.username = userInfo.username;
-        res.locals.nickname = userInfo.nickname;
+        res.locals.email = userInfo.email;
+        res.locals.display_name = userInfo.display_name;
         res.locals.avatar = userInfo.avatar;
 
         res.locals["is_admin"] = 0;
-        if (userInfo.username == process.env.adminuser) {
+        if (userInfo.email == process.env.adminuser) {
           res.locals["is_admin"] = 1;
         }
-        //console.log("JWT验证成功: " + userInfo.username);
-        //console.log('调试用户信息(session)：'+res.locals.userid+','+res.locals.username+','+res.locals.nickname+','+res.locals.is_admin);
+        //console.log("JWT验证成功: " + userInfo.email);
+        //console.log('调试用户信息(session)：'+res.locals.userid+','+res.locals.email+','+res.locals.display_name+','+res.locals.is_admin);
 
         res.locals = {
           login: true,
           userid: res.locals.userid,
-          username: res.locals.username,
-          nickname: res.locals.nickname,
+          email: res.locals.email,
+          display_name: res.locals.display_name,
           avatar: res.locals.avatar,
           is_admin: res.locals["is_admin"],
         };
 
-        //console.log('调试用户信息(locals )：'+res.locals.userid+','+res.locals.username+','+res.locals.nickname+','+res.locals.is_admin);
+        //console.log('调试用户信息(locals )：'+res.locals.userid+','+res.locals.email+','+res.locals.display_name+','+res.locals.is_admin);
       }
 
       next();
@@ -164,8 +164,8 @@ app.all("*", function (req, res, next) {
     res.locals = {
       login: false,
       userid: "",
-      username: "",
-      nickname: "",
+      email: "",
+      display_name: "",
       avatar: "",
       is_admin: 0,
     };

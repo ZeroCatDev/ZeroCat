@@ -28,7 +28,7 @@ router.get("/", function (req, res) {
       res.locals.scratch_count = data[0].scratch_count;
       res.locals.python_count = data[0].python_count;
     }
-    SQL = `SELECT id,nickname, motto FROM user WHERE id = ${req.query.id};`;
+    SQL = `SELECT id,display_name, motto FROM ow_Users WHERE id = ${req.query.id};`;
 
     DB.query(SQL, function (err, USER) {
       if (err || USER.length == 0) {
@@ -83,13 +83,13 @@ router.post("/login", function (req, res) {
         !req.body.pw ||
         !I.userpwTest(req.body.pw) ||
         !req.body.un ||
-        !I.usernameTest(req.body.un)
+        !I.emailTest(req.body.un)
       ) {
         res.status(200).send({ status: "账号或密码错误" });
         return;
       }
 
-      var SQL = `SELECT * FROM user WHERE username=? LIMIT 1`;
+      var SQL = `SELECT * FROM ow_Users WHERE email=? LIMIT 1`;
       var WHERE = [`${req.body["un"]}`];
       DB.qww(SQL, WHERE, function (err, USER) {
         if (err || USER.length == 0) {
@@ -98,30 +98,30 @@ router.post("/login", function (req, res) {
         }
 
         var User = USER[0];
-        pw = I.md5(I.md5(req.body.pw) + req.body.un);
-        if (User["pwd"] != pw) {
+        pw = I.hash(req.body.pw)
+        if (I.checkhash(req.body.pw,User["password"])==false) {
           res.status(200).send({ status: "账号或密码错误" });
         } else if (User["state"] == 2) {
           res.status(200).send({ status: "您已经被封号，请联系管理员" });
         } else {
           res.locals["userid"] = User["id"];
-          res.locals["username"] = User["username"];
-          res.locals["nickname"] = User["nickname"];
+          res.locals["email"] = User["email"];
+          res.locals["display_name"] = User["display_name"];
           //console.log('已登录：**********************************');
 
           //判断系统管理员权限
-          // if (req.session['username']=='sunwuyuan'){
+          // if (req.session['email']=='sunwuyuan'){
           //     req.session['is_admin'] = 1;
           // } else {
           //     req.session['is_admin'] = 0;
           // }
           //判断系统管理员权限：此处写死，无需从数据库获取
           res.locals["is_admin"] = 0;
-          if (res.locals["username"].indexOf(process.env.adminuser) == 0) {
-            if (res.locals["username"] == process.env.adminuser) {
+          if (res.locals["email"].indexOf(process.env.adminuser) == 0) {
+            if (res.locals["email"] == process.env.adminuser) {
               res.locals["is_admin"] = 1;
             } else {
-              let no = parseInt(res.locals["username"].substring(8));
+              let no = parseInt(res.locals["email"].substring(8));
               if (0 <= no && no < 100) {
                 res.locals["is_admin"] = 1;
               }
@@ -130,11 +130,11 @@ router.post("/login", function (req, res) {
 
           //7天时长的毫秒数：86400000=24*60*60*1000
           res.cookie("userid", User["id"], { maxAge: 604800000, signed: true });
-          res.cookie("username", User["username"], {
+          res.cookie("email", User["email"], {
             maxAge: 604800000,
             signed: true,
           });
-          res.cookie("nickname", User["nickname"], {
+          res.cookie("display_name", User["display_name"], {
             maxAge: 604800000,
             signed: true,
           });
@@ -142,8 +142,8 @@ router.post("/login", function (req, res) {
             "token",
             I.GenerateJwt({
               userid: User["id"],
-              username: User["username"],
-              nickname: User["nickname"],
+              email: User["email"],
+              display_name: User["display_name"],
               avatar: User["images"]
             }),
             { maxAge: 604800000 }
@@ -151,8 +151,8 @@ router.post("/login", function (req, res) {
           res.status(200).send({
             status: "OK",
             userid: parseInt(User["id"]),
-            username: User["username"],
-            nickname: User["nickname"],
+            email: User["email"],
+            display_name: User["display_name"],
             avatar: User["images"],
           });
         }
@@ -166,11 +166,11 @@ var logout = function (req, res) {
   //req.session.destroy();
 
   res.locals["userid"] = null;
-  res.locals["username"] = null;
+  res.locals["email"] = null;
 
   res.cookie("userid", "", { maxAge: 0, signed: true });
-  res.cookie("username", "", { maxAge: 0, signed: true });
-  res.cookie("nickname", "", { maxAge: 0, signed: true });
+  res.cookie("email", "", { maxAge: 0, signed: true });
+  res.cookie("display_name", "", { maxAge: 0, signed: true });
   res.cookie("token", "", { maxAge: 0, signed: true });
 };
 router.get("/logout", function (req, res) {
@@ -205,11 +205,11 @@ router.post("/register", function (req, res) {
           return;
         }
 
-        //if (!req.body.pw|| !I.userpwTest(req.body.pw) || !req.body.un|| !I.usernameTest(req.body.un)){ res.status(200).send( { 'status':'账号或密码格式错误' });return;}
+        //if (!req.body.pw|| !I.userpwTest(req.body.pw) || !req.body.un|| !I.emailTest(req.body.un)){ res.status(200).send( { 'status':'账号或密码格式错误' });return;}
         //if (I.phoneTest(req.body.un)){res.status(200).send( { 'status':'手机号不能直接用于注册账号' });return;}
 
-        var username = req.body.un;
-        SQL = `SELECT id FROM user WHERE username='${username}' LIMIT 1`;
+        var email = req.body.un;
+        SQL = `SELECT id FROM ow_Users WHERE email='${email}' LIMIT 1`;
         DB.query(SQL, function (err, User) {
           if (err) {
             res.status(200).send({ status: "账号格式错误" });
@@ -224,17 +224,18 @@ router.post("/register", function (req, res) {
           //var pw = req.body.pw;
           var randonpw = I.randomPassword(12);
           //console.log(randonpw);
-          //console.log(username);
+          //console.log(email);
 
-          pw = I.md5(I.md5(randonpw) + username);
+          pw = I.hash(randonpw) 
           //console.log(pw);
           //新用户注册 //loginInfo = [{'t': new Date(),'ip':req.ip,'agent':req.headers["user-agent"]}];
-          //var nickname = username.substring(username.length-5);
-          var nickname = req.body.pw;
-          //console.log(nickname);
-          var INSERT = `INSERT INTO user (username,pwd,nickname) VALUES ('${username}','${pw}','${nickname}')`;
+          //var display_name = email.substring(email.length-5);
+          var display_name = req.body.pw;
+          //console.log(display_name);
+          var INSERT = `INSERT INTO ow_Users (email,password,display_name) VALUES ('${email}','${pw}','${display_name}')`;
           DB.query(INSERT, function (err, newUser) {
             if (err) {
+              console.error(err);
               res.status(200).send({ status: "再试一次17" });
               return;
             }
@@ -256,7 +257,7 @@ router.post("/register", function (req, res) {
                 // 邮件标题
                 subject: process.env.SiteName + "社区注册消息",
                 // 目标邮箱
-                to: username,
+                to: email,
                 // 邮件内容
                 html: `<div class="page flex-col">
                   <div class="box_3 flex-col"
@@ -277,7 +278,7 @@ router.post("/register", function (req, res) {
                               style="display: flex;flex-direction: column;margin-left: 30px;margin-bottom: 16px;"><span class="text_3"
                                   style="height: 22px;font-size: 16px;font-family: PingFang-SC-Bold, PingFang-SC;font-weight: bold;color: #0585ee;line-height: 22px;">账户信息</span><span
                                   class="text_4"
-                                  style="margin-top: 6px;margin-right: 22px;font-size: 16px;font-family: PingFangSC-Regular, PingFang SC;font-weight: 400;color: #000000;line-height: 22px;">登录邮箱：${username}<br />密码：${randonpw}</span>
+                                  style="margin-top: 6px;margin-right: 22px;font-size: 16px;font-family: PingFangSC-Regular, PingFang SC;font-weight: 400;color: #000000;line-height: 22px;">登录邮箱：${email}<br />密码：${randonpw}</span>
                           </div>
                           <hr
                               style="display: flex;position: relative;border: 1px dashed #1289d82e;box-sizing: content-box;height: 0px;overflow: visible;width: 100%;">
@@ -314,13 +315,7 @@ router.post("/register", function (req, res) {
                 }
               }
             );
-            var INSERT = `INSERT INTO wl_Users (id,display_name,email,password,type,url,avatar) VALUES ('${userid}','${nickname}','${username}','nopassword','guest','/user?id=${userid}','${process.env.S3staticurl}/user/${userid}.png')`;
-            DB.query(INSERT, function (err) {
-              if (err) {
-                res.status(200).send({ status: "再试一次18" });
-                return;
-              }
-            });
+            
             res.status(200).send({ status: "注册成功,请查看邮箱获取账户数据" });
           });
         });
@@ -345,8 +340,8 @@ router.post("/repw", function (req, res) {
         res.status(200).send({ status: "验证码错误" });
         return;
       }
-      var username = req.body.un;
-      SQL = `SELECT * FROM user WHERE username='${username}' LIMIT 1`;
+      var email = req.body.un;
+      SQL = `SELECT * FROM ow_Users WHERE email='${email}' LIMIT 1`;
       DB.query(SQL, function (err, User) {
         if (err) {
           res.status(200).send({ status: "账号格式错误或不存在" });
@@ -355,7 +350,7 @@ router.post("/repw", function (req, res) {
         var user = User[0];
         //console.log(user);
         var jwttoken = jwt.sign(
-          { userid: user["id"], username: user["username"] },
+          { userid: user["id"], email: user["email"] },
           process.env.jwttoken,
           { expiresIn: 60 * 10 }
         );
@@ -376,7 +371,7 @@ router.post("/repw", function (req, res) {
             // 邮件标题
             subject: process.env.SiteName + "密码重置消息",
             // 目标邮箱
-            to: username,
+            to: email,
             // 邮件内容
             html: `<div class="page flex-col">
             <div class="box_3 flex-col"
@@ -397,7 +392,7 @@ router.post("/repw", function (req, res) {
                         style="display: flex;flex-direction: column;margin-left: 30px;margin-bottom: 16px;"><span class="text_3"
                             style="height: 22px;font-size: 16px;font-family: PingFang-SC-Bold, PingFang-SC;font-weight: bold;color: #0585ee;line-height: 22px;">账户信息</span><span
                             class="text_4"
-                            style="margin-top: 6px;margin-right: 22px;font-size: 16px;font-family: PingFangSC-Regular, PingFang SC;font-weight: 400;color: #000000;line-height: 22px;">登录邮箱：${username}</span>
+                            style="margin-top: 6px;margin-right: 22px;font-size: 16px;font-family: PingFangSC-Regular, PingFang SC;font-weight: 400;color: #000000;line-height: 22px;">登录邮箱：${email}</span>
                     </div>
                     <hr
                         style="display: flex;position: relative;border: 1px dashed #1289d82e;box-sizing: content-box;height: 0px;overflow: visible;width: 100%;">
@@ -471,16 +466,16 @@ router.post("/torepw", function (req, res) {
             return;
           }
           userid = decoded.userid;
-          username = decoded.username;
+          email = decoded.email;
         }
       );
       //console.log(userid);
       //console.log(req.body.pw);
-      var newPW = I.md5(I.md5(req.body.pw) + username);
+      var newPW = I.hash(req.body.pw)
       //console.log(newPW);
 
-      SET = { pwd: newPW };
-      UPDATE = `UPDATE user SET ? WHERE id=${userid} LIMIT 1`;
+      SET = { password: newPW };
+      UPDATE = `UPDATE ow_Users SET ? WHERE id=${userid} LIMIT 1`;
       DB.qww(UPDATE, SET, function (err, u) {
         if (err) {
           res.status(200).send({ status: "请再试一次" });
@@ -494,16 +489,6 @@ router.post("/torepw", function (req, res) {
   );
 });
 
-router.get("/walineget", function (req, res) {
-  if (!res.locals.login) {
-    res.redirect("/");
-  }
-  res.redirect(
-    process.env.WalineServerURL +
-      "/ui/profile?token=" +
-      I.jwt(res.locals["username"])
-  );
-});
 
 router.get("/tuxiaochao", function (req, res) {
   if (!res.locals.login) {
@@ -516,7 +501,7 @@ router.get("/tuxiaochao", function (req, res) {
     res.redirect("https://support.qq.com/product/" + process.env.txcid);
   }
   
-  SQL = `SELECT images FROM user WHERE id = ${res.locals["userid"]};`;
+  SQL = `SELECT images FROM ow_Users WHERE id = ${res.locals["userid"]};`;
   
   DB.query(SQL, function (err, USER) {
     if (err || USER.length == 0) {
@@ -527,8 +512,8 @@ router.get("/tuxiaochao", function (req, res) {
     uid = res.locals["userid"].toString();
     var txcinfo =
       uid +
-      res.locals["nickname"] +
-      process.env.S3staticurl+'/user/'+USER[0].images+'.png'+
+      res.locals["display_name"] +
+      process.env.S3staticurl+'/user/'+USER[0].images+''+
       process.env.txckey;
     var cryptostr = cryptojs.MD5(txcinfo).toString();
     
@@ -537,9 +522,9 @@ router.get("/tuxiaochao", function (req, res) {
         process.env.txcid +
         "?openid=" +
         res.locals["userid"] +
-        "&nickname=" +
-        res.locals["nickname"] +
-        "&avatar="+process.env.S3staticurl+'/user/'+USER[0].images+'.png'+
+        "&display_name=" +
+        res.locals["display_name"] +
+        "&avatar="+process.env.S3staticurl+'/user/'+USER[0].images+''+
         "&user_signature=" +
         cryptostr
     );

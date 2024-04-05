@@ -1,158 +1,63 @@
-<%- include('html-head.ejs', {pageTitle: user.nickname + '的个人主页'}); %>
-<link rel="stylesheet" href="<%= process.env.staticurl %>/css/waline.css" />
+<%- include('html-head.ejs', {pageTitle: user.display_name + '的个人主页' }); %>
+	<link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css" />
 
-<script type="text/javascript" src="<%= process.env.staticurl %>/js/userpage.js"></script>
 
-			<img class="mdui-img-circle" src=""
-				style="height: 70px;" id="mainuserimages"/>
-			<div class="mdui-typo-display-2 nickname" id="mainusernickname" style="user-select: text;">
-				加载中
+	<img class="mdui-img-circle" src="" style="height: 70px" id="mainuserimages" />
+	<div class="mdui-typo-display-2 display_name" id="mainuserdisplay_name" style="user-select: text">
+		创作者
+	</div>
 
-			</div>
-			 
+	<mdui-card variant="filled">
+		<mdui-chip icon="access_time" id="regTime" style="margin: 10px 0px 0px 10px"></mdui-chip><mdui-chip icon="tag"
+			id="tag" style="margin: 10px 10px 0px 10px">创作者</mdui-chip>
 
-			<mdui-card  variant="filled">			<mdui-chip icon="access_time" id="regTime" style="margin: 10px 0px 0px 10px;"></mdui-chip><mdui-chip icon="tag" id="tag" style="margin: 10px 10px 0px 10px;">创作者</mdui-chip>
-
-			<div class="usermotto" id="usermotto" style="user-select: text;margin: 10px;">
-				加载中
-			</div></mdui-card>
-			<mdui-tabs value="tab-1">
-				<mdui-tab value="tab-1">Scratch</mdui-tab>
-				<mdui-tab value="tab-2">Python</mdui-tab>
-			  
-				<mdui-tab-panel slot="panel" value="tab-1"><div id="scratch_box">
-					<div class="mdui-row" id="scratch_projects"></div>
-					<div style="display:flex; justify-content:center;">
-						<div id="scratch_change_page"></div>
-					</div>
-				</div></mdui-tab-panel>
-				<mdui-tab-panel slot="panel" value="tab-2"><div id="python_box">
-					<div class="layui-row" id="python_projects"></div>
-					<div style="display:flex; justify-content:center;">
-						<div id="python_change_page"></div>
-					</div>
-				</div></mdui-tab-panel>
-			  </mdui-tabs>
-			
-			
-
-			<div id="waline"></div>
-			<script type="module">
-				import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
-
-				init({
-					el: '#waline',
-					serverURL: '<%= process.env.WalineServerURL %>',
-					path: 'user-<%= user.id %>',
-					copyright: false,
-					reaction: true, // 开启反应
-					pageview: true, // 浏览量统计
-					locale: {
-						reactionTitle: "发表下看法？"
-					},
-					emoji: [
-						'//unpkg.com/@waline/emojis@1.1.0/weibo',
-						'//unpkg.com/@waline/emojis@1.1.0/bilibili',
-					],
-					dark: 'body[dark]',
-				});
-			</script>
-	<%- include('./html-footer.ejs', {page: 'user'}); %>
-
-<script>	var laypage = layui.laypage, layer = layui.layer;
-
-	function Scratch() {
-		laypage.render({
-			elem: 'scratch_change_page'
-			, count: <%= scratch_count %>
-	, limit: 8
-			, theme: '#448aff'
-			, jump: function (obj, first) {
-				$.ajax({
-					'url': '/api/getUserScratchProjects',
-					'type': 'POST',
-					'data': { curr: obj.curr, limit: obj.limit, userid: getQueryString('id') },
-					'success': function (d) {
-						if (d.length) {
-							$("#scratch_projects").html("");
-							for (var i = 0; i < d.length; i++) {
-								tzzt = ''
-								if (d[i].state == 2) {
-
-									tzzt = '<mdui-icon name="star"></mdui-icon>'
-								}
-								$("#scratch_projects").append(`
-								<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
-<mdui-card variant="outlined" clickable ondragstart="return false" style="user-select:none;width: 100%;overflow: hidden" href="/scratch/play?id=${d[i].id}">
-	
-		<img src="<%= process.env.S3staticurl%>/scratch_slt/${d[i].id}"
-			style="pointer-events: none;width: 100%;" />
-		<div class="card-media-covered">
-				<div class="card-media-covered-text">${tzzt}${d[i].title}</div>
+		<div class="usermotto" id="usermotto" style="user-select: text; margin: 10px">
+			创作者
 		</div>
-</mdui-card>
-</div>
-						`);
-							}
-						} else {
-							$("#scratch_projects").html(`<p class="mdui-text-center">没有找到Scratch作品</p>`);
-							automsg({ buttonText: '关闭', message: "无满足条件的作品" });
-						}
-					}
-				});
-			}
-	});
-	}
-	function Python() {
-		laypage.render({
-			elem: 'python_change_page'
-			, count: <%= python_count %>
-	, limit: 8
-			, theme: '#448aff'
-			, jump: function (obj, first) {
-				$.ajax({
-					'url': '/api/getUserPythonProjects',
-					'type': 'POST',
-					'data': { curr: obj.curr, limit: obj.limit, userid: getQueryString('id') },
-					'success': function (d) {
-						if (d.length) {
-							$("#python_projects").html("");
-							for (var i = 0; i < d.length; i++) {
-								tzzt = ''
-								if (d[i].state == 2) {
+	</mdui-card>
+	<mdui-tabs value="tab-1">
+		<mdui-tab value="tab-1">Scratch</mdui-tab>
+		<mdui-tab value="tab-2">Python</mdui-tab>
 
-									tzzt = '<mdui-icon name="star"></mdui-icon>'
-								}
-								$("#python_projects").append(`<div class="mdui-col-md-3 mdui-col-sm-6 mdui-col-xs-12" style="margin:5px 0px 5px 0px;">
-					<mdui-card variant="outlined" href='/python/play?id=${d[i].id}' clickable ondragstart="return false" style="user-select:none;width: 100%;overflow: hidden">
-						<div class="card-main">
-								<div class="substr card-main-text" >${tzzt}${d[i].title}</div>
-								<div class="substr card-main-subtitle">${d[i].description}</div>
-							</div>
-					</mdui-card>
-					</div>
-						`);
+		<mdui-tab-panel slot="panel" value="tab-1">
+			<div id="scratch_box">
+				<div class="mdui-row" id="scratch_projects" style="width: 100%;"></div>
+				<div style="display: flex; justify-content: center">
+					<div id="scratch_change_page"></div>
+				</div>
+			</div>
+		</mdui-tab-panel>
+		<mdui-tab-panel slot="panel" value="tab-2">
+			<div id="python_box">
+				<div class="layui-row" id="python_projects"></div>
+				<div style="display: flex; justify-content: center">
+					<div id="python_change_page"></div>
+				</div>
+			</div>
+		</mdui-tab-panel>
+	</mdui-tabs>
 
-							}
-						} else {
-							$("#python_projects").html(`<p class="mdui-text-center">没有找到Python作品</p>`);
+	<div id="waline"></div>
+	<script type="module">
+		import { init } from "https://unpkg.com/@waline/client@v3/dist/waline.js";
 
-							automsg({ buttonText: '关闭', message: "无满足条件的作品" });
-						}
-					}
-				});
-			}
-	});
-	}
-	Scratch()
-	Python()
-	function getQueryString(name) {
-		var reg = new RegExp('(^|&)' + name + '=([^&]*)(&|$)', 'i');
-		var r = window.location.search.substr(1).match(reg);
-		if (r != null) {
-			return unescape(r[2]);
-		}
-		return null;
-	}
-</script>
-
+		init({
+			el: "#waline",
+			serverURL: "<%= process.env.WalineServerURL %>",
+			path: "user-<%= user.id %>",
+			copyright: false,
+			reaction: true, // 开启反应
+			pageview: true, // 浏览量统计
+			locale: {
+				reactionTitle: "发表下看法？",
+			},
+			emoji: [
+				"//unpkg.com/@waline/emojis@1.1.0/weibo",
+				"//unpkg.com/@waline/emojis@1.1.0/bilibili",
+			],
+			dark: "body[dark]",
+		});
+	</script>
+	<%- include('./html-footer.ejs', {page: 'user' }); %>
+	<script>scratch_count = <%= scratch_count %>;python_count = <%= python_count %></script>
+	<script type="text/javascript" src="<%= process.env.staticurl %>/page/user/page.js"></script>

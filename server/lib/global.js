@@ -1,6 +1,8 @@
 //公用小函数库
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken"); // 首先确保安装了jsonwebtoken库
+const { PasswordHash } = require('phpass');
+const pwdHash = new PasswordHash();
 
 var fs = require("fs");
 
@@ -19,7 +21,7 @@ const s3 = new S3Client({
 // Create a bucket and upload something into it
 
 
-exports.S3update = function ow(name, file,username) {
+exports.S3update = function ow(name, file,email) {
   console.log(name);
 try {
   s3.send(new PutObjectCommand({
@@ -28,7 +30,7 @@ try {
     Body: fs.readFileSync(file)
   }));
 
-  console.log(`用户 ${username} 成功上传了文件 ${process.env.S3bucket}/${name}`);
+  console.log(`用户 ${email} 成功上传了文件 ${process.env.S3bucket}/${name}`);
 } catch (err) {
   console.log("S3 update Error: ", err);
 }
@@ -40,14 +42,20 @@ exports.md5 = function md5(data) {
   let hash = crypto.createHash("md5");
   return hash.update(data).digest("base64");
 };
+exports.hash = function hash(data) {
+  return pwdHash.hashPassword(data);
+};
 
+exports.checkhash = function checkhash(pwd,storeHash) {
+  return pwdHash.checkPassword(pwd,storeHash);
+};
 //检查用户密码格式
 exports.userpwTest = function (pw) {
   var reg = /^(?:\d+|[a-zA-Z]+|[!@#$%^&*]+){6,16}$/;
   return reg["test"](pw);
 };
 
-exports.usernameTest = function (No) {
+exports.emailTest = function (No) {
   var reg = /^([a-zA-Z]|[0-9])(\w|\-)+@[a-zA-Z0-9]+\.([a-zA-Z]{2,4})$/;
 
   return reg["test"](No);
@@ -67,12 +75,12 @@ exports.randomPassword = function randomPassword(len) {
   var $chars =
     "ABCDEFGHJKMNPQRSTWXYZabcdefhijkmnprstwxyz2345678"; /****默认去掉了容易混淆的字符oOLl,9gq,Vv,Uu,I1****/
   var maxPos = $chars.length;
-  var pwd = "";
+  var password = "";
   for (var i = 0; i < len; i++) {
-    pwd += $chars.charAt(Math.floor(Math.random() * maxPos));
+    password += $chars.charAt(Math.floor(Math.random() * maxPos));
   }
-  pwd = pwd + "@Aa1";
-  return pwd;
+  password = password + "@Aa1";
+  return password;
 };
 
 exports.jwt = function (data) {

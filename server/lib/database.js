@@ -12,7 +12,7 @@ var pool = mysql.createPool({
         "rejectUnauthorized" : true}});
 
 
-//防止注入：'SELECT * FROM user WHERE ?', WHERE
+//防止注入：'SELECT * FROM ow_Users WHERE ?', WHERE
 exports.qww = function query_with_w(SQL, W, callback) {
     pool.getConnection(function (err, connection) {
         if (err) return callback(err,'');

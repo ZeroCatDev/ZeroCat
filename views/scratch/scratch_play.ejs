@@ -1,5 +1,5 @@
 <%- include('../html-head.ejs', {pageTitle: 'Scratch' }); %>
-<link rel="stylesheet" href="<%= process.env.staticurl %>/css/waline.css" />
+<link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css" />
 
 	<link rel="stylesheet" type="text/css" href="<%= process.env.staticurl %>/css/scratch_play.css">
 	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/social-share.js/1.0.16/css/share.min.css" />
@@ -79,7 +79,7 @@
 
 	<div id="waline"></div>
 	<script type="module">
-		import { init } from '<%= process.env.staticurl %>/js/waline-c.mjs';
+		import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
 		init({
 			el: '#waline',
 			serverURL: '<%= process.env.WalineServerURL %>',
@@ -121,7 +121,7 @@
 			S3staticurl = '<%= process.env.S3staticurl %>'
 		var $config = {
     title: '<%= project.title %>', // 标题，默认读取 document.title 或者 <meta name="title" content="share.js" />
-    description: '<%= project.title %> 是 <%= project.author_nickname %> 在<%= process.env.SiteName %>上的作品', // 描述, 默认读取head标签：<meta name="description" content="PHP弱类型的实现原理分析" />
+    description: '<%= project.title %> 是 <%= project.author_display_name %> 在<%= process.env.SiteName %>上的作品', // 描述, 默认读取head标签：<meta name="description" content="PHP弱类型的实现原理分析" />
     image: '<%= process.env.S3staticurl%>/scratch_slt/<%= project.id %>', // 图片, 默认取网页中第一个img标签
     wechatqrcodeTitle: "微信扫一扫分享", // 微信二维码提示文字
     wechatqrcodeHelper: '<p>打开扫一扫</p><p>在手机上打开即可分享至朋友圈。</p>',

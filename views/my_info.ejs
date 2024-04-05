@@ -20,7 +20,7 @@
 			<div>
 				<div class=" mdui-col-xs-2" style="  margin-bottom: 10px;
 				">
-					<mdui-text-field variant="outlined" id="my_nickname" maxlength="10" value="<%= nickname %>"
+					<mdui-text-field variant="outlined" id="my_display_name" maxlength="10" value="<%= display_name %>"
 						label="昵称"></mdui-text-field>
 
 				</div>
@@ -122,12 +122,12 @@
 		
 
 			<script>
-				const pwdialog = document.querySelector(".password-dialog");
+				const passwordialog = document.querySelector(".password-dialog");
 				const openpwButton = document.querySelector(".open-password-dialog");
 				const closepwButton = document.querySelector(".close-password-dialog");
 
-				openpwButton.addEventListener("click", () => pwdialog.open = true);
-				closepwButton.addEventListener("click", () => pwdialog.open = false);
+				openpwButton.addEventListener("click", () => passwordialog.open = true);
+				closepwButton.addEventListener("click", () => passwordialog.open = false);
 			</script>
 
 

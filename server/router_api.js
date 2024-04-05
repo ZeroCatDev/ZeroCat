@@ -93,11 +93,11 @@ router.get('/play', function (req, res) {
         }
         
        
-            SQL = `SELECT user.nickname,scratch.motto,`+
+            SQL = `SELECT ow_Users.display_name,scratch.motto,`+
           
-            ` FROM user `+
-            ` LEFT JOIN user ON (user.nickname=user.neme) `+
-            ` WHERE user.id=${req.query.id}`;
+            ` FROM ow_Users `+
+            ` LEFT JOIN ow_Users ON (ow_Users.display_name=ow_Users.neme) `+
+            ` WHERE ow_Users.id=${req.query.id}`;
          
     
         DB.query(SQL, function (err, SCRATCH) {
@@ -117,7 +117,7 @@ router.get('/play', function (req, res) {
 router.get('/usertx', function (req, res) {
     
 
-    SQL = `SELECT images FROM user WHERE id = ${req.query.id};`;
+    SQL = `SELECT images FROM ow_Users WHERE id = ${req.query.id};`;
   
       DB.query(SQL, function (err, USER) {
         if (err || USER.length == 0) {
@@ -134,7 +134,7 @@ router.get('/usertx', function (req, res) {
 router.post("/getuserinfo", function (req, res) {
     //获取已分享的作品总数：1:普通作品，2：推荐的优秀作品
     
-    SQL = `SELECT id,nickname, motto,images,regTime FROM user WHERE id=?;`;
+    SQL = `SELECT id,display_name, motto,images,regTime FROM ow_Users WHERE id=?;`;
     id = [req.query.id || req.body.id]
 
       DB.qww(SQL,id, function (err, USER) {
@@ -151,7 +151,7 @@ router.post("/getuserinfo", function (req, res) {
     router.get("/getuserinfo", function (req, res) {
       //获取已分享的作品总数：1:普通作品，2：推荐的优秀作品
       
-        SQL = `SELECT id,nickname, motto,images,regTime,tag FROM user WHERE id=?;`;
+        SQL = `SELECT id,display_name, motto,images,regTime FROM ow_Users WHERE id=?;`;
     id = [req.query.id || req.body.id]
   
         DB.qww(SQL,id, function (err, USER) {
@@ -167,7 +167,7 @@ router.post("/getuserinfo", function (req, res) {
 //平台概况
 router.get('/info', function (req, res) {   
   var SQL = `SELECT `+
-             ` (SELECT count(id) FROM user) AS user_count, `+ 
+             ` (SELECT count(id) FROM  ow_Users ) AS user_count, `+ 
              ` (SELECT count(id) FROM scratch) AS scratch_count, ` +
              ` (SELECT count(id) FROM python) AS python_count, ` +
              ` (SELECT count(id) FROM material_backdrop) AS backdrop_count, `+

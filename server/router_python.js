@@ -37,7 +37,7 @@ router.post("/view/getPythonProjects", function (req, res) {
       type = "time";
     }
   
-    var SQL = `SELECT python.id, python.title, python.state,python.authorid, python.description,python.view_count,user.nickname,user.motto FROM python JOIN user ON python.authorid = user.id WHERE python.state > 0 ORDER BY python.${type} DESC LIMIT ${
+    var SQL = `SELECT python.id, python.title, python.state,python.authorid, python.description,python.view_count,ow_Users.display_name,ow_Users.motto FROM python JOIN ow_Users ON python.authorid = ow_Users.id WHERE python.state > 0 ORDER BY python.${type} DESC LIMIT ${
       (curr - 1) * limit
     }, ${limit}`;
     DB.query(SQL, function (err, data) {
@@ -61,7 +61,7 @@ router.post("/view/seachPythonProjects", function (req, res) {
       searchinfo = "src";
     }
     //var SQL = `SELECT id, title FROM ${tabelName} WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
-    var SQL = `SELECT ${tabelName}.id, ${tabelName}.title, ${tabelName}.state,${tabelName}.authorid,${tabelName}.description,${tabelName}.view_count, user.nickname,user.motto FROM ${tabelName} JOIN user ON ${tabelName}.authorid = user.id WHERE ${tabelName}.state>0 AND (${searchinfo} LIKE ?)`;
+    var SQL = `SELECT ${tabelName}.id, ${tabelName}.title, ${tabelName}.state,${tabelName}.authorid,${tabelName}.description,${tabelName}.view_count, ow_Users.display_name,ow_Users.motto FROM ${tabelName} JOIN ow_Users ON ${tabelName}.authorid = ow_Users.id WHERE ${tabelName}.state>0 AND (${searchinfo} LIKE ?)`;
     var WHERE = [`%${req.body.txt}%`];
     DB.qww(SQL, WHERE, function (err, data) {
       if (err) {
@@ -215,8 +215,8 @@ router.post('/YxLibrary_count', function (req, res) {
 router.post('/YxLibrary_data', function (req, res) {
     //获取当前数据集合：以被浏览次数降序排列，每次取16个
     var page = parseInt(req.body.page);
-    SQL = `SELECT python.id, python.authorid, python.view_count, python.time, python.title, python.description, user.nickname AS author_nickname FROM python `+
-    ` LEFT JOIN user ON user.id=python.authorid `+
+    SQL = `SELECT python.id, python.authorid, python.view_count, python.time, python.title, python.description, ow_Users.display_name AS author_display_name FROM python `+
+    ` LEFT JOIN ow_Users ON ow_Users.id=python.authorid `+
     ` WHERE python.state=2 ORDER BY python.view_count DESC LIMIT ${(page-1)*16},${16}`;
     DB.query(SQL, function (err, data) {
         if (err) {

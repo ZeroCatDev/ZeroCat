@@ -41,7 +41,7 @@
           <mdui-list-item rounded active href="/user?id=<%= userid %>" description="查看个人主页"> 
             <mdui-avatar slot="icon"
               src="/api/usertx?id=<%= userid %>"></mdui-avatar>
-            <%= nickname %>
+            <%= display_name %>
           </mdui-list-item>
           <mdui-list-item rounded href="/my/scratch" description="管理Scratch作品">Scratch</mdui-list-item>
           <mdui-list-item rounded href="/my/python" description="管理Python作品">Python</mdui-list-item>
@@ -72,6 +72,8 @@
       <mdui-list-item rounded href="https://wuyuan.dev" description="https://wuyuan.dev" target="_blank">由 孙悟元 开发</mdui-list-item>
       <mdui-list-item rounded href="https://github.com/ourworlddev/" description="OurWorldDev" target="_blank">Github</mdui-list-item>
   <!-- 以上 -->
+  <mdui-list-item rounded href="https://afdian.net/a/wydev" description="孙悟元 的爱发电" target="_blank">赞助</mdui-list-item>
+
       <mdui-list-item rounded href="http://yhcoding.site/" description="友情链接" target="_blank">银河编程社区</mdui-list-item>
       <mdui-list-item rounded href="https://www.rainyun.com/wuyuan_?s=ourworld" description="友情链接" target="_blank">雨云</mdui-list-item>
   
@@ -105,12 +107,19 @@
     <mdui-navigation-rail-item icon="home" href="/" value="/">主页</mdui-navigation-rail-item>
     <mdui-navigation-rail-item icon="code" href="/scratch" value="/scratch">Scratch</mdui-navigation-rail-item>
     <mdui-navigation-rail-item icon="code" href="/python" value="/python">Python</mdui-navigation-rail-item>
+    <mdui-navigation-rail-item icon="handshake" href="https://afdian.net/a/wydev" value="赞助" target="_blank">赞助</mdui-navigation-rail-item>
+
   </mdui-navigation-rail>
-  <mdui-bottom-app-bar scroll-behavior="hide" scroll-threshold="30" class="mobile">
+  <mdui-bottom-app-bar class="mobile" 
+
+  >
     <mdui-button-icon icon="menu" class="open-tools"></mdui-button-icon>
     <mdui-button-icon icon="home" href="/"></mdui-button-icon>
     <mdui-button-icon icon="account_circle" class="open-user"></mdui-button-icon>
     <mdui-button-icon icon="code" class="open-types"></mdui-button-icon>
+    <mdui-button-icon icon="handshake" href="https://afdian.net/a/wydev" target="_blank"></mdui-button-icon>
+
+
     <div style="flex-grow: 1"></div>
     <mdui-fab icon="add" class="open-add"></mdui-fab>
   </mdui-bottom-app-bar>

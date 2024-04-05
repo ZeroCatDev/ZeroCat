@@ -36,7 +36,7 @@ router.get('/default', function (req, res) {
 //平台概况
 router.get('/info', function (req, res) {   
     var SQL = `SELECT `+
-               ` (SELECT count(id) FROM user) AS user_count, `+ 
+               ` (SELECT count(id) FROM ow_Users ) AS user_count, `+ 
                ` (SELECT count(id) FROM scratch) AS scratch_count, ` +
                ` (SELECT count(id) FROM python) AS python_count, ` +
                ` (SELECT count(id) FROM material_backdrop) AS backdrop_count, `+
@@ -78,9 +78,9 @@ router.get('/user', function (req, res) {
 router.get('/user/data', function(req, res) {
     var state = parseInt(req.query['s']);
     if (state == 9){//0：正常用户，2：封号用户，9：查找用户
-        var SQL = `SELECT count(id) AS c FROM user WHERE username LIKE '%${req.query.t}%'`;
+        var SQL = `SELECT count(id) AS c FROM ow_Users WHERE email LIKE '%${req.query.t}%'`;
     } else {
-        var SQL = `SELECT count(id) AS c FROM user WHERE state=${state}`;
+        var SQL = `SELECT count(id) AS c FROM ow_Users WHERE state=${state}`;
     }
     DB.query(SQL,function (err, count){
         if (err || count.length==0 || count[0]['c']==0) {
@@ -92,9 +92,9 @@ router.get('/user/data', function(req, res) {
         var limit = parseInt(req.query['limit']);
 
         if (state == 9){//0：正常用户，2：封号用户，9：查找用户
-            SQL = `SELECT id,username,nickname,state,regTime FROM user WHERE username LIKE '%${req.query.t}%' LIMIT ${(page-1)*limit}, ${limit}`;
+            SQL = `SELECT id,email,display_name,state,regTime FROM ow_Users WHERE email LIKE '%${req.query.t}%' LIMIT ${(page-1)*limit}, ${limit}`;
         } else {
-            SQL = `SELECT id,username,nickname,state,regTime FROM user WHERE state=${state} LIMIT ${(page-1)*limit}, ${limit}`;
+            SQL = `SELECT id,email,display_name,state,regTime FROM ow_Users WHERE state=${state} LIMIT ${(page-1)*limit}, ${limit}`;
         }
         DB.query(SQL, function (err, data) {
             if (err) {
@@ -106,15 +106,15 @@ router.get('/user/data', function(req, res) {
     });
 });
 //管理员重置用户密码
-router.post('/user_setpwd', function (req, res) {
+router.post('/user_setpassword', function (req, res) {
     if (!req.body.pw || !req.body.un|| !I.userpwTest(req.body.pw)){
         res.status(200).send({"status":"failed","msg":"再试一次"});
         return;
     }
 
     //对密码进行加密
-    let pw = I.md5(I.md5(req.body.pw)+req.body.un);
-    var UPDATE = `UPDATE user SET pwd='${pw}' WHERE username='${req.body['un']}' LIMIT 1`;
+    let pw = I.hash(req.body.pw)
+    var UPDATE = `UPDATE ow_Users SET password='${pw}' WHERE email='${req.body['un']}' LIMIT 1`;
     DB.query(UPDATE, function (err, d) {
         if (err) {
             res.status(200).send({"status":"failed","msg":"再试一次"})
@@ -130,7 +130,7 @@ router.post('/user_setstate',function(req,res){
         state = 2;//未知时，都当作封号处理
     }
     //var state = parseInt(req.body['s']);
-    var UPDATE = `UPDATE user SET state=${state} WHERE id=${req.body.id} LIMIT 1`;
+    var UPDATE = `UPDATE ow_Users SET state=${state} WHERE id=${req.body.id} LIMIT 1`;
     DB.query(UPDATE, function(err,d){
         if(err){
             res.status(200).send({"status":"failed","msg":"再试一次"})
@@ -142,12 +142,12 @@ router.post('/user_setstate',function(req,res){
 });
 //用户管理：创建新用户，功能
 router.post('/user_new',function(req,res){ 
-    if (!req.body.un|| !I.usernameTest(req.body.un)){
+    if (!req.body.un|| !I.emailTest(req.body.un)){
         res.status(200).send({"status":"failed","msg":"再试一次"});
         return;
     }
     //检查账号是否已存在
-    var SQL = `SELECT id FROM user WHERE username='${req.body.un}' LIMIT 1`;
+    var SQL = `SELECT id FROM ow_Users WHERE email='${req.body.un}' LIMIT 1`;
     DB.query(SQL, function (err, User) {
         if (err) {
             res.status(200).send( msg_fail);
@@ -161,8 +161,8 @@ router.post('/user_new',function(req,res){
         //对密码进行加密:默认密码为用户手机号后8位
         var nn = req.body.un.substring(req.body.un.length-6);//昵称
         var pw = nn;//req.body.un.substring(req.body.un.length-6);//初始密码
-        pw = I.md5(I.md5(pw)+req.body.un);
-        SQL = `INSERT INTO user (username,pwd,nickname) VALUES ('${req.body.un}','${pw}','${nn}')`;
+        pw = I.hash(pw)
+        SQL = `INSERT INTO  ow_Users (email,password,display_name) VALUES ('${req.body.un}','${pw}','${nn}')`;
         DB.query(SQL, function (err, newUser) {
             if (err) {
                 res.status(200).send( { 'status': 'fail', 'msg': '再试一次' });
@@ -211,8 +211,8 @@ router.post('/user_new100',function(req,res){
         }
 
         var pw = un.substring(un.length-6);//初始密码
-        pw = I.md5(I.md5(pw)+un);
-        SQL = `INSERT INTO user (username, pwd, nickname) VALUES ('${un}','${pw}','${un}')`;
+        pw = I.hash(pw)
+        SQL = `INSERT INTO  ow_Users (email, password, display_name) VALUES ('${un}','${pw}','${un}')`;
         DB.query(SQL, function (err, newUser) {if (err) {return;}});
     }
 
@@ -254,15 +254,15 @@ router.get('/works/scratch/data', function(req, res) {
         WHERE = ` WHERE scratch.state=2 `;
     } else if (req.query.w == 'search_workname'){
         WHERE = ` WHERE scratch.title LIKE '%${req.query.v}%' `;
-    } else if (req.query.w == 'search_nickname'){
-        NICKNAME = ` AND user.nickname LIKE '%${req.query.v}%' `;
+    } else if (req.query.w == 'search_display_name'){
+        NICKNAME = ` AND ow_Users.display_name LIKE '%${req.query.v}%' `;
     }
 
     if (NICKNAME==''){
         var SQL = `SELECT count(id) AS c FROM scratch ${WHERE}`;
     } else {
         var SQL = `SELECT count(scratch.id) AS c FROM scratch `+
-        ` INNER JOIN user ON (user.id=scratch.authorid ${NICKNAME}) `;
+        ` INNER JOIN ow_Users ON (ow_Users.id=scratch.authorid ${NICKNAME}) `;
     }
     DB.query(SQL, function (err, count){
         if (err || count[0]['c']==0) {
@@ -272,8 +272,8 @@ router.get('/works/scratch/data', function(req, res) {
         //获取当前数据集合
         var page = parseInt(req.query['page']);
         var limit = parseInt(req.query['limit']);
-        SQL = `SELECT scratch.id, scratch.state, scratch.title, scratch.time, user.username, user.nickname FROM scratch `
-             +` INNER JOIN user ON (user.id=scratch.authorid ${NICKNAME}) `
+        SQL = `SELECT scratch.id, scratch.state, scratch.title, scratch.time, ow_Users.email, ow_Users.display_name FROM scratch `
+             +` INNER JOIN ow_Users ON (ow_Users.id=scratch.authorid ${NICKNAME}) `
              +` ${WHERE} ORDER BY scratch.time DESC LIMIT ${(page-1)*limit},${limit}`;
 
         DB.query(SQL, function (err, data) {
@@ -360,15 +360,15 @@ router.get('/works/python/data', function(req, res) {
         WHERE = ` WHERE python.state=2 `;
     } else if (req.query.w == 'search_workname'){
         WHERE = ` WHERE python.title LIKE '%${req.query.v}%' `;
-    } else if (req.query.w == 'search_nickname'){
-        NICKNAME = ` AND user.nickname LIKE '%${req.query.v}%' `;
+    } else if (req.query.w == 'search_display_name'){
+        NICKNAME = ` AND ow_Users.display_name LIKE '%${req.query.v}%' `;
     }
 
     if (NICKNAME==''){
         var SQL = `SELECT count(id) AS c FROM python ${WHERE}`;
     } else {
         var SQL = `SELECT count(python.id) AS c FROM python `+
-        ` INNER JOIN user ON (user.id=python.authorid ${NICKNAME}) `;
+        ` INNER JOIN ow_Users ON (ow_Users.id=python.authorid ${NICKNAME}) `;
     }
     DB.query(SQL, function (err, count){
         if (err || count[0]['c']==0) {
@@ -378,8 +378,8 @@ router.get('/works/python/data', function(req, res) {
         //获取当前数据集合
         var page = parseInt(req.query['page']);
         var limit = parseInt(req.query['limit']);
-        SQL = `SELECT python.id, python.state, python.title, python.time, user.username, user.nickname FROM python `
-             +` INNER JOIN user ON (user.id=python.authorid ${NICKNAME}) `
+        SQL = `SELECT python.id, python.state, python.title, python.time, ow_Users.email, ow_Users.display_name FROM python `
+             +` INNER JOIN ow_Users ON (ow_Users.id=python.authorid ${NICKNAME}) `
              +` ${WHERE} ORDER BY python.time DESC LIMIT ${(page-1)*limit},${limit}`;
 
         DB.query(SQL, function (err, data) {

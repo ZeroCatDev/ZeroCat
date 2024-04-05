@@ -37,7 +37,7 @@ router.post("/view/getScratchProjects", function (req, res) {
     type = "time";
   }
 
-  var SQL = `SELECT scratch.id, scratch.title, scratch.state,scratch.authorid,scratch.view_count, user.nickname,user.motto FROM scratch JOIN user ON scratch.authorid = user.id WHERE scratch.state > 0 ORDER BY scratch.${type} DESC LIMIT ${
+  var SQL = `SELECT scratch.id, scratch.title, scratch.state,scratch.authorid,scratch.view_count, ow_Users.display_name,ow_Users.motto FROM scratch JOIN ow_Users ON scratch.authorid = ow_Users.id WHERE scratch.state > 0 ORDER BY scratch.${type} DESC LIMIT ${
     (curr - 1) * limit
   }, ${limit}`;
   DB.query(SQL, function (err, data) {
@@ -61,7 +61,7 @@ router.post("/view/seachScratchProjects", function (req, res) {
     searchinfo = "src";
   }
   //var SQL = `SELECT id, title FROM ${tabelName} WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
-  var SQL = `SELECT ${tabelName}.id, ${tabelName}.title, ${tabelName}.state,${tabelName}.authorid,${tabelName}.description,${tabelName}.view_count, user.nickname,user.motto FROM ${tabelName} JOIN user ON ${tabelName}.authorid = user.id WHERE ${tabelName}.state>0 AND (${searchinfo} LIKE ?)`;
+  var SQL = `SELECT ${tabelName}.id, ${tabelName}.title, ${tabelName}.state,${tabelName}.authorid,${tabelName}.description,${tabelName}.view_count, ow_Users.display_name,ow_Users.motto FROM ${tabelName} JOIN ow_Users ON ${tabelName}.authorid = ow_Users.id WHERE ${tabelName}.state>0 AND (${searchinfo} LIKE ?)`;
   var WHERE = [`%${req.body.txt}%`];
   DB.qww(SQL, WHERE, function (err, data) {
     if (err) {
@@ -99,10 +99,10 @@ router.get("/play", function (req, res) {
         `SELECT scratch.id,scratch.authorid,scratch.time,scratch.view_count,scratch.like_count,` +
         ` scratch.favo_count,scratch.title,scratch.state,scratch.description,` +
         ` '' AS likeid, '' AS favoid,` +
-        ` user.nickname AS author_nickname,` +
-        ` user.motto AS author_motto` +
+        ` ow_Users.display_name AS author_display_name,` +
+        ` ow_Users.motto AS author_motto` +
         ` FROM scratch ` +
-        ` LEFT JOIN user ON (user.id=scratch.authorid) ` +
+        ` LEFT JOIN ow_Users ON (ow_Users.id=scratch.authorid) ` +
         ` WHERE scratch.id=${req.query.id} AND scratch.state>=1 LIMIT 1`;
     } else {
       //登录用户，需要判断是否已点赞、收藏
@@ -111,12 +111,12 @@ router.get("/play", function (req, res) {
         ` scratch.favo_count,scratch.title,scratch.state,scratch.description,` +
         ` scratch_like.id AS likeid,` +
         ` scratch_favo.id AS favoid,` +
-        ` user.nickname AS author_nickname,` +
-        ` user.motto AS author_motto` +
+        ` ow_Users.display_name AS author_display_name,` +
+        ` ow_Users.motto AS author_motto` +
         ` FROM scratch ` +
         ` LEFT JOIN scratch_like ON (scratch_like.userid=${res.locals.userid} AND scratch_like.projectid=${req.query.id}) ` +
         ` LEFT JOIN scratch_favo ON (scratch_favo.userid=${res.locals.userid} AND scratch_favo.projectid=${req.query.id}) ` +
-        ` LEFT JOIN user ON (user.id=scratch.authorid) ` +
+        ` LEFT JOIN ow_Users ON (ow_Users.id=scratch.authorid) ` +
         ` WHERE scratch.id=${req.query.id} AND scratch.state>=1 LIMIT 1`;
     }
 
@@ -141,11 +141,11 @@ router.get("/projectinfo", function (req, res) {
   `SELECT scratch.id,scratch.authorid,scratch.time,scratch.view_count,scratch.like_count,` +
   ` scratch.favo_count,scratch.title,scratch.state,scratch.description,` +
   ` '' AS likeid, '' AS favoid,` +
-  ` user.nickname AS author_nickname,` +
-  ` user.images AS author_images,` +
-  ` user.motto AS author_motto` +
+  ` ow_Users.display_name AS author_display_name,` +
+  ` ow_Users.images AS author_images,` +
+  ` ow_Users.motto AS author_motto` +
   ` FROM scratch ` +
-  ` LEFT JOIN user ON (user.id=scratch.authorid) ` +
+  ` LEFT JOIN ow_Users ON (ow_Users.id=scratch.authorid) ` +
   ` WHERE scratch.id=${req.query.id} AND scratch.state>=1 LIMIT 1`;
   DB.query(SQL, function (err, SCRATCH) {
     if (err || SCRATCH.length == 0) {
@@ -457,7 +457,7 @@ router.post("/thumbnail/:projectid", function (req, res) {
         //console.log(err);
         //console.log("保存缩略图失败：" + strFileName);
       } else {
-        I.S3update("scratch_slt/" + req.params.projectid, strFileName,res.locals.username);
+        I.S3update("scratch_slt/" + req.params.projectid, strFileName,res.locals.email);
 
         ////console.log('保存缩略图成功：'+strFileName);
         res.status(200).send({ status: "ok" });
@@ -537,7 +537,7 @@ router.post("/assets/:filename", function (req, res) {
             res.send(404);
             //console.log("素材保存失败：" + strFileName);
           } else {
-            I.S3update("material/asset/" + req.params.filename, strFileName,res.locals.username);
+            I.S3update("material/asset/" + req.params.filename, strFileName,res.locals.email);
 
             //console.log("素材保存成功：" + strFileName);
             res.status(200).send({ status: "ok" });
@@ -664,8 +664,8 @@ router.post("/getMyProjectLibrary", function (req, res) {
 // 获取优秀作品列表
 router.post("/getYxProjectLibrary", function (req, res) {
   var SELECT =
-    ` SELECT s.id, s.title, s.view_count, s.authorid, u.nickname, u.images FROM scratch s ` +
-    " LEFT JOIN user u ON u.id=s.authorid " +
+    ` SELECT s.id, s.title, s.view_count, s.authorid, u.display_name, u.images FROM scratch s ` +
+    " LEFT JOIN ow_Users u ON u.id=s.authorid " +
     ` WHERE s.state=2 ORDER BY s.view_count DESC LIMIT ${req.body.l},${req.body.n}`;
   DB.query(SELECT, function (err, SCRATCH) {
     if (err) {
@@ -893,15 +893,15 @@ router.post("/getSession", (req, res) => {
   if (!res.locals.login) {
     var new_session = {
       userid: 0,
-      username: "",
-      nickname: "",
+      email: "",
+      display_name: "",
       avatar: ``,
     };
   } else {
     var new_session = {
       userid: parseInt(res.locals["userid"]),
-      username: res.locals["username"],
-      nickname: res.locals["nickname"],
+      email: res.locals["email"],
+      display_name: res.locals["display_name"],
       avatar: `${process.env.S3staticurl}/user/${res.locals["avatar"]}`,
     };
   }
@@ -911,7 +911,7 @@ router.post("/getSession", (req, res) => {
 //从Scratch中退出
 router.post("/logout", function (req, res) {
   logout(req, res);
-  var login_info = [{ username: "OurWorldExampleUser", success: 1 }];
+  var login_info = [{ email: "OurWorldExampleUser", success: 1 }];
   res.status(200).send(login_info);
 });
 module.exports = router;
