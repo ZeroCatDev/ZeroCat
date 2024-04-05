@@ -1,22 +1,22 @@
-<%- include('./html-head.ejs', {pageTitle: '个人中心'}); %>
+<%- include('./html-head.ejs', {pageTitle: '个人中心' }); %>
 
-			<div class="mdui-typo-display-2">
-				个人信息
-			</div>
-			<div class="mdui-typo-headline-opacity">
-				您可以随时修改个人信息，可能要重新登录后本地生效
-			</div><br />
+	<div class="mdui-typo-display-2">
+		个人信息
+	</div>
+	<div class="mdui-typo-headline-opacity">
+		您可以随时修改个人信息，可能要重新登录后本地生效
+	</div><br />
 
 
 
-			<mdui-tabs value="tab-1">
-				<mdui-tab value="tab-1">用户信息</mdui-tab>
-				<mdui-tab value="tab-2">头像</mdui-tab>
-				<mdui-tab value="tab-3">安全</mdui-tab>
-			  
-				<mdui-tab-panel slot="panel" value="tab-1">
-					<br/>
-					
+	<mdui-tabs value="tab-1">
+		<mdui-tab value="tab-1">用户信息</mdui-tab>
+		<mdui-tab value="tab-2">头像</mdui-tab>
+		<mdui-tab value="tab-3">安全</mdui-tab>
+
+		<mdui-tab-panel slot="panel" value="tab-1">
+			<br />
+
 			<div>
 				<div class=" mdui-col-xs-2" style="  margin-bottom: 10px;
 				">
@@ -24,31 +24,32 @@
 						label="昵称"></mdui-text-field>
 
 				</div>
-	<br/>
+				<br />
 				<div class="mdui-col-xs-12" style="  margin-bottom: 10px;
 				">
-					<mdui-text-field variant="outlined" id="my_aboutme" maxlength="1000" value="<%= motto %>"
-						label="简介" autosize min-rows="2"></mdui-text-field>
+					<mdui-text-field variant="outlined" id="my_aboutme" maxlength="1000" value="<%= motto %>" label="简介"
+						autosize min-rows="2"></mdui-text-field>
 				</div>
-				<br/>		
-			<mdui-select variant="outlined" id="sex-chick" label="性别" class="mdui-col-xs-3" <% if (sex==1) { %>value="1" <% } %>
-				<% if (sex==0) { %>value="0" <% } %> >
-						<mdui-menu-item value="1">男</mdui-menu-item>
-						<mdui-menu-item value="0">女</mdui-menu-item>
-		</mdui-select>
+				<br />
+				<mdui-select variant="outlined" id="sex-chick" label="性别" class="mdui-col-xs-3" <% if (sex==1) {
+					%>value="1" <% } %>
+						<% if (sex==0) { %>value="0" <% } %> >
+								<mdui-menu-item value="1">男</mdui-menu-item>
+								<mdui-menu-item value="0">女</mdui-menu-item>
+				</mdui-select>
 			</div>
 			<div style="float: right;">
 				<mdui-button href="/my/info">取消</mdui-button>
 				<mdui-button onclick="updataInfo()">确认</mdui-button>
 			</div>
-				</mdui-tab-panel>
-				<mdui-tab-panel slot="panel" value="tab-2"><br/>
-					<img class="mdui-img-circle mdui-m-l-2" src="/api/usertx?id=<%= userid %>"
-							style="height: 100px;width: auto;border-radius: 15px;" />
-							<br/>	<br/>
-						<mdui-button class="avatarUpload " lay-data="{exts:'png|jpg', size:1024}">修改头像</mdui-button>
+		</mdui-tab-panel>
+		<mdui-tab-panel slot="panel" value="tab-2"><br />
+			<img class="mdui-img-circle mdui-m-l-2" src="/api/usertx?id=<%= userid %>"
+				style="height: 100px;width: auto;border-radius: 15px;" />
+			<br /> <br />
+			<mdui-button class="avatarUpload " lay-data="{exts:'png|jpg', size:1024}">修改头像</mdui-button>
 
-					<!--	<script src="https://registry.npmmirror.com/compressorjs/1.2.1/files/dist/compressor.js" crossorigin="anonymous"></script>
+			<!--	<script src="https://registry.npmmirror.com/compressorjs/1.2.1/files/dist/compressor.js" crossorigin="anonymous"></script>
 
 
 						<input type="file" id="file" accept="image/*">
@@ -96,45 +97,34 @@
 	
 	});</script>-->
 
-			</mdui-tab-panel><br/>
-				<mdui-tab-panel slot="panel" value="tab-3">	<br/>		<mdui-text-field variant="outlined" id='old_password'  type="password" 
-					label="原密码" autocomplete="off"></mdui-text-field><br/><br/>
-					<mdui-text-field variant="outlined" id='new_password'  type="password" 
-					label="新密码" autocomplete="off"></mdui-text-field><br/>
-					<div style="float: right;">
-						<mdui-button   onclick="updatePassword()">确认</mdui-button>
-					</div>
-			</mdui-tab-panel>
-			  </mdui-tabs>
+		</mdui-tab-panel><br />
+		<mdui-tab-panel slot="panel" value="tab-3"> <br /> <mdui-text-field variant="outlined" id='old_password'
+				type="password" label="原密码" autocomplete="off" toggle-password></mdui-text-field><br /><br />
+			<mdui-text-field variant="outlined" id='new_password' type="password" label="新密码" autocomplete="off"
+				toggle-password></mdui-text-field><br />
+			<div style="float: right;">
+				<mdui-button onclick="updatePassword()">确认</mdui-button>
+			</div>
+		</mdui-tab-panel>
+	</mdui-tabs>
 
-			<mdui-dialog class="password-dialog" 
-			headline="修改密码"
-  description="请确保密码足够安全"
-			>
-			<mdui-text-field variant="outlined" id='old_password'  type="password" 
-				label="原密码" autocomplete="off"></mdui-text-field><br/><br/>
-				<mdui-text-field variant="outlined" id='new_password'  type="password" 
-				label="新密码" autocomplete="off"></mdui-text-field>
-				<mdui-button slot="action" variant="text" class="close-password-dialog">关闭</mdui-button>
-				<mdui-button slot="action" variant="tonal" onclick="updatePassword()">确认</mdui-button>
-			</mdui-dialog>
 
-		
 
-			<script>
-				const passwordialog = document.querySelector(".password-dialog");
-				const openpwButton = document.querySelector(".open-password-dialog");
-				const closepwButton = document.querySelector(".close-password-dialog");
 
-				openpwButton.addEventListener("click", () => passwordialog.open = true);
-				closepwButton.addEventListener("click", () => passwordialog.open = false);
-			</script>
+	<script>
+		const passwordialog = document.querySelector(".password-dialog");
+		const openpwButton = document.querySelector(".open-password-dialog");
+		const closepwButton = document.querySelector(".close-password-dialog");
+
+		openpwButton.addEventListener("click", () => passwordialog.open = true);
+		closepwButton.addEventListener("click", () => passwordialog.open = false);
+	</script>
 
 
 
 
 
-		<script type="text/javascript" src="<%= process.env.staticurl %>/js/gter.js"></script>
-		
+	<script type="text/javascript" src="<%= process.env.staticurl %>/js/gter.js"></script>
 
-		<%- include('./html-footer.ejs', {page: 'myinfo'}); %>
+
+	<%- include('./html-footer.ejs', {page: 'myinfo' }); %>
