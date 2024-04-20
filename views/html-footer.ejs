@@ -104,6 +104,8 @@ style="min-height: calc(100vh - 208px);min-width: 497px;width: 100%;border-radiu
 <script src="https://registry.npmmirror.com/jwt-decode/4.0.0/files/build/cjs/index.js"></script>
   <script>
     function userinfo() {
+      isLogin = false;
+      _userid = 0
       if (Cookies.get('token')){
         try { 
       const token = Cookies.get('token');
@@ -115,7 +117,9 @@ $('.ow-usernick').text(decoded.display_name);
 $('.ow-userid').text(decoded.userid);
 $('.ow-useravatar').attr("src", "/api/usertx?id=" + decoded.userid);
 $('.ow-useravatar').attr("alt", decoded.display_name);
-        
+isLogin = true;
+_userid = decoded.userid
+
       }
       catch (error) {
         console.log(error)

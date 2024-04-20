@@ -1,11 +1,13 @@
+require('dotenv').config({ override: true })
+
 var express = require("express");
 var app = express();
 var http = require("http");
 const jwt = require("jsonwebtoken"); // 首先确保安装了jsonwebtoken库
 
 //环境变量
-require("dotenv").config();
 
+console.log(process.env.staticurl);
 // 日志部分
 const opentelemetry = require("@opentelemetry/sdk-node");
 const {
@@ -102,6 +104,7 @@ var DB = require("./server/lib/database.js");
 //设置静态资源路径
 if (process.env.localstatic == "true") {
   app.use(process.env.staticurl, express.static(process.env.staticpath));
+  console.log("local static");
 }
 //全局变量
 global.dirname = __dirname;
@@ -174,22 +177,9 @@ app.all("*", function (req, res, next) {
   }
 });
 
-// 辅助函数：从请求头或请求体中获取JWT Token
-function getTokenFromRequest(req) {
-  if (req.headers.token && req.headers.token) {
-    return req.headers.token.split(" ")[1];
-  } else if (req.body && req.body.token) {
-    return req.body.token;
-  } else if (req.query && req.query.token) {
-    return req.query.token;
-  }
-  return null;
-}
 //首页
 app.get("/", function (req, res) {
-
-        res.render('index.ejs');
-    
+  res.render('index.ejs');
 });
 
 //放在最后，确保路由时能先执行app.all=====================
@@ -230,9 +220,6 @@ app.get("/tools/asdm", function (req, res, next) {
 var router_python = require("./server/router_python.js");
 app.use("/python", router_python);
 
-//头图系统
-var router_ads = require("./server/router_ads.js");
-app.use("/ads", router_ads);
 
 process.on("uncaughtException", function (err) {
   console.log("Caught exception: " + err);

@@ -11,6 +11,9 @@ let cryptojs = require("crypto-js");
 router.all("*", function (req, res, next) {
   next();
 });
+
+
+
 const request = require("request");
 var nodemailer = require("nodemailer");
 router.get("/", function (req, res) {
@@ -138,22 +141,26 @@ router.post("/login", function (req, res) {
             maxAge: 604800000,
             signed: true,
           });
+          var token = I.GenerateJwt({
+            userid: User["id"],
+            email: User["email"],
+            display_name: User["display_name"],
+            avatar: User["images"]
+          })
+          console.log(token);
           res.cookie(
             "token",
-            I.GenerateJwt({
-              userid: User["id"],
-              email: User["email"],
-              display_name: User["display_name"],
-              avatar: User["images"]
-            }),
+            token,
             { maxAge: 604800000 }
           );
+          
           res.status(200).send({
             status: "OK",
             userid: parseInt(User["id"]),
             email: User["email"],
             display_name: User["display_name"],
             avatar: User["images"],
+            token: token,
           });
         }
       });
@@ -171,7 +178,7 @@ var logout = function (req, res) {
   res.cookie("userid", "", { maxAge: 0, signed: true });
   res.cookie("email", "", { maxAge: 0, signed: true });
   res.cookie("display_name", "", { maxAge: 0, signed: true });
-  res.cookie("token", "", { maxAge: 0, signed: true });
+  res.cookie("token", "", { maxAge: 0, signed: true 		});
 };
 router.get("/logout", function (req, res) {
   logout(req, res);
@@ -513,7 +520,7 @@ router.get("/tuxiaochao", function (req, res) {
     var txcinfo =
       uid +
       res.locals["display_name"] +
-      process.env.S3staticurl+'/user/'+USER[0].images+''+
+      process.env.S3staticurl+'/user/'+USER[0].images+
       process.env.txckey;
     var cryptostr = cryptojs.MD5(txcinfo).toString();
     
@@ -524,7 +531,7 @@ router.get("/tuxiaochao", function (req, res) {
         res.locals["userid"] +
         "&display_name=" +
         res.locals["display_name"] +
-        "&avatar="+process.env.S3staticurl+'/user/'+USER[0].images+''+
+        "&avatar="+process.env.S3staticurl+'/user/'+USER[0].images+
         "&user_signature=" +
         cryptostr
     );

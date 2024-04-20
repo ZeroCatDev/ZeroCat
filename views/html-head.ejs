@@ -2,254 +2,289 @@
 <html lang="zh-cmn-Hans">
 
 <head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-	<title><%= process.env.SiteName %> - <%= pageTitle %></title>
-	<link rel="shortcut icon" href="<%= process.env.staticurl %>/img/siteicon.png">
-	<meta name="description" content="<%= process.env.SiteSlogan %>">
-	<meta name="keyword" content="<%= process.env.SiteSlogan %>">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title>
+    <%= process.env.SiteName %> - <%= pageTitle %>
+  </title>
+  <link rel="shortcut icon" href="<%= process.env.staticurl %>/img/siteicon.png">
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta charset="UTF-8">
 
+  <meta name="description" content="OurWorld是新一代开源编程社区！坚信每一行代码都可以改变世界，我们致力于提供优质的开源编程社区，让开源编程更加容易。">
+  <meta name="keyword" content="scratch编程,scratch社区,python编程,python社区,在线编程,编程社区,开源,自托管,开源编程社区,代码,阿尔法营,有道小图灵">
+  <meta name="author" content="孙悟元">
+  <meta name="generator" content="wuyuan.dev" />
+  <meta name="HandheldFriendly" content="true">
+  <meta name="MobileOptimized" content="320">
+  <meta name="screen-orientation" content="portrait">
+  <meta name="x5-orientation" content="portrait">
+  <meta name="renderer" content="webkit">
+  <meta name="force-rendering" content="webkit" />
+  <meta name="format-detection" content="telephone=no">
+  <meta name="format-detection" content="date=no">
+  <meta name="format-detection" content="address=no">
+  <meta content=”telephone=no” name=”format-detection” />
+  <meta property="og:title" content="OurWorld社区 - 新一代开源编程社区">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content=" https://ourworld.wuyuan.dev">
+  <meta property="og:image" content="<%= process.env.staticurl %>/img/toutu.png">
+  <meta name="referrer" content="origin-when-cross-origin" />
+  <link rel="preconnect" href="<%= process.env.staticurl %>" />
+  <link rel="preconnect" href="<%= process.env.staticurl %>" crossorigin />
+  <link rel="dns-prefetch" href="<%= process.env.staticurl %>" />
+  <link rel="dns-prefetch" href="<%= process.env.staticurl %>" crossorigin />
   <script src="https://npm.elemecdn.com/mdui@1.0.2/dist/js/mdui.min.js"></script>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1">
 
-    <link rel="stylesheet" href="https://npm.elemecdn.com/mdui@1.0.2/dist/css/mdui.min.css" />
-    <link rel="stylesheet" href="<%= process.env.staticurl %>/mdui2/mdui.css">
-    <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
-    <link rel="stylesheet" href="<%= process.env.staticurl %>/css/projectspage.css">
-    <link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css">
+  <link rel="stylesheet" href="https://npm.elemecdn.com/mdui@1.0.2/dist/css/mdui.min.css" />
+  <link rel="stylesheet" href="<%= process.env.staticurl %>/mdui2/mdui.css">
+  <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
+  <link rel="stylesheet" href="<%= process.env.staticurl %>/css/projectspage.css">
+  <link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css">
 
 
 
-    <meta name="view-transition" content="same-origin">
-    <link id="layui_theme_css" rel="stylesheet">
+  <meta name="view-transition" content="same-origin">
+  <link id="layui_theme_css" rel="stylesheet">
 
-    <script type="text/javascript" src="https://npm.elemecdn.com/jquery@latest/dist/jquery.min.js"></script>
-    <script src="https://registry.npmmirror.com/js-cookie/3.0.5/files/dist/js.cookie.min.js"></script>
+  <script type="text/javascript" src="https://npm.elemecdn.com/jquery@latest/dist/jquery.min.js"></script>
+  <script src="https://registry.npmmirror.com/js-cookie/3.0.5/files/dist/js.cookie.min.js"></script>
 
 </head>
 <style>
-:not(:defined) {
+  :not(:defined) {
     visibility: hidden;
   }
 </style>
-<body class="mdui-theme-light mdui-theme-accent-blue mdui-loaded " >
+
+<body class="mdui-theme-light mdui-theme-accent-blue mdui-loaded ">
   <mdui-layout style='height: 100vh;'>
-    
-  
-  <mdui-navigation-drawer class="user-drawer"  close-on-esc close-on-overlay-click>
-    <mdui-list id="user-drawer-list">
-
-          <mdui-list-item rounded active href="/user?id=<%= userid %>" description="查看个人主页"> 
-            <mdui-avatar slot="icon"
-              src="/api/usertx?id=<%= userid %>"></mdui-avatar>
-            <%= display_name %>
-          </mdui-list-item>
-          <mdui-list-item rounded href="/my/scratch" description="管理Scratch作品">Scratch</mdui-list-item>
-          <mdui-list-item rounded href="/my/python" description="管理Python作品">Python</mdui-list-item>
-          <mdui-list-item rounded href="/my/info" description="管理个人信息">个人信息</mdui-list-item>
-          <mdui-list-item rounded href="/user/logout" description="退出此账户">退出</mdui-list-item>
-        
-            <mdui-list-item rounded class="close-user" icon="arrow_left">关闭</mdui-list-item>
-    </mdui-list>
- 
-  </mdui-navigation-drawer>
-  
-  <mdui-navigation-drawer class="tools-drawer"  close-on-esc close-on-overlay-click>
-  
-    <mdui-list>
-      <mdui-list-item rounded id="open-feedback-dialog" icon="send" description="发送反馈">反馈</mdui-list-item>
-      <mdui-list-item rounded href="/tools/asdm" icon="content_copy" description="公益Scratch下载镜像">Scratch下载镜像</mdui-list-item>
-      <mdui-list-item rounded onclick="openWebdialog('https:\/\/b2.190823.xyz/ourworld/comparer.html')"  icon="compare" description="对比项目差异">项目比较器</mdui-list-item>
-      <mdui-list-item rounded icon="brightness_4" id="switch-theme" description="切换light/dark">切换主题</mdui-list-item>
-      <mdui-list-item rounded icon="build" description="慎重使用的工具" class="open-switch">更多选项</mdui-list-item>
-
-  
-      <mdui-list-item rounded>当前CDN节点<span id="cdn" slot="description">[未知]</span></mdui-list-item>
-      <mdui-list-item rounded>IP地址<span
-          id="ip" slot="description">[未知]</span></mdui-list-item><mdui-list-item rounded>IP属地<span
-          id="loc" slot="description">[未知]</span></mdui-list-item>
-  <!-- 请注意：根据开源协议，您无权修改以下内容的文本，您需要保证以下内容保持原样提供给用户(例如在修改UI框架时修改样式时被允许的) -->
-      <mdui-list-item rounded description="来自 OurWorld社区 项目" href="https://ourworld.wuyuan.dev" target="_blank">OurWorld</mdui-list-item>
-      <mdui-list-item rounded href="https://wuyuan.dev" description="https://wuyuan.dev" target="_blank">由 孙悟元 开发</mdui-list-item>
-      <mdui-list-item rounded href="https://github.com/ourworlddev/" description="OurWorldDev" target="_blank">Github</mdui-list-item>
-  <!-- 以上 -->
-  <mdui-list-item rounded href="https://afdian.net/a/wydev" description="孙悟元 的爱发电" target="_blank">赞助</mdui-list-item>
-
-      <mdui-list-item rounded href="http://yhcoding.site/" description="友情链接" target="_blank">银河编程社区</mdui-list-item>
-      <mdui-list-item rounded href="https://www.rainyun.com/wuyuan_?s=ourworld" description="友情链接" target="_blank">雨云</mdui-list-item>
-  
-  
-      <mdui-list-item rounded class="close-tools" icon="arrow_left">关闭</mdui-list-item>
-    </mdui-list>
-  
-  </mdui-navigation-drawer>
-  
-  <mdui-navigation-drawer class="types-drawer"  close-on-esc close-on-overlay-click>
-  
-    <mdui-list>
-      <mdui-list-item rounded href="/scratch" icon="code">Scratch</mdui-list-item>
-      <mdui-list-item rounded href="/python" icon="code">Python</mdui-list-item>
-      <mdui-list-item rounded class="close-types" icon="arrow_left">关闭</mdui-list-item>
-    </mdui-list>
-  
-  </mdui-navigation-drawer>
-
-  <mdui-dialog close-on-esc headline="更多选项" description="高级选项，慎重使用" close-on-overlay-click class="switch-dialog">
-    <mdui-list>
-     <mdui-list-item rounded onclick="Cookies.remove('token');automsg('修复完成，请刷新')"  description="强制清除登录信息">修复登录问题</mdui-list-item>
-   </mdui-list></mdui-dialog>
 
 
-  <mdui-navigation-rail alignment="start" class="pc">
-    <mdui-button-icon icon="menu" slot="top" class="open-tools"></mdui-button-icon>
-    <mdui-fab lowered icon="add" slot="top" class="open-add"></mdui-fab>
-    <mdui-button-icon icon="account_circle" slot="bottom" class="open-user"></mdui-button-icon>
+    <mdui-navigation-drawer class="user-drawer" close-on-esc close-on-overlay-click>
+      <mdui-list id="user-drawer-list">
 
-    <mdui-navigation-rail-item icon="home" href="/" value="/">主页</mdui-navigation-rail-item>
-    <mdui-navigation-rail-item icon="code" href="/scratch" value="/scratch">Scratch</mdui-navigation-rail-item>
-    <mdui-navigation-rail-item icon="code" href="/python" value="/python">Python</mdui-navigation-rail-item>
-    <mdui-navigation-rail-item icon="handshake" href="https://afdian.net/a/wydev" value="赞助" target="_blank">赞助</mdui-navigation-rail-item>
+        <mdui-list-item rounded active href="/user?id=<%= userid %>" description="查看个人主页" class='ow-userlink'>
+          <mdui-avatar slot="icon" src="/api/usertx?id=<%= userid %>"></mdui-avatar>
+          <div class="ow-usernick">
+            <div class="ow-usernick">
+              <%= display_name %>
+            </div>
+          </div>
 
-  </mdui-navigation-rail>
-  <mdui-bottom-app-bar class="mobile" 
+        </mdui-list-item>
+        <mdui-list-item rounded href="/my/scratch" description="管理Scratch作品">Scratch</mdui-list-item>
+        <mdui-list-item rounded href="/my/python" description="管理Python作品">Python</mdui-list-item>
+        <mdui-list-item rounded href="/my/info" description="管理个人信息">个人信息</mdui-list-item>
+        <mdui-list-item rounded href="/user/logout" description="退出此账户">退出</mdui-list-item>
 
-  >
-    <mdui-button-icon icon="menu" class="open-tools"></mdui-button-icon>
-    <mdui-button-icon icon="home" href="/"></mdui-button-icon>
-    <mdui-button-icon icon="account_circle" class="open-user"></mdui-button-icon>
-    <mdui-button-icon icon="code" class="open-types"></mdui-button-icon>
-    <mdui-button-icon icon="handshake" href="https://afdian.net/a/wydev" target="_blank"></mdui-button-icon>
+        <mdui-list-item rounded class="close-user" icon="arrow_left">关闭</mdui-list-item>
+      </mdui-list>
+
+    </mdui-navigation-drawer>
+
+    <mdui-navigation-drawer class="tools-drawer" close-on-esc close-on-overlay-click>
+
+      <mdui-list>
+        <mdui-list-item rounded id="open-feedback-dialog" icon="send" description="发送反馈">反馈</mdui-list-item>
+        <mdui-list-item rounded href="/tools/asdm" icon="content_copy"
+          description="公益Scratch下载镜像">Scratch下载镜像</mdui-list-item>
+        <mdui-list-item rounded onclick="openWebdialog('https:\/\/b2.190823.xyz/ourworld/comparer.html')" icon="compare"
+          description="对比项目差异">项目比较器</mdui-list-item>
+        <mdui-list-item rounded icon="brightness_4" id="switch-theme" description="切换light/dark">切换主题</mdui-list-item>
+        <mdui-list-item rounded icon="build" description="慎重使用的工具" class="open-switch">更多选项</mdui-list-item>
 
 
-    <div style="flex-grow: 1"></div>
-    <mdui-fab icon="add" class="open-add"></mdui-fab>
-  </mdui-bottom-app-bar>
-  
-  
-  <mdui-dialog close-on-esc headline="创建新的项目" close-on-overlay-click id="newproject" icon="add">
-       <mdui-list>
+        <mdui-list-item rounded>当前CDN节点<span id="cdn" slot="description">[未知]</span></mdui-list-item>
+        <mdui-list-item rounded>IP地址<span id="ip" slot="description">[未知]</span></mdui-list-item><mdui-list-item
+          rounded>IP属地<span id="loc" slot="description">[未知]</span></mdui-list-item>
+        <!-- 请注意：根据开源协议，您无权修改以下内容的文本，您需要保证以下内容保持原样提供给用户(例如在修改UI框架时修改样式时被允许的) -->
+        <mdui-list-item rounded description="来自 OurWorld社区 项目" href="https://ourworld.wuyuan.dev"
+          target="_blank">OurWorld</mdui-list-item>
+        <mdui-list-item rounded href="https://wuyuan.dev" description="https://wuyuan.dev" target="_blank">由 孙悟元
+          开发</mdui-list-item>
+        <mdui-list-item rounded href="https://github.com/ourworlddev/" description="OurWorldDev"
+          target="_blank">Github</mdui-list-item>
+        <!-- 以上 -->
+        <mdui-list-item rounded href="https://afdian.net/a/wydev" description="孙悟元 的爱发电"
+          target="_blank">赞助</mdui-list-item>
+
+        <mdui-list-item rounded href="http://yhcoding.site/" description="友情链接" target="_blank">银河编程社区</mdui-list-item>
+        <mdui-list-item rounded href="https://www.rainyun.com/wuyuan_?s=ourworld" description="友情链接"
+          target="_blank">雨云</mdui-list-item>
+
+
+        <mdui-list-item rounded class="close-tools" icon="arrow_left">关闭</mdui-list-item>
+      </mdui-list>
+
+    </mdui-navigation-drawer>
+
+    <mdui-navigation-drawer class="types-drawer" close-on-esc close-on-overlay-click>
+
+      <mdui-list>
+        <mdui-list-item rounded href="/scratch" icon="code">Scratch</mdui-list-item>
+        <mdui-list-item rounded href="/python" icon="code">Python</mdui-list-item>
+        <mdui-list-item rounded class="close-types" icon="arrow_left">关闭</mdui-list-item>
+      </mdui-list>
+
+    </mdui-navigation-drawer>
+
+    <mdui-dialog close-on-esc headline="更多选项" description="高级选项，慎重使用" close-on-overlay-click class="switch-dialog">
+      <mdui-list>
+        <mdui-list-item rounded onclick="Cookies.remove('token');automsg('修复完成，请刷新')"
+          description="强制清除登录信息">修复登录问题</mdui-list-item>
+      </mdui-list></mdui-dialog>
+
+
+    <mdui-navigation-rail alignment="start" class="pc">
+      <mdui-button-icon icon="menu" slot="top" class="open-tools"></mdui-button-icon>
+      <mdui-fab lowered icon="add" slot="top" class="open-add"></mdui-fab>
+      <mdui-button-icon icon="account_circle" slot="bottom" class="open-user"></mdui-button-icon>
+
+      <mdui-navigation-rail-item icon="home" href="/" value="/">主页</mdui-navigation-rail-item>
+      <mdui-navigation-rail-item icon="code" href="/scratch" value="/scratch">Scratch</mdui-navigation-rail-item>
+      <mdui-navigation-rail-item icon="code" href="/python" value="/python">Python</mdui-navigation-rail-item>
+      <mdui-navigation-rail-item icon="handshake" href="https://afdian.net/a/wydev" value="赞助"
+        target="_blank">赞助</mdui-navigation-rail-item>
+
+    </mdui-navigation-rail>
+    <mdui-bottom-app-bar class="mobile">
+      <mdui-button-icon icon="menu" class="open-tools"></mdui-button-icon>
+      <mdui-button-icon icon="home" href="/"></mdui-button-icon>
+      <mdui-button-icon icon="account_circle" class="open-user"></mdui-button-icon>
+      <mdui-button-icon icon="code" class="open-types"></mdui-button-icon>
+      <mdui-button-icon icon="handshake" href="https://afdian.net/a/wydev" target="_blank"></mdui-button-icon>
+
+
+      <div style="flex-grow: 1"></div>
+      <mdui-fab icon="add" class="open-add"></mdui-fab>
+    </mdui-bottom-app-bar>
+
+
+    <mdui-dialog close-on-esc headline="创建新的项目" close-on-overlay-click id="newproject" icon="add">
+      <mdui-list>
         <mdui-list-item rounded href="/scratch/edit" description="在线Scratch编辑器">Scratch</mdui-list-item>
         <mdui-list-item rounded href="/python/edit" description="在线Python编辑器">Python</mdui-list-item>
       </mdui-list></mdui-dialog>
-  
-  
-  
-  
-  
-  <mdui-dialog close-on-overlay-click close-on-esc class="feedback-dialog" icon="feedback" headline="反馈"
-    description="涉及社区本身请提issues，站务请去兔小巢，涉及漏洞、安全问题请加QQ1847261658">
-    <mdui-list>
-      <mdui-list-item rounded href="/user/tuxiaochao" description="反馈站务问题，将自动登录您的社区账户">兔小巢</mdui-list-item>
-      <mdui-list-item rounded href="https://support.qq.com/product/597800" description="反馈站务问题">兔小巢(不登录)</mdui-list-item>
-      <mdui-list-item rounded href="https://url.wuyuan.dev/qiscord" description="Qiscord！(频道号sunwuyuan0)">QQ频道</mdui-list-item>
 
-      <mdui-list-item rounded href="https://github.com/OurWorldDev/OurWorld/issues" description="涉及社区本身的问题请在此处提出">Github Issues</mdui-list-item>
-      <mdui-list-item rounded href="https://wuyuan.dev" description="社区开发者">联系 孙悟元</mdui-list-item>
 
-    </mdui-list>
-  </mdui-dialog>
 
-  
-  <style>
-    .mdui-color-white {
-      background-color: #ffffff !important;
-      color: rgba(0, 0, 0, .87) !important;
-    }
-  
-    .webkit-app-region {
-      -webkit-app-region: drag
-    }
-  
-    .webkit-app-region-no {
-      -webkit-app-region: no-drag
-    }
-  
-    .md3botton {
-      border-radius: 18px;
-    }
-  
-    .mdui-snackbar {
-      border-radius: 15px 15px 0px 0px;
-    }
-  
-    .mdui-list-item {
-      border-radius: 0 50px 50px 0;
-    }
-  
-    .mdui-dialog-prompt {
-      border-radius: 15px;
-    }
-  
-    .mdui-snackbar {
-      border-radius: 15px 15px 0px 0px;
-    }
-  
-    .substr {
-      white-space: nowrap;
-      overflow: hidden;
-    }
-  
-    .mdui-tooltip {
-      word-wrap: break-word;
-      word-break: break-all;
-    }
-   
-  </style>
- 
-  <link href="<%= process.env.staticurl %>/font1.css" rel="stylesheet">
-  
-  <script>// 控制台安全提示
-    //window.console.log('%c%s', 'color: red; background: yellow; font-size: 72px;', '警告！');
-    //window.console.log('%c%s', 'color: red; background: yellow; font-size: 24px;', '使用此控制台会让攻击者控制你的账户，并窃取你的信息，删掉你的所有作品');
-    //window.console.log('%c%s', 'color: red; background: yellow; font-size: 24px;', '请永远不要在这里粘贴或输入任何文字，不论他们告诉你这有多安全，管理员不需要查看控制台获取你的日志，OurWorld无法使用控制台进行调试或操作，任何希望你使用"检查"或F12按钮打开这里的人都是骗子，请立刻关掉这个网页并在官方渠道反馈(右上角头像旁反馈按钮)');
-  </script>
-  
-  <style>
-    @media (max-width: 767px) {
-      .pc {
-        display: none !important;
+
+
+    <mdui-dialog close-on-overlay-click close-on-esc class="feedback-dialog" icon="feedback" headline="反馈"
+      description="涉及社区本身请提issues，站务请去兔小巢，涉及漏洞、安全问题请加QQ1847261658">
+      <mdui-list>
+        <mdui-list-item rounded href="/user/tuxiaochao" description="反馈站务问题，将自动登录您的社区账户">兔小巢</mdui-list-item>
+        <mdui-list-item rounded href="https://support.qq.com/product/597800"
+          description="反馈站务问题">兔小巢(不登录)</mdui-list-item>
+        <mdui-list-item rounded href="https://url.wuyuan.dev/qiscord"
+          description="Qiscord！(频道号sunwuyuan0)">QQ频道</mdui-list-item>
+
+        <mdui-list-item rounded href="https://github.com/OurWorldDev/OurWorld/issues"
+          description="涉及社区本身的问题请在此处提出">Github Issues</mdui-list-item>
+        <mdui-list-item rounded href="https://wuyuan.dev" description="社区开发者">联系 孙悟元</mdui-list-item>
+
+      </mdui-list>
+    </mdui-dialog>
+
+
+    <style>
+      .mdui-color-white {
+        background-color: #ffffff !important;
+        color: rgba(0, 0, 0, .87) !important;
       }
-    }
-  
-    @media (min-width: 767px) {
-      .mobile {
-        display: none !important
+
+      .webkit-app-region {
+        -webkit-app-region: drag
       }
-    }
-    .cover1{
-    background: rgb(0 0 0 / 0%);
-    backdrop-filter: blur(10px);
-}
 
-  </style>
-<script type="module">
-  var tauributton = document.querySelector('#tauributton');
+      .webkit-app-region-no {
+        -webkit-app-region: no-drag
+      }
 
-  if (window.__TAURI__) {
-    tauributton.removeAttribute('style')
-  }
-  const { appWindow } = window.__TAURI__.window;
-  document
-    .getElementById('titlebar-minimize')
-    .addEventListener('click', () => appWindow.minimize())
-  document
-    .getElementById('titlebar-maximize')
-    .addEventListener('click', () => appWindow.toggleMaximize())
-  document
-    .getElementById('titlebar-close')
-    .addEventListener('click', () => appWindow.close())</script>
-<mdui-top-app-bar data-tauri-drag-region class="cover1" 
-    scroll-behavior="elevate"
-scroll-target="mdui-layout-main"
+      .md3botton {
+        border-radius: 18px;
+      }
 
->
+      .mdui-snackbar {
+        border-radius: 15px 15px 0px 0px;
+      }
 
-    <div style="flex-grow: 1"></div>
-    
-    <mdui-segmented-button-group style="display: none;" id="tauributton">
-      <mdui-segmented-button icon="minimize" id="titlebar-minimize"></mdui-segmented-button>
-      <mdui-segmented-button icon="crop_square" id="titlebar-maximize"></mdui-segmented-button>
-      <mdui-segmented-button icon="close" id="titlebar-close"></mdui-segmented-button>
-    </mdui-segmented-button-group>
-  </mdui-top-app-bar>
+      .mdui-list-item {
+        border-radius: 0 50px 50px 0;
+      }
+
+      .mdui-dialog-prompt {
+        border-radius: 15px;
+      }
+
+      .mdui-snackbar {
+        border-radius: 15px 15px 0px 0px;
+      }
+
+      .substr {
+        white-space: nowrap;
+        overflow: hidden;
+      }
+
+      .mdui-tooltip {
+        word-wrap: break-word;
+        word-break: break-all;
+      }
+    </style>
+
+    <link href="<%= process.env.staticurl %>/font1.css" rel="stylesheet">
+
+    <script>// 控制台安全提示
+      //window.console.log('%c%s', 'color: red; background: yellow; font-size: 72px;', '警告！');
+      //window.console.log('%c%s', 'color: red; background: yellow; font-size: 24px;', '使用此控制台会让攻击者控制你的账户，并窃取你的信息，删掉你的所有作品');
+      //window.console.log('%c%s', 'color: red; background: yellow; font-size: 24px;', '请永远不要在这里粘贴或输入任何文字，不论他们告诉你这有多安全，管理员不需要查看控制台获取你的日志，OurWorld无法使用控制台进行调试或操作，任何希望你使用"检查"或F12按钮打开这里的人都是骗子，请立刻关掉这个网页并在官方渠道反馈(右上角头像旁反馈按钮)');
+    </script>
+
+    <style>
+      @media (max-width: 767px) {
+        .pc {
+          display: none !important;
+        }
+      }
+
+      @media (min-width: 767px) {
+        .mobile {
+          display: none !important
+        }
+      }
+
+      .cover1 {
+        background: rgb(0 0 0 / 0%);
+        backdrop-filter: blur(10px);
+      }
+    </style>
+    <script type="module">
+      var tauributton = document.querySelector('#tauributton');
+
+      if (window.__TAURI__) {
+        tauributton.removeAttribute('style')
+      }
+      const { appWindow } = window.__TAURI__.window;
+      document
+        .getElementById('titlebar-minimize')
+        .addEventListener('click', () => appWindow.minimize())
+      document
+        .getElementById('titlebar-maximize')
+        .addEventListener('click', () => appWindow.toggleMaximize())
+      document
+        .getElementById('titlebar-close')
+        .addEventListener('click', () => appWindow.close())</script>
+    <mdui-top-app-bar data-tauri-drag-region class="cover1" scroll-behavior="elevate" scroll-target="mdui-layout-main">
+
+      <div style="flex-grow: 1"></div>
+
+      <mdui-segmented-button-group style="display: none;" id="tauributton">
+        <mdui-segmented-button icon="minimize" id="titlebar-minimize"></mdui-segmented-button>
+        <mdui-segmented-button icon="crop_square" id="titlebar-maximize"></mdui-segmented-button>
+        <mdui-segmented-button icon="close" id="titlebar-close"></mdui-segmented-button>
+      </mdui-segmented-button-group>
+    </mdui-top-app-bar>
     <mdui-layout-main>
-        <div class="mdui-container ow-container" style="border-radius: 15px;">
+      <div class="mdui-container ow-container" style="border-radius: 15px;">

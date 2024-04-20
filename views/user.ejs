@@ -11,7 +11,7 @@
 		<mdui-chip icon="access_time" id="regTime" style="margin: 10px 0px 0px 10px"></mdui-chip><mdui-chip icon="tag"
 			id="tag" style="margin: 10px 10px 0px 10px">创作者</mdui-chip>
 
-		<div class="usermotto" id="usermotto" style="user-select: text; margin: 10px">
+		<div class="usermotto" id="usermotto" style="user-select: text; margin: 20px">
 			创作者
 		</div>
 	</mdui-card>
@@ -59,5 +59,4 @@
 		});
 	</script>
 	<%- include('./html-footer.ejs', {page: 'user' }); %>
-	<script>scratch_count = <%= scratch_count %>;python_count = <%= python_count %></script>
 	<script type="text/javascript" src="<%= process.env.staticurl %>/page/user/page.js"></script>

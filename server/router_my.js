@@ -299,7 +299,7 @@ router.post("/set/userinfo", function (req, res) {
     motto: req.body["aboutme"],
     sex: req.body["sex"],
     birthday: new Date(
-      `${req.body["year"]}-${req.body["month"]}-${req.body["day"]} 00:00:00`
+      `2000-01-01 00:00:00`
     ),
   };
   DB.qww(UPDATE, SET, function (err, u) {

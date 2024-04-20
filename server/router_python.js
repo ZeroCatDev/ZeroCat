@@ -28,6 +28,21 @@ router.get("/", function (req, res) {
     });
   });
 
+  router.get("/pythoncount", function (req, res) {
+    //获取已分享的作品总数：1:普通作品，2：推荐的优秀作品
+    var SQL =
+      `SELECT ` +
+      ` (SELECT count(id) FROM python WHERE state>0 ) AS python_count `;
+    DB.query(SQL, function (err, data) {
+      if (err) {
+        // console.error('数据库操作出错：');
+        res.locals.python_count = 0;
+      } else {
+        res.locals.python_count = data[0].python_count;
+      }
+      res.status(200).send(data[0]);  
+    });
+  });
 //翻页：Python作品列表：数据
 router.post("/view/getPythonProjects", function (req, res) {
     var curr = parseInt(req.body.curr); //当前要显示的页码

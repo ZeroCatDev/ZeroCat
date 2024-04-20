@@ -25,17 +25,6 @@ router.get("/", function (req, res) {
         res.locals.python_count = data[0].python_count;
       }
   
-      // 获取首页头图
-      //SQL = `SELECT id, content FROM ads WHERE state=1 ORDER BY i ASC`;
-      //DB.query(SQL, function (err, ADS) {
-      //  if (err) {
-      //    console.error(err);
-      //    ADS = [];
-      //  }
-  
-      //  res.locals["ads"] = encodeURIComponent(JSON.stringify(ADS));
-  
-      //});
       res.status(200).send({name: "index", count: data[0]});
     });
   });
@@ -149,12 +138,23 @@ router.post("/getuserinfo", function (req, res) {
     });
 
     router.get("/getuserinfo", function (req, res) {
-      //获取已分享的作品总数：1:普通作品，2：推荐的优秀作品
       
-        SQL = `SELECT id,display_name, motto,images,regTime FROM ow_Users WHERE id=?;`;
-    id = [req.query.id || req.body.id]
+        SQL = `SELECT 
+        (SELECT COUNT(CASE WHEN state > 0 THEN 1 END)  FROM scratch WHERE authorid = ?)AS scratch_count,
+        (SELECT COUNT(CASE WHEN state > 0 THEN 1 END) FROM python WHERE authorid = 
+        ?)AS python_count ,
+        id,
+        display_name,
+        motto,
+        images,
+        regTime
+    FROM ow_Users
+    WHERE id=?
+
+     `
+    info = [req.query.id,req.query.id,req.query.id]
   
-        DB.qww(SQL,id, function (err, USER) {
+        DB.qww(SQL,info, function (err, USER) {
           if (err || USER.length == 0) {
             res.locals.tip = { opt: "flash", msg: "用户不存在" };
             res.render("404.ejs");
@@ -182,4 +182,33 @@ router.get('/info', function (req, res) {
   })
 });
 
+//作品
+router.get("/myprojectcount", function (req, res) {
+  res.locals.type = "scratch";
+  if(req.query.type == 'python'){
+    res.locals.type = "python";
+  }else if(req.query.type == 'scratch'){
+    res.locals.type = "scratch";
+
+  }
+  var SQL =
+    `SELECT ` +
+    ` count(case when state=0 then 1 end) AS state0_count, ` +
+    ` count(case when state=1 then 1 end) AS state1_count, ` +
+    ` count(case when state=2 then 1 end) AS state2_count ` +
+    ` FROM ${res.locals.type} WHERE authorid=${res.locals["userid"]}`;
+
+  DB.query(SQL, function (err, data) {
+    if (err) {
+      res.locals.state0_count = 0;
+      res.locals.state1_count = 0;
+      res.locals.state2_count = 0;
+    } else {
+      res.locals.state0_count = data[0].state0_count;
+      res.locals.state1_count = data[0].state1_count;
+      res.locals.state2_count = data[0].state2_count;
+    }
+    res.send(data[0]);
+  });
+});
 module.exports = router;
