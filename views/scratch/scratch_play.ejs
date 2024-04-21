@@ -1,62 +1,62 @@
 <%- include('../html-head.ejs', {pageTitle: 'Scratch' }); %>
-<link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css" />
+	<link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css" />
 
 	<link rel="stylesheet" type="text/css" href="<%= process.env.staticurl %>/css/scratch_play.css">
 	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/social-share.js/1.0.16/css/share.min.css" />
-	<mdui-card style="width: 100%;" variant="outlined">
+<mdui-card style="width: 100%;" variant="outlined">
 
 
 		<div id="container_play" style="display: none;">
+			
 			<div id="wrapper"> <canvas id="stage"></canvas>
 				<div id="monitors"></div>
 				<div id="asking-box">
 					<label id="question" for="answer">问题</label> <input type="text" id="answer">
 				</div>
 			</div>
+			
 		</div>
-
-		<span id="loading-progress" style="display: none;"></span>
+<div class=" loading-progress-box" style="display: none;">
+	<mdui-linear-progress value="0" id="loading-progress-linear"></mdui-linear-progress>
+		<mdui-button id="loading-progress" variant="tonal"></mdui-button>	
+	</div>
 		<div id="container_main">
 			<div id="project_slt"
 				style="background-image: url(<%= process.env.S3staticurl %>/scratch_slt/<%=project.id%>);">
-				<div class="green-flag-box mdui-ripple mdui-valign first-green-flag" class="first-green-flag"
-					style="width: 100%;height: 100%;">
-					<div class="mdui-center">
-						<img class="green-flag"
-							src="<%= process.env.staticurl %>/scratchstatic/assets/2e0c4790f8f9cf28e3c346b9cef0fcb6.svg">
-						<div style="font-size: small; width: 88px;text-align: center;">点击加载</div>
-					</div>
-				</div>
+				<mdui-button onclick="loadProject()" disabled class="remove-disabled" variant="filled" icon="play_arrow"
+					class="ow-center">运行</mdui-button>
+
 			</div>
 		</div>
 	</mdui-card>
-	<mdui-button onclick="greenFlag()" variant="filled" icon="play_arrow">运行</mdui-button>
+	<mdui-button onclick="greenFlag()" variant="filled" icon="play_arrow" id="greenFlag-button" disabled
+		class="remove-disabled">运行</mdui-button>
 
-	<mdui-button id="stopAll" onclick="stopAll()" variant="tonal" icon="clear">停止</mdui-button>
+	<mdui-button id="stopAll" onclick="stopAll()" variant="tonal" icon="clear" id="stopAll-button" disabled
+		class="remove-disabled">停止</mdui-button>
 	<br />
 	<div style="font-size: 24px;line-height: 36px" id="projecttitle">
 		加载中
 	</div>
 	<div style="font-size: 14px;line-height: 24px;opacity: .54;" id="projectdescription">
-加载中
+		加载中
 	</div>
 	<mdui-list>
-		<mdui-list-item id="authorinfo" rounded active headline="加载中"
-			description="加载中" headline-line="1" description-line="1"
-			href=""><mdui-avatar id="authoravatar" slot="icon"
+		<mdui-list-item id="authorinfo" rounded active headline="加载中" description="加载中" headline-line="1"
+			description-line="1" href="" disabled class="remove-disabled"><mdui-avatar id="authoravatar" slot="icon"
 				src=""></mdui-avatar>
 		</mdui-list-item>
 	</mdui-list>
 
-	<mdui-chip icon="play_circle" id="projectview">加载中</mdui-chip>
-	<mdui-chip icon="access_time" id="projecttime">加载中</mdui-chip>
-	<mdui-chip icon="code" id="projectstate">加载中</mdui-chip>
-	<mdui-chip icon="code">Scratch</mdui-chip><br />
-	<mdui-button variant="filled" class="copylink" icon="content_copy">复制链接</mdui-button>
-	<mdui-button variant="filled" icon="analytics" id="open-analysis-dialog"
-		onclick='projectanalysis(projectjson)'>分析</mdui-button>
+	<mdui-chip icon="play_circle" id="projectview" disabled class="remove-disabled">加载中</mdui-chip>
+	<mdui-chip icon="access_time" id="projecttime" disabled class="remove-disabled">加载中</mdui-chip>
+	<mdui-chip icon="code" id="projectstate" disabled class="remove-disabled">加载中</mdui-chip>
+	<mdui-chip icon="code" disabled class="remove-disabled">Scratch</mdui-chip><br />
+	<mdui-button variant="filled" class="copylink remove-disabled" icon="content_copy" disabled>复制链接</mdui-button>
+	<mdui-button variant="filled" icon="analytics" id="open-analysis-dialog" onclick='projectanalysis(projectjson)'
+		disabled class="remove-disabled">分析</mdui-button>
 
-	<mdui-button variant="text"  target="_blank" id="editlink">创作页打开</mdui-button>
+	<mdui-button variant="text" target="_blank" id="editlink" disabled class="remove-disabled">创作页打开</mdui-button>
 
 	<div class="social-share"></div>
 
@@ -105,23 +105,23 @@
 		<script type="text/javascript" src="<%= process.env.staticurl %>/js/scratch.vm.min.js"></script>
 		<script type="text/javascript" src="<%= process.env.staticurl %>/js/clipboard.min.js"></script>
 		<script>
-			
+
 		</script>
 		<script type="text/javascript" src="<%= process.env.staticurl %>/js/scratch_play.js"></script>
 
 		<script type="text/javascript" src="<%= process.env.staticurl %>/js/scratch-analysis-core.js"></script>
 
 
-		
+
 		<script>
 			S3staticurl = '<%= process.env.S3staticurl %>'
-		var $config = {
-    title: '<%= project.title %>', // 标题，默认读取 document.title 或者 <meta name="title" content="share.js" />
-    description: '<%= project.title %> 是 <%= project.author_display_name %> 在<%= process.env.SiteName %>上的作品', // 描述, 默认读取head标签：<meta name="description" content="PHP弱类型的实现原理分析" />
-    image: '<%= process.env.S3staticurl%>/scratch_slt/<%= project.id %>', // 图片, 默认取网页中第一个img标签
-    wechatqrcodeTitle: "微信扫一扫分享", // 微信二维码提示文字
-    wechatqrcodeHelper: '<p>打开扫一扫</p><p>在手机上打开即可分享至朋友圈。</p>',
-};</script>
-	<script src="https://npm.elemecdn.com/echarts@5.3.2/dist/echarts.min.js"></script>
+			var $config = {
+				title: '<%= project.title %>', // 标题，默认读取 document.title 或者 <meta name="title" content="share.js" />
+				description: '<%= project.title %> 是 <%= project.author_display_name %> 在<%= process.env.SiteName %>上的作品', // 描述, 默认读取head标签：<meta name="description" content="PHP弱类型的实现原理分析" />
+				image: '<%= process.env.S3staticurl%>/scratch_slt/<%= project.id %>', // 图片, 默认取网页中第一个img标签
+				wechatqrcodeTitle: "微信扫一扫分享", // 微信二维码提示文字
+				wechatqrcodeHelper: '<p>打开扫一扫</p><p>在手机上打开即可分享至朋友圈。</p>',
+			};</script>
+		<script src="https://npm.elemecdn.com/echarts@5.3.2/dist/echarts.min.js"></script>
 
-<script src="<%= process.env.staticurl %>/page/scratch/playpage.js"></script>
+		<script src="<%= process.env.staticurl %>/page/scratch/playpage.js"></script>
