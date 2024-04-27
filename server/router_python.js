@@ -116,7 +116,7 @@ router.post('/getWork', function (req, res) {
         //     "id":0,
         //     "title":"Python新项目",
         //     "state":0,
-        //     "src":`import turtle\n\nt = turtle.Turtle()\nt.forward(100)\n\nprint ("Welcome to ourworld!")`
+        //     "src":`import turtle\n\nt = turtle.Turtle()\nt.forward(100)\n\nprint ("Welcome to ZeroCat!")`
         // };
         // if (projectid == 1){
         // 	res.status(200).send({status:'ok',work:DefaultPython});

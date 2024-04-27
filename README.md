@@ -1,13 +1,13 @@
-# OurWorld 编程社区
+# ZeroCat 编程社区
 
-OurWorld 是一个轻量级的在线编程、分享平台
+ZeroCat 是一个轻量级的在线编程、分享平台
 
 本仓库包含以下内容：
-OurWorld 社区的源代码，包括前端与后端
+ZeroCat 社区的源代码，包括前端与后端
 
 ## 内容列表
 
-- [OurWorld 编程社区](#ourworld-编程社区)
+- [ZeroCat 编程社区](#ourworld-编程社区)
   - [内容列表](#内容列表)
   - [背景](#背景)
   - [示例](#示例)
@@ -24,7 +24,7 @@ OurWorld 社区的源代码，包括前端与后端
 
 ## 背景
 
-`OurWorld` 最开始由 [@sunwuyuan](https://github.com/sunwuyuan) 在秦氏工作室中提出，我们希望搭建一个全开源的编成社区，因此这个项目也就从这开始了。
+`ZeroCat` 最开始由 [@sunwuyuan](https://github.com/sunwuyuan) 在秦氏工作室中提出，我们希望搭建一个全开源的编成社区，因此这个项目也就从这开始了。
 <br/>维护一个编程社区从某种程度上来说相当不易，但我相信，这个项目会一直开发下去。
 
 这个仓库的目标是：
@@ -32,7 +32,7 @@ OurWorld 社区的源代码，包括前端与后端
 
 ## 示例
 
-想了解社区效果，请参考 [OurWorld](https://ourworld.wuyuan.dev)。
+想了解社区效果，请参考 [ZeroCat](https://ourworld.wuyuan.dev)。
 
 ## 安装
 
@@ -74,7 +74,7 @@ $ docker compose up -d
 
 ## 相关仓库
 
-- [StaticFile](https://github.com/OurWorldOrg/StaticFile) — 静态文件仓库
+- [StaticFile](https://github.com/ZeroCatOrg/StaticFile) — 静态文件仓库
 
 ## 开发者
 
@@ -84,7 +84,7 @@ $ docker compose up -d
 
 非常欢迎你的加入！[提一个 Issue](https://github.com/RichardLitt/standard-readme/issues/new) 或者提交一个 Pull Request。
 
-OurWorld 的项目 遵循 [Contributor Covenant](http://contributor-covenant.org/version/1/3/0/) 行为规范
+ZeroCat 的项目 遵循 [Contributor Covenant](http://contributor-covenant.org/version/1/3/0/) 行为规范
 <br/>孙悟元 希望你遵循 [提问的智慧](https://github.com/ryanhanwu/How-To-Ask-Questions-The-Smart-Way/blob/main/README-zh_CN.md)
 
 ### 贡献者
@@ -95,7 +95,7 @@ OurWorld 的项目 遵循 [Contributor Covenant](http://contributor-covenant.org
 
 [GPL](LICENSE) © 2020-2023 孙悟元 https://wuyuan.dev
 
-您可以在开源的前提下免费使用 OurWorld 社区，您不可以使用 OurWorld 社区的名称进行宣传，您需要保留 OurWorld 的声明
+您可以在开源的前提下免费使用 ZeroCat 社区，您不可以使用 ZeroCat 社区的名称进行宣传，您需要保留 ZeroCat 的声明
 <br/>需要闭源的使用授权请联系 QQ1847261658，我们会协助您联系lite的开发者
 
 原项目：https://gitee.com/scratch-cn/lite

@@ -75,7 +75,7 @@ var corsOptions = {
 app.use(cors(corsOptions)); // 应用CORS配置函数
 
 //设置环境变量
-//var session = require("express-session"); app.use( session({ secret: process.env.SessionSecret, resave: false, name: "OurWorld-session", saveUninitialized: true, cookie: { secure: false }, }) );
+//var session = require("express-session"); app.use( session({ secret: process.env.SessionSecret, resave: false, name: "ZeroCat-session", saveUninitialized: true, cookie: { secure: false }, }) );
 //express 的cookie的解析组件
 var cookieParser = require("cookie-parser");
 app.use(cookieParser(process.env.SessionSecret));

@@ -927,7 +927,7 @@ router.post("/getSession", (req, res) => {
 //从Scratch中退出
 router.post("/logout", function (req, res) {
   logout(req, res);
-  var login_info = [{ email: "OurWorldExampleUser", success: 1 }];
+  var login_info = [{ email: "ZeroCatExampleUser", success: 1 }];
   res.status(200).send(login_info);
 });
 module.exports = router;
