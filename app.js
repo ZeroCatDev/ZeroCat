@@ -190,8 +190,8 @@ var router_admin = require("./server/router_my.js");
 app.use("/my", router_admin);
 
 //系统平台路由
-//var router_admin = require("./server/router_admin.js");
-//app.use("/admin", router_admin);
+var router_admin = require("./server/router_admin.js");
+app.use("/admin", router_admin);
 
 //scratch路由
 var router_scratch = require("./server/router_scratch.js");

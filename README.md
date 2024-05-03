@@ -7,9 +7,10 @@ ZeroCat 社区的源代码，包括前端与后端
 
 ## 内容列表
 
-- [ZeroCat 编程社区](#ourworld-编程社区)
+- [ZeroCat 编程社区](#zerocat-编程社区)
   - [内容列表](#内容列表)
   - [背景](#背景)
+  - [交流](#交流)
   - [示例](#示例)
   - [安装](#安装)
     - [配置数据库](#配置数据库)
@@ -29,6 +30,9 @@ ZeroCat 社区的源代码，包括前端与后端
 
 这个仓库的目标是：
 <br/>开发一个完整的支持 Scratch、Python 与其他适合编程初学者的编成社区
+
+## 交流
+QQ：964979747
 
 ## 示例
 
@@ -96,7 +100,7 @@ ZeroCat 的项目 遵循 [Contributor Covenant](http://contributor-covenant.org/
 [GPL](LICENSE) © 2020-2023 孙悟元 https://wuyuan.dev
 
 您可以在开源的前提下免费使用 ZeroCat 社区，您不可以使用 ZeroCat 社区的名称进行宣传，您需要保留 ZeroCat 的声明
-<br/>需要闭源的使用授权请联系 QQ1847261658，我们会协助您联系lite的开发者
+<br/>需要闭源的使用授权请联系 QQ1847261658
 
 原项目：https://gitee.com/scratch-cn/lite
-<br/>原项目声明了MIT协议
+<br/>原项目声明了MIT协议，无需保留版权声明
