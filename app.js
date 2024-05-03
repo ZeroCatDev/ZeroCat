@@ -1,13 +1,11 @@
-require('dotenv').config({ override: true })
-
 var express = require("express");
 var app = express();
 var http = require("http");
 const jwt = require("jsonwebtoken"); // 首先确保安装了jsonwebtoken库
 
 //环境变量
+require('dotenv').config({ override: true })
 
-console.log(process.env.staticurl);
 // 日志部分
 const opentelemetry = require("@opentelemetry/sdk-node");
 const {
@@ -192,8 +190,8 @@ var router_admin = require("./server/router_my.js");
 app.use("/my", router_admin);
 
 //系统平台路由
-var router_admin = require("./server/router_admin.js");
-app.use("/admin", router_admin);
+//var router_admin = require("./server/router_admin.js");
+//app.use("/admin", router_admin);
 
 //scratch路由
 var router_scratch = require("./server/router_scratch.js");
