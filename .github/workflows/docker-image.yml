@@ -38,9 +38,9 @@ jobs:
             sunwuyuan/zerocat
             ghcr.io/${{ github.repository }}
           tags: |
-            type=schedule
+            type=sha
           flavor: |
-            latest=auto
+            latest=true
 
       
       - name: Build and push Docker images
