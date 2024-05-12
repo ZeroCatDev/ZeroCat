@@ -35,7 +35,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            sunwuyuan/ourworld
+            sunwuyuan/zerocat
             ghcr.io/${{ github.repository }}
       
       - name: Build and push Docker images
