@@ -1,14 +1,13 @@
-name: Publish Docker image
+name: Build and Push Docker image
 
 on:
   push:
     branches:
       - main
-      - seed
   workflow_dispatch:
 jobs:
-  push_to_registries:
-    name: Push Docker image to multiple registries
+  build_and_push:
+    name: Build and Push Docker image to DockerHub and ghcr.io
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -30,7 +29,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Extract metadata (tags, labels) for Docker
+      - name: Extract metadata for Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -41,8 +40,7 @@ jobs:
             type=sha
           flavor: |
             latest=true
-
-      
+            
       - name: Build and push Docker images
         uses: docker/build-push-action@v5
         with:
@@ -51,7 +49,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  # 请删除以下部分，这是部署CI，理论上 无需 配置
+  # 请删除以下部分，这是部署CI，理论上 无需 使用
   deploy:
     name: deploy 
     runs-on: ubuntu-latest
