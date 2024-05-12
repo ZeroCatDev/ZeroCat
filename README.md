@@ -110,4 +110,4 @@ ZeroCat 的项目 遵循 [Contributor Covenant](http://contributor-covenant.org/
 
 ![社区(Github图床)](https://github.com/ZeroCatDev/ZeroCat/assets/88357633/d6f4a6ba-daa1-45c8-88f7-4b20d9edbb22)
 
-<br/>原项目声明了MIT协议，无需保留版权声明
+<br/>原项目声明了MIT协议
