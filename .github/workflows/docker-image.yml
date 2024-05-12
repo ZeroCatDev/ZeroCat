@@ -38,7 +38,8 @@ jobs:
             sunwuyuan/zerocat
             ghcr.io/${{ github.repository }}
           tags: |
-            type=sha
+            type=schedule,pattern={{date 'YYYYMMDD-hhmmss'}}
+
       
       - name: Build and push Docker images
         uses: docker/build-push-action@v5
