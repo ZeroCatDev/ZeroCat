@@ -1,4 +1,4 @@
-name: Build and Push Docker image
+name: Build and Push
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 jobs:
   build_and_push:
-    name: Build and Push Docker image to DockerHub and ghcr.io
+    name: Build and Push
     runs-on: ubuntu-latest
     permissions:
       packages: write
