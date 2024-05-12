@@ -50,6 +50,8 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}    
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  # 请删除以下部分，这是部署CI，理论上 无需 配置
   deploy:
     name: deploy 
     runs-on: ubuntu-latest
