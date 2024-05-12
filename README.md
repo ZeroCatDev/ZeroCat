@@ -67,8 +67,6 @@ $ XXX install
 
 ```sh
 $ npm start
-#或者(不建议)
-$ node app
 ```
 
 ### 使用 Docker
