@@ -61,4 +61,4 @@ jobs:
         username: ${{ secrets.USERNAME }}
         password: ${{ secrets.PASSWORD }}
         port: ${{ secrets.PORT }}
-        script: cd /opt/1panel/docker/compose/zerocat && docker compose up -d && cd /opt/1panel/apps/openresty/openresty/www/sites/zerocatstatic/index/StaticFile && git pull
+        script: docker pull sunwuyuan/zerocat:latest && cd /opt/1panel/docker/compose/zerocat && docker compose up -d && cd /opt/1panel/apps/openresty/openresty/www/sites/zerocatstatic/index/StaticFile && git pull
