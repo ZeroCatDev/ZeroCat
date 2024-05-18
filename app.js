@@ -193,6 +193,10 @@ app.use("/my", router_admin);
 var router_admin = require("./server/router_admin.js");
 app.use("/admin", router_admin);
 
+//搜索api
+var router_search = require("./server/router_search.js");
+app.use("/searchapi", router_search);
+
 //scratch路由
 var router_scratch = require("./server/router_scratch.js");
 app.use("/scratch", router_scratch);
@@ -207,6 +211,9 @@ app.get("/share", function (req, res, next) {
   res.render("share.ejs");
 });
 
+app.get("/search", function (req, res, next) {
+  res.render("search.ejs");
+});
 //工具
 app.get("/tools/comparer", function (req, res, next) {
   res.render("tools/comparer.ejs");

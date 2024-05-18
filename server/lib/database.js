@@ -21,7 +21,7 @@ exports.qww = function query_with_w(SQL, W, callback) {
         connection.query(SQL, W, function (err, rows) {
             callback(err, rows);
             connection.release();//释放链接
-            //console.log(SQL)
+            console.log(SQL)
         });
     });
 }
@@ -35,8 +35,9 @@ exports.query = function query(SQL, callback) {
         connection.query(SQL, function (err, rows) {
             callback(err, rows);
             connection.release();//释放链接
-            //console.log(SQL)
+            console.log(SQL)
         });
     });
 }
 
+exports.mysql = mysql;
