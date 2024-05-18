@@ -1,9 +1,8 @@
 var express = require("express");
 var app = express();
 var http = require("http");
-const jwt = require("jsonwebtoken"); // 首先确保安装了jsonwebtoken库
+const jwt = require("jsonwebtoken"); 
 
-//环境变量
 require('dotenv').config({ override: true })
 
 // 日志部分
