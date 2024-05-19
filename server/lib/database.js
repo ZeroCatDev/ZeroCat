@@ -1,5 +1,11 @@
 //主库
-
+if (process.env.mysqlssl=='false'){
+    ssl = false
+}
+if (process.env.mysqlssl=='true'){
+    ssl = true
+}
+console.log(ssl)
 // 连接MySQL
 var mysql = require('mysql');
 var pool = mysql.createPool({
@@ -8,8 +14,8 @@ var pool = mysql.createPool({
      user: process.env.mysqluser,
      password: process.env.mysqlpassword,
      database: process.env.mysqldatabase,
-     ssl :{
-        "rejectUnauthorized" : true}});
+     ssl :{"rejectUnauthorized" : ssl}
+    });
 
 
 //防止注入：'SELECT * FROM ow_Users WHERE ?', WHERE
