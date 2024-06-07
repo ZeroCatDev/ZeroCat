@@ -1,11 +1,11 @@
 services:
-  ourworld:
+  zerocat:
     restart: always
     build:
       context: . #指定dockerfile文件的所在路径  
       dockerfile: Dockerfile #指定Dockerfile文件名称 
-    image: ourworld:1.0.0 #自定义镜像名和版本号
-    container_name: ourworld
+    image: zerocat:1.0.0 #自定义镜像名和版本号
+    container_name: zerocat
     ports:
       - 3000:3000
 #    volumes:
