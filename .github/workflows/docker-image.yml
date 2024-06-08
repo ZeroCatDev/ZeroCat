@@ -44,7 +44,7 @@ jobs:
           images: |
             sunwuyuan/zerocat
             ghcr.io/${{ github.repository }}
-            registry.ap-northeast-1.aliyuncs.com/zerocat
+            registry.ap-northeast-1.aliyuncs.com/zerocat/zerocat
 
           tags: |
             type=sha
