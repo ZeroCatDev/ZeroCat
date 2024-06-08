@@ -5,7 +5,6 @@ if (process.env.mysqlssl=='false'){
 if (process.env.mysqlssl=='true'){
     ssl = true
 }
-console.log(ssl)
 // 连接MySQL
 var mysql = require('mysql');
 var pool = mysql.createPool({

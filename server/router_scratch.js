@@ -12,21 +12,10 @@ router.all("*", function (req, res, next) {
 
 //首页
 router.get("/", function (req, res) {
-  //获取已分享的作品总数：1:普通作品，2：推荐的优秀作品
-  var SQL =
-    `SELECT ` +
-    ` (SELECT count(id) FROM scratch WHERE state>0 ) AS scratch_count `;
-  DB.query(SQL, function (err, data) {
-    if (err) {
-      // console.error('数据库操作出错：');
-      res.locals.scratch_count = 0;
-    } else {
-      res.locals.scratch_count = data[0].scratch_count;
-    }
 
       res.render("scratch/scratch_projects.ejs");
   
-  });
+
 });
 
 router.get("/scratchcount", function (req, res) {
