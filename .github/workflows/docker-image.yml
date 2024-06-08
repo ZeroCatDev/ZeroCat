@@ -29,6 +29,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: registry.cn-hangzhou.aliyuncs.com
+          username: ${{ github.aliyuncs_username }}
+          password: ${{ secrets.aliyuncs_password }}
+        
       - name: Extract metadata for Docker
         id: meta
         uses: docker/metadata-action@v5
@@ -50,15 +57,15 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
   # 请删除以下部分，这是部署CI，理论上 无需 使用
-  deploy:
-    name: deploy 
-    runs-on: ubuntu-latest
-    steps:
-    - name: deploy
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.HOST }}
-        username: ${{ secrets.USERNAME }}
-        password: ${{ secrets.PASSWORD }}
-        port: ${{ secrets.PORT }}
-        script: docker pull sunwuyuan/zerocat:latest && cd /opt/1panel/docker/compose/zerocat && docker compose up -d && cd /opt/1panel/apps/openresty/openresty/www/sites/zerocatstatic/index/StaticFile && git pull
+#  deploy:
+#    name: deploy 
+#    runs-on: ubuntu-latest
+#    steps:
+#    - name: deploy
+#      uses: appleboy/ssh-action@v1.0.3
+#      with:
+#        host: ${{ secrets.HOST }}
+#        username: ${{ secrets.USERNAME }}
+#        password: ${{ secrets.PASSWORD }}
+#        port: ${{ secrets.PORT }}
+#        script: docker pull sunwuyuan/zerocat:latest && cd /opt/1panel/docker/compose/zerocat && docker compose up -d && cd /opt/1panel/apps/openresty/openresty/www/sites/zerocatstatic/index/StaticFile && git pull
