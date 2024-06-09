@@ -1,10 +1,3 @@
-//主库
-if (process.env.mysqlssl=='false'){
-    ssl = false
-}
-if (process.env.mysqlssl=='true'){
-    ssl = true
-}
 // 连接MySQL
 var mysql = require('mysql');
 var pool = mysql.createPool({
@@ -12,8 +5,7 @@ var pool = mysql.createPool({
      port: process.env.mysqlport,
      user: process.env.mysqluser,
      password: process.env.mysqlpassword,
-     database: process.env.mysqldatabase,
-     ssl :{"rejectUnauthorized" : ssl}
+     database: process.env.mysqldatabase
     });
 
 
