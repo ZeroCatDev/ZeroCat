@@ -465,7 +465,7 @@ router.post("/torepw", function (req, res) {
       }
       //console.log(req.body.token);
       var user1 = jwt.verify(
-        req.body.token,
+        req.body.jwttoken,
         process.env.jwttoken,
         function (err, decoded) {
           if (err) {
