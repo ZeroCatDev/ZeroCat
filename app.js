@@ -18,27 +18,23 @@ const { Resource } = require("@opentelemetry/resources");
 const {
   SemanticResourceAttributes,
 } = require("@opentelemetry/semantic-conventions");
-// Initialize OTLP trace exporter with the URL and headers for the Axiom API
 const traceExporter = new OTLPTraceExporter(
 {
-    url: "https://api.axiom.co/v1/traces", // Axiom API endpoint for trace data
+    url: "https://api.axiom.co/v1/traces", 
     headers: {
-      Authorization: `Bearer ${process.env.AXIOM_TOKEN}`,// || 'xaat-11d3193a-3608-41ee-a015-d7884b4f6c71'}`, // Replace $API_TOKEN with your actual API token
-      "X-Axiom-Dataset": process.env.AXIOM_DATASET// || 'wuyuan-telemetry', // Replace $DATASET with your dataset
+      Authorization: `Bearer ${process.env.AXIOM_TOKEN}`,
+      "X-Axiom-Dataset": process.env.AXIOM_DATASET
     },
   },
 );
-// Define the resource attributes, in this case, setting the service name for the traces
 const resource = new Resource({
-  [SemanticResourceAttributes.SERVICE_NAME]: "node traces", // Name for the tracing service
+  [SemanticResourceAttributes.SERVICE_NAME]: "node traces", 
 });
-// Create a NodeSDK instance with the configured span processor, resource, and auto-instrumentations
 const sdk = new opentelemetry.NodeSDK({
-  spanProcessor: new BatchSpanProcessor(traceExporter), // Use BatchSpanProcessor for batching and sending traces
-  resource: resource, // Attach the defined resource to provide additional context
-  instrumentations: [getNodeAutoInstrumentations()], // Automatically instrument common Node.js modules
+  spanProcessor: new BatchSpanProcessor(traceExporter), 
+  resource: resource,
+  instrumentations: [getNodeAutoInstrumentations()], 
 });
-// Start the OpenTelemetry SDK
 sdk.start();
 
 var morganlogger = require("morgan");
