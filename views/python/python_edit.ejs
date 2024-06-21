@@ -9,7 +9,7 @@
   <link rel="shortcut icon" href='<%= process.env.staticurl %>/img/siteicon.png'>
   <link rel="stylesheet" href='<%= process.env.staticurl %>/pythonstatic/css/style.css' />
     <link type="text/css" rel="stylesheet" href="<%= process.env.staticurl %>/pythonstatic/showWorks.css" />
-    <link rel="stylesheet" href="https://npm.elemecdn.com/mdui@1.0.2/dist/css/mdui.min.css" />
+    <link rel="stylesheet" href="<%= process.env.staticurl %>/css/mdui102.css" />
     <link id="layui_theme_css" rel="stylesheet">
     <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
     <link rel="stylesheet" href="<%= process.env.staticurl %>/css/projectspage.css">
@@ -18,10 +18,9 @@
     
     
     
-    <script src="https://registry.npmmirror.com/pjax/0.2.8/files/pjax.min.js"></script>
     <script src="<%= process.env.staticurl %>/js/mdui102.js"></script>
 
-    <script src="https://npm.elemecdn.com/jquery@3.2.1/dist/jquery.min.js"></script>
+    <script src="<%= process.env.staticurl %>/js/jquery.3.7.1.js"></script>
     
     <script> 
         
@@ -246,7 +245,7 @@ href="<%= process.env.staticurl %>/vs/editor/editor.main.css"
 
 
 
-  <script type="text/javascript" src="https://npm.elemecdn.com/jquery@latest/dist/jquery.min.js"></script>
+  <script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.3.7.1.js"></script>
   <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/js/file-saver.js"></script>
   <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/skulpt.min.js"></script>
   <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/skulpt-stdlib.js"></script>

@@ -34,10 +34,10 @@
   <link rel="preconnect" href="<%= process.env.staticurl %>" crossorigin />
   <link rel="dns-prefetch" href="<%= process.env.staticurl %>" />
   <link rel="dns-prefetch" href="<%= process.env.staticurl %>" crossorigin />
-  <script src="https://npm.elemecdn.com/mdui@1.0.2/dist/js/mdui.min.js"></script>
+  <script src="<%= process.env.staticurl %>/js/mdui102.js"></script>
   <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1">
 
-  <link rel="stylesheet" href="https://npm.elemecdn.com/mdui@1.0.2/dist/css/mdui.min.css" />
+  <link rel="stylesheet" href="<%= process.env.staticurl %>/css/mdui102.css" />
   <link rel="stylesheet" href="<%= process.env.staticurl %>/mdui2/mdui.css">
   <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
   <link rel="stylesheet" href="<%= process.env.staticurl %>/css/projectspage.css">
@@ -47,9 +47,9 @@
 
   <meta name="view-transition" content="same-origin">
   <link id="layui_theme_css" rel="stylesheet">
+  <script type="text/javascript" src="<%= process.env.staticurl %>/page/main.js"></script>
 
-  <script type="text/javascript" src="https://npm.elemecdn.com/jquery@latest/dist/jquery.min.js"></script>
-  <script src="https://registry.npmmirror.com/js-cookie/3.0.5/files/dist/js.cookie.min.js"></script>
+  <script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.3.7.1.js"></script>
   <%- process.env.html %>
 </head>
 <style>
@@ -60,9 +60,18 @@
 
 <body class="mdui-theme-light mdui-theme-accent-blue mdui-loaded ">
   <mdui-layout style='height: 100vh;'>
+    <mdui-top-app-bar data-tauri-drag-region class="cover1" scroll-behavior="elevate" scroll-target="mdui-layout-main">
 
+      <div style="flex-grow: 1"></div>
 
-    <mdui-navigation-drawer class="user-drawer" close-on-esc close-on-overlay-click>
+      <mdui-segmented-button-group style="display: none;" id="tauributton">
+        <mdui-segmented-button icon="minimize" id="titlebar-minimize"></mdui-segmented-button>
+        <mdui-segmented-button icon="crop_square" id="titlebar-maximize"></mdui-segmented-button>
+        <mdui-segmented-button icon="close" id="titlebar-close"></mdui-segmented-button>
+      </mdui-segmented-button-group>
+    </mdui-top-app-bar>
+
+    <mdui-navigation-drawer class="user-drawer" close-on-esc close-on-overlay-click >
       <mdui-list id="user-drawer-list">
 
         <mdui-list-item rounded active href="/user?id=<%= userid %>" description="查看个人主页" class='ow-userlink'>
@@ -277,15 +286,6 @@
       document
         .getElementById('titlebar-close')
         .addEventListener('click', () => appWindow.close())</script>
-    <mdui-top-app-bar data-tauri-drag-region class="cover1" scroll-behavior="elevate" scroll-target="mdui-layout-main">
 
-      <div style="flex-grow: 1"></div>
-
-      <mdui-segmented-button-group style="display: none;" id="tauributton">
-        <mdui-segmented-button icon="minimize" id="titlebar-minimize"></mdui-segmented-button>
-        <mdui-segmented-button icon="crop_square" id="titlebar-maximize"></mdui-segmented-button>
-        <mdui-segmented-button icon="close" id="titlebar-close"></mdui-segmented-button>
-      </mdui-segmented-button-group>
-    </mdui-top-app-bar>
     <mdui-layout-main>
       <div class="zc-container" style="border-radius: 15px;">
