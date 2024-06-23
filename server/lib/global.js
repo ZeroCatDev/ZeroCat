@@ -6,19 +6,19 @@ const pwdHash = new PasswordHash();
 
 var fs = require("fs");
 
+//prisma client
+const { PrismaClient } = require('@prisma/client')
+const prisma = new PrismaClient()
+exports.prisma =prisma;
+
 
 const { S3Client, PutObjectCommand } =require('@aws-sdk/client-s3');
 
 // Create an S3 client
-//
-// You must copy the endpoint from your B2 bucket details
-// and set the region to match.
 const s3 = new S3Client({
   endpoint: process.env.S3endpoint,
   region: process.env.S3region
 });
-
-// Create a bucket and upload something into it
 
 
 exports.S3update = function ow(name, file,email) {
