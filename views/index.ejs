@@ -2,7 +2,7 @@
 <link href="<%= process.env.staticurl %>/css/webpixels-1.2.6.css" rel="stylesheet" />
 
   <div>
-    
+
     <div class="py-24">
       <div class="container max-w-screen-xl">
         <div class="row align-items-center">
@@ -12,23 +12,23 @@
               ZeroCat，<br />启动！ </div>
             <p class="lead mb-10">新一代开源编程社区</p>
 
-            
+
             <div class="mx-n2">
               <mdui-button variant="filled" href="/user/login">立刻加入</mdui-button>
               <mdui-button variant="elevated" href="/about">了解更多</mdui-button><mdui-list>
                 <mdui-list-item icon="people" description="qq群号964979747" href="https://qm.qq.com/q/wn3TkPoZ5C" active rounded >ZeroCat现由厚浪云提供支持</mdui-list-item>
-                
+
               </mdui-list>
             </div>
           </div>
           <!--<div class="col-12 col-lg-6 ms-lg-auto">
             <div class="w-xl-12/10 position-relative">
-              
+
               <span
                 class="d-none d-lg-block position-absolute top-0 start-0 transform translate-x-n32 translate-y-n16 w-2/3 h-2/3 bg-warning opacity-20 rounded-circle filter blur-50"></span>
               <span
                 class="d-none d-xl-block position-absolute bottom-0 end-0 transform translate-x-16 translate-y-16 w-32 h-32 bg-warning opacity-60 rounded-circle filter blur-50"></span>
-          
+
               <img alt="..." src="<%= process.env.staticurl %>/img/toutu.png"
                 class="shadow-4 rounded-4 position-relative overlap-10" />
             </div>
@@ -37,7 +37,7 @@
       </div>
     </div>
   </div>
-  
+
 
   <div class="mdui-row" id="scratch_projects">
     <div class="mdui-col-md-4 mdui-col-sm-6 mdui-col-xs-12">
@@ -73,7 +73,7 @@
           </h5>
           <div class="ls-tight font-bolder mb-5 display-5">ZeroCat 完全开源</div>
           <p class="lead mb-10">
-            自豪的作为国内仅有的完整开源且内容完善的编程社区，我们向您提供了完整的在线编程解决方案
+            自豪的作为国内少有的完整开源且内容完善的编程社区，我们向您提供了完整的在线编程解决方案
           </p>
           <div class="mx-n2">
             <mdui-button variant="filled" href="https://github.com/zerocatdev">GitHub</mdui-button>
@@ -101,8 +101,8 @@
           <div class="icon icon-shape icon-lg text-xl text-white rounded-circle shadow-primary mb-4"
             style="background-color: rgb(var(--mdui-color-primary))"></div>
           <div class="h1 mb-2" style="color: rgb(var(--mdui-color-primary))">
-            <span>1</span>
-            <span class="font-weight-normal">位开发者</span>
+            <span></span>
+            <span class="font-weight-normal">多位开发者</span>
           </div>
         </div>
         <div class="col-lg-3 col-6 mb-5 mb-lg-0 text-center">
@@ -117,14 +117,14 @@
     </div>
   </div>
   <script>
-    
+
 $(function () {
   AjaxGet("/api/info",{}, function (data) {
       $("#user-num").text(data.user);
       $("#project-num").text(data.project);
     });
 });
-   
+
 
   </script>
   <footer class="pt-10">
@@ -271,4 +271,3 @@ $(function () {
     }
   </style>
   <%- include('html-footer.ejs', {page: 'home' }); %>
-  

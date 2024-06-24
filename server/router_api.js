@@ -121,56 +121,39 @@ router.get("/usertx", function (req, res) {
   });
 });
 
-router.get("/getuserinfo", function (req, res) {
-  I.prisma.ow_Users
-    .findMany({
-      where: {
-        id: parseInt(req.query.id),
-      },
-      select: {
-        id: true,
-        display_name: true,
-        motto: true,
-        images: true,
-        regTime: true,
-      },
-    })
-    .then((USER) => {
-      if (!USER) {
-        res.locals.tip = { opt: "flash", msg: "用户不存在" };
-        res.render("404.ejs");
-        return;
-      }
-      res.status(200).send({ status: "ok", info: USER[0] });
-    })
-    .catch((err) => {
-      res.locals.tip = { opt: "flash", msg: "用户不存在" };
-      console.log(err);
-      res.render("404.ejs");
-    });
+router.get("/getuserinfo", async function (req, res) {
+  user = await I.prisma.ow_Users.findMany({
+    where: {
+      id: parseInt(req.query.id),
+    },
+    select: {
+      id: true,
+      display_name: true,
+      motto: true,
+      images: true,
+      regTime: true,
+    },
+  });
+  if (!user[0]) {
+    res.locals.tip = { opt: "flash", msg: "用户不存在" };
+    res.render("404.ejs");
+  }
+  res.send({ status: "ok", info: user[0] });
 });
-//平台概况
-router.get("/info", function (req, res) {
-  var SQL =
-    `SELECT ` +
-    ` (SELECT count(id) FROM  ow_Users ) AS user_count, ` +
-    ` (SELECT count(id) FROM scratch) AS scratch_count, ` +
-    ` (SELECT count(id) FROM python) AS python_count, ` +
-    ` (SELECT count(id) FROM material_backdrop) AS backdrop_count, ` +
-    ` (SELECT count(id) FROM material_sprite) AS sprite_count `;
-  DB.query(SQL, function (err, d) {
-    if (err || d.length == 0) {
-      res.send({ user: 0, scratch: 0, python: 0, project: 0 });
-    }
+router.get("/info", async (req, res) => {
+  const userCount = await I.prisma.ow_Users.count();
+  const scratchCount = await I.prisma.scratch.count();
+  const pythonCount = await I.prisma.python.count();
 
-    res.send({
-      user: d[0].user_count,
-      scratch: d[0].scratch_count,
-      python: d[0].python_count,
-      project: d[0].scratch_count + d[0].python_count,
-    });
+
+  res.send({
+    user: userCount,
+    scratch: scratchCount,
+    python: pythonCount,
+    project: scratchCount + pythonCount,
   });
 });
+
 
 //作品
 router.get("/myprojectcount", function (req, res) {
