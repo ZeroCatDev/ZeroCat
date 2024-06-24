@@ -60,16 +60,7 @@
 
 <body class="mdui-theme-light mdui-theme-accent-blue mdui-loaded ">
   <mdui-layout style='height: 100vh;'>
-    <mdui-top-app-bar data-tauri-drag-region class="cover1" scroll-behavior="elevate" scroll-target="mdui-layout-main">
 
-      <div style="flex-grow: 1"></div>
-
-      <mdui-segmented-button-group style="display: none;" id="tauributton">
-        <mdui-segmented-button icon="minimize" id="titlebar-minimize"></mdui-segmented-button>
-        <mdui-segmented-button icon="crop_square" id="titlebar-maximize"></mdui-segmented-button>
-        <mdui-segmented-button icon="close" id="titlebar-close"></mdui-segmented-button>
-      </mdui-segmented-button-group>
-    </mdui-top-app-bar>
 
     <mdui-navigation-drawer class="user-drawer" close-on-esc close-on-overlay-click >
       <mdui-list id="user-drawer-list">
@@ -197,52 +188,17 @@
         <mdui-list-item rounded href="https://qm.qq.com/q/wn3TkPoZ5C" description="QQ群">QQ交流群</mdui-list-item>
       </mdui-list>
     </mdui-dialog>
+    <mdui-top-app-bar data-tauri-drag-region class="cover1" scroll-behavior="elevate" scroll-target="mdui-layout-main">
 
+      <div style="flex-grow: 1"></div>
 
-    <style>
-      .mdui-color-white {
-        background-color: #ffffff !important;
-        color: rgba(0, 0, 0, .87) !important;
-      }
+      <mdui-segmented-button-group style="display: none;" id="tauributton">
+        <mdui-segmented-button icon="minimize" id="titlebar-minimize"></mdui-segmented-button>
+        <mdui-segmented-button icon="crop_square" id="titlebar-maximize"></mdui-segmented-button>
+        <mdui-segmented-button icon="close" id="titlebar-close"></mdui-segmented-button>
+      </mdui-segmented-button-group>
+    </mdui-top-app-bar>
 
-      .webkit-app-region {
-        -webkit-app-region: drag
-      }
-
-      .webkit-app-region-no {
-        -webkit-app-region: no-drag
-      }
-
-      .md3botton {
-        border-radius: 18px;
-      }
-
-      .mdui-snackbar {
-        border-radius: 15px 15px 0px 0px;
-      }
-
-      .mdui-list-item {
-        border-radius: 0 50px 50px 0;
-      }
-
-      .mdui-dialog-prompt {
-        border-radius: 15px;
-      }
-
-      .mdui-snackbar {
-        border-radius: 15px 15px 0px 0px;
-      }
-
-      .substr {
-        white-space: nowrap;
-        overflow: hidden;
-      }
-
-      .mdui-tooltip {
-        word-wrap: break-word;
-        word-break: break-all;
-      }
-    </style>
 
     <link href="<%= process.env.staticurl %>/font1.css" rel="stylesheet">
 
