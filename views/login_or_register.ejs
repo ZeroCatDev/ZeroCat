@@ -33,18 +33,18 @@
             <mdui-text-field variant="outlined" label="密码" id='password' type="password" toggle-password name="password"
               autocomplete="on" style="margin-bottom: 10px;"></mdui-text-field>
 
+              <mdui-button class="open-captchadialog">完成验证码</mdui-button>
 
-            <div id="recaptcha-div-login-page">验证码加载中</div>
 
 
 
             <div style="display:flex; height: 50px;">
               <% if (reg==1) { %>
-                <mdui-button variant="tonal" onclick="switchPage('reg-page')">注册账户</mdui-button>
+                <mdui-button variant="text" onclick="switchPage('reg-page')">注册账户</mdui-button>
                 <% } %>
-                  <mdui-button variant="tonal" onclick="switchPage('getPW-page')">忘记密码</mdui-button>
+                  <mdui-button variant="text" onclick="switchPage('getPW-page')">忘记密码</mdui-button>
             </div>
-            <mdui-button onclick="login()">登 录</mdui-button>
+            <mdui-button onclick="login()">登录</mdui-button>
           </div>
           <div>
           </div>
@@ -64,15 +64,15 @@
             <mdui-text-field variant="outlined" label="昵称" id='reg_password' type="text"
               style="margin-bottom: 10px;"></mdui-text-field>
 
-            <div id="recaptcha-div-reg-page">验证码加载中</div>
-            <div style="display:flex; height: 50px;">
-              <mdui-button variant="tonal" onclick="switchPage('login-page')">登录</mdui-button>
+              <mdui-button class="open-captchadialog">完成验证码</mdui-button>
+              <div style="display:flex; height: 50px;">
+              <mdui-button variant="text" onclick="switchPage('login-page')">去登录</mdui-button>
 
             </div>
 
 
 
-            <mdui-button type="button" mdui-dialog="{target: '#privacy'}">注 册</mdui-button>
+            <mdui-button type="button" mdui-dialog="{target: '#privacy'}">注册</mdui-button>
 
           </div>
           <div>
@@ -87,10 +87,10 @@
           <div>
             <mdui-text-field variant="outlined" label="邮箱" id='getPW_email' type="email"
               style="margin-bottom: 10px;"></mdui-text-field>
-            <div id="recaptcha-div-getPW-page">验证码加载中</div>
-            <br /><br />
+              <mdui-button class="open-captchadialog">完成验证码</mdui-button>
+              <br /><br />
             <mdui-button onclick="getPW()">找回密码</mdui-button>
-            <mdui-button onclick="switchPage('login-page')" variant="tonal">去登录</mdui-button>
+            <mdui-button onclick="switchPage('login-page')" variant="text">去登录</mdui-button>
           </div>
         </div>
       </div>
@@ -146,7 +146,26 @@
         onclick="register()">注册</button>
     </div>
   </div>
+  <mdui-dialog close-on-overlay-click close-on-esc class="captchadialog">
+    <span slot="headline">请完成验证码</span>
+    <span slot="description">部分地区加载可能较慢，请耐心等待。</span>
+    <div id="captcha-div"></div>
 
+    <mdui-button slot="action" variant="text" class="zc-feedback">反馈</mdui-button>
+    <mdui-button slot="action" variant="text" onclick="reloudcaptcha()">刷新</mdui-button>
+
+<mdui-button slot="action" variant="tonal" class="close-captchadialog">完成</mdui-button>
+  </mdui-dialog>
+
+
+  <script>
+    const captchadialog = document.querySelector(".captchadialog");
+    const opencaptchadialogButtons = document.querySelectorAll(".open-captchadialog");
+    const closecaptchadialogButton = document.querySelector(".close-captchadialog");
+    opencaptchadialogButtons.forEach(button => { button.addEventListener("click", () => { captchadialog.open = true }); });
+    closecaptchadialogButton.addEventListener("click", () => captchadialog.open = false);
+
+  </script>
   <%- include('./html-footer.ejs', {page: 'login' }); %>
     <script type="text/javascript" src="<%= process.env.staticurl %>/js/gter.js"></script>
     <script type="text/javascript" src="<%= process.env.staticurl %>/js/login.js"></script>

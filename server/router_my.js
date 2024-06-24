@@ -236,20 +236,7 @@ router.post("/python/del", function (req, res) {
 
 //个人设置
 router.get("/info", function (req, res) {
-  res.locals["curItem"]["set"] = "active";
-  var SQL = `SELECT * FROM ow_Users WHERE id=${res.locals.userid} LIMIT 1`;
-  DB.query(SQL, function (err, USER) {
-    if (err || USER.length == 0) {
-      res.render("404.ejs");
-      return;
-    }
-
-    res.locals["sex"] = USER[0]["sex"];
-    res.locals["birth"] = USER[0]["birthday"];
-    res.locals["motto"] = USER[0]["motto"];
-
     res.render("my_info.ejs");
-  });
 });
 //修改头像
 router.post("/set/avatar", function (req, res) {
@@ -321,7 +308,7 @@ router.post("/set/userinfo", function (req, res) {
         { maxAge: 604800000 }
       );
       res.status(200).send({ status: "个人信息修成成功" });
-    
+
   });
 });
 //修改密码：动作

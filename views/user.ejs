@@ -39,12 +39,18 @@
 
 	<div id="waline"></div>
 	<script type="module">
+		function getQueryString(name) {
+			const queryString = window.location.search.slice(1);
+			const reg = new RegExp("(^|&)" + name + "=([^&]*)(&|$)", "i");
+			const r = queryString.match(reg);
+			return r ? decodeURIComponent(r[2]) : null;
+		}
 		import { init } from "https://unpkg.com/@waline/client@v3/dist/waline.js";
 
 		init({
 			el: "#waline",
 			serverURL: "<%= process.env.WalineServerURL %>",
-			path: "user-"+getQueryString("id"),
+			path: "user-" + getQueryString("id"),
 			copyright: false,
 			reaction: true,
 			pageview: true,
@@ -59,4 +65,4 @@
 		});
 	</script>
 	<%- include('./html-footer.ejs', {page: 'user' }); %>
-	<script type="text/javascript" src="<%= process.env.staticurl %>/page/user/page.js"></script>
+		<script type="text/javascript" src="<%= process.env.staticurl %>/page/user/page.js"></script>

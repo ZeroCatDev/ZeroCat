@@ -22,52 +22,52 @@
     });
   }
   mdui.setColorScheme('#2087fd');
-  
+
   document.querySelector('mdui-navigation-rail').setAttribute('value', window.location.pathname);
 
-const AddDialog = document.querySelector("#newproject");
-const openAddButtons = document.querySelectorAll(".open-add");
-openAddButtons.forEach(button => {
-  button.addEventListener("click", () => AddDialog.open = true);
-});
+  const AddDialog = document.querySelector("#newproject");
+  const openAddButtons = document.querySelectorAll(".open-add");
+  openAddButtons.forEach(button => {
+    button.addEventListener("click", () => AddDialog.open = true);
+  });
 
-const UserDrawer = document.querySelector(".user-drawer");
-const openUserButton = document.querySelectorAll(".open-user");
-const closeUserButton = document.querySelector(".close-user");
-openUserButton.forEach(button => {
-  button.addEventListener("click", () => UserDrawer.open = true);
-});
-closeUserButton.addEventListener("click", () => UserDrawer.open = false);
+  const UserDrawer = document.querySelector(".user-drawer");
+  const openUserButton = document.querySelectorAll(".open-user");
+  const closeUserButton = document.querySelector(".close-user");
+  openUserButton.forEach(button => {
+    button.addEventListener("click", () => UserDrawer.open = true);
+  });
+  closeUserButton.addEventListener("click", () => UserDrawer.open = false);
 
-const ToolsDrawer = document.querySelector(".tools-drawer");
-const openToolsButton = document.querySelectorAll(".open-tools");
-const closeToolsButton = document.querySelector(".close-tools");
-openToolsButton.forEach(button => {
-  button.addEventListener("click", () => ToolsDrawer.open = true);
-});
-closeToolsButton.addEventListener("click", () => ToolsDrawer.open = false);
+  const ToolsDrawer = document.querySelector(".tools-drawer");
+  const openToolsButton = document.querySelectorAll(".open-tools");
+  const closeToolsButton = document.querySelector(".close-tools");
+  openToolsButton.forEach(button => {
+    button.addEventListener("click", () => ToolsDrawer.open = true);
+  });
+  closeToolsButton.addEventListener("click", () => ToolsDrawer.open = false);
 
-const SwitcDialog = document.querySelector(".switch-dialog");
-const openanSwitcButton = document.querySelector(".open-switch");
+  const SwitcDialog = document.querySelector(".switch-dialog");
+  const openanSwitcButton = document.querySelector(".open-switch");
 
-openanSwitcButton.addEventListener("click", () => SwitcDialog.open = true);
+  openanSwitcButton.addEventListener("click", () => SwitcDialog.open = true);
 
 
 
-const TypesDrawer = document.querySelector(".types-drawer");
-const openTypesButton = document.querySelectorAll(".open-types");
-const closeTypesButton = document.querySelector(".close-types");
-openTypesButton.forEach(button => {
-  button.addEventListener("click", () => TypesDrawer.open = true);
-});
-closeTypesButton.addEventListener("click", () => TypesDrawer.open = false);
+  const TypesDrawer = document.querySelector(".types-drawer");
+  const openTypesButton = document.querySelectorAll(".open-types");
+  const closeTypesButton = document.querySelector(".close-types");
+  openTypesButton.forEach(button => {
+    button.addEventListener("click", () => TypesDrawer.open = true);
+  });
+  closeTypesButton.addEventListener("click", () => TypesDrawer.open = false);
 
-const FeedBackDialog = document.querySelector(".feedback-dialog");
-const openanFeedBackButton = document.querySelector("#open-feedback-dialog");
+  const FeedBackDialog = document.querySelector(".feedback-dialog");
+  const openanFeedBackButtons = document.querySelectorAll(".zc-feedback");
 
-openanFeedBackButton.addEventListener("click", () => FeedBackDialog.open = true);
+  openanFeedBackButtons.forEach(button => { button.addEventListener("click", () => { FeedBackDialog.open = true }); });
 
-if (localStorage.darkTheme) {
+  if (localStorage.darkTheme) {
     document.body.classList.add("mdui-theme-layout-dark");
     document.body.classList.add("mdui-theme-dark");
     document.documentElement.classList.add("mdui-theme-dark");
@@ -112,7 +112,7 @@ if (localStorage.darkTheme) {
 
 
 <script>
-  
+
   S3staticurl = "<%= process.env.S3staticurl %>"
 </script>
 <script src="<%= process.env.staticurl %>/js/js-cookie.js"></script>
