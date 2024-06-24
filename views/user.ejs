@@ -1,4 +1,4 @@
-<%- include('html-head.ejs', {pageTitle: user.display_name + '的个人主页' }); %>
+<%- include('html-head.ejs', {pageTitle: '用户个人主页' }); %>
 	<link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css" />
 
 
@@ -44,10 +44,10 @@
 		init({
 			el: "#waline",
 			serverURL: "<%= process.env.WalineServerURL %>",
-			path: "user-<%= user.id %>",
+			path: "user-"+getQueryString("id"),
 			copyright: false,
-			reaction: true, 
-			pageview: true, 
+			reaction: true,
+			pageview: true,
 			locale: {
 				reactionTitle: "发表下看法？",
 			},

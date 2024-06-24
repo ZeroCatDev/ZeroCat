@@ -17,33 +17,9 @@ router.all("*", function (req, res, next) {
 const request = require("request");
 var nodemailer = require("nodemailer");
 router.get("/", function (req, res) {
-  //获取已分享的作品总数：1:普通作品，2：推荐的优秀作品
-  var SQL =
-    `SELECT ` +
-    ` (SELECT count(id) FROM scratch WHERE authorid=${req.query.id}  AND state>0 ) AS scratch_count, ` +
-    ` (SELECT count(id) FROM python WHERE authorid=${req.query.id}  AND state>0 ) AS python_count `;
-  DB.query(SQL, function (err, data) {
-    if (err) {
-      // console.error('数据库操作出错：');
-      res.locals.scratch_count = 0;
-      res.locals.python_count = 0;
-    } else {
-      res.locals.scratch_count = data[0].scratch_count;
-      res.locals.python_count = data[0].python_count;
-    }
-    SQL = `SELECT id,display_name, motto FROM ow_Users WHERE id = ${req.query.id};`;
 
-    DB.query(SQL, function (err, USER) {
-      if (err || USER.length == 0) {
-        res.locals.tip = { opt: "flash", msg: "用户不存在" };
-        res.render("404.ejs");
-        return;
-      }
-      res.locals["user"] = USER[0];
-      //console.log(USER);
       res.render("user.ejs");
-    });
-  });
+
 });
 //登录、注册、找回密码三合一界面
 router.get("/login", function (req, res) {
@@ -153,7 +129,7 @@ router.post("/login", function (req, res) {
             token,
             { maxAge: 604800000 }
           );
-          
+
           res.status(200).send({
             status: "OK",
             userid: parseInt(User["id"]),
@@ -233,7 +209,7 @@ router.post("/register", function (req, res) {
           //console.log(randonpw);
           //console.log(email);
 
-          pw = I.hash(randonpw) 
+          pw = I.hash(randonpw)
           //console.log(pw);
           //新用户注册 //loginInfo = [{'t': new Date(),'ip':req.ip,'agent':req.headers["user-agent"]}];
           //var display_name = email.substring(email.length-5);
@@ -246,7 +222,7 @@ router.post("/register", function (req, res) {
               res.status(200).send({ status: "再试一次17" });
               return;
             }
-            var userid = newUser.insertId;    
+            var userid = newUser.insertId;
 
             const transporter = nodemailer.createTransport({
               service: process.env.mailservice, //  邮箱
@@ -322,7 +298,7 @@ router.post("/register", function (req, res) {
                 }
               }
             );
-            
+
             res.status(200).send({ status: "注册成功,请查看邮箱获取账户数据" });
           });
         });
@@ -507,9 +483,9 @@ router.get("/tuxiaochao", function (req, res) {
   if (!process.env.txckey) {
     res.redirect("https://support.qq.com/product/" + process.env.txcid);
   }
-  
+
   SQL = `SELECT images FROM ow_Users WHERE id = ${res.locals["userid"]};`;
-  
+
   DB.query(SQL, function (err, USER) {
     if (err || USER.length == 0) {
       res.locals.tip = { opt: "flash", msg: "用户不存在" };
@@ -523,7 +499,7 @@ router.get("/tuxiaochao", function (req, res) {
       process.env.S3staticurl+'/user/'+USER[0].images+
       process.env.txckey;
     var cryptostr = cryptojs.MD5(txcinfo).toString();
-    
+
     res.redirect(
       "https://support.qq.com/product/" +
         process.env.txcid +
@@ -537,7 +513,7 @@ router.get("/tuxiaochao", function (req, res) {
     );
 
   });
-  
+
 });
 
 module.exports = router;
