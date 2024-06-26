@@ -1,7 +1,7 @@
 var express = require("express");
 var app = express();
 var http = require("http");
-const jwt = require("jsonwebtoken"); 
+const jwt = require("jsonwebtoken");
 
 require('dotenv').config({ override: true })
 
@@ -20,7 +20,7 @@ const {
 } = require("@opentelemetry/semantic-conventions");
 const traceExporter = new OTLPTraceExporter(
 {
-    url: "https://api.axiom.co/v1/traces", 
+    url: "https://api.axiom.co/v1/traces",
     headers: {
       Authorization: `Bearer ${process.env.AXIOM_TOKEN}`,
       "X-Axiom-Dataset": process.env.AXIOM_DATASET
@@ -28,12 +28,12 @@ const traceExporter = new OTLPTraceExporter(
   },
 );
 const resource = new Resource({
-  [SemanticResourceAttributes.SERVICE_NAME]: "node traces", 
+  [SemanticResourceAttributes.SERVICE_NAME]: "node traces",
 });
 const sdk = new opentelemetry.NodeSDK({
-  spanProcessor: new BatchSpanProcessor(traceExporter), 
+  spanProcessor: new BatchSpanProcessor(traceExporter),
   resource: resource,
-  instrumentations: [getNodeAutoInstrumentations()], 
+  instrumentations: [getNodeAutoInstrumentations()],
 });
 sdk.start();
 

@@ -75,10 +75,10 @@ router.get("/python", function (req, res) {
   });
 });
 //显示Scratch项目列表：数据，{curr:obj.curr, limit:obj.limit,state:state}
-router.post("/getScratchProjects", function (req, res) {
-  var curr = parseInt(req.body.curr); //当前要显示的页码
-  var limit = parseInt(req.body.limit); //每页显示的作品数
-  var state = parseInt(req.body.state); //每页显示的作品状态
+router.get("/getScratchProjects", function (req, res) {
+  var curr = parseInt(req.query.curr); //当前要显示的页码
+  var limit = parseInt(req.query.limit); //每页显示的作品数
+  var state = parseInt(req.query.state); //每页显示的作品状态
 
   var SQL = `SELECT id, title,view_count,description FROM scratch WHERE authorid=${
     res.locals.userid
@@ -95,10 +95,10 @@ router.post("/getScratchProjects", function (req, res) {
 });
 
 //显示Scratch项目列表：数据，{curr:obj.curr, limit:obj.limit,state:state}
-router.post("/getPythonProjects", function (req, res) {
-  var curr = parseInt(req.body.curr); //当前要显示的页码
-  var limit = parseInt(req.body.limit); //每页显示的作品数
-  var state = parseInt(req.body.state); //每页显示的作品状态
+router.get("/getPythonProjects", function (req, res) {
+  var curr = parseInt(req.query.curr); //当前要显示的页码
+  var limit = parseInt(req.query.limit); //每页显示的作品数
+  var state = parseInt(req.query.state); //每页显示的作品状态
 
   var SQL = `SELECT id, title,view_count,description FROM python WHERE authorid=${
     res.locals.userid

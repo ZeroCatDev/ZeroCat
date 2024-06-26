@@ -11,10 +11,10 @@ router.all('*', function (req, res, next) {
 
 //首页
 router.get("/", function (req, res) {
-   
-  
+
+
         res.render("python/python_projects.ejs");
-    
+
 
   });
 
@@ -30,18 +30,18 @@ router.get("/", function (req, res) {
       } else {
         res.locals.python_count = data[0].python_count;
       }
-      res.status(200).send(data[0]);  
+      res.status(200).send(data[0]);
     });
   });
 //翻页：Python作品列表：数据
-router.post("/view/getPythonProjects", function (req, res) {
-    var curr = parseInt(req.body.curr); //当前要显示的页码
-    var limit = parseInt(req.body.limit); //每页显示的作品数
+router.get("/view/getPythonProjects", function (req, res) {
+    var curr = parseInt(req.query.curr); //当前要显示的页码
+    var limit = parseInt(req.query.limit); //每页显示的作品数
     var type = "view_count";
-    if (req.body.type == "new") {
+    if (req.query.type == "new") {
       type = "time";
     }
-  
+
     var SQL = `SELECT python.id, python.title, python.state,python.authorid, python.description,python.view_count,ow_Users.display_name,ow_Users.motto FROM python JOIN ow_Users ON python.authorid = ow_Users.id WHERE python.state > 0 ORDER BY python.${type} DESC LIMIT ${
       (curr - 1) * limit
     }, ${limit}`;
@@ -55,19 +55,19 @@ router.post("/view/getPythonProjects", function (req, res) {
   });
 
 //搜索：Scratch项目列表：数据//只搜索标题
-router.post("/view/seachPythonProjects", function (req, res) {
-    if (!req.body.txt) {
+router.get("/view/seachPythonProjects", function (req, res) {
+    if (!req.query.txt) {
       res.status(200).send([]);
       return;
     }
     var tabelName = "python";
     var searchinfo = "title";
-    if (req.body.searchall == "true") {
+    if (req.query.searchall == "true") {
       searchinfo = "src";
     }
     //var SQL = `SELECT id, title FROM ${tabelName} WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
     var SQL = `SELECT ${tabelName}.id, ${tabelName}.title, ${tabelName}.state,${tabelName}.authorid,${tabelName}.description,${tabelName}.view_count, ow_Users.display_name,ow_Users.motto FROM ${tabelName} JOIN ow_Users ON ${tabelName}.authorid = ow_Users.id WHERE ${tabelName}.state>0 AND (${searchinfo} LIKE ?)`;
-    var WHERE = [`%${req.body.txt}%`];
+    var WHERE = [`%${req.query.txt}%`];
     DB.qww(SQL, WHERE, function (err, data) {
       if (err) {
         res.status(200).send([]);
@@ -76,10 +76,10 @@ router.post("/view/seachPythonProjects", function (req, res) {
       }
     });
   });
-  
+
 //python项目展示界面
 router.get('/play', function (req, res) {
-    
+
             res.render('python/python_play.ejs');
         });
 
@@ -119,13 +119,13 @@ router.post('/getWork', function (req, res) {
         if (!res.locals.login){//未登录时，只能打开已发布的作品
             SQL = `SELECT * FROM python WHERE id=${projectid} AND state>0`;
         }else {
-           
+
                 //作品编辑：能够打开一个作品的几种权限：
                 //1、自己的作品；
                 //2、开源的作品；
                 SQL = `SELECT * FROM python WHERE id=${projectid} AND (authorid=${res.locals.userid} OR state>0)`;
-            
-            
+
+
         }
     }
 
@@ -160,7 +160,7 @@ router.post('/save', function (req, res) {
 				res.status(200).send({status: "x", msg: "保存失败" });
 				return;
 			}
-	
+
 			res.status(200).send({status: "ok", msg: "保存成功", 'newid': newPython['insertId']})
 		});
 

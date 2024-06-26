@@ -14,7 +14,7 @@ router.all("*", function (req, res, next) {
 router.get("/", function (req, res) {
 
       res.render("scratch/scratch_projects.ejs");
-  
+
 
 });
 
@@ -30,15 +30,15 @@ router.get("/scratchcount", function (req, res) {
     } else {
       res.locals.scratch_count = data[0].scratch_count;
     }
-    res.status(200).send({scratch_count: res.locals.scratch_count});  
+    res.status(200).send({scratch_count: res.locals.scratch_count});
   });
 });
 //翻页：Scratch作品列表：数据
-router.post("/view/getScratchProjects", function (req, res) {
-  var curr = parseInt(req.body.curr) || parseInt(req.query.curr); //当前要显示的页码
-  var limit = parseInt(req.body.limit) || parseInt(req.query.limit); //每页显示的作品数
+router.get("/view/getScratchProjects", function (req, res) {
+  var curr = parseInt(req.query.curr); //当前要显示的页码
+  var limit = parseInt(req.query.limit); //每页显示的作品数
   var type = "view_count";
-  if (req.body.type === "new" || req.query.type === "new"){
+  if (req.query.type === "new"){
     type = "time";
   }
 
@@ -55,19 +55,19 @@ router.post("/view/getScratchProjects", function (req, res) {
 });
 
 //搜索：Scratch项目列表：数据//只搜索标题
-router.post("/view/seachScratchProjects", function (req, res) {
-  if (!req.body.txt) {
+router.get("/view/seachScratchProjects", function (req, res) {
+  if (!req.query.txt) {
     res.status(200).send([]);
     return;
   }
   var tabelName = "scratch";
   var searchinfo = "title";
-  if (req.body.searchall == "true") {
+  if (req.query.searchall == "true") {
     searchinfo = "src";
   }
   //var SQL = `SELECT id, title FROM ${tabelName} WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
   var SQL = `SELECT ${tabelName}.id, ${tabelName}.title, ${tabelName}.state,${tabelName}.authorid,${tabelName}.description,${tabelName}.view_count, ow_Users.display_name,ow_Users.motto FROM ${tabelName} JOIN ow_Users ON ${tabelName}.authorid = ow_Users.id WHERE ${tabelName}.state>0 AND (${searchinfo} LIKE ?)`;
-  var WHERE = [`%${req.body.txt}%`];
+  var WHERE = [`%${req.query.txt}%`];
   DB.qww(SQL, WHERE, function (err, data) {
     if (err) {
       res.status(200).send([]);
@@ -567,9 +567,9 @@ router.get("/getBackdrop", (req, res, next) => {
 
     resultData.tags = TAGS;
 
-    var SQL = `SELECT mb.src 
+    var SQL = `SELECT mb.src
             FROM material_backdrop mb
-            INNER JOIN material_tags mt ON mt.type=1 
+            INNER JOIN material_tags mt ON mt.type=1
             WHERE mb.tagId=mt.id `;
     DB.query(SQL, function (err, Mates) {
       if (err || Mates.length == 0) {
