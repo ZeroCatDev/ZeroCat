@@ -132,6 +132,7 @@ router.get("/getuserinfo", async function (req, res) {
       motto: true,
       images: true,
       regTime: true,
+      sex: true,
     },
   });
   if (!user[0]) {
