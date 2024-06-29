@@ -184,4 +184,39 @@ router.get("/myprojectcount", function (req, res) {
     res.send(data[0]);
   });
 });
+
+
+//论反向适配40code
+
+
+//作品
+router.get("/work/info", function (req, res) {
+  res.locals.type = "scratch";
+  if (req.query.type == "python") {
+    res.locals.type = "python";
+  } else if (req.query.type == "scratch") {
+    res.locals.type = "scratch";
+  }
+  var SQL =
+    `SELECT ` +
+    ` count(case when state=0 then 1 end) AS state0_count, ` +
+    ` count(case when state=1 then 1 end) AS state1_count, ` +
+    ` count(case when state=2 then 1 end) AS state2_count ` +
+    ` FROM ${res.locals.type} WHERE authorid=${res.locals["userid"]}`;
+
+  DB.query(SQL, function (err, data) {
+    if (err) {
+      res.locals.state0_count = 0;
+      res.locals.state1_count = 0;
+      res.locals.state2_count = 0;
+    } else {
+      res.locals.state0_count = data[0].state0_count;
+      res.locals.state1_count = data[0].state1_count;
+      res.locals.state2_count = data[0].state2_count;
+    }
+    res.send(data[0]);
+  });
+});
+
+
 module.exports = router;

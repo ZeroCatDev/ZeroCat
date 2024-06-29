@@ -109,13 +109,13 @@ http.createServer(app).listen(3000, "0.0.0.0", function () {
 app.all("*", function (req, res, next) {
   //console.log(req.method +' '+ req.url + " IP:" + req.ip);
 
-  const token = req.cookies.token || req.body.token || req.headers["token"]; // 获取JWT令牌
+  const token = req.cookies.token || req.body.token || req.headers["token"] || req.query.token; // 获取JWT令牌
 
   if (token) {
     jwt.verify(token, process.env.jwttoken, (err, decodedToken) => {
       // 解析并验证JWT
       if (err) {
-        6;
+
         // 如果验证失败，清除本地登录状态
         res.locals = {
           login: false,
@@ -125,7 +125,7 @@ app.all("*", function (req, res, next) {
           avatar: "",
           is_admin: 0,
         };
-        //console.log("JWT验证失败: " + err.message);
+        console.log("JWT验证失败: " + err.message);
       } else {
         // 如果验证成功，将用户信息存储在res.locals和session中
         let userInfo = decodedToken;
@@ -139,7 +139,7 @@ app.all("*", function (req, res, next) {
           res.locals["is_admin"] = 1;
         }
         //console.log("JWT验证成功: " + userInfo.email);
-        //console.log('调试用户信息(session)：'+res.locals.userid+','+res.locals.email+','+res.locals.display_name+','+res.locals.is_admin);
+        console.log('调试用户信息(session)：'+res.locals.userid+','+res.locals.email+','+res.locals.display_name+','+res.locals.is_admin);
 
         res.locals = {
           login: true,
@@ -150,7 +150,7 @@ app.all("*", function (req, res, next) {
           is_admin: res.locals["is_admin"],
         };
 
-        //console.log('调试用户信息(locals )：'+res.locals.userid+','+res.locals.email+','+res.locals.display_name+','+res.locals.is_admin);
+        console.log('调试用户信息(locals )：'+res.locals.userid+','+res.locals.email+','+res.locals.display_name+','+res.locals.is_admin);
       }
 
       next();
@@ -159,9 +159,9 @@ app.all("*", function (req, res, next) {
     // 如果未找到token，则清除本地登录状态
     res.locals = {
       login: false,
-      userid: "",
+      userid: 0,
       email: "",
-      display_name: "",
+      display_name: "未登录",
       avatar: "",
       is_admin: 0,
     };

@@ -167,6 +167,115 @@ router.get("/projectinfo", function (req, res) {
   });
 });
 
+router.get("/projectinfo2", function (req, res) {
+  SQL =
+  `SELECT scratch.id,scratch.authorid,scratch.time,scratch.view_count,scratch.like_count,` +
+  ` scratch.favo_count,scratch.title,scratch.state,scratch.description,` +
+  ` '' AS likeid, '' AS favoid,` +
+  ` ow_Users.display_name AS author_display_name,` +
+  ` ow_Users.images AS author_images,` +
+  ` ow_Users.motto AS author_motto` +
+  ` FROM scratch ` +
+  ` LEFT JOIN ow_Users ON (ow_Users.id=scratch.authorid) ` +
+  ` WHERE scratch.id=${req.query.id} AND (scratch.state>=1 or scratch.authorid=${res.locals.userid}) LIMIT 1`;
+  DB.query(SQL, function (err, SCRATCH) {
+    if (err || SCRATCH.length == 0) {
+      res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
+      res.render("404.ejs");
+      return;
+    }
+    res.locals["is_author"] =
+      SCRATCH[0].authorid == res.locals.userid ? true : false;
+json40code = {
+  "code": 1,
+  "data": {
+    "id": SCRATCH[0].id,
+    "opensource": 1,
+    "publish": 1,
+    "author": SCRATCH[0].authorid,
+    "introduce": "",
+    "name": SCRATCH[0].title,
+    "time": SCRATCH[0].time,
+    "image": SCRATCH[0].id,
+    "look": SCRATCH[0].view_count,
+    "oldlook": 0,
+    "like": 0,
+    "delete": 0,
+    "publish_time": 1861891200,
+    "update_time": 1861891200,
+    "featuredLevel": 0,
+    "ban": null,
+    "version": 1861891200,
+    "size": 1,
+    "num_collections": 0,
+    "ns": null,
+    "raw": null,
+    "onlyFirefox": null,
+    "issign": 1,
+    "isauthor": SCRATCH[0].authorid == res.locals.userid ? 1 : 0,
+    "islike": 0,
+    "is_collection": 0,
+    "nickname": SCRATCH[0].author_display_name,
+    "head": SCRATCH[0].author_images
+  }
+}
+jsontw={
+  "id": SCRATCH[0].id,
+  "title": SCRATCH[0].title,
+  "description": SCRATCH[0].description,
+  "instructions": "ZeroCat",
+  "visibility": "visible",
+  "public": SCRATCH[0].state>=1 ? true : false,
+  "comments_allowed": true,
+  "is_published": SCRATCH[0].state>=1 ? true : false,
+  "author": {
+      "id": SCRATCH[0].authorid,
+      "username":  SCRATCH[0].author_display_name,
+      "scratchteam": false,
+      "history": {
+          "joined": "1900-01-01T00:00:00.000Z"
+      },
+      "profile": {
+          "id": null,
+          "images": {
+              "90x90": "https://s4-1.wuyuan.1r.ink/user/"+SCRATCH[0].author_images,
+              "60x60": "https://s4-1.wuyuan.1r.ink/user/"+SCRATCH[0].author_images,
+              "55x55": "https://s4-1.wuyuan.1r.ink/user/"+SCRATCH[0].author_images,
+              "50x50": "https://s4-1.wuyuan.1r.ink/user/"+SCRATCH[0].author_images,
+              "32x32": "https://s4-1.wuyuan.1r.ink/user/"+SCRATCH[0].author_images
+          }
+      }
+  },
+  "image": "https://s4-1.wuyuan.1r.ink/scratch_slt/"+SCRATCH[0].id,
+  "images": {
+      "282x218": "https://s4-1.wuyuan.1r.ink/scratch_slt/"+SCRATCH[0].id,
+      "216x163": "https://s4-1.wuyuan.1r.ink/scratch_slt/"+SCRATCH[0].id,
+      "200x200": "https://s4-1.wuyuan.1r.ink/scratch_slt/"+SCRATCH[0].id,
+      "144x108": "https://s4-1.wuyuan.1r.ink/scratch_slt/"+SCRATCH[0].id,
+      "135x102": "https://s4-1.wuyuan.1r.ink/scratch_slt/"+SCRATCH[0].id,
+      "100x80": "https://s4-1.wuyuan.1r.ink/scratch_slt/"+SCRATCH[0].id
+  },
+  "history": {
+      "created": SCRATCH[0].time,
+      "modified": SCRATCH[0].time,
+      "shared": SCRATCH[0].time
+  },
+  "stats": {
+      "views": SCRATCH[0].view_count,
+      "loves": 0,
+      "favorites": 0,
+      "remixes": 0
+  },
+  "remix": {
+      "parent": null,
+      "root": null
+  },
+  "project_token": ""
+}
+    ////console.log(SCRATCH[0]);
+    res.json(jsontw)
+  });
+});
 //Scratch_play获取源代码数据部分
 router.get("/play/project/:filename", function (req, res) {
   var SQL = `SELECT src FROM scratch WHERE id=${req.params.filename} LIMIT 1`;
@@ -499,10 +608,7 @@ router.post("/shareProject/:projectid", function (req, res) {
 router.post("/projects", function (req, res) {
   //console.log("服务器：新建作品JSON源代码");
 
-  if (!req.body) {
-    res.send(404);
-    return;
-  }
+  //if (!req.body) { res.send(404); return; }
   var title = "新作品";
   if (req.query.title) {
     title = req.query.title;
@@ -544,7 +650,7 @@ router.post("/assets/:filename", function (req, res) {
           } else {
             I.S3update("material/asset/" + req.params.filename, strFileName,res.locals.email);
 
-            //console.log("素材保存成功：" + strFileName);
+            console.log("素材保存成功：" + strFileName);
             res.status(200).send({ status: "ok" });
             //fs.unlink('./data/material/asset/' + req.params.filename,function (err) { if (err) { res.status(200).send( {'status':'文件上传失败'}); return; }})
           }
