@@ -3,7 +3,7 @@ var app = express();
 var http = require("http");
 const jwt = require("jsonwebtoken");
 
-require('dotenv').config({ override: true })
+require("dotenv").config({ override: true });
 
 // 日志部分
 const opentelemetry = require("@opentelemetry/sdk-node");
@@ -18,15 +18,13 @@ const { Resource } = require("@opentelemetry/resources");
 const {
   SemanticResourceAttributes,
 } = require("@opentelemetry/semantic-conventions");
-const traceExporter = new OTLPTraceExporter(
-{
-    url: "https://api.axiom.co/v1/traces",
-    headers: {
-      Authorization: `Bearer ${process.env.AXIOM_TOKEN}`,
-      "X-Axiom-Dataset": process.env.AXIOM_DATASET
-    },
+const traceExporter = new OTLPTraceExporter({
+  url: "https://api.axiom.co/v1/traces",
+  headers: {
+    Authorization: `Bearer ${process.env.AXIOM_TOKEN}`,
+    "X-Axiom-Dataset": process.env.AXIOM_DATASET,
   },
-);
+});
 const resource = new Resource({
   [SemanticResourceAttributes.SERVICE_NAME]: "node traces",
 });
@@ -60,12 +58,13 @@ app.use(
 var cors = require("cors");
 var corsOptions = {
   origin: (origin, callback) => {
-    if (process.env.corslist.indexOf(origin) !== -1) {
-      callback(null, true)
+    console.log(origin)
+    if (process.env.corslist.indexOf(origin) !== -1 || !origin) {
+      callback(null, true);
     } else {
-      callback(new Error())
-    }}
-,
+      callback(new Error());
+    }
+  },
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
   preflightContinue: false,
   optionsSuccessStatus: 204,
@@ -112,16 +111,19 @@ global.dirname = __dirname;
 http.createServer(app).listen(3000, "0.0.0.0", function () {
   console.log("Listening on http://localhost:3000");
 }); // 平台总入口
-app.all("*",  function (req, res, next) {
+app.all("*", function (req, res, next) {
   //console.log(req.method +' '+ req.url + " IP:" + req.ip);
 
-  const token = req.cookies.token || req.body.token || req.headers["token"] || req.query.token; // 获取JWT令牌
+  const token =
+    req.cookies.token ||
+    req.body.token ||
+    req.headers["token"] ||
+    req.query.token; // 获取JWT令牌
 
   if (token) {
     jwt.verify(token, process.env.jwttoken, (err, decodedToken) => {
       // 解析并验证JWT
       if (err) {
-
         // 如果验证失败，清除本地登录状态
         res.locals = {
           login: false,
@@ -145,7 +147,16 @@ app.all("*",  function (req, res, next) {
           res.locals["is_admin"] = 1;
         }
         //console.log("JWT验证成功: " + userInfo.email);
-        console.log('调试用户信息(session)：'+res.locals.userid+','+res.locals.email+','+res.locals.display_name+','+res.locals.is_admin);
+        console.log(
+          "调试用户信息(session)：" +
+            res.locals.userid +
+            "," +
+            res.locals.email +
+            "," +
+            res.locals.display_name +
+            "," +
+            res.locals.is_admin
+        );
 
         res.locals = {
           login: true,
@@ -156,7 +167,16 @@ app.all("*",  function (req, res, next) {
           is_admin: res.locals["is_admin"],
         };
 
-        console.log('调试用户信息(locals )：'+res.locals.userid+','+res.locals.email+','+res.locals.display_name+','+res.locals.is_admin);
+        console.log(
+          "调试用户信息(locals )：" +
+            res.locals.userid +
+            "," +
+            res.locals.email +
+            "," +
+            res.locals.display_name +
+            "," +
+            res.locals.is_admin
+        );
       }
 
       next();
@@ -178,7 +198,7 @@ app.all("*",  function (req, res, next) {
 
 //首页
 app.get("/", function (req, res) {
-  res.render('index.ejs');
+  res.render("index.ejs");
 });
 
 //放在最后，确保路由时能先执行app.all=====================
@@ -225,7 +245,6 @@ app.get("/tools/asdm", function (req, res, next) {
 //python路由
 var router_python = require("./server/router_python.js");
 app.use("/python", router_python);
-
 
 process.on("uncaughtException", function (err) {
   console.log("Caught exception: " + err);
