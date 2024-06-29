@@ -59,7 +59,13 @@ app.use(
 // cors配置
 var cors = require("cors");
 var corsOptions = {
-  origin: process.env.corslist,
+  origin: (origin, callback) => {
+    if (process.env.corslist.indexOf(origin) !== -1) {
+      callback(null, true)
+    } else {
+      callback(new Error())
+    }}
+,
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
   preflightContinue: false,
   optionsSuccessStatus: 204,
@@ -106,7 +112,7 @@ global.dirname = __dirname;
 http.createServer(app).listen(3000, "0.0.0.0", function () {
   console.log("Listening on http://localhost:3000");
 }); // 平台总入口
-app.all("*", function (req, res, next) {
+app.all("*",  function (req, res, next) {
   //console.log(req.method +' '+ req.url + " IP:" + req.ip);
 
   const token = req.cookies.token || req.body.token || req.headers["token"] || req.query.token; // 获取JWT令牌
