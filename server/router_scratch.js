@@ -151,11 +151,11 @@ router.get("/projectinfo", function (req, res) {
   ` ow_Users.motto AS author_motto` +
   ` FROM scratch ` +
   ` LEFT JOIN ow_Users ON (ow_Users.id=scratch.authorid) ` +
-  ` WHERE scratch.id=${req.query.id} AND scratch.state>=1 LIMIT 1`;
+  ` WHERE scratch.id=${req.query.id} AND (scratch.state>=1 or scratch.authorid=${res.locals.userid}) LIMIT 1`;
   DB.query(SQL, function (err, SCRATCH) {
     if (err || SCRATCH.length == 0) {
       res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
-      res.render("404.ejs");
+      res.send({code:404,status:"404",msg:"项目不存在或未发布"})
       return;
     }
 
@@ -181,7 +181,7 @@ router.get("/projectinfo2", function (req, res) {
   DB.query(SQL, function (err, SCRATCH) {
     if (err || SCRATCH.length == 0) {
       res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
-      res.render("404.ejs");
+      res.send({code:404,status:"404",msg:"项目不存在或未发布"})
       return;
     }
     res.locals["is_author"] =
@@ -613,8 +613,10 @@ router.post("/projects", function (req, res) {
   if (req.query.title) {
     title = req.query.title;
   }
+
+
   var INSERT = `INSERT INTO scratch (authorid, title, src) VALUES (${res.locals.userid}, ?, ?)`;
-  var VAL = [title, `${JSON.stringify(req.body)}`];
+  var VAL = [title, `${JSON.stringify(req.body.work||req.body)}`];
   DB.qww(INSERT, VAL, function (err, newScratch) {
     if (err || newScratch.affectedRows == 0) {
       res.send(404);

@@ -62,12 +62,12 @@ var corsOptions = {
     if (process.env.corslist.indexOf(origin) !== -1 || !origin) {
       callback(null, true);
     } else {
-      callback(new Error());
+      callback(new Error('Not allowed by CORS'));
     }
   },
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
   preflightContinue: false,
-  optionsSuccessStatus: 204,
+  optionsSuccessStatus: 200,
   credentials: true,
 };
 app.use(cors(corsOptions)); // 应用CORS配置函数
@@ -111,6 +111,7 @@ global.dirname = __dirname;
 http.createServer(app).listen(3000, "0.0.0.0", function () {
   console.log("Listening on http://localhost:3000");
 }); // 平台总入口
+app.options('*', cors())
 app.all("*", function (req, res, next) {
   //console.log(req.method +' '+ req.url + " IP:" + req.ip);
 
