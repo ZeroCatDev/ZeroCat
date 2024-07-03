@@ -6,18 +6,18 @@
 
 
 		<div id="container_play" style="display: none;">
-			
+
 			<div id="wrapper"> <canvas id="stage"></canvas>
 				<div id="monitors"></div>
 				<div id="asking-box">
 					<label id="question" for="answer">问题</label> <input type="text" id="answer">
 				</div>
 			</div>
-			
+
 		</div>
 <div class=" loading-progress-box" style="display: none;">
 	<mdui-linear-progress value="0" id="loading-progress-linear"></mdui-linear-progress>
-		<mdui-button id="loading-progress" variant="tonal"></mdui-button>	
+		<mdui-button id="loading-progress" variant="tonal"></mdui-button>
 	</div>
 		<div id="container_main">
 			<div id="project_slt"
@@ -47,10 +47,10 @@
 		</mdui-list-item>
 	</mdui-list>
 
-	<mdui-chip icon="play_circle" id="projectview" disabled class="remove-disabled">加载中</mdui-chip>
-	<mdui-chip icon="access_time" id="projecttime" disabled class="remove-disabled">加载中</mdui-chip>
-	<mdui-chip icon="code" id="projectstate" disabled class="remove-disabled">加载中</mdui-chip>
-	<mdui-chip icon="code" disabled class="remove-disabled">Scratch</mdui-chip><br />
+	<mdui-chip icon="play_circle" id="projectview" disabled class="remove-disabled" elevated>加载中</mdui-chip>
+	<mdui-chip icon="access_time" id="projecttime" disabled class="remove-disabled" elevated>加载中</mdui-chip>
+	<mdui-chip icon="code" id="projectstate" disabled class="remove-disabled" elevated>加载中</mdui-chip>
+	<mdui-chip icon="code" disabled class="remove-disabled" elevated>Scratch</mdui-chip><br />
 	<mdui-button variant="filled" class="copylink remove-disabled" icon="content_copy" disabled>复制链接</mdui-button>
 	<mdui-button variant="filled" icon="analytics" id="open-analysis-dialog" onclick='projectanalysis(projectjson)'
 		disabled class="remove-disabled">分析</mdui-button>
@@ -84,8 +84,8 @@
 			serverURL: '<%= process.env.WalineServerURL %>',
 			path: 'project-<%=project.id%>',
 			copyright: false,
-			reaction: true, 
-			pageview: true, 
+			reaction: true,
+			pageview: true,
 			locale: {
 				reactionTitle: "这个作品怎么样？"
 			},

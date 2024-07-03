@@ -26,8 +26,8 @@
 
                 <div class="reply-form" style="height: max-content;">
 
-              
-                  <mdui-text-field variant="outlined" label="密码" id='password' type="password" toggle-password
+
+                  <mdui-text-field variant="filled" label="密码" id='password' type="password" toggle-password
                   style="margin-bottom: 10px;"></mdui-text-field>
 
                   <div id="recaptcha-div-rePW-page">验证码加载中</div>
@@ -68,6 +68,6 @@ function repwonloadCallback() {
 grecaptcha.render("#recaptcha-div-rePW-page", {
     sitekey: rekey,
   });
- 
+
 }
 </script>

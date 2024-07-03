@@ -129,7 +129,6 @@ router.post("/login", function (req, res) {
             token,
             { maxAge: 604800000 }
           );
-
           res.status(200).send({
             status: "OK",
             userid: parseInt(User["id"]),

@@ -40,9 +40,9 @@
 						src="/api/usertx?id=1"></mdui-avatar>
 				</mdui-list-item>
 			</mdui-list>
-			<mdui-chip icon="play_circle"><span id="view_count">浏览量: <span class="waline-pageview-count">加载中</span> </span></mdui-chip>
-			<mdui-chip icon="access_time"><span id="work_update"></mdui-chip>
-			<mdui-chip icon="code" id="projectstate">Python</mdui-chip><mdui-chip icon="code">Python</mdui-chip><br />
+			<mdui-chip icon="play_circle" elevated><span id="view_count">浏览量: <span class="waline-pageview-count">加载中</span> </span></mdui-chip>
+			<mdui-chip icon="access_time" elevated><span id="work_update"></mdui-chip>
+			<mdui-chip icon="code" id="projectstate" elevated>Python</mdui-chip><mdui-chip icon="code" elevated> Python</mdui-chip><br />
 			<mdui-button variant="text" onclick='tocode()'>查看代码</mdui-button>
 
 			<div class="social-share"></div>
@@ -56,8 +56,8 @@
 					serverURL: '<%= process.env.WalineServerURL %>',
 					path: `project-${_work_id}`,
 					copyright: false,
-					reaction: true, 
-					pageview: true, 
+					reaction: true,
+					pageview: true,
 					locale: {
 						reactionTitle: "这个作品怎么样？"
 					},
@@ -89,10 +89,10 @@
 <script>
 
 var $config = {
-		title: _work_title, 
-		description: `${_work_title} 是<%= process.env.SiteName %>上的Python作品`, 
-		image: `<%= process.env.S3staticurl%>/scratch_slt/${_work_id}`, 
-		wechatqrcodeTitle: "微信扫一扫分享", 
+		title: _work_title,
+		description: `${_work_title} 是<%= process.env.SiteName %>上的Python作品`,
+		image: `<%= process.env.S3staticurl%>/scratch_slt/${_work_id}`,
+		wechatqrcodeTitle: "微信扫一扫分享",
 		wechatqrcodeHelper: '<p>打开扫一扫</p><p>在手机上打开即可分享至朋友圈。</p>',
 	};
 
