@@ -38,7 +38,7 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1">
 
   <link rel="stylesheet" href="<%= process.env.staticurl %>/css/mdui102.css" />
-  <link rel="stylesheet" href="<%= process.env.staticurl %>/mdui2/mdui.css">
+  <link rel="stylesheet" href="<%= process.env.staticurl %>/mdui2/mdui.css" id="mdui_css">
   <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
   <link rel="stylesheet" href="<%= process.env.staticurl %>/css/projectspage.css">
   <link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css">
@@ -57,6 +57,7 @@
     visibility: hidden;
   }
 </style>
+
 <body class="mdui-theme-light mdui-theme-accent-blue mdui-loaded ">
   <mdui-layout style='height: 100vh;'>
 
@@ -68,7 +69,7 @@
           <mdui-avatar slot="icon" src="#" class="ow-useravatar"></mdui-avatar>
           <div class="ow-usernick">
             <div class="ow-usernick">
-             加载中
+              加载中
             </div>
           </div>
         </mdui-list-item>
@@ -134,6 +135,12 @@
       <mdui-list>
         <mdui-list-item rounded onclick="Cookies.remove('token');automsg('修复完成，请刷新')"
           description="强制清除登录信息">修复登录问题</mdui-list-item>
+        <mdui-list-item rounded onclick="if (localStorage.win8ui === 'true') {
+  localStorage.win8ui = 'false';
+} else {
+  localStorage.win8ui = 'true';
+}
+;location.reload()" description="不加载mdui2的css文件，秒变win8ui">使用整活UI</mdui-list-item>
       </mdui-list></mdui-dialog>
 
 
