@@ -92,7 +92,7 @@
         <mdui-list-item rounded onclick="openWebdialog('https:\/\/b2.190823.xyz/ourworld/comparer.html')" icon="compare"
           description="对比项目差异">项目比较器</mdui-list-item>
         <mdui-list-item rounded icon="brightness_4" id="switch-theme" description="切换light/dark">切换主题</mdui-list-item>
-        <mdui-list-item rounded icon="build" description="慎重使用的工具" class="open-switch">更多选项</mdui-list-item>
+        <mdui-list-item rounded icon="code" description="慎重使用的工具" class="open-switch">开发者选项</mdui-list-item>
 
 
         <mdui-list-item rounded>当前CDN节点<span id="cdn" slot="description">[未知]</span></mdui-list-item>
@@ -131,7 +131,7 @@
 
     </mdui-navigation-drawer>
 
-    <mdui-dialog close-on-esc headline="更多选项" description="高级选项，慎重使用" close-on-overlay-click class="switch-dialog">
+    <mdui-dialog close-on-esc headline="开发者选项" description="不稳定，仅限开发者使用" close-on-overlay-click class="switch-dialog" icon="code">
       <mdui-list>
         <mdui-list-item rounded onclick="Cookies.remove('token');automsg('修复完成，请刷新')"
           description="强制清除登录信息">修复登录问题</mdui-list-item>
