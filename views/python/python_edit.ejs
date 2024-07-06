@@ -8,40 +8,38 @@
   </title>
   <link rel="shortcut icon" href='<%= process.env.staticurl %>/img/siteicon.png'>
   <link rel="stylesheet" href='<%= process.env.staticurl %>/pythonstatic/css/style.css' />
-    <link type="text/css" rel="stylesheet" href="<%= process.env.staticurl %>/pythonstatic/showWorks.css" />
-    <link rel="stylesheet" href="<%= process.env.staticurl %>/css/mdui102.css" />
-    <link id="layui_theme_css" rel="stylesheet">
-    <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
-    <link rel="stylesheet" href="<%= process.env.staticurl %>/css/projectspage.css">
-    <link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css">
-    
-    
-    
-    
-    <script src="<%= process.env.staticurl %>/js/mdui102.js"></script>
+  <link type="text/css" rel="stylesheet" href="<%= process.env.staticurl %>/pythonstatic/showWorks.css" />
+  <link rel="stylesheet" href="<%= process.env.staticurl %>/mdui-v1.0.2/css/mdui.min.css" />
+  <link id="layui_theme_css" rel="stylesheet">
+  <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
+  <link rel="stylesheet" href="<%= process.env.staticurl %>/css/projectspage.css">
+  <link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css">
 
-    <script src="<%= process.env.staticurl %>/js/jquery.3.7.1.js"></script>
-    
-    <script> 
-        
-        
+
+
+
+  <script src="<%= process.env.staticurl %>/mdui-v1.0.2/js/mdui.min.js"></script>
+
+  <script src="<%= process.env.staticurl %>/js/jquery.3.7.1.js"></script>
+
+  <script>
+
+
     function automsg(msg) {
       if (typeof msg === 'string') {
         msg = { message: msg };
       }
       mdui.snackbar({
         message: msg.message,
-      closeable: true,
-    });
+        closeable: true,
+      });
     }
-    
-    </script>
-    
-<link
-rel="stylesheet"
-data-name="vs/editor/editor.main"
-href="<%= process.env.staticurl %>/vs/editor/editor.main.css"
-/></head>
+
+  </script>
+
+  <link rel="stylesheet" data-name="vs/editor/editor.main"
+    href="<%= process.env.staticurl %>/pythonstatic/vs/editor/editor.main.css" />
+</head>
 
 <body class="mdui-theme-light mdui-theme-accent-blue">
   <script>
@@ -54,7 +52,7 @@ href="<%= process.env.staticurl %>/vs/editor/editor.main.css"
         (delete localStorage.darkTheme)
     );
   </script>
-  
+
   <div>
     <div class="mdui-toolbar">
       <a class="mdui-btn mdui-btn-icon" id="toggle" href="/"><i class="mdui-icon material-icons">home</i></a>
@@ -111,6 +109,8 @@ href="<%= process.env.staticurl %>/vs/editor/editor.main.css"
                 <% } %>
     </div>
   </div>
+  <div id="pageprogress">
+  </div>
   <div class="mdui-dialog" id="user" style="border-radius: 20px;">
     <div class="mdui-dialog-title">登录为 <%= display_name %>
     </div>
@@ -140,45 +140,49 @@ href="<%= process.env.staticurl %>/vs/editor/editor.main.css"
   </div>
   <div class="mdui-fluid" style="padding: 0;">
     <!-- 编程区 -->
-      
+
     <div class="mdui-row mdui-row-gapless">
-      <div class="mdui-col-xs-12 mdui-col-sm-8" style="padding: 0;"
-        id='python_edit_box'>
-        <div class="python-editor-code"><div id="container" style="height:calc(93vh); border: 1px solid grey"></div>
-     
+      <div class="mdui-col-xs-12 mdui-col-sm-8" style="padding: 0;" id='python_edit_box'>
+        <div class="python-editor-code">
+          <div id="container" style="height:calc(93vh); border: 1px solid grey"></div>
+
         </div>
       </div>
       <!-- 运行结果区 -->
-      <div class=" mdui-col-xs-12 mdui-col-sm-4"><div style="display: flex; position: absolute; top:8px; right:0; z-index: 99999;">
-        <div style="margin:auto 10px;">
-          <button class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-theme-accent" id="run-code" onclick="run_it()"
-            style="border-radius: 10px;">运行</button>
-        </div>
-        <div style="margin:auto 10px auto 0;">
-          <button class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-red-accent" onclick="run_clear()"
-            style="border-radius: 10px;">清除</button>
-        </div>
-       <!-- <div style="margin:auto 10px auto 0;">
+      <div class=" mdui-col-xs-12 mdui-col-sm-4">
+        <div style="display: flex; position: absolute; top:8px; right:0; z-index: 99999;">
+          <div style="margin:auto 10px;">
+            <button class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-theme-accent" id="run-code"
+              onclick="run_it()" style="border-radius: 10px;">运行</button>
+          </div>
+          <div style="margin:auto 10px auto 0;">
+            <button class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-red-accent" onclick="run_clear()"
+              style="border-radius: 10px;">清除</button>
+          </div>
+          <!-- <div style="margin:auto 10px auto 0;">
           <button class="mdui-btn mdui-btn-raised mdui-ripple mdui-color-cyan-700" onclick="all_Screen(this)"
             style="border-radius: 10px;">全屏运行</button>
         </div>-->
-      </div>
-      <div id='main_edit_box'>
-        <div class="" style="padding: 0;">
-          <div class="">
-            <div class="" style="padding: 0;">
-              <div id="canvas_box"
-                style="height:calc(50vh);background:url(/*<%= process.env.staticurl %>/pythonstatic/img/welcome_python_editor.png*/) no-repeat center;background-size: contain;background-size:auto 100%;">
-                <div id="pythoncanvas"></div>
+        </div>
+        <div id='main_edit_box'>
+          <div class="" style="padding: 0;">
+            <div class="">
+              <div class="" style="padding: 0;">
+                <div id="canvas_box"
+                  style="height:calc(50vh);background:url(/*<%= process.env.staticurl %>/pythonstatic/img/welcome_python_editor.png*/) no-repeat center;background-size: contain;background-size:auto 100%;">
+                  <div id="pythoncanvas"></div>
+                </div>
               </div>
-            </div>
-            <div class=""
-              style="padding: 0!important ; margin:0;background-color: rgb(0, 0, 0);height:calc(50vh - 50px);">
-              <textarea id="output" class="mdui-text-color-theme-text" style="padding: 0!important ;border: 0px!important ;height: 100%;width: 100%;" disabled>终端打印输出区</textarea>
+              <div class=""
+                style="padding: 0!important ; margin:0;background-color: rgb(0, 0, 0);height:calc(50vh - 50px);">
+                <textarea id="output" class="mdui-text-color-theme-text"
+                  style="padding: 0!important ;border: 0px!important ;height: 100%;width: 100%;"
+                  disabled>终端打印输出区</textarea>
+              </div>
             </div>
           </div>
         </div>
-      </div></div>
+      </div>
     </div>
   </div>
 
@@ -191,10 +195,10 @@ href="<%= process.env.staticurl %>/vs/editor/editor.main.css"
     <div class="mdui-dialog-title">项目信息
     </div>
     <div class="mdui-dialog-content">修改内容请手动保存到云端
-<br/>
-    分享
+      <br />
+      分享
       <label class="mdui-switch">
-        <input type="checkbox" id="publish-work-box" onclick="publish_work()"/>
+        <input type="checkbox" id="publish-work-box" onclick="publish_work()" />
         <i class="mdui-switch-icon"></i>
       </label>
       <div class="mdui-textfield">
@@ -235,15 +239,14 @@ href="<%= process.env.staticurl %>/vs/editor/editor.main.css"
 
 
 
-  <script>
-   
-  </script>
-  <script src="<%= process.env.staticurl %>/vs/loader.js"></script>
-  <script src="<%= process.env.staticurl %>/vs/editor/editor.main.nls.js"></script>
-  <script src="<%= process.env.staticurl %>/vs/editor/editor.main.js"></script>
+  <script>self.require = { paths: { 'vs': '<%= process.env.staticurl %>/pythonstatic/vs' },'vs/nls': { availableLanguages: { '*': 'zh-cn' } } };</script>
+
+  <script src="<%= process.env.staticurl %>/pythonstatic/vs/loader.js"></script>
+  <script src="<%= process.env.staticurl %>/pythonstatic/vs/editor/editor.main.js"></script>
 
 
 
+  <script type="text/javascript" src="<%= process.env.staticurl %>/page/main.js"></script>
 
   <script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.3.7.1.js"></script>
   <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/js/file-saver.js"></script>
@@ -258,25 +261,27 @@ href="<%= process.env.staticurl %>/vs/editor/editor.main.css"
 </body>
 
 </html>
-<script>S3staticurl = '<%= process.env.S3staticurl %>'</script>
+<script>S3staticurl = '<%= process.env.S3staticurl %>'
+  staticfile = '<%= process.env.staticurl %>'
+  window.staticfile = '<%= process.env.staticurl %>'</script>
 <script>if (localStorage.darkTheme) {
-  document.body.classList.add("mdui-theme-layout-dark");
-  document.body.classList.add("mdui-theme-dark");
-  document.documentElement.classList.add("mdui-theme-dark");
-  document.body.setAttribute("dark", "");
-  $("#layui_theme_css").attr("href", S3staticurl+"/css/layui-theme-dark.css");
-}
-document.getElementById("switch-theme").addEventListener("click", () => {
-  document.body.classList.toggle("mdui-theme-layout-dark");
-  document.body.classList.toggle("mdui-theme-dark");
-  document.documentElement.classList.toggle("mdui-theme-dark");
-  document.body.toggleAttribute("dark");
-  if (document.body.hasAttribute("dark")) {
-    localStorage.darkTheme = true;
-    $("#layui_theme_css").attr("href", S3staticurl+"/css/layui-theme-dark.css");
-  } else {
-    delete localStorage.darkTheme;
-    $("#layui_theme_css").removeAttr("href");
+    document.body.classList.add("mdui-theme-layout-dark");
+    document.body.classList.add("mdui-theme-dark");
+    document.documentElement.classList.add("mdui-theme-dark");
+    document.body.setAttribute("dark", "");
+    $("#layui_theme_css").attr("href", "<%= process.env.staticurl %>/css/layui-theme-dark.css");
   }
-});
-mdui.setColorScheme('#2087fd');</script>
+  document.getElementById("switch-theme").addEventListener("click", () => {
+    document.body.classList.toggle("mdui-theme-layout-dark");
+    document.body.classList.toggle("mdui-theme-dark");
+    document.documentElement.classList.toggle("mdui-theme-dark");
+    document.body.toggleAttribute("dark");
+    if (document.body.hasAttribute("dark")) {
+      localStorage.darkTheme = true;
+      $("#layui_theme_css").attr("href", "<%= process.env.staticurl %>/css/layui-theme-dark.css");
+    } else {
+      delete localStorage.darkTheme;
+      $("#layui_theme_css").removeAttr("href");
+    }
+  });
+  mdui.setColorScheme('#2087fd');</script>

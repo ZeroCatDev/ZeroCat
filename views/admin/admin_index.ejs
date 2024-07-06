@@ -5,19 +5,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <link rel="shortcut icon" href="<%= process.env.staticurl %>/img/siteicon.png">
-  <link rel="stylesheet" href="<%= process.env.staticurl %>/css/mdui102.css"/>
-  <script src="<%= process.env.staticurl %>/js/mdui102.js"></script>
-  
+  <link rel="stylesheet" href="<%= process.env.staticurl %>/mdui-v1.0.2/css/mdui.min.css"/>
+  <script src="<%= process.env.staticurl %>/mdui-v1.0.2/js/mdui.min.js"></script>
+
   <script> function automsg(msg) {
       automsg({
-   
+
           buttonText: '关闭',
            message:msg,
           });
   };</script>
-  
-  
-  <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">	
+
+
+  <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
   <link id="layui_theme_css" rel="stylesheet" href="<%= process.env.staticurl %>/css/layui-theme-dark.css">
 </head>
 <body class="mdui-theme-light layui-layout-body">
@@ -26,9 +26,9 @@
   <div class="layui-header" style="width: 100%;">
     <div class="layui-logo">
       <a href="/"><img src="<%= process.env.staticurl %>/img/logo_w.png" style="width: 120px;margin:0 20px"></a>
-    </div>    
+    </div>
 
-  
+
   </div>
   <!-- 左侧导航区域 -->
   <div class="layui-side layui-bg-black">
@@ -70,17 +70,17 @@
         </dd>
       </dl>
   </li>
-    
+
       </ul>
     </div>
   </div>
   <!-- 内容主体区域：默认为src -->
   <div class="layui-body" style="bottom:0;padding:0;">
-      <iframe id="iframeMain" 
+      <iframe id="iframeMain"
         src="/admin/default"
         width="100%";
         style="height: calc(100% - 3px);";
-        
+
         marginwidth="0";
         marginheight="0";
         scrolling="auto";
@@ -103,4 +103,3 @@
     });
 </script>
 </html>
-      
