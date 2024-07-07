@@ -2,105 +2,109 @@
 	<link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css" />
 
 	<link rel="stylesheet" type="text/css" href="<%= process.env.staticurl %>/css/scratch_play.css">
-<mdui-card style="width: 100%;" variant="outlined">
+	<div class="mdui-row">
+		<div class="mdui-col-xs-12 mdui-col-md-8">  	<mdui-card style="width: 100%;" variant="outlined">
 
 
-		<div id="container_play" style="display: none;">
+			<div id="container_play" style="display: none;">
 
-			<div id="wrapper"> <canvas id="stage"></canvas>
-				<div id="monitors"></div>
-				<div id="asking-box">
-					<label id="question" for="answer">问题</label> <input type="text" id="answer">
+				<div id="wrapper"> <canvas id="stage"></canvas>
+					<div id="monitors"></div>
+					<div id="asking-box">
+						<label id="question" for="answer">问题</label> <input type="text" id="answer">
+					</div>
+				</div>
+
+			</div>
+			<div class=" loading-progress-box" style="display: none;">
+				<mdui-linear-progress value="0" id="loading-progress-linear"></mdui-linear-progress>
+				<mdui-button id="loading-progress" variant="tonal"></mdui-button>
+			</div>
+			<div id="container_main">
+				<div id="project_slt"
+					style="background-image: url(<%= process.env.S3staticurl %>/scratch_slt/<%=project.id%>);">
+					<mdui-button onclick="loadProject()" disabled class="remove-disabled" variant="filled" icon="play_arrow"
+						class="ow-center">运行</mdui-button>
+
 				</div>
 			</div>
+		</mdui-card>
+		<mdui-button onclick="greenFlag()" variant="filled" icon="play_arrow" id="greenFlag-button" disabled
+			class="remove-disabled">运行</mdui-button>
 
+		<mdui-button id="stopAll" onclick="stopAll()" variant="tonal" icon="clear" id="stopAll-button" disabled
+			class="remove-disabled">停止</mdui-button></div>
+		<div class="mdui-col-xs-12 mdui-col-md-4"><div style="font-size: 24px;line-height: 36px" id="projecttitle">
+			加载中
 		</div>
-<div class=" loading-progress-box" style="display: none;">
-	<mdui-linear-progress value="0" id="loading-progress-linear"></mdui-linear-progress>
-		<mdui-button id="loading-progress" variant="tonal"></mdui-button>
-	</div>
-		<div id="container_main">
-			<div id="project_slt"
-				style="background-image: url(<%= process.env.S3staticurl %>/scratch_slt/<%=project.id%>);">
-				<mdui-button onclick="loadProject()" disabled class="remove-disabled" variant="filled" icon="play_arrow"
-					class="ow-center">运行</mdui-button>
-
-			</div>
+		<div style="font-size: 14px;line-height: 24px;opacity: .54;" id="projectdescription">
+			加载中
 		</div>
-	</mdui-card>
-	<mdui-button onclick="greenFlag()" variant="filled" icon="play_arrow" id="greenFlag-button" disabled
-		class="remove-disabled">运行</mdui-button>
+		<mdui-list>
+			<mdui-list-item id="authorinfo" rounded active headline="加载中" description="加载中" headline-line="1"
+				description-line="1" href="" disabled class="remove-disabled"><mdui-avatar id="authoravatar" slot="icon"
+					src=""></mdui-avatar>
+			</mdui-list-item>
+		</mdui-list>
 
-	<mdui-button id="stopAll" onclick="stopAll()" variant="tonal" icon="clear" id="stopAll-button" disabled
-		class="remove-disabled">停止</mdui-button>
-	<br />
-	<div style="font-size: 24px;line-height: 36px" id="projecttitle">
-		加载中
-	</div>
-	<div style="font-size: 14px;line-height: 24px;opacity: .54;" id="projectdescription">
-		加载中
-	</div>
-	<mdui-list>
-		<mdui-list-item id="authorinfo" rounded active headline="加载中" description="加载中" headline-line="1"
-			description-line="1" href="" disabled class="remove-disabled"><mdui-avatar id="authoravatar" slot="icon"
-				src=""></mdui-avatar>
-		</mdui-list-item>
-	</mdui-list>
+		<mdui-chip icon="play_circle" id="projectview" disabled class="remove-disabled" elevated>加载中</mdui-chip>
+		<mdui-chip icon="access_time" id="projecttime" disabled class="remove-disabled" elevated>加载中</mdui-chip>
+		<mdui-chip icon="code" id="projectstate" disabled class="remove-disabled" elevated>加载中</mdui-chip>
+		<mdui-chip icon="code" disabled class="remove-disabled" elevated>Scratch</mdui-chip><br />
+		<mdui-button variant="filled" class="copylink remove-disabled" icon="content_copy" disabled>复制链接</mdui-button>
+		<mdui-button variant="filled" icon="analytics" id="open-analysis-dialog" onclick='projectanalysis(projectjson)'
+			disabled class="remove-disabled">分析</mdui-button>
 
-	<mdui-chip icon="play_circle" id="projectview" disabled class="remove-disabled" elevated>加载中</mdui-chip>
-	<mdui-chip icon="access_time" id="projecttime" disabled class="remove-disabled" elevated>加载中</mdui-chip>
-	<mdui-chip icon="code" id="projectstate" disabled class="remove-disabled" elevated>加载中</mdui-chip>
-	<mdui-chip icon="code" disabled class="remove-disabled" elevated>Scratch</mdui-chip><br />
-	<mdui-button variant="filled" class="copylink remove-disabled" icon="content_copy" disabled>复制链接</mdui-button>
-	<mdui-button variant="filled" icon="analytics" id="open-analysis-dialog" onclick='projectanalysis(projectjson)'
-		disabled class="remove-disabled">分析</mdui-button>
+		<mdui-button variant="text" target="_blank" id="editlink" disabled class="remove-disabled">创作页打开</mdui-button>
 
-	<mdui-button variant="text" target="_blank" id="editlink" disabled class="remove-disabled">创作页打开</mdui-button>
-
-	<div class="social-share"></div>
+		<div class="social-share"></div>
 
 
-	<mdui-dialog close-on-overlay-click close-on-esc class="analysis-dialog">
-		<span slot="headline">
-			<%= project.title %> 的分析
-		</span>
-		<span slot="description">由 ZeroCat 统计</span>
-		<div id="main1" style="width: 450px; height: 400px">请加载完毕后再使用分析</div>
+		<mdui-dialog close-on-overlay-click close-on-esc class="analysis-dialog">
+			<span slot="headline">
+				<%= project.title %> 的分析
+			</span>
+			<span slot="description">由 ZeroCat 统计</span>
+			<div id="main1" style="width: 450px; height: 400px">请加载完毕后再使用分析</div>
 
-		<div id="r"></div>
-	</mdui-dialog>
-	<script>
-		const analysisdialog = document.querySelector(".analysis-dialog");
-		const openanalysisButton = document.querySelector("#open-analysis-dialog");
+			<div id="r"></div>
+		</mdui-dialog>
+		<script>
+			const analysisdialog = document.querySelector(".analysis-dialog");
+			const openanalysisButton = document.querySelector("#open-analysis-dialog");
 
-		openanalysisButton.addEventListener("click", () => analysisdialog.open = true);
-	</script>
+			openanalysisButton.addEventListener("click", () => analysisdialog.open = true);
+		</script>
 
-	<div id="waline"></div>
-	<script type="module">
-		import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
-		init({
-			el: '#waline',
-			serverURL: '<%= process.env.WalineServerURL %>',
-			path: 'project-<%=project.id%>',
-			copyright: false,
-			reaction: true,
-			pageview: true,
-			locale: {
-				reactionTitle: "这个作品怎么样？"
-			},
-			emoji: [
-				'//unpkg.com/@waline/emojis@1.1.0/weibo',
-				'//unpkg.com/@waline/emojis@1.1.0/bilibili',
-			],
-			dark: 'body[dark]',
-		});
-	</script>
-<!--	<input type="hidden" id="works_id" value="<%= project.id %>">-->
+		<div id="waline"></div>
+		<script type="module">
+			import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
+			init({
+				el: '#waline',
+				serverURL: '<%= process.env.WalineServerURL %>',
+				path: 'project-<%=project.id%>',
+				copyright: false,
+				reaction: true,
+				pageview: true,
+				locale: {
+					reactionTitle: "这个作品怎么样？"
+				},
+				emoji: [
+					'//unpkg.com/@waline/emojis@1.1.0/weibo',
+					'//unpkg.com/@waline/emojis@1.1.0/bilibili',
+				],
+				dark: 'body[dark]',
+			});
+		</script></div>
+	  </div>
+
+
+
+	<!--	<input type="hidden" id="works_id" value="<%= project.id %>">-->
 	<%- include('../html-footer.ejs', {page: 'scratch' }); %>
 
-	<script type="text/javascript" src="<%= process.env.staticurl %>/js/social-share.js"></script>
-	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/social-share.css" />
+		<script type="text/javascript" src="<%= process.env.staticurl %>/js/social-share.js"></script>
+		<link rel="stylesheet" href="<%= process.env.staticurl %>/css/social-share.css" />
 		<script type="text/javascript" src="<%= process.env.staticurl %>/js/scratch.vm.min.js"></script>
 		<script type="text/javascript" src="<%= process.env.staticurl %>/js/clipboard.min.js"></script>
 		<script>
@@ -114,7 +118,7 @@
 
 		<script>
 			S3staticurl = '<%= process.env.S3staticurl %>'
-			</script>
+		</script>
 		<script src="<%= process.env.staticurl %>/js/echarts.js"></script>
 
 		<script src="<%= process.env.staticurl %>/page/scratch/playpage.js"></script>

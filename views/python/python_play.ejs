@@ -1,7 +1,7 @@
-<%- include('../html-head.ejs', {pageTitle: 'Python'}); %>
-<link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css" />
-
-			<mdui-card style="width: 100%;" variant="outlined">
+<%- include('../html-head.ejs', {pageTitle: 'Python' }); %>
+	<link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css" />
+	<div class="mdui-row">
+		<div class="mdui-col-xs-12 mdui-col-md-8"> <mdui-card style="width: 100%;" variant="outlined">
 
 				<div style="display: flex; position: absolute; top:8px; right:0; z-index: 99999;">
 				</div>
@@ -14,17 +14,18 @@
 			</mdui-card>
 
 
-
+			<div style="display: none;">
+				<textarea id="code_textarea"></textarea>
+			</div>
 
 			<mdui-button id="run-code" onclick="run_it()" variant="filled" icon="play_arrow">运行</mdui-button>
 
 			<mdui-button onclick="run_clear()" variant="tonal" icon="clear">清除</mdui-button>
+		</div>
+
+		<div class="mdui-col-xs-12 mdui-col-md-4">
 
 
-			<div style="display: none;">
-				<textarea id="code_textarea"></textarea>
-			</div>
-			<br />
 			<div style="font-size: 24px;
 			line-height: 36px" id="work_title">
 
@@ -40,9 +41,11 @@
 						src="/api/usertx?id=1"></mdui-avatar>
 				</mdui-list-item>
 			</mdui-list>
-			<mdui-chip icon="play_circle" elevated><span id="view_count">浏览量: <span class="waline-pageview-count">加载中</span> </span></mdui-chip>
+			<mdui-chip icon="play_circle" elevated><span id="view_count">浏览量: <span
+						class="waline-pageview-count">加载中</span> </span></mdui-chip>
 			<mdui-chip icon="access_time" elevated><span id="work_update"></mdui-chip>
-			<mdui-chip icon="code" id="projectstate" elevated>Python</mdui-chip><mdui-chip icon="code" elevated> Python</mdui-chip><br />
+			<mdui-chip icon="code" id="projectstate" elevated>Python</mdui-chip><mdui-chip icon="code" elevated>
+				Python</mdui-chip><br />
 			<mdui-button variant="text" onclick='tocode()'>查看代码</mdui-button>
 
 			<div class="social-share"></div>
@@ -71,30 +74,31 @@
 
 
 			</script>
-			<%- include('../html-footer.ejs', {page: 'python'}); %>
+		</div>
+		<%- include('../html-footer.ejs', {page: 'python' }); %>
 
 			<script type="text/javascript" src="<%= process.env.staticurl %>/js/social-share.js"></script>
 			<link rel="stylesheet" href="<%= process.env.staticurl %>/css/social-share.css" />
-<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/CodeMirror.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/js/file-saver.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/skulpt.min.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/skulpt-stdlib.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/mode/python.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/js/show-hint.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/public.js"></script>
+			<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/CodeMirror.js"></script>
+			<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/js/file-saver.js"></script>
+			<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/skulpt.min.js"></script>
+			<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/skulpt-stdlib.js"></script>
+			<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/mode/python.js"></script>
+			<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/js/show-hint.js"></script>
+			<script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
+			<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/public.js"></script>
 
 
-<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/python_play.js"></script>
-<script>
+			<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/python_play.js"></script>
+			<script>
 
-var $config = {
-		title: _work_title,
-		description: `${_work_title} 是<%= process.env.SiteName %>上的Python作品`,
-		image: `<%= process.env.S3staticurl%>/scratch_slt/${_work_id}`,
-		wechatqrcodeTitle: "微信扫一扫分享",
-		wechatqrcodeHelper: '<p>打开扫一扫</p><p>在手机上打开即可分享至朋友圈。</p>',
-	};
+				var $config = {
+					title: _work_title,
+					description: `${_work_title} 是<%= process.env.SiteName %>上的Python作品`,
+					image: `<%= process.env.S3staticurl%>/scratch_slt/${_work_id}`,
+					wechatqrcodeTitle: "微信扫一扫分享",
+					wechatqrcodeHelper: '<p>打开扫一扫</p><p>在手机上打开即可分享至朋友圈。</p>',
+				};
 
-	socialShare('.social-share', $config)
-	</script>
+				socialShare('.social-share', $config)
+			</script>
