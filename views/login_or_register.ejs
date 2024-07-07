@@ -2,10 +2,23 @@
 
 
   <script>
-$(function() {    if (Cookies.get('token')) {
-      window.location.href = '/';
+    $(function () {
+      if (Cookies.get('token')) {
+        if (getQueryString('redirect') == 'editor') {
+          window.location.href = "<%= process.env.editorurl %>/editor.html?token=" + Cookies.get('token');
+
+
+        } else {
+          window.location.href = '/';
+        }
+      }
+    })
+
+    function getQueryString(name) {
+      const url_string = window.location.href;
+      const url = new URL(url_string);
+      return url.searchParams.get(name);
     }
-})
   </script>
 
   <div class="layui-row">
@@ -34,7 +47,7 @@ $(function() {    if (Cookies.get('token')) {
             <mdui-text-field variant="filled" label="密码" id='password' type="password" toggle-password name="password"
               autocomplete="on" style="margin-bottom: 10px;"></mdui-text-field>
 
-              <mdui-button class="open-captchadialog" variant="tonal">完成验证码</mdui-button>
+            <mdui-button class="open-captchadialog" variant="tonal">完成验证码</mdui-button>
 
 
 
@@ -65,8 +78,8 @@ $(function() {    if (Cookies.get('token')) {
             <mdui-text-field variant="filled" label="昵称" id='reg_password' type="text"
               style="margin-bottom: 10px;"></mdui-text-field>
 
-              <mdui-button class="open-captchadialog" variant="tonal">完成验证码</mdui-button>
-              <div style="display:flex; height: 50px;">
+            <mdui-button class="open-captchadialog" variant="tonal">完成验证码</mdui-button>
+            <div style="display:flex; height: 50px;">
               <mdui-button variant="text" onclick="switchPage('login-page')">去登录</mdui-button>
 
             </div>
@@ -88,8 +101,8 @@ $(function() {    if (Cookies.get('token')) {
           <div>
             <mdui-text-field variant="filled" label="邮箱" id='getPW_email' type="email"
               style="margin-bottom: 10px;"></mdui-text-field>
-              <mdui-button class="open-captchadialog" variant="tonal">完成验证码</mdui-button>
-              <br /><br />
+            <mdui-button class="open-captchadialog" variant="tonal">完成验证码</mdui-button>
+            <br /><br />
             <mdui-button onclick="getPW()">找回密码</mdui-button>
             <mdui-button onclick="switchPage('login-page')" variant="text">去登录</mdui-button>
           </div>
@@ -155,7 +168,7 @@ $(function() {    if (Cookies.get('token')) {
     <mdui-button slot="action" variant="text" class="zc-feedback">反馈</mdui-button>
     <mdui-button slot="action" variant="text" onclick="reloudcaptcha()">刷新</mdui-button>
 
-<mdui-button slot="action" variant="tonal" class="close-captchadialog">完成</mdui-button>
+    <mdui-button slot="action" variant="tonal" class="close-captchadialog">完成</mdui-button>
   </mdui-dialog>
 
 

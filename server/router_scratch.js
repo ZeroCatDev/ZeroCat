@@ -406,7 +406,9 @@ router.post("/play/openSrc", function (req, res) {
 router.get("/edit", function (req, res) {
   res.render("scratch/scratch_edit.ejs");
 });
-
+router.get("/editnew", function (req, res) {
+  res.render("scratch/scratch_edit_next.ejs");
+});
 //Scratch内部调用一：获取作品数据：JSON源代码
 //支持两种方案加载默认作品
 //1、从指定文件加载
