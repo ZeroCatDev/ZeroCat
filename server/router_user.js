@@ -39,24 +39,11 @@ router.get("/login", function (req, res) {
 router.get("/repw", function (req, res) {
   res.render("repw.ejs");
 });
+const captcha = require('./captcha.js');
 
 //登录
-router.post("/login", function (req, res) {
-  request.post(
-    {
-      url: process.env.reverify,form: {secret: process.env.resecret,response: req.body.re},
-    },
-    function (err, httpResponse, body) {
-      if (err) {
-        console.error(err);
-        return;
-      }
+router.post("/login",captcha ,function (req, res) {
 
-      const response = JSON.parse(body);
-      if (!response.success) {
-        res.status(200).send({ status: "验证码错误" });
-        return;
-      }
 
       if (
         !req.body.pw ||
@@ -141,7 +128,7 @@ router.post("/login", function (req, res) {
       });
     }
   );
-});
+
 
 //退出
 var logout = function (req, res) {
@@ -161,22 +148,8 @@ router.get("/logout", function (req, res) {
 });
 
 //注册
-router.post("/register", function (req, res) {
-  request.post(
-    {
-      url:process.env.reverify,form: {secret: process.env.resecret,response: req.body.re}
-    },
-    function (err, httpResponse, body) {
-      if (err) {
-        console.error(err);
-        return;
-      }
+router.post("/register",captcha,function (req, res) {
 
-      const response = JSON.parse(body);
-      if (!response.success) {
-        res.status(200).send({ status: "验证码错误" });
-        return;
-      }
       // 选择判断是否已关系注册通道
       var SQL = `SELECT id FROM sys_ini WHERE iniKey='regist' AND iniValue=1 LIMIT 1`;
       DB.query(SQL, function (err, Regist) {
@@ -304,24 +277,9 @@ router.post("/register", function (req, res) {
       });
     }
   );
-});
 //找回密码
-router.post("/repw", function (req, res) {
-  request.post(
-    {
-      url: process.env.reverify,form: {secret: process.env.resecret,response: req.body.re},
-    },
-    function (err, httpResponse, body) {
-      if (err) {
-        console.error(err);
-        return;
-      }
+router.post("/repw", captcha,function (req, res) {
 
-      const response = JSON.parse(body);
-      if (!response.success) {
-        res.status(200).send({ status: "验证码错误" });
-        return;
-      }
       var email = req.body.un;
       SQL = `SELECT * FROM ow_Users WHERE email='${email}' LIMIT 1`;
       DB.query(SQL, function (err, User) {
@@ -419,25 +377,11 @@ router.post("/repw", function (req, res) {
       });
     }
   );
-});
+
 
 //找回密码
-router.post("/torepw", function (req, res) {
-  request.post(
-    {
-      url: process.env.reverify,form: {secret: process.env.resecret,response: req.body.re},
-    },
-    function (err, httpResponse, body) {
-      if (err) {
-        console.error(err);
-        return;
-      }
+router.post("/torepw",captcha, function (req, res) {
 
-      const response = JSON.parse(body);
-      if (!response.success) {
-        res.status(200).send({ status: "验证码错误" });
-        return;
-      }
       //console.log(req.body.token);
       var user1 = jwt.verify(
         req.body.jwttoken,
@@ -469,7 +413,7 @@ router.post("/torepw", function (req, res) {
       // Continue with your program
     }
   );
-});
+
 
 
 router.get("/tuxiaochao", function (req, res) {

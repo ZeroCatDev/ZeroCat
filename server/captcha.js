@@ -1,0 +1,38 @@
+const express = require('express');
+
+const app = express();
+const request = require("request");
+
+
+app.use((req, res, next) => {
+  const recaptcha = req.body.recaptcha||req.body.re;
+
+  if (!recaptcha) {
+    return res.status(200).send({message:'请完成验证码'});
+  }
+console.log(process.env.reverify)
+console.log(process.env.resecret)
+console.log(req.body.re)
+  request.post(
+    {
+      url: process.env.reverify,form: {secret: process.env.resecret,response: req.body.re},
+    },
+    function (error, httpResponse, body) {
+      if (error) {
+
+            console.error('Error verifying recaptcha:', error);
+            res.status(200).send({message:'验证码验证失败',error:error});
+
+      }
+
+      const response = JSON.parse(body);
+      console.log(response)
+      if (response.success) {
+        next();
+      } else {
+        res.status(200).send({message:'验证码无效',response:response});
+      }
+
+});})
+
+module.exports = app;

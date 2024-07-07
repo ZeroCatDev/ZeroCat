@@ -196,6 +196,7 @@ app.all("*", function (req, res, next) {
     next();
   }
 });
+const captcha = require('./server/captcha.js');
 
 //首页
 app.get("/", function (req, res) {
