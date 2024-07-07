@@ -51,7 +51,7 @@ router.post("/login",captcha ,function (req, res) {
         !req.body.un ||
         !I.emailTest(req.body.un)
       ) {
-        res.status(200).send({ status: "账号或密码错误" });
+        res.status(200).send({ message: "账号或密码错误" });
         return;
       }
 
@@ -59,16 +59,16 @@ router.post("/login",captcha ,function (req, res) {
       var WHERE = [`${req.body["un"]}`];
       DB.qww(SQL, WHERE, function (err, USER) {
         if (err || USER.length == 0) {
-          res.status(200).send({ status: "账号或密码错误" });
+          res.status(200).send({ message: "账号或密码错误" });
           return;
         }
 
         var User = USER[0];
         pw = I.hash(req.body.pw)
         if (I.checkhash(req.body.pw,User["password"])==false) {
-          res.status(200).send({ status: "账号或密码错误" });
+          res.status(200).send({ message: "账号或密码错误" });
         } else if (User["state"] == 2) {
-          res.status(200).send({ status: "您已经被封号，请联系管理员" });
+          res.status(200).send({ message: "您已经被封号，请联系管理员" });
         } else {
           res.locals["userid"] = User["id"];
           res.locals["email"] = User["email"];
@@ -118,6 +118,7 @@ router.post("/login",captcha ,function (req, res) {
           );
           res.status(200).send({
             status: "OK",
+            message: "OK",
             userid: parseInt(User["id"]),
             email: User["email"],
             display_name: User["display_name"],
@@ -156,7 +157,7 @@ router.post("/register",captcha,function (req, res) {
         if (err || Regist.length == 0) {
           res
             .status(200)
-            .send({ status: "系统已关闭注册通道，请联系管理员处理" });
+            .send({ message: "系统已关闭注册通道，请联系管理员处理" });
           return;
         }
 
@@ -167,11 +168,11 @@ router.post("/register",captcha,function (req, res) {
         SQL = `SELECT id FROM ow_Users WHERE email='${email}' LIMIT 1`;
         DB.query(SQL, function (err, User) {
           if (err) {
-            res.status(200).send({ status: "账号格式错误" });
+            res.status(200).send({ message: "账号格式错误" });
             return;
           }
           if (User.length > 0) {
-            res.status(200).send({ status: "账号已存在" });
+            res.status(200).send({ message: "账号已存在" });
             return;
           }
 
@@ -191,7 +192,7 @@ router.post("/register",captcha,function (req, res) {
           DB.query(INSERT, function (err, newUser) {
             if (err) {
               console.error(err);
-              res.status(200).send({ status: "再试一次17" });
+              res.status(200).send({ message: "再试一次17" });
               return;
             }
             var userid = newUser.insertId;
@@ -271,7 +272,7 @@ router.post("/register",captcha,function (req, res) {
               }
             );
 
-            res.status(200).send({ status: "注册成功,请查看邮箱获取账户数据" });
+            res.status(200).send({ message: "注册成功,请查看邮箱获取账户数据" });
           });
         });
       });
@@ -284,7 +285,7 @@ router.post("/repw", captcha,function (req, res) {
       SQL = `SELECT * FROM ow_Users WHERE email='${email}' LIMIT 1`;
       DB.query(SQL, function (err, User) {
         if (err) {
-          res.status(200).send({ status: "账号格式错误或不存在" });
+          res.status(200).send({ message: "账号格式错误或不存在" });
           return;
         }
         var user = User[0];
@@ -388,7 +389,7 @@ router.post("/torepw",captcha, function (req, res) {
         process.env.jwttoken,
         function (err, decoded) {
           if (err) {
-            res.status(200).send({ status: "token错误或过期" });
+            res.status(200).send({ message: "token错误或过期" });
             return;
           }
           userid = decoded.userid;
@@ -404,11 +405,11 @@ router.post("/torepw",captcha, function (req, res) {
       UPDATE = `UPDATE ow_Users SET ? WHERE id=${userid} LIMIT 1`;
       DB.qww(UPDATE, SET, function (err, u) {
         if (err) {
-          res.status(200).send({ status: "请再试一次" });
+          res.status(200).send({ message: "请再试一次" });
           return;
         }
 
-        res.status(200).send({ status: "您的密码已更新" });
+        res.status(200).send({ message: "您的密码已更新" });
       });
       // Continue with your program
     }
