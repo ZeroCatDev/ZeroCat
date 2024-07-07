@@ -449,7 +449,7 @@ router.get("/tuxiaochao", function (req, res) {
         process.env.txcid +
         "?openid=" +
         res.locals["userid"] +
-        "&display_name=" +
+        "&nickname=" +
         res.locals["display_name"] +
         "&avatar="+process.env.S3staticurl+'/user/'+USER[0].images+
         "&user_signature=" +
