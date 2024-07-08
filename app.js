@@ -246,13 +246,7 @@ app.get("/share", function (req, res, next) {
 app.get("/search", function (req, res, next) {
   res.render("search.ejs");
 });
-//工具
-app.get("/tools/comparer", function (req, res, next) {
-  res.render("tools/comparer.ejs");
-});
-app.get("/tools/asdm", function (req, res, next) {
-  res.render("tools/asdm.ejs");
-});
+
 //python路由
 var router_python = require("./server/router_python.js");
 app.use("/python", router_python);

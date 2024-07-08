@@ -16,12 +16,12 @@
   <link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css">
 
 
+  <script src="<%= process.env.staticurl %>/js/js-cookie.js"></script>
 
 
   <script src="<%= process.env.staticurl %>/mdui-v1.0.2/js/mdui.min.js"></script>
 
   <script src="<%= process.env.staticurl %>/js/jquery.3.7.1.js"></script>
-
   <script>
 
 
@@ -62,23 +62,20 @@
       <div class="mdui-toolbar-spacer"></div>
       <a href="javascript:;" onclick="javascript:location.reload();" class="mdui-btn mdui-btn-icon mdui-ripple"><i
           class="mdui-icon material-icons">refresh</i></a>
-      <% if (login==false) { %>
-        <a href="/user/login" class="mdui-btn mdui-ripple" style="border-radius: 12px;">登录/注册</a>
-        <% } else { %>
+
           <button class="mdui-btn mdui-btn-icon mdui-ripple" mdui-dialog="{target: '#user'}"><i
               class="mdui-icon material-icons">account_circle</i></button>
-          <% } %>
+
     </div>
     <div class="mdui-tab">
       <a class="mdui-ripple " style="border-radius: 20px;" mdui-dialog="{target: '#file'}"><i
           class="mdui-icon material-icons">insert_drive_file</i>文件</a>
 
       <div id="save_work">
-        <% if (login) { %>
+
           <a class="mdui-ripple" onclick="save_work()" style="border-radius: 20px;"><i
               class="mdui-icon material-icons">cloud_upload</i>保存到云端</a>
-          <% } else { %>
-            <% } %>
+
       </div> <a class="mdui-ripple" id="revise_work" onclick="revise_work()" style="border-radius: 20px;"><i
           class="mdui-icon material-icons">call_split</i>改编此作品</a>
 
@@ -92,43 +89,27 @@
       <div class="mdui-toolbar-spacer"></div>
       <a class="mdui-ripple" onclick="open_YX()" style="border-radius: 20px;"><i
           class="mdui-icon material-icons">thumb_up</i>优秀作品</a>
-      <% if (login) { %>
+
         <a class="mdui-ripple" onclick="open_MY()" style="border-radius: 20px;"><i
             class="mdui-icon material-icons">inbox</i>我的作品</a>
-        <% } else { %>
-          <% } %>
-            <% if (login==false) { %>
-              <a class="mdui-ripple" href="/user/login" style="border-radius: 20px;">
-                <i class="mdui-icon material-icons">account_circle</i>登录|注册 </a>
-              <% } else { %>
+
+
                 <a class="mdui-ripple" mdui-dialog="{target: '#user'}" style="border-radius: 20px;">
                   <i class="mdui-icon material-icons">account_circle</i>
-                  登录为
-                  <%= display_name %>
+
+                  <span class="ow-usernick"></span>
                 </a>
-                <% } %>
+
     </div>
   </div>
   <div id="pageprogress">
   </div>
   <div class="mdui-dialog" id="user" style="border-radius: 20px;">
-    <div class="mdui-dialog-title">登录为 <%= display_name %>
+    <div class="mdui-dialog-title">登录为 <span class="ow-usernick"></span>
     </div>
     <div class="mdui-dialog-content"> 选择操作前请保存作品</div>
     <div class="mdui-dialog-actions">
       <div class="mdui-tab">
-        <a href="/my/scratch" class="mdui-ripple" style="border-radius: 20px;">
-          <i class="mdui-icon material-icons">insert_drive_file</i>
-          <label>Scratch作品</label>
-        </a>
-        <a href="/my/python" class="mdui-ripple" style="border-radius: 20px;">
-          <i class="mdui-icon material-icons">insert_drive_file</i>
-          <label>Python作品</label>
-        </a>
-        <a href="/my/info" class="mdui-ripple" style="border-radius: 20px;">
-          <i class="mdui-icon material-icons">remove_red_eye</i>
-          <label>个人信息</label>
-        </a>
         <a href="/user/logout" class="mdui-ripple" style="border-radius: 20px;">
           <i class="mdui-icon material-icons">close</i>
           <label>退出</label>
@@ -284,4 +265,22 @@
       $("#layui_theme_css").removeAttr("href");
     }
   });
-  mdui.setColorScheme('#2087fd');</script>
+  mdui.setColorScheme('#2087fd');</script><script>
+staticurl='<%= process.env.staticurl %>'
+  S3staticurl = "<%= process.env.S3staticurl %>"
+</script>
+
+<script src="<%= process.env.staticurl %>/js/jwt-decode.js"></script>
+<script>
+  $(function () {
+    if (!Cookies.get('token')) {
+
+        window.location.href = '/login';
+      }
+
+  })
+
+</script>
+
+
+<script type="text/javascript" src="<%= process.env.staticurl %>/page/main.js"></script>

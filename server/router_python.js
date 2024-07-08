@@ -88,10 +88,7 @@ router.get('/play', function (req, res) {
 router.get('/edit', function (req, res) {
 	res.render('python/python_edit.ejs');
 })
-//python兼容编辑器
-router.get('/old', function (req, res) {
-	res.render('python/python_edit_old.ejs');
-})
+
 // 从数据库获取作品
 router.post('/getWork', function (req, res) {
     var projectid = 0;
