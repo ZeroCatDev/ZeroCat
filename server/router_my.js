@@ -7,6 +7,7 @@ var crypto = require("crypto");
 var I = require("./lib/global.js");
 //数据库
 var DB = require("./lib/database.js");
+const captcha = require('./captcha.js');
 
 router.all("*", function (req, res, next) {
   //限定访问该模块的权限：必须已登录
@@ -239,7 +240,7 @@ router.get("/info", function (req, res) {
     res.render("my_info.ejs");
 });
 //修改头像
-router.post("/set/avatar", function (req, res) {
+router.post("/set/avatar",captcha, function (req, res) {
   //保存文件到正确位置
   if (!req["files"]["file"]) {
     res.status(200).send({ status: "文件上传失败" });
@@ -270,16 +271,16 @@ router.post("/set/avatar", function (req, res) {
       };
       DB.qww(UPDATE, SET, function (err, u) {
         if (err) {
-          res.status(200).send({ status: "请再试一次" });
+          res.status(200).send({ status: "请再试一次" ,message: "头像修改失败"});
           return;
         }
-        res.status(200).send({ status: "ok" });
+        res.status(200).send({ status: "ok" ,message: "头像修改成功"});
       });
     });
   });
 });
 //修改个人信息
-router.post("/set/userinfo", function (req, res) {
+router.post("/set/userinfo",captcha, function (req, res) {
   var UPDATE = `UPDATE ow_Users SET ? WHERE id=${res.locals.userid} LIMIT 1`;
   var SET = {
     display_name: req.body["display_name"],
@@ -302,6 +303,8 @@ router.post("/set/userinfo", function (req, res) {
         I.GenerateJwt({
           userid: res.locals["userid"],
           email: res.locals["email"],
+          username: res.locals["username"],
+
           display_name: res.locals["display_name"],
           avatar: res.locals["avatar"],
         }),
@@ -311,8 +314,37 @@ router.post("/set/userinfo", function (req, res) {
 
   });
 });
+//修改个人信息
+router.post("/set/username",captcha, function (req, res) {
+  var UPDATE = `UPDATE ow_Users SET ? WHERE id=${res.locals.userid} LIMIT 1`;
+  var SET = {
+    username: req.body["username"],
+  };
+  DB.qww(UPDATE, SET, function (err, u) {
+    if (err) {
+      res.status(200).send({ status: "请再试一次" });
+      return;
+    }
+
+    res.locals["username"] = req.body["username"];
+
+    res.cookie(
+        "token",
+        I.GenerateJwt({
+          userid: res.locals["userid"],
+          email: res.locals["email"],
+          username: res.locals["username"],
+          display_name: res.locals["display_name"],
+          avatar: res.locals["avatar"],
+        }),
+        { maxAge: 604800000 }
+      );
+      res.status(200).send({ status: "用户名修成成功" });
+
+  });
+});
 //修改密码：动作
-router.post("/set/pw", function (req, res) {
+router.post("/set/pw",captcha, function (req, res) {
   SQL = `SELECT password FROM ow_Users WHERE id=? LIMIT 1`;
   id = res.locals.userid;
 

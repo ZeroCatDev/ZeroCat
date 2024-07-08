@@ -1,90 +1,113 @@
 <%- include('./html-head.ejs', {pageTitle: '个人中心' }); %>
 
-	<div class="mdui-typo-display-2">
-		个人信息
-	</div>
+	<div class="mdui-typo-display-2">个人信息</div>
 	<div class="mdui-typo-headline-opacity">
 		您可以随时修改个人信息，可能要重新登录后本地生效
-	</div><br />
-
-
+	</div>
+	<br />
 
 	<mdui-tabs value="tab-1">
 		<mdui-tab value="tab-1">用户信息</mdui-tab>
 		<mdui-tab value="tab-2">头像</mdui-tab>
 		<mdui-tab value="tab-3">安全</mdui-tab>
+		<mdui-tab value="tab-4">用户名</mdui-tab>
 
 		<mdui-tab-panel slot="panel" value="tab-1">
 			<br />
 
 			<div>
-				<div class=" mdui-col-xs-12 mdui-col-md-2" style="  margin-bottom: 10px;
-				">
+				<div class="mdui-col-xs-12 mdui-col-md-2" style="margin-bottom: 10px">
 					<mdui-text-field variant="outlined" id="my_display_name" maxlength="10" value="<%= display_name %>"
 						label="昵称"></mdui-text-field>
-
 				</div>
 				<br />
-				<div class="mdui-col-xs-12" style="  margin-bottom: 10px;
-				">
-					<mdui-text-field variant="outlined" id="my_aboutme" maxlength="1000" value="加载中" label="简介"
-						autosize min-rows="2"></mdui-text-field>
+				<div class="mdui-col-xs-12" style="margin-bottom: 10px">
+					<mdui-text-field variant="outlined" id="my_aboutme" maxlength="1000" value="加载中" label="简介" autosize
+						min-rows="2"></mdui-text-field>
 				</div>
 				<br />
-				<mdui-select variant="outlined" id="sex-chick" label="性别" class="mdui-col-xs-6 mdui-col-md-3" >
-								<mdui-menu-item value="1">男</mdui-menu-item>
-								<mdui-menu-item value="0">女</mdui-menu-item>
+				<mdui-select variant="outlined" id="sex-chick" label="性别" class="mdui-col-xs-6 mdui-col-md-3">
+					<mdui-menu-item value="1">男</mdui-menu-item>
+					<mdui-menu-item value="0">女</mdui-menu-item>
 				</mdui-select>
 			</div>
-			<div style="float: right;">
+			<mdui-button class="open-captchadialog" variant="tonal">完成验证码</mdui-button>
+
+			<div style="float: right">
 				<mdui-button href="/my/info">取消</mdui-button>
 				<mdui-button onclick="updataInfo()">确认</mdui-button>
 			</div>
 		</mdui-tab-panel>
 		<mdui-tab-panel slot="panel" value="tab-2"><br />
 			<img class="mdui-img-circle mdui-m-l-2" src="/api/usertx?id=<%= userid %>"
-				style="height: 100px;width: auto;border-radius: 15px;" />
-			<br /> <br />
-		<!--	<mdui-button class="avatarUpload " lay-data="{exts:'png|jpg', size:1024}">修改头像</mdui-button>-->
-		<script src="<%= process.env.staticurl %>/js/compressorjs.js"></script>
+				style="height: 100px; width: auto; border-radius: 15px" />
+			<br />
+			<br />
+			<!--	<mdui-button class="avatarUpload " lay-data="{exts:'png|jpg', size:1024}">修改头像</mdui-button>-->
+			<script src="<%= process.env.staticurl %>/js/compressorjs.js"></script>
+			<mdui-button class="open-captchadialog" variant="tonal">完成验证码</mdui-button>
 
+			<mdui-button icon="attach_file" id="updateinages" onclick="updateinages()">修改头像</mdui-button>
 
-						<mdui-button icon="attach_file" id="updateinages" onclick="updateinages()">修改头像</mdui-button>
-
-<script>
-
-</script>
-
+			<script></script>
 		</mdui-tab-panel><br />
-		<mdui-tab-panel slot="panel" value="tab-3"> <br /> <mdui-text-field variant="outlined" id='old_password'
-				type="password" label="原密码" autocomplete="off" toggle-password></mdui-text-field><br /><br />
-			<mdui-text-field variant="outlined" id='new_password' type="password" label="新密码" autocomplete="off"
+		<mdui-tab-panel slot="panel" value="tab-3">
+			<br />
+			<mdui-text-field variant="outlined" id="old_password" type="password" label="原密码" autocomplete="off"
+				toggle-password></mdui-text-field><br /><br />
+			<mdui-text-field variant="outlined" id="new_password" type="password" label="新密码" autocomplete="off"
 				toggle-password></mdui-text-field><br />
-			<div style="float: right;">
+			<div style="float: right">
+				<mdui-button class="open-captchadialog" variant="tonal">完成验证码</mdui-button>
+
 				<mdui-button onclick="updatePassword()">确认</mdui-button>
 			</div>
 		</mdui-tab-panel>
+				<mdui-tab-panel slot="panel" value="tab-4">
+			<br />
+
+			<mdui-text-field variant="outlined" id="my_username" type="text" label="用户名" autocomplete="off"
+				toggle-password></mdui-text-field><br />
+			<div style="float: right">
+				<mdui-button class="open-captchadialog" variant="tonal">完成验证码</mdui-button>
+
+				<mdui-button onclick="updateUsername()">确认</mdui-button>
+			</div>
+		</mdui-tab-panel>
 	</mdui-tabs>
-
-
-
 
 	<script>
 		const passwordialog = document.querySelector(".password-dialog");
 		const openpwButton = document.querySelector(".open-password-dialog");
 		const closepwButton = document.querySelector(".close-password-dialog");
 
-		openpwButton.addEventListener("click", () => passwordialog.open = true);
-		closepwButton.addEventListener("click", () => passwordialog.open = false);
+		openpwButton.addEventListener("click", () => (passwordialog.open = true));
+		closepwButton.addEventListener("click", () => (passwordialog.open = false));
 	</script>
+  <mdui-dialog close-on-overlay-click close-on-esc class="captchadialog">
+    <span slot="headline">请完成验证码</span>
+    <span slot="description">部分地区加载可能较慢，请耐心等待。</span>
+    <div id="captcha-div"></div>
+
+    <mdui-button slot="action" variant="text" class="zc-feedback">反馈</mdui-button>
+    <mdui-button slot="action" variant="text" onclick="reloudcaptcha()">刷新</mdui-button>
+
+    <mdui-button slot="action" variant="tonal" class="close-captchadialog">完成</mdui-button>
+  </mdui-dialog>
 
 
+  <script>
+    const captchadialog = document.querySelector(".captchadialog");
+    const opencaptchadialogButtons = document.querySelectorAll(".open-captchadialog");
+    const closecaptchadialogButton = document.querySelector(".close-captchadialog");
+    opencaptchadialogButtons.forEach(button => { button.addEventListener("click", () => { captchadialog.open = true }); });
+    closecaptchadialogButton.addEventListener("click", () => captchadialog.open = false);
 
-
-
+  </script>
 	<script type="text/javascript" src="<%= process.env.staticurl %>/js/gter.js"></script>
 
-
 	<%- include('./html-footer.ejs', {page: 'myinfo' }); %>
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.11/purify.min.js"></script>
-	<script type="text/javascript" src="<%= process.env.staticurl %>/page/user/info.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.11/purify.min.js"></script>
+		<script type="text/javascript" src="<%= process.env.staticurl %>/page/user/info.js"></script>
+		   <script src="<%= process.env.reurl %>?compat=recaptcha&onload=onloadCallback" async defer></script>
+		<script>rekey = '<%= process.env.rekey %>'</script>

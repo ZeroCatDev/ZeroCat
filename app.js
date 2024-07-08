@@ -130,6 +130,7 @@ app.all("*", function (req, res, next) {
           login: false,
           userid: "",
           email: "",
+          username: "",
           display_name: "",
           avatar: "",
           is_admin: 0,
@@ -140,6 +141,8 @@ app.all("*", function (req, res, next) {
         let userInfo = decodedToken;
         res.locals.userid = userInfo.userid;
         res.locals.email = userInfo.email;
+        res.locals.username = userInfo.username;
+
         res.locals.display_name = userInfo.display_name;
         res.locals.avatar = userInfo.avatar;
 
@@ -154,6 +157,8 @@ app.all("*", function (req, res, next) {
             "," +
             res.locals.email +
             "," +
+            res.locals.username +
+            "," +
             res.locals.display_name +
             "," +
             res.locals.is_admin
@@ -163,6 +168,7 @@ app.all("*", function (req, res, next) {
           login: true,
           userid: res.locals.userid,
           email: res.locals.email,
+          username: res.locals.username,
           display_name: res.locals.display_name,
           avatar: res.locals.avatar,
           is_admin: res.locals["is_admin"],
@@ -173,6 +179,8 @@ app.all("*", function (req, res, next) {
             res.locals.userid +
             "," +
             res.locals.email +
+            "," +
+            res.locals.username +
             "," +
             res.locals.display_name +
             "," +
@@ -188,6 +196,7 @@ app.all("*", function (req, res, next) {
       login: false,
       userid: 0,
       email: "",
+      username:'',
       display_name: "未登录",
       avatar: "",
       is_admin: 0,

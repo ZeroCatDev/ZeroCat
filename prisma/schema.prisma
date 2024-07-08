@@ -115,7 +115,8 @@ model ow_Counter {
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model ow_Users {
   id           Int       @unique(map: "id_UNIQUE") @default(autoincrement())
-  email        String    @unique(map: "user_UNIQUE") @db.Char(100)
+  username     String    @unique(map: "user_UNIQUE") @db.Char(20)
+  email        String    @db.Char(100)
   password     String    @db.VarChar(255)
   display_name String    @default("OurWorld创作者") @db.Char(20)
   state        Int       @default(0) @db.TinyInt
@@ -139,7 +140,7 @@ model ow_Users {
   updatedAt    DateTime? @default(dbgenerated("'2000-04-01 00:00:00'")) @db.Timestamp(0)
   label        String?   @db.VarChar(255)
 
-  @@id([id, email])
+  @@id([id, username])
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments

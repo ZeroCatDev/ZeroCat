@@ -5,17 +5,16 @@ const request = require("request");
 
 
 app.use((req, res, next) => {
-  const recaptcha = req.body.recaptcha||req.body.re;
+  const recaptcha = req.body.recaptcha||req.body.re||req.query.recaptcha||req.query.re;
 
   if (!recaptcha) {
     return res.status(200).send({message:'请完成验证码'});
   }
-console.log(process.env.reverify)
-console.log(process.env.resecret)
-console.log(req.body.re)
-  request.post(
+
+
+request.post(
     {
-      url: process.env.reverify,form: {secret: process.env.resecret,response: req.body.re},
+      url: process.env.reverify,form: {secret: process.env.resecret,response: recaptcha},
     },
     function (error, httpResponse, body) {
       if (error) {

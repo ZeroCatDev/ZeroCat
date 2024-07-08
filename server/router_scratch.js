@@ -1009,6 +1009,8 @@ router.post("/getSession", (req, res) => {
     var new_session = {
       userid: 0,
       email: "",
+      username: "",
+
       display_name: "",
       avatar: ``,
     };
@@ -1016,6 +1018,8 @@ router.post("/getSession", (req, res) => {
     var new_session = {
       userid: parseInt(res.locals["userid"]),
       email: res.locals["email"],
+      username: res.locals["username"],
+
       display_name: res.locals["display_name"],
       avatar: `${process.env.S3staticurl}/user/${res.locals["avatar"]}`,
     };

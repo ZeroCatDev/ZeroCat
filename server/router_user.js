@@ -43,8 +43,6 @@ const captcha = require('./captcha.js');
 
 //登录
 router.post("/login",captcha ,function (req, res) {
-
-
       if (
         !req.body.pw ||
         !I.userpwTest(req.body.pw) ||
@@ -71,6 +69,7 @@ router.post("/login",captcha ,function (req, res) {
           res.status(200).send({ message: "您已经被封号，请联系管理员" });
         } else {
           res.locals["userid"] = User["id"];
+          res.locals["username"] = User["username"];
           res.locals["email"] = User["email"];
           res.locals["display_name"] = User["display_name"];
           //console.log('已登录：**********************************');
@@ -100,12 +99,17 @@ router.post("/login",captcha ,function (req, res) {
             maxAge: 604800000,
             signed: true,
           });
+          res.cookie("username", User["username"], {
+            maxAge: 604800000,
+            signed: true,
+          });
           res.cookie("display_name", User["display_name"], {
             maxAge: 604800000,
             signed: true,
           });
           var token = I.GenerateJwt({
             userid: User["id"],
+            username: User["username"],
             email: User["email"],
             display_name: User["display_name"],
             avatar: User["images"]
@@ -121,6 +125,8 @@ router.post("/login",captcha ,function (req, res) {
             message: "OK",
             userid: parseInt(User["id"]),
             email: User["email"],
+            username: User["username"],
+
             display_name: User["display_name"],
             avatar: User["images"],
             token: token,
@@ -188,7 +194,7 @@ router.post("/register",captcha,function (req, res) {
           //var display_name = email.substring(email.length-5);
           var display_name = req.body.pw;
           //console.log(display_name);
-          var INSERT = `INSERT INTO ow_Users (email,password,display_name) VALUES ('${email}','${pw}','${display_name}')`;
+          var INSERT = `INSERT INTO ow_Users (username,email,password,display_name) VALUES ('${Date.now()}','${email}','${pw}','${display_name}')`;
           DB.query(INSERT, function (err, newUser) {
             if (err) {
               console.error(err);

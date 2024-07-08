@@ -133,6 +133,7 @@ router.get("/getuserinfo", async function (req, res) {
       images: true,
       regTime: true,
       sex: true,
+      username: true
     },
   });
   if (!user[0]) {

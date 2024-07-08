@@ -104,27 +104,27 @@
 				openanalysisButton.addEventListener("click", () => analysisdialog.open = true);
 			</script>
 
-			<div id="waline"></div>
-			<script type="module">
-				import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
-				init({
-					el: '#waline',
-					serverURL: '<%= process.env.WalineServerURL %>',
-					path: 'project-<%=project.id%>',
-					copyright: false,
-					reaction: true,
-					pageview: true,
-					locale: {
-						reactionTitle: "这个作品怎么样？"
-					},
-					emoji: [
-						'//unpkg.com/@waline/emojis@1.1.0/weibo',
-						'//unpkg.com/@waline/emojis@1.1.0/bilibili',
-					],
-					dark: 'body[dark]',
-				});
-			</script>
-		</div>
+
+		</div><div class="mdui-col-xs-12">	<div id="waline"></div>
+		<script type="module">
+			import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
+			init({
+				el: '#waline',
+				serverURL: '<%= process.env.WalineServerURL %>',
+				path: 'project-<%=project.id%>',
+				copyright: false,
+				reaction: true,
+				pageview: true,
+				locale: {
+					reactionTitle: "这个作品怎么样？"
+				},
+				emoji: [
+					'//unpkg.com/@waline/emojis@1.1.0/weibo',
+					'//unpkg.com/@waline/emojis@1.1.0/bilibili',
+				],
+				dark: 'body[dark]',
+			});
+		</script></div>
 	</div>
 
 
