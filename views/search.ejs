@@ -19,23 +19,22 @@
             <mdui-menu-item value="time_down">时间降序</mdui-menu-item>
             <mdui-menu-item value="view_up">观看量升序</mdui-menu-item>
             <mdui-menu-item value="view_down">观看量降序</mdui-menu-item>
-            <mdui-menu-item value="random_random">随机</mdui-menu-item>
 
         </mdui-select>
 
         <mdui-select value="scratch" id="search_type" class="search_type">
-            <!--<mdui-menu-item value="">所有</mdui-menu-item>-->
+            <mdui-menu-item value="all">所有</mdui-menu-item>
             <mdui-menu-item value="scratch">scratch</mdui-menu-item>
             <mdui-menu-item value="python">python</mdui-menu-item>
 
         </mdui-select>
-       
+
         <mdui-dialog close-on-overlay-click class="choose_user">
             <mdui-top-app-bar slot="header">
                 <mdui-button-icon icon="close" class="choose_user_cancel"></mdui-button-icon>
                 <mdui-top-app-bar-title>选择用户</mdui-top-app-bar-title>
             </mdui-top-app-bar>
-            
+
             <div><mdui-text-field variant="outlined" label="用户名" id='choose_user_search' clearable>
                     <mdui-button-icon slot="icon" icon="search"></mdui-button-icon>
                 </mdui-text-field>
@@ -47,14 +46,14 @@
 
 
         </mdui-dialog><mdui-list id="open_choose_user" onclick="document.querySelector('.choose_user').open = true;">
-            <mdui-list-item rounded>选择用户  <mdui-avatar slot="icon" >   
+            <mdui-list-item rounded>选择用户  <mdui-avatar slot="icon" >
             </mdui-avatar> <span slot="description">点击选择在用户中搜索</span>
             </mdui-list-item>
             </mdui-list>
-      
+
 
         <script>
-           
+
 
         </script>
 <div id="search_explain"></div>
