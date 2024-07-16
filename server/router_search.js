@@ -7,9 +7,10 @@ var fs = require("fs");
 var I = require("./lib/global.js");
 //数据库
 var DB = require("./lib/database.js");
+const { join } = require("path");
 
 //搜索：Scratch项目列表：数据//只搜索标题
-router.get("/", function (req, res) {
+router.get("/", async function (req, res) {
   var search = {
     userid: req.query.search_userid,
     type: req.query.search_type,
@@ -19,78 +20,84 @@ router.get("/", function (req, res) {
     orderby: req.query.search_orderby,
     curr: Number(req.query.curr),
     limit: Number(req.query.limit),
-
   };
-  console.log(search);
+  //console.log(search);
+
+
   var andid = "";
-  if (!["scratch", "python"].includes(search.type)) {
+  if (!["scratch", "python",''].includes(search.type)) {
     res.send("注入");
   }
 
   if (search.userid != "") {
     andid = `AND (authorid = ${Number(search.userid)} )`;
   }
-  orderby = search.orderby.split('_')[0]
-  if (!["view", "time","random","id"].includes(orderby)) {
+  orderby = search.orderby.split("_")[0];
+  if (!["view", "time", "random", "id"].includes(orderby)) {
     res.send("注入1");
   }
-  ordersc = search.orderby.split('_')[1]
-  if (!["up", "down","random"].includes(ordersc)) {
+  ordersc = search.orderby.split("_")[1];
+  if (!["up", "down"].includes(ordersc)) {
     res.send("注入2");
   }
-  orderbylist={view:'s.view_count',time:'s.time',id:'s.id',random:'RAND()'}
-  orderby = orderbylist[orderby]
-  ordersclist={up:'desc',down:'asc',random:''}
-  ordersc = ordersclist[ordersc]
-  //var SQL = `SELECT id, title FROM ${tabelName} WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
-  var SQL = `SELECT s.id, s.title, s.state, s.authorid, s.description, s.view_count, u.display_name, u.motto
-    FROM (
-        SELECT id, title, state, authorid, description, view_count,time
-        FROM ${search.type}
-        WHERE state > 0 AND (title LIKE ? ) AND (src like ? ) AND (description like ? ) ${andid}
-    ) s
-    JOIN ow_Users u ON s.authorid = u.id
-ORDER BY ${orderby} ${ordersc} LIMIT ${
-  (search.curr - 1) * search.limit
-}, ${search.limit}`;
-  var QUERY = [
-    `%${search.title}%`,
-    `%${search.src}%`,
-    `%${search.description}%`,
-  ];
-  
-  DB.qww(SQL, QUERY, function (err, data) {
+  orderbylist = {
+    view: "view_count",
+    time: "time",
+    id: "id",
+  };
+  var orderby = orderbylist[orderby];
+  ordersclist = { up: "desc", down: "asc"};
+  ordersc = ordersclist[ordersc];
+//  console.log(ordersc);
+  var projectresult = await I.prisma.ow_Projects.findMany({
+    orderBy: [orderby === 'view_count' ? { view_count:ordersc } : orderby === 'time' ? { time:ordersc } : orderby === 'id' ? { id:ordersc } : { }],
+    where: { title:{contains: search.title},src:{contains: search.src} ,description:{contains: search.description},type:{contains: search.type} },
+    select: {
+      id: true,
+      type: true,
+      title: true,
+      state: true,
+      authorid: true,
+      description: true,
+      view_count: true,
+      time: true,
+    },
+    skip: (search.curr - 1) * search.limit,
+    take: search.limit,
+  });
+  var projectcount = await I.prisma.ow_Projects.count({
+    where: { title:{contains: search.title},src:{contains: search.src} ,description:{contains: search.description},type:{contains: search.type} },
+  });
+ // console.log(projectcount);
+  const authorIds = new Set(projectresult.map((item) => item.authorid));
+ // console.log(authorIds); // 输出: Set(2) { '0', '1' }
+  const authorIdTuple = [...authorIds];
+  //console.log(authorIdTuple); // 输出: [0, 1]
+  var userresult = await I.prisma.ow_Users.findMany({
 
-    if (err) {
-      res.status(200).send([err]);
-    } else {
-      searchresult=data
-      console.log(searchresult)
-      var SQL = `SELECT COUNT(s.id) as totalCount
-      FROM (
-          SELECT id, title, state, authorid, description, view_count, time
-          FROM ${search.type}
-          WHERE state > 0 AND (title LIKE ? ) AND (src like ? ) AND (description like ? ) ${andid}
-      ) s
-      JOIN ow_Users u ON s.authorid = u.id
-  
-      `;
-  var QUERY = [
-    `%${search.title}%`,
-    `%${search.src}%`,
-    `%${search.description}%`,
-  ];
-  DB.qww(SQL, QUERY, function (err, totalCount) {
-    if (err) {
-      res.status(200).send([err]);
-    } else {
-      console.log(totalCount)
-      res.status(200).send({data:data,totalCount:totalCount});
-    }
+    where: { id: { in: authorIdTuple } },
+    select: {
+      id: true,
+      username: true,
+      display_name: true,
+      motto: true,
+      images: true,
+    },
+
   });
-      
-    }
-  });
+ // console.log(userresult); // 输出: [0, 1]
+
+  //var SQL = `SELECT id, title FROM ${tabelName} WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
+  //var SQL = `SELECT s.id, s.title, s.state, s.authorid, s.description, s.view_count, u.display_name, u.motto,u.images FROM ( SELECT id, title, state, authorid, description, view_count,time FROM ${search.type} WHERE state > 0 AND (title LIKE ? ) AND (src like ? ) AND (description like ? ) ${andid} ) s JOIN ow_Users u ON s.authorid = u.id ORDER BY ${orderby} ${ordersc} LIMIT ${(search.curr - 1) * search.limit}, ${ search.limit }`; var QUERY = [ `%${search.title}%`, `%${search.src}%`, `%${search.description}%`, ];
+
+
+
+          res.status(200).send({
+            data: projectresult,
+            user: userresult,
+            totalCount: [{"totalCount":projectcount}],
+          });
+
 });
 
 //搜索：Scratch项目列表：数据//只搜索标题

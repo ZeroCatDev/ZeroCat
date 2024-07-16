@@ -345,11 +345,11 @@ router.post("/repw", captcha,function (req, res) {
                         style="display: flex;position: relative;border: 1px dashed #1289d82e;box-sizing: content-box;height: 0px;overflow: visible;width: 100%;">
                     <a class="text-wrapper_2 flex-col"
                         style="min-width: 106px;height: 38px;background: #1289d82e;border-radius: 32px;display: flex;align-items: center;justify-content: center;text-decoration: none;margin: auto;margin-top: 32px;"
-                        href="https://${process.env.SiteDomain}/user/repw?token=${jwttoken}"><span class="text_5"
+                        href="https://${process.env.SiteDomain}/account/repw?token=${jwttoken}"><span class="text_5"
                             style="color: #068bf8;">重设密码</span></a>
                     <p style="text-align:center; margin:20px auto 5px auto;font-size:12px;color:#999;">也可以复制以下链接</p>
                     <p style="text-align:center; margin:0px auto 0px auto;font-size:12px;color:#999;word-break:break-all">
-                        https://${process.env.SiteDomain}/user/repw?token=${jwttoken}</p>
+                        https://${process.env.SiteDomain}/account/repw?token=${jwttoken}</p>
                 </div>
                 <table style="width:100%;font-weight:300;margin-bottom:10px;border-collapse:collapse">
                     <tbody>

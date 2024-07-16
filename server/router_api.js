@@ -1,4 +1,4 @@
-//个人中心
+//API
 var express = require("express");
 var router = express.Router();
 var fs = require("fs");
@@ -13,8 +13,8 @@ router.get("/", function (req, res) {
   //获取已分享的作品总数：1:普通作品，2：推荐的优秀作品
   var SQL =
     `SELECT ` +
-    ` (SELECT count(id) FROM scratch WHERE state>0 ) AS scratch_count, ` +
-    ` (SELECT count(id) FROM python WHERE state>0 ) AS python_count `;
+    ` (SELECT count(id) FROM ow_Projects WHERE state>0 AND type='scratch' ) AS scratch_count, ` +
+    ` (SELECT count(id) FROM ow_Projects WHERE state>0 AND type='python') AS python_count `;
   DB.query(SQL, function (err, data) {
     if (err) {
       // console.error('数据库操作出错：');
@@ -33,7 +33,7 @@ router.post("/getUserScratchProjects", function (req, res) {
   var curr = parseInt(req.body.curr); //当前要显示的页码
   var limit = parseInt(req.body.limit); //每页显示的作品数
   var userid = parseInt(req.body.userid); //
-  var SQL = `SELECT id, title,state,view_count,description FROM scratch WHERE authorid=${userid} AND state>0 ORDER BY view_count DESC LIMIT ${
+  var SQL = `SELECT id, title,state,view_count,description FROM ow_Projects WHERE authorid=${userid} AND state>0 AND type='scratch' ORDER BY view_count DESC LIMIT ${
     (curr - 1) * limit
   }, ${limit}`;
   DB.query(SQL, function (err, data) {
@@ -50,7 +50,7 @@ router.post("/getUserPythonProjects", function (req, res) {
   var curr = parseInt(req.body.curr); //当前要显示的页码
   var limit = parseInt(req.body.limit); //每页显示的作品数
   var userid = parseInt(req.body.userid); //
-  var SQL = `SELECT id, title,state,view_count,description FROM python WHERE authorid=${userid} AND state>0 ORDER BY view_count DESC LIMIT ${
+  var SQL = `SELECT id, title,state,view_count,description FROM ow_Projects WHERE authorid=${userid} AND state>0 AND type='python' ORDER BY view_count DESC LIMIT ${
     (curr - 1) * limit
   }, ${limit}`;
   DB.query(SQL, function (err, data) {
@@ -69,43 +69,7 @@ router.post("/getProjectsInfo", function (req, res) {
     { name: "Python编程", info: "Python编程", link: "/python" },
   ]);
 });
-router.get("/play", function (req, res) {
-  var deviceAgent = req.headers["user-agent"].toLowerCase();
-  var agentID = deviceAgent.match(/(iphone|ipad|android|windows phone)/);
-  res.locals["is_mobile"] = false;
-  if (agentID) {
-    res.locals["is_mobile"] = true; //请求来自手机、pad等移动端
-  }
 
-  //浏览数+1
-  var SQL = `UPDATE scratch SET view_count=view_count+1 WHERE id=${req.query.id} LIMIT 1`;
-  DB.query(SQL, function (err, U) {
-    if (err || U.affectedRows == 0) {
-      res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
-      res.render("404.ejs");
-      return;
-    }
-
-    SQL =
-      `SELECT ow_Users.display_name,scratch.motto,` +
-      ` FROM ow_Users ` +
-      ` LEFT JOIN ow_Users ON (ow_Users.display_name=ow_Users.neme) ` +
-      ` WHERE ow_Users.id=${req.query.id}`;
-
-    DB.query(SQL, function (err, SCRATCH) {
-      if (err || SCRATCH.length == 0) {
-        res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
-        res.render("404.ejs");
-        return;
-      }
-
-      res.locals["is_author"] =
-        SCRATCH[0].authorid == res.locals.userid ? true : false;
-      res.locals["project"] = SCRATCH[0];
-      res.render("scratch/scratch_play.ejs");
-    });
-  });
-});
 
 router.get("/usertx", function (req, res) {
   SQL = `SELECT images FROM ow_Users WHERE id = ${req.query.id};`;
@@ -136,16 +100,30 @@ router.get("/getuserinfo", async function (req, res) {
       username: true
     },
   });
+
+  scratchcount =await  I.prisma.ow_Projects.count({
+    where: {
+      type: 'scratch',
+      state: {in:[1,2]},
+    },
+  });
+  pythoncount =await  I.prisma.ow_Projects.count({
+    where: {
+      type: 'python',
+      state: {in:[1,2]},
+    },
+  });
   if (!user[0]) {
+    console.log('用户不存在')
     res.locals.tip = { opt: "flash", msg: "用户不存在" };
     res.render("404.ejs");
   }
-  res.send({ status: "ok", info: user[0] });
+  res.send({ status: "ok", info: {user:user[0],count:{pythoncount,scratchcount}} });
 });
 router.get("/info", async (req, res) => {
   const userCount = await I.prisma.ow_Users.count();
-  const scratchCount = await I.prisma.scratch.count();
-  const pythonCount = await I.prisma.python.count();
+  const scratchCount = await I.prisma.ow_Projects.count();
+  const pythonCount = await I.prisma.ow_Projects.count();
 
 
   res.send({
@@ -170,7 +148,7 @@ router.get("/myprojectcount", function (req, res) {
     ` count(case when state=0 then 1 end) AS state0_count, ` +
     ` count(case when state=1 then 1 end) AS state1_count, ` +
     ` count(case when state=2 then 1 end) AS state2_count ` +
-    ` FROM ${res.locals.type} WHERE authorid=${res.locals["userid"]}`;
+    ` FROM ow_Projects WHERE authorid=${res.locals["userid"]} AND type='${res.locals.type}'`;
 
   DB.query(SQL, function (err, data) {
     if (err) {
@@ -187,7 +165,6 @@ router.get("/myprojectcount", function (req, res) {
 });
 
 
-//论反向适配40code
 
 
 //作品
@@ -203,7 +180,7 @@ router.get("/work/info", function (req, res) {
     ` count(case when state=0 then 1 end) AS state0_count, ` +
     ` count(case when state=1 then 1 end) AS state1_count, ` +
     ` count(case when state=2 then 1 end) AS state2_count ` +
-    ` FROM ${res.locals.type} WHERE authorid=${res.locals["userid"]}`;
+    ` FROM ow_Projects WHERE authorid=${res.locals["userid"]} AND type='${res.locals.type}'`;
 
   DB.query(SQL, function (err, data) {
     if (err) {
@@ -216,6 +193,32 @@ router.get("/work/info", function (req, res) {
       res.locals.state2_count = data[0].state2_count;
     }
     res.send(data[0]);
+  });
+});
+
+router.get("/projectinfo", function (req, res) {
+  SQL =
+  `SELECT ow_Projects.id,ow_Projects.authorid,ow_Projects.time,ow_Projects.view_count,ow_Projects.like_count,ow_Projects.type,` +
+  ` ow_Projects.favo_count,ow_Projects.title,ow_Projects.state,ow_Projects.description,` +
+  ` '' AS likeid, '' AS favoid,` +
+  ` ow_Users.display_name AS author_display_name,` +
+  ` ow_Users.images AS author_images,` +
+  ` ow_Users.motto AS author_motto` +
+  ` FROM ow_Projects ` +
+  ` LEFT JOIN ow_Users ON (ow_Users.id=ow_Projects.authorid) ` +
+  ` WHERE ow_Projects.id=${req.query.id} AND (ow_Projects.state>=1 or ow_Projects.authorid=${res.locals.userid}) LIMIT 1`;
+  DB.query(SQL, function (err, SCRATCH) {
+    if (err || SCRATCH.length == 0) {
+      res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
+      res.send({code:404,status:"404",msg:"项目不存在或未发布"})
+      return;
+    }
+
+    res.locals["is_author"] =
+      SCRATCH[0].authorid == res.locals.userid ? true : false;
+
+    ////console.log(SCRATCH[0]);
+    res.json(SCRATCH[0])
   });
 });
 

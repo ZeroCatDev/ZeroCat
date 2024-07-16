@@ -58,11 +58,11 @@ app.use(
 var cors = require("cors");
 var corsOptions = {
   origin: (origin, callback) => {
-    console.log(origin)
+    console.log(origin);
     if (process.env.corslist.indexOf(origin) !== -1 || !origin) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      callback(new Error("Not allowed by CORS"));
     }
   },
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
@@ -111,7 +111,7 @@ global.dirname = __dirname;
 http.createServer(app).listen(3000, "0.0.0.0", function () {
   console.log("Listening on http://localhost:3000");
 }); // 平台总入口
-app.options('*', cors())
+app.options("*", cors());
 app.all("*", function (req, res, next) {
   //console.log(req.method +' '+ req.url + " IP:" + req.ip);
 
@@ -119,6 +119,7 @@ app.all("*", function (req, res, next) {
     req.cookies.token ||
     req.body.token ||
     req.headers["token"] ||
+    req.headers["authorization"] ||
     req.query.token; // 获取JWT令牌
 
   if (token) {
@@ -196,7 +197,7 @@ app.all("*", function (req, res, next) {
       login: false,
       userid: 0,
       email: "",
-      username:'',
+      username: "",
       display_name: "未登录",
       avatar: "",
       is_admin: 0,
@@ -205,7 +206,7 @@ app.all("*", function (req, res, next) {
     next();
   }
 });
-const captcha = require('./server/captcha.js');
+const captcha = require("./server/captcha.js");
 
 //首页
 app.get("/", function (req, res) {

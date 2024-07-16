@@ -24,21 +24,21 @@ router.all('*', function(req, res, next) {
 	next();
 });
 //平台首页
-router.get('/', function (req, res) {    
+router.get('/', function (req, res) {
     res.render('admin/admin_index.ejs');
 });
 //平台默认首页
-router.get('/default', function (req, res) {    
+router.get('/default', function (req, res) {
     res.render('admin/admin_default.ejs');
 
 });
 
 //平台概况
-router.get('/info', function (req, res) {   
+router.get('/info', function (req, res) {
     var SQL = `SELECT `+
-               ` (SELECT count(id) FROM ow_Users ) AS user_count, `+ 
-               ` (SELECT count(id) FROM scratch) AS scratch_count, ` +
-               ` (SELECT count(id) FROM python) AS python_count, ` +
+               ` (SELECT count(id) FROM ow_Users ) AS user_count, `+
+               ` (SELECT count(id) FROM ow_Projects WHERE type='scratch') AS scratch_count, ` +
+               ` (SELECT count(id) FROM ow_Projects WHILE type='python) AS python_count, ` +
                ` (SELECT count(id) FROM material_backdrop) AS backdrop_count, `+
                ` (SELECT count(id) FROM material_sprite) AS sprite_count `;
     DB.query(SQL, function(err,d){
@@ -64,7 +64,7 @@ router.get('/info', function (req, res) {
 
 //用户管理
 router.get('/user', function (req, res) {
-    var SQL = `SELECT id FROM sys_ini WHERE iniKey='regist' AND iniValue=1 LIMIT 1`; 
+    var SQL = `SELECT id FROM sys_ini WHERE iniKey='regist' AND iniValue=1 LIMIT 1`;
     DB.query(SQL, function(err, data){
         if (err || data.length == 0){
             res.locals.regist = 0;
@@ -136,12 +136,12 @@ router.post('/user_setstate',function(req,res){
             res.status(200).send({"status":"failed","msg":"再试一次"})
         }
         else {
-            res.status(200).send({"status":"success",'msg':'操作成功'})        
+            res.status(200).send({"status":"success",'msg':'操作成功'})
         }
     })
 });
 //用户管理：创建新用户，功能
-router.post('/user_new',function(req,res){ 
+router.post('/user_new',function(req,res){
     if (!req.body.un|| !I.emailTest(req.body.un)){
         res.status(200).send({"status":"failed","msg":"再试一次"});
         return;
@@ -174,14 +174,14 @@ router.post('/user_new',function(req,res){
             let oldFile = fs['createReadStream'](oldpath);
             let newFile = fs['createWriteStream'](newpath);
             oldFile['pipe'](newFile);
-            
+
 
             res.status(200).send( { 'status': 'success', 'msg': '操作成功' });
         });
     });
 });
 //用户管理：批量创建新用户，功能
-router.post('/user_new100',function(req,res){ 
+router.post('/user_new100',function(req,res){
     const qz = req.body.qz;
     const sl = req.body.sl;
     var reg = /^(?:\d+|[a-zA-Z]+){4,8}$/;
@@ -232,7 +232,7 @@ router.post('/user/setRegist',function(req,res){
             res.status(200).send({status:'x', msg: '数据错误'});
             return;
         }
-        
+
         res.status(200).send({status:'ok', msg: '操作成功'});
     });
 });
@@ -294,7 +294,7 @@ router.post('/works/scratch/changeTitle',function(req,res){
             res.status(200).send({"status":"failed","msg":"再试一次"})
         }
         else {
-            res.status(200).send({"status":"success",'msg':'操作成功'})        
+            res.status(200).send({"status":"success",'msg':'操作成功'})
         }
     })
 });
@@ -312,7 +312,7 @@ router.post('/works/scratch/setState',function(req,res){
             res.status(200).send({"status":"failed","msg":"再试一次"})
         }
         else {
-            res.status(200).send({"status":"success",'msg':'操作成功'})        
+            res.status(200).send({"status":"success",'msg':'操作成功'})
         }
     })
 });
@@ -337,7 +337,7 @@ router.post('/works/scratch/setDefaultWork',function(req,res){
             if(err){
                 res.status(200).send({status:"x", msg:"再试一次"});
             } else {
-                res.status(200).send({status:"ok",msg:'操作成功'});      
+                res.status(200).send({status:"ok",msg:'操作成功'});
             }
         })
     })
@@ -400,7 +400,7 @@ router.post('/works/python/changeTitle',function(req,res){
             res.status(200).send({status:"x", msg:"再试一次"})
         }
         else {
-            res.status(200).send({status:"ok", msg:'操作成功'})        
+            res.status(200).send({status:"ok", msg:'操作成功'})
         }
     })
 });
@@ -418,7 +418,7 @@ router.post('/works/python/setState',function(req,res){
             res.status(200).send({status:"x", msg:"再试一次"})
         }
         else {
-            res.status(200).send({status:"ok", msg:'操作成功'})        
+            res.status(200).send({status:"ok", msg:'操作成功'})
         }
     })
 });
@@ -443,7 +443,7 @@ router.post('/works/python/setDefaultWork',function(req,res){
             if(err){
                 res.status(200).send({status:"x", msg:"再试一次"});
             } else {
-                res.status(200).send({status:"ok",msg:'操作成功'});      
+                res.status(200).send({status:"ok",msg:'操作成功'});
             }
         })
     })
@@ -459,11 +459,11 @@ router.post('/works/python/setDefaultWork',function(req,res){
 
 
 // 素材分类管理：数据
-router.get('/material/tag', function(req, res) { 
+router.get('/material/tag', function(req, res) {
     res.render('admin/admin_tag.ejs');
 });
 // 素材分类管理：数据
-router.get('/material/tag/data', function(req, res) { 
+router.get('/material/tag/data', function(req, res) {
     var type = parseInt(req.query['t']);
     if (!type || (type < 1 || 4 < type)) {// 1背景、2角色、3造型、4声音
         res.status(200).send({status:"x", msg: "素材类型参数错误"});
@@ -499,7 +499,7 @@ router.post('/material/tag/add', function (req, res) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
             return;
         }
-        
+
         res.status(200).send({status:'ok', msg: '操作成功', newTagId: newTag.insertId});
     });
 });
@@ -526,14 +526,14 @@ router.post('/material/tag/del', function (req, res) {
     // 判断此标签下是否有素材：只能删除空标签
     var type = parseInt(req.body.t);
     var tabelname = '';// 1背景、2角色、3造型、4声音
-    if (type == 1 ) { tabelname = "material_backdrop";} else 
-    if (type == 2 ) { tabelname = "material_sprite";} else 
-    if (type == 3 ) { tabelname = "material_costume";} else 
-    if (type == 4 ) { tabelname = "material_sound";} 
-    else { 
+    if (type == 1 ) { tabelname = "material_backdrop";} else
+    if (type == 2 ) { tabelname = "material_sprite";} else
+    if (type == 3 ) { tabelname = "material_costume";} else
+    if (type == 4 ) { tabelname = "material_sound";}
+    else {
         res.status(200).send({status:"x", msg: "素材类型参数错误"});
         return;
-    } 
+    }
 
 
     var VAL = [req.body.id];
@@ -573,7 +573,7 @@ const random_32ID_With_Time_Tag = function() {
     return randomID;
 }
 
-    
+
 // 背景管理：页面
 router.get('/material/backdrop', function (req, res) {
     var SQL = `SELECT id, tag FROM material_tags WHERE type=1 ORDER BY id DESC`;
@@ -585,7 +585,7 @@ router.get('/material/backdrop', function (req, res) {
         }
 
         res.render('admin/admin_material_backdrop.ejs');
-    });   
+    });
 });
 // 背景管理：数据
 router.get('/material/backdrop/data', function(req, res) {
@@ -619,7 +619,7 @@ router.post('/material/backdrop/add', function(req, res) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
             return;
         }
-        
+
         //保存文件到正确位置
         exampleFile = `./data/material/backdrop_example.png`;
         md5File = `./data/material/asset/${newFileName}.png`;
@@ -634,7 +634,7 @@ router.post('/material/backdrop/modImage', function (req, res) {
         res.status(200).send({status: 'x', msg: '文件上传失败,请再试一次'});
         return;
     }
-    
+
     //保存文件到正确位置
     const tmppath = req['files']['file']['path'];
     arr=tmppath.split(".")
@@ -644,7 +644,7 @@ router.post('/material/backdrop/modImage', function (req, res) {
         return;
     }
 
-    
+
     let md5 = req.body.md5;
     const oldExt = md5.substring(md5.length-3);
     if (oldExt == newExt){ // 后缀未变，直接替换
@@ -656,7 +656,7 @@ router.post('/material/backdrop/modImage', function (req, res) {
         // 删除原图片文件
         fs.unlink(`./data/material/asset/${md5}`, function (err) {  if(err){ console.log(err); } });
 
-        
+
         md5 = md5.substring(0, md5.length-3) + newExt; // 组合新文件名
         const newpath = `./data/material/asset/${md5}`;
         fs.rename(tmppath, newpath, function (err) { if(err){}});
@@ -687,7 +687,7 @@ router.post('/material/backdrop/modName', function (req, res) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
             return;
         }
-        
+
         res.status(200).send({status:'ok', msg: '操作成功'});
     });
 });
@@ -698,12 +698,12 @@ router.post('/material/backdrop/modMateSize', function (req, res) {
         if (!infoValue || infoValue<1 || 9999<infoValue) {
             res.status(200).send({status:"x", msg: "参数错误：宽、高只能在 1~9999 之间"});
             return;
-        }    
+        }
     } else if (req.body.t == 'info2'){
         if (!infoValue || infoValue<1 || 2<infoValue) {
             res.status(200).send({status:"x", msg: "参数错误！显示方式：1=铺开显示；2=原图显示"});
             return;
-        }   
+        }
     } else {
         res.status(200).send({status:"x", msg: "参数错误"});
         return;
@@ -716,7 +716,7 @@ router.post('/material/backdrop/modMateSize', function (req, res) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
             return;
         }
-        
+
         res.status(200).send({status:'ok', msg: '操作成功'});
     });
 });
@@ -746,7 +746,7 @@ router.post('/material/backdrop/setState',function(req,res){
             res.status(200).send({status:"x", msg:"再试一次"})
         }
         else {
-            res.status(200).send({status:"ok", msg:'操作成功'})        
+            res.status(200).send({status:"ok", msg:'操作成功'})
         }
     })
 });
@@ -762,7 +762,7 @@ router.get('/material/costume', function (req, res) {
         }
 
         res.render('admin/admin_material_costume.ejs');
-    }); 
+    });
 });
 // 造型管理：数据
 router.get('/material/costume/data', function(req, res) {
@@ -796,7 +796,7 @@ router.post('/material/costume/add', function(req, res) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
             return;
         }
-        
+
         //保存文件到正确位置
         exampleFile = `./data/material/backdrop_example.png`;
         md5File = `./data/material/asset/${newFileName}.png`;
@@ -811,7 +811,7 @@ router.post('/material/costume/modImage', function (req, res) {
         res.status(200).send({status: 'x', msg: '文件上传失败,请再试一次'});
         return;
     }
-    
+
     //保存文件到正确位置
     const tmppath = req['files']['file']['path'];
     arr=tmppath.split(".")
@@ -821,7 +821,7 @@ router.post('/material/costume/modImage', function (req, res) {
         return;
     }
 
-    
+
     let md5 = req.body.md5;
     const oldExt = md5.substring(md5.length-3);
     if (oldExt == newExt){ // 后缀未变，直接替换
@@ -833,7 +833,7 @@ router.post('/material/costume/modImage', function (req, res) {
         // 删除原图片文件
         fs.unlink(`./data/material/asset/${md5}`, function (err) {  if(err){ console.log(err); } });
 
-        
+
         md5 = md5.substring(0, md5.length-3) + newExt; // 组合新文件名
         const newpath = `./data/material/asset/${md5}`;
         fs.rename(tmppath, newpath, function (err) { if(err){}});
@@ -864,7 +864,7 @@ router.post('/material/costume/modName', function (req, res) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
             return;
         }
-        
+
         res.status(200).send({status:'ok', msg: '操作成功'});
     });
 });
@@ -875,12 +875,12 @@ router.post('/material/costume/modMateSize', function (req, res) {
         if (!infoValue || infoValue<1 || 9999<infoValue) {
             res.status(200).send({status:"x", msg: "参数错误：宽、高只能在 1~9999 之间"});
             return;
-        }    
+        }
     } else if (req.body.t == 'info2'){
         if (!infoValue || infoValue<1 || 2<infoValue) {
             res.status(200).send({status:"x", msg: "参数错误！显示方式：1=铺开显示；2=原图显示"});
             return;
-        }   
+        }
     } else {
         res.status(200).send({status:"x", msg: "参数错误"});
         return;
@@ -893,7 +893,7 @@ router.post('/material/costume/modMateSize', function (req, res) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
             return;
         }
-        
+
         res.status(200).send({status:'ok', msg: '操作成功'});
     });
 });
@@ -924,7 +924,7 @@ router.post('/material/costume/setState',function(req,res){
             res.status(200).send({status:"x", msg:"再试一次"})
         }
         else {
-            res.status(200).send({status:"ok", msg:'操作成功'})        
+            res.status(200).send({status:"ok", msg:'操作成功'})
         }
     })
 });
@@ -941,7 +941,7 @@ router.get('/material/sprite', function (req, res) {
         }
 
         res.render('admin/admin_material_sprite.ejs');
-    }); 
+    });
 });
 // 角色管理：页面数据
 router.get('/material/sprite/data', function(req, res) {
@@ -967,7 +967,7 @@ router.get('/material/sprite/data', function(req, res) {
     });
 });
 // 角色管理：添加
-router.post('/material/sprite/add', function(req, res) {    
+router.post('/material/sprite/add', function(req, res) {
     const sprite = require("./lib/scratch_default_sprite.js");// 默认角色
     const SQL = `INSERT INTO material_sprite (tagId, json) VALUES (?, ?)`;
     const VAL = [req.body.tagId, sprite]
@@ -1007,7 +1007,7 @@ router.get('/material/sprite/worklist', function (req, res) {
             res.status(200).send({'count':0,'data':[]});
             return;
         }
-        
+
         //获取当前数据集合
         var page = parseInt(req.query['page']);
         var limit = parseInt(req.query['limit']);
@@ -1047,7 +1047,7 @@ router.post('/material/sprite/import', function (req, res) {
 
                 values += `(${req.body.tagid}, '${targets[i].name}', '${JSON.stringify(json).replace(/'/g, '’')}')`;
 
-                
+
                 spriteCount++;
             }
         }
@@ -1081,7 +1081,7 @@ router.post('/material/sprite/modName', function (req, res) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
             return;
         }
-        
+
         res.status(200).send({status:'ok', msg: '操作成功'});
     });
 });
@@ -1098,7 +1098,7 @@ router.post('/material/sprite/setState',function(req,res){
             res.status(200).send({status:"x", msg:"再试一次"})
         }
         else {
-            res.status(200).send({status:"ok", msg:'操作成功'})        
+            res.status(200).send({status:"ok", msg:'操作成功'})
         }
     })
 });
@@ -1190,13 +1190,13 @@ router.post('/material/sprite/setCostume/add', function (req, res) {
     let SQL = `SELECT c.name, c.md5, c.info0, c.info1, c.info2, s.json FROM material_costume c` +
             ` LEFT JOIN material_sprite s ON (s.id=?) ` +
             ` WHERE c.id=?`;
-    let VAL = [req.body.sid, req.body.cid] 
+    let VAL = [req.body.sid, req.body.cid]
     DB.qww(SQL, VAL, function (err, D) {
         if (err || D.length==0) {
             res.status(200).send({status:'x', msg: '数据错误，请再试一次' });
             return;
         }
-        
+
         // 组合数据
         const md5 = D[0].md5.split('.');
         let newCostume = {
@@ -1208,7 +1208,7 @@ router.post('/material/sprite/setCostume/add', function (req, res) {
             rotationCenterY: D[0].info1, // info1
             bitmapResolution: D[0].info2 // info2
         }
- 
+
 
         let json = JSON.parse(D[0].json);
         json.costumes.push(newCostume);
@@ -1313,13 +1313,13 @@ router.post('/material/sprite/setSound/add', function (req, res) {
     let SQL = `SELECT c.name, c.md5, c.format, c.rate, c.sampleCount, s.json FROM material_sound c` +
             ` LEFT JOIN material_sprite s ON (s.id=?) ` +
             ` WHERE c.id=?`;
-    let VAL = [req.body.sid, req.body.cid] 
+    let VAL = [req.body.sid, req.body.cid]
     DB.qww(SQL, VAL, function (err, D) {
         if (err || D.length==0) {
             res.status(200).send({status:'x', msg: '数据错误，请再试一次' });
             return;
         }
-        
+
         // 组合数据
         const md5 = D[0].md5.split('.');
         let newSound = {
@@ -1330,7 +1330,7 @@ router.post('/material/sprite/setSound/add', function (req, res) {
             format: D[0].format, // format
             rate: D[0].rate, // rate
             sampleCount: D[0].sampleCount, // sampleCount
-        } 
+        }
 
         let json = JSON.parse(D[0].json);
         json.sounds.push(newSound);
@@ -1359,7 +1359,7 @@ router.get('/material/sound', function (req, res) {
         }
 
         res.render('admin/admin_material_sound.ejs');
-    }); 
+    });
 });
 // 声音管理：数据
 router.get('/material/sound/data', function(req, res) {
@@ -1394,7 +1394,7 @@ router.post('/material/sound/add', function(req, res) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
             return;
         }
-        
+
         //保存文件到正确位置
         exampleFile = `./data/material/sound_example.wav`;
         md5File = `./data/material/asset/${newFileName}`;
@@ -1425,11 +1425,11 @@ router.post('/material/sound/modWav', function (req, res) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
             return;
         }
-        
+
         //保存文件
         const newpath = `./data/material/asset/${DATA[0].md5}`;
         fs.rename(tmppath, newpath, function (err) { if(err){}});
-    
+
         res.status(200).send({ status: "ok", msg: "修改成功"});
     });
 
@@ -1448,7 +1448,7 @@ router.post('/material/sound/modName', function (req, res) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
             return;
         }
-        
+
         res.status(200).send({status:'ok', msg: '操作成功'});
     });
 });
@@ -1458,7 +1458,7 @@ router.post('/material/sound/modMateAttr', function (req, res) {
         res.status(200).send({status:"x", msg: "参数错误"});
         return;
     }
-        
+
     let infoValue = parseInt(req.body.v);
     if (!infoValue || infoValue<0 || 10000000<infoValue) {
         res.status(200).send({status:"x", msg: "参数错误：只能在 0~1000,0000 之间"});
@@ -1473,7 +1473,7 @@ router.post('/material/sound/modMateAttr', function (req, res) {
             res.status(200).send({status:'x', msg: '保存数据错误，请再试一次' });
             return;
         }
-        
+
         res.status(200).send({status:'ok', msg: '操作成功'});
     });
 });
@@ -1504,7 +1504,7 @@ router.post('/material/sound/setState',function(req,res){
             res.status(200).send({status:"x", msg:"再试一次"})
         }
         else {
-            res.status(200).send({status:"ok", msg:'操作成功'})        
+            res.status(200).send({status:"ok", msg:'操作成功'})
         }
     })
 });

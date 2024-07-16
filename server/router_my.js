@@ -81,9 +81,9 @@ router.get("/getScratchProjects", function (req, res) {
   var limit = parseInt(req.query.limit); //每页显示的作品数
   var state = parseInt(req.query.state); //每页显示的作品状态
 
-  var SQL = `SELECT id, title,view_count,description FROM scratch WHERE authorid=${
+  var SQL = `SELECT id,type, title,view_count,description FROM ow_Projects WHERE authorid=${
     res.locals.userid
-  } AND state=${state} ORDER BY view_count DESC LIMIT ${
+  } AND state=${state} AND type='scratch' ORDER BY view_count DESC LIMIT ${
     (curr - 1) * limit
   }, ${limit}`;
   DB.query(SQL, function (err, data) {
@@ -101,9 +101,9 @@ router.get("/getPythonProjects", function (req, res) {
   var limit = parseInt(req.query.limit); //每页显示的作品数
   var state = parseInt(req.query.state); //每页显示的作品状态
 
-  var SQL = `SELECT id, title,view_count,description FROM python WHERE authorid=${
+  var SQL = `SELECT id,type, title,view_count,description FROM ow_Projects WHERE authorid=${
     res.locals.userid
-  } AND state=${state} ORDER BY view_count DESC LIMIT ${
+  } AND state=${state} AND type='scratch' ORDER BY view_count DESC LIMIT ${
     (curr - 1) * limit
   }, ${limit}`;
   DB.query(SQL, function (err, data) {
@@ -117,7 +117,7 @@ router.get("/getPythonProjects", function (req, res) {
 
 //分享Scratch项目
 router.post("/scratch/share", function (req, res) {
-  var SQL = `UPDATE scratch SET state=1 WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
+  var SQL = `UPDATE ow_Projects SET state=1 WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
   DB.query(SQL, function (err, d) {
     if (err) {
       res.status(200).send(I.msg_fail);
@@ -130,7 +130,7 @@ router.post("/scratch/share", function (req, res) {
 
 //分享Scratch项目
 router.post("/python/share", function (req, res) {
-  var SQL = `UPDATE python SET state=1 WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
+  var SQL = `UPDATE ow_Projects SET state=1 WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
   DB.query(SQL, function (err, d) {
     if (err) {
       res.status(200).send(I.msg_fail);
@@ -141,10 +141,22 @@ router.post("/python/share", function (req, res) {
   });
 });
 
+//分享Scratch项目
+router.post("/project/share", function (req, res) {
+  var SQL = `UPDATE ow_Projects SET state=1 WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
+  DB.query(SQL, function (err, d) {
+    if (err) {
+      res.status(200).send(I.msg_fail);
+      return;
+    }
+
+    res.status(200).send({ status: "success", msg: "分享成功" });
+  });
+});
 //简介
 router.post("/scratch/setdescription", function (req, res) {
   var SET = { description: req.body["description"] };
-  var SQL = `UPDATE scratch SET ? WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
+  var SQL = `UPDATE ow_Projects SET ? WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
   DB.qww(SQL, SET, function (err, d) {
     if (err) {
       res.status(200).send(I.msg_fail);
@@ -158,7 +170,20 @@ router.post("/scratch/setdescription", function (req, res) {
 //简介
 router.post("/python/setdescription", function (req, res) {
   var SET = { description: req.body["description"] };
-  var SQL = `UPDATE python SET ? WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
+  var SQL = `UPDATE ow_Projects SET ? WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
+  DB.qww(SQL, SET, function (err, d) {
+    if (err) {
+      res.status(200).send(I.msg_fail);
+      return;
+    }
+
+    res.status(200).send({ status: "success", msg: "设置成功" });
+  });
+});
+//简介
+router.post("/project/setdescription", function (req, res) {
+  var SET = { description: req.body["description"] };
+  var SQL = `UPDATE ow_Projects SET ? WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
   DB.qww(SQL, SET, function (err, d) {
     if (err) {
       res.status(200).send(I.msg_fail);
@@ -171,7 +196,7 @@ router.post("/python/setdescription", function (req, res) {
 
 //取消分享Scratch项目
 router.post("/scratch/noshare", function (req, res) {
-  var SQL = `UPDATE scratch SET state=0 WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
+  var SQL = `UPDATE ow_Projects SET state=0 WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
   DB.query(SQL, function (err, d) {
     if (err) {
       res.status(200).send(I.msg_fail);
@@ -184,7 +209,7 @@ router.post("/scratch/noshare", function (req, res) {
 
 //取消分享Scratch项目
 router.post("/python/noshare", function (req, res) {
-  var SQL = `UPDATE python SET state=0 WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
+  var SQL = `UPDATE ow_Projects SET state=0 WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
   DB.query(SQL, function (err, d) {
     if (err) {
       res.status(200).send(I.msg_fail);
@@ -195,9 +220,21 @@ router.post("/python/noshare", function (req, res) {
   });
 });
 
+//取消分享Scratch项目
+router.post("/project/noshare", function (req, res) {
+  var SQL = `UPDATE ow_Projects SET state=0 WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
+  DB.query(SQL, function (err, d) {
+    if (err) {
+      res.status(200).send(I.msg_fail);
+      return;
+    }
+
+    res.status(200).send({ status: "success", msg: "取消分享成功" });
+  });
+});
 //删除Scratch项目
 router.post("/scratch/del", function (req, res) {
-  var DEL = `DELETE FROM scratch WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
+  var DEL = `DELETE FROM ow_Projects WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
   DB.query(DEL, function (err, d) {
     if (err) {
       res.status(200).send(I.msg_fail);
@@ -219,7 +256,7 @@ router.post("/scratch/del", function (req, res) {
 
 //删除Scratch项目
 router.post("/python/del", function (req, res) {
-  var DEL = `DELETE FROM python WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
+  var DEL = `DELETE FROM ow_Projects WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
   DB.query(DEL, function (err, d) {
     if (err) {
       res.status(200).send(I.msg_fail);
@@ -235,6 +272,23 @@ router.post("/python/del", function (req, res) {
   });
 });
 
+//删除Scratch项目
+router.post("/project/del", function (req, res) {
+  var DEL = `DELETE FROM ow_Projects WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
+  DB.query(DEL, function (err, d) {
+    if (err) {
+      res.status(200).send(I.msg_fail);
+      return;
+    }
+
+    if (d.affectedRows == 0) {
+      res.status(200).send({ status: "failed", msg: "删除失败" });
+      return;
+    }
+
+    res.status(200).send({ status: "success", msg: "删除成功" });
+  });
+});
 //个人设置
 router.get("/info", function (req, res) {
     res.render("my_info.ejs");
