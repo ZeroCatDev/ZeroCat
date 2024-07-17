@@ -24,6 +24,9 @@ router.get("/", async function (req, res) {
   //console.log(search);
 
 
+  orderby = search.orderby.split("_")[0];
+
+  ordersc = search.orderby.split("_")[1];
 
   orderbylist = {
     view: "view_count",
