@@ -5,7 +5,8 @@
   "scripts": {
     "build": "npm i -g @vercel/ncc && ncc build app.js && mkdir dist/api && cp dist/index.js dist/api/index.js",
     "test": "echo \"No test specified\" && exit 1",
-    "start": "node app"
+    "start": "node app",
+    "prisma": "prisma db pull && prisma generate"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.556.0",
