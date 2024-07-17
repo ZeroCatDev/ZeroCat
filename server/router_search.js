@@ -21,7 +21,7 @@ router.get("/", async function (req, res) {
     curr: Number(req.query.curr),
     limit: Number(req.query.limit),
   };
-  //console.log(search);
+  console.log(search);
 
   var andid = "";
   if (!["scratch", "python", ""].includes(search.type)) {
@@ -101,7 +101,7 @@ router.get("/", async function (req, res) {
       images: true,
     },
   });
-  // console.log(userresult); // 输出: [0, 1]
+   console.log(userresult); // 输出: [0, 1]
 
   //var SQL = `SELECT id, title FROM ${tabelName} WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
   //var SQL = `SELECT s.id, s.title, s.state, s.authorid, s.description, s.view_count, u.display_name, u.motto,u.images FROM ( SELECT id, title, state, authorid, description, view_count,time FROM ${search.type} WHERE state > 0 AND (title LIKE ? ) AND (src like ? ) AND (description like ? ) ${andid} ) s JOIN ow_users u ON s.authorid = u.id ORDER BY ${orderby} ${ordersc} LIMIT ${(search.curr - 1) * search.limit}, ${ search.limit }`; var QUERY = [ `%${search.title}%`, `%${search.src}%`, `%${search.description}%`, ];
