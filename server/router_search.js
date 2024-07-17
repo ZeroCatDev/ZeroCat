@@ -23,9 +23,8 @@ router.get("/", async function (req, res) {
   };
   //console.log(search);
 
-
   var andid = "";
-  if (!["scratch", "python",''].includes(search.type)) {
+  if (!["scratch", "python", ""].includes(search.type)) {
     res.send("注入");
   }
 
@@ -46,12 +45,25 @@ router.get("/", async function (req, res) {
     id: "id",
   };
   var orderby = orderbylist[orderby];
-  ordersclist = { up: "desc", down: "asc"};
+  ordersclist = { up: "desc", down: "asc" };
   ordersc = ordersclist[ordersc];
-//  console.log(ordersc);
+  //  console.log(ordersc);
   var projectresult = await I.prisma.ow_projects.findMany({
-    orderBy: [orderby === 'view_count' ? { view_count:ordersc } : orderby === 'time' ? { time:ordersc } : orderby === 'id' ? { id:ordersc } : { }],
-    where: { title:{contains: search.title},src:{contains: search.src} ,description:{contains: search.description},type:{contains: search.type} },
+    orderBy: [
+      orderby === "view_count"
+        ? { view_count: ordersc }
+        : orderby === "time"
+        ? { time: ordersc }
+        : orderby === "id"
+        ? { id: ordersc }
+        : {},
+    ],
+    where: {
+      title: { contains: search.title },
+      src: { contains: search.src },
+      description: { contains: search.description },
+      type: { contains: search.type },
+    },
     select: {
       id: true,
       type: true,
@@ -66,15 +78,20 @@ router.get("/", async function (req, res) {
     take: search.limit,
   });
   var projectcount = await I.prisma.ow_projects.count({
-    where: { title:{contains: search.title},src:{contains: search.src} ,description:{contains: search.description},type:{contains: search.type} },
+    where: {
+      title: { contains: search.title },
+      src: { contains: search.src },
+      description: { contains: search.description },
+      type: { contains: search.type },
+    },
   });
- // console.log(projectcount);
+  console.log(projectcount);
   const authorIds = new Set(projectresult.map((item) => item.authorid));
- // console.log(authorIds); // 输出: Set(2) { '0', '1' }
-  const authorIdTuple = [...authorIds];
-  //console.log(authorIdTuple); // 输出: [0, 1]
-  var userresult = await I.prisma.ow_users.findMany({
 
+  console.log(authorIds); // 输出: Set(2) { '0', '1' }
+  const authorIdTuple = [...authorIds];
+  console.log(authorIdTuple); // 输出: [0, 1]
+  var userresult = await I.prisma.ow_users.findMany({
     where: { id: { in: authorIdTuple } },
     select: {
       id: true,
@@ -83,21 +100,17 @@ router.get("/", async function (req, res) {
       motto: true,
       images: true,
     },
-
   });
- // console.log(userresult); // 输出: [0, 1]
+  // console.log(userresult); // 输出: [0, 1]
 
   //var SQL = `SELECT id, title FROM ${tabelName} WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
   //var SQL = `SELECT s.id, s.title, s.state, s.authorid, s.description, s.view_count, u.display_name, u.motto,u.images FROM ( SELECT id, title, state, authorid, description, view_count,time FROM ${search.type} WHERE state > 0 AND (title LIKE ? ) AND (src like ? ) AND (description like ? ) ${andid} ) s JOIN ow_users u ON s.authorid = u.id ORDER BY ${orderby} ${ordersc} LIMIT ${(search.curr - 1) * search.limit}, ${ search.limit }`; var QUERY = [ `%${search.title}%`, `%${search.src}%`, `%${search.description}%`, ];
 
-
-
-          res.status(200).send({
-            data: projectresult,
-            user: userresult,
-            totalCount: [{"totalCount":projectcount}],
-          });
-
+  res.status(200).send({
+    data: projectresult,
+    user: userresult,
+    totalCount: [{ totalCount: projectcount }],
+  });
 });
 
 //搜索：Scratch项目列表：数据//只搜索标题

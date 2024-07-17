@@ -113,53 +113,6 @@ model ow_Counter {
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model ow_users {
-  id           Int       @unique(map: "id_UNIQUE") @default(autoincrement())
-  username     String    @unique(map: "user_UNIQUE") @db.Char(20)
-  email        String    @db.Char(100)
-  password     String    @db.VarChar(255)
-  display_name String    @default("OurWorld创作者") @db.Char(20)
-  state        Int       @default(0) @db.TinyInt
-  loginTime    DateTime? @db.Timestamp(0)
-  regTime      DateTime  @default(now()) @db.Timestamp(0)
-  sex          Int?      @default(0) @db.TinyInt
-  birthday     DateTime  @default(dbgenerated("'2000-04-01 00:00:00'")) @db.Timestamp(0)
-  motto        String?   @default("OurWorld创作者") @db.VarChar(1000)
-  images       String?   @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
-  avatar       String?   @default("https://owcdn.190823.xyz/user/fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
-  type         String?   @default("guest") @db.VarChar(50)
-  url          String?   @db.VarChar(255)
-  github       String?   @db.VarChar(255)
-  twitter      String?   @db.VarChar(255)
-  facebook     String?   @db.VarChar(255)
-  google       String?   @db.VarChar(255)
-  weibo        String?   @db.VarChar(255)
-  qq           String?   @db.VarChar(255)
-  fa           String?   @map("2fa") @db.VarChar(255)
-  createdAt    DateTime  @default(dbgenerated("'2000-04-01 00:00:00'")) @db.Timestamp(0)
-  updatedAt    DateTime  @default(dbgenerated("'2000-04-01 00:00:00'")) @db.Timestamp(0)
-  label        String?   @db.VarChar(255)
-
-  @@id([id, username])
-}
-
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model python {
-  id          Int      @id @default(autoincrement()) @db.UnsignedInt
-  type        String?  @default("python") @db.VarChar(32)
-  licence     String?  @db.VarChar(32)
-  authorid    String   @db.VarChar(32)
-  state       Int?     @default(0) @db.UnsignedTinyInt
-  view_count  Int?     @default(0) @db.UnsignedInt
-  like_count  Int?     @default(0)
-  favo_count  Int?     @default(0)
-  time        DateTime @default(now()) @db.Timestamp(0)
-  title       String?  @default("Python新项目") @db.VarChar(50)
-  description String?  @default("OurWorld上的Python项目") @db.VarChar(1000)
-  src         String?  @db.MediumText
-}
-
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model register {
   username String   @id @db.Char(12)
   code     String   @db.Char(6)
@@ -167,7 +120,7 @@ model register {
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model scratch {
+model scratch1 {
   id          Int      @id @default(autoincrement()) @db.UnsignedInt
   type        String?  @default("scratch") @db.VarChar(32)
   licence     String?  @db.VarChar(32)
@@ -178,21 +131,6 @@ model scratch {
   favo_count  Int?     @default(0)
   time        DateTime @default(now()) @db.Timestamp(0)
   title       String?  @default("Scratch新项目") @db.VarChar(255)
-  description String?  @default("OurWorld上的Scratch项目") @db.VarChar(1000)
-  src         String?  @db.MediumText
-}
-
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model scratch1 {
-  id          Int      @id @default(autoincrement()) @db.UnsignedInt
-  authorid    String   @db.VarChar(32)
-  teacherid   Int?     @default(0) @db.UnsignedInt
-  state       Int?     @default(0) @db.UnsignedTinyInt
-  view_count  Int?     @default(0) @db.UnsignedInt
-  like_count  Int?     @default(0)
-  favo_count  Int?     @default(0)
-  time        DateTime @default(now()) @db.Timestamp(0)
-  title       String?  @default("Scratch新项目") @db.VarChar(50)
   description String?  @default("OurWorld上的Scratch项目") @db.VarChar(1000)
   src         String?  @db.MediumText
 }
@@ -238,6 +176,39 @@ model wl_Users {
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model ow_Projects1 {
+  id          Int       @id @default(autoincrement()) @db.UnsignedInt
+  type        String?   @default("text") @db.VarChar(32)
+  licence     String?   @db.VarChar(32)
+  authorid    String    @db.VarChar(32)
+  teacherid   Int?      @default(0) @db.UnsignedInt
+  state       Int?      @default(0) @db.UnsignedTinyInt
+  view_count  Int?      @default(0) @db.UnsignedInt
+  like_count  Int?      @default(0)
+  favo_count  Int?      @default(0)
+  time        DateTime? @default(now()) @db.Timestamp(0)
+  title       String?   @default("Scratch新项目") @db.VarChar(50)
+  description String?   @default("OurWorld上的Scratch项目") @db.VarChar(1000)
+  src         String?   @db.MediumText
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model python1 {
+  id          Int      @id @default(autoincrement()) @db.UnsignedInt
+  type        String?  @default("python") @db.VarChar(32)
+  licence     String?  @db.VarChar(32)
+  authorid    String   @db.VarChar(32)
+  state       Int?     @default(0) @db.UnsignedTinyInt
+  view_count  Int?     @default(0) @db.UnsignedInt
+  like_count  Int?     @default(0)
+  favo_count  Int?     @default(0)
+  time        DateTime @default(now()) @db.Timestamp(0)
+  title       String?  @default("Python新项目") @db.VarChar(50)
+  description String?  @default("OurWorld上的Python项目") @db.VarChar(1000)
+  src         String?  @db.MediumText
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model ow_projects {
   id          Int      @id @default(autoincrement()) @db.UnsignedInt
   type        String?  @default("text") @db.VarChar(32)
@@ -251,4 +222,35 @@ model ow_projects {
   title       String?  @default("ow_projects新项目") @db.VarChar(50)
   description String?  @default("OurWorld上的ow_projects项目") @db.VarChar(1000)
   src         String?  @db.MediumText
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model ow_users {
+  id           Int       @unique(map: "id_UNIQUE") @default(autoincrement())
+  username     String    @unique(map: "user_UNIQUE") @db.Char(20)
+  email        String    @db.Char(100)
+  password     String    @db.VarChar(255)
+  display_name String    @default("OurWorld创作者") @db.Char(20)
+  state        Int       @default(0) @db.TinyInt
+  loginTime    DateTime? @db.Timestamp(0)
+  regTime      DateTime  @default(now()) @db.Timestamp(0)
+  sex          Int?      @default(0) @db.TinyInt
+  birthday     DateTime  @default(dbgenerated("'2000-04-01 00:00:00'")) @db.Timestamp(0)
+  motto        String?   @default("OurWorld创作者") @db.VarChar(1000)
+  images       String?   @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
+  avatar       String?   @default("https://owcdn.190823.xyz/user/fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
+  type         String?   @default("guest") @db.VarChar(50)
+  url          String?   @db.VarChar(255)
+  github       String?   @db.VarChar(255)
+  twitter      String?   @db.VarChar(255)
+  facebook     String?   @db.VarChar(255)
+  google       String?   @db.VarChar(255)
+  weibo        String?   @db.VarChar(255)
+  qq           String?   @db.VarChar(255)
+  fa           String?   @map("2fa") @db.VarChar(255)
+  createdAt    DateTime  @default(dbgenerated("'2000-04-01 00:00:00'")) @db.Timestamp(0)
+  updatedAt    DateTime  @default(dbgenerated("'2000-04-01 00:00:00'")) @db.Timestamp(0)
+  label        String?   @db.VarChar(255)
+
+  @@id([id, username])
 }
