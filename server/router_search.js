@@ -21,24 +21,10 @@ router.get("/", async function (req, res) {
     curr: Number(req.query.curr),
     limit: Number(req.query.limit),
   };
-  console.log(search);
+  //console.log(search);
 
-  var andid = "";
-  if (!["scratch", "python", ""].includes(search.type)) {
-    res.send("注入");
-  }
 
-  if (search.userid != "") {
-    andid = `AND (authorid = ${Number(search.userid)} )`;
-  }
-  orderby = search.orderby.split("_")[0];
-  if (!["view", "time", "random", "id"].includes(orderby)) {
-    res.send("注入1");
-  }
-  ordersc = search.orderby.split("_")[1];
-  if (!["up", "down"].includes(ordersc)) {
-    res.send("注入2");
-  }
+
   orderbylist = {
     view: "view_count",
     time: "time",
@@ -63,6 +49,7 @@ router.get("/", async function (req, res) {
       src: { contains: search.src },
       description: { contains: search.description },
       type: { contains: search.type },
+      authorid: search.userid != ""?{equals:Number(search.userid)}:{},
     },
     select: {
       id: true,
@@ -83,14 +70,16 @@ router.get("/", async function (req, res) {
       src: { contains: search.src },
       description: { contains: search.description },
       type: { contains: search.type },
+      authorid: search.userid != ""?{equals:Number(search.userid)}:{},
+
     },
   });
-  console.log(projectcount);
+  //console.log(projectcount);
   const authorIds = new Set(projectresult.map((item) => item.authorid));
 
-  console.log(authorIds); // 输出: Set(2) { '0', '1' }
+  //console.log(authorIds); // 输出: Set(2) { '0', '1' }
   const authorIdTuple = [...authorIds];
-  console.log(authorIdTuple); // 输出: [0, 1]
+  //console.log(authorIdTuple); // 输出: [0, 1]
   var userresult = await I.prisma.ow_users.findMany({
     where: { id: { in: authorIdTuple } },
     select: {
@@ -101,7 +90,7 @@ router.get("/", async function (req, res) {
       images: true,
     },
   });
-   console.log(userresult); // 输出: [0, 1]
+   //console.log(userresult); // 输出: [0, 1]
 
   //var SQL = `SELECT id, title FROM ${tabelName} WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
   //var SQL = `SELECT s.id, s.title, s.state, s.authorid, s.description, s.view_count, u.display_name, u.motto,u.images FROM ( SELECT id, title, state, authorid, description, view_count,time FROM ${search.type} WHERE state > 0 AND (title LIKE ? ) AND (src like ? ) AND (description like ? ) ${andid} ) s JOIN ow_users u ON s.authorid = u.id ORDER BY ${orderby} ${ordersc} LIMIT ${(search.curr - 1) * search.limit}, ${ search.limit }`; var QUERY = [ `%${search.title}%`, `%${search.src}%`, `%${search.description}%`, ];
