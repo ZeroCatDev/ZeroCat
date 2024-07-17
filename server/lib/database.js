@@ -19,7 +19,7 @@ var pool = mysql.createPool({
     });
 
 
-//防止注入：'SELECT * FROM ow_Users WHERE ?', WHERE
+//防止注入：'SELECT * FROM ow_users WHERE ?', WHERE
 exports.qww = function query_with_w(SQL, W, callback) {
     pool.getConnection(function (err, connection) {
         //console.log(err)
@@ -39,7 +39,7 @@ exports.query = function query(SQL, callback) {
     pool.getConnection(function (err, connection) {
         //console.log(err)
         if (err) return callback(err,'');
-        
+
         // Use the connection
         connection.query(SQL, function (err, rows) {
             callback(err, rows);

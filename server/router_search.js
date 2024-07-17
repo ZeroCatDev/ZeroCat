@@ -49,7 +49,7 @@ router.get("/", async function (req, res) {
   ordersclist = { up: "desc", down: "asc"};
   ordersc = ordersclist[ordersc];
 //  console.log(ordersc);
-  var projectresult = await I.prisma.ow_Projects.findMany({
+  var projectresult = await I.prisma.ow_projects.findMany({
     orderBy: [orderby === 'view_count' ? { view_count:ordersc } : orderby === 'time' ? { time:ordersc } : orderby === 'id' ? { id:ordersc } : { }],
     where: { title:{contains: search.title},src:{contains: search.src} ,description:{contains: search.description},type:{contains: search.type} },
     select: {
@@ -65,7 +65,7 @@ router.get("/", async function (req, res) {
     skip: (search.curr - 1) * search.limit,
     take: search.limit,
   });
-  var projectcount = await I.prisma.ow_Projects.count({
+  var projectcount = await I.prisma.ow_projects.count({
     where: { title:{contains: search.title},src:{contains: search.src} ,description:{contains: search.description},type:{contains: search.type} },
   });
  // console.log(projectcount);
@@ -73,7 +73,7 @@ router.get("/", async function (req, res) {
  // console.log(authorIds); // 输出: Set(2) { '0', '1' }
   const authorIdTuple = [...authorIds];
   //console.log(authorIdTuple); // 输出: [0, 1]
-  var userresult = await I.prisma.ow_Users.findMany({
+  var userresult = await I.prisma.ow_users.findMany({
 
     where: { id: { in: authorIdTuple } },
     select: {
@@ -88,7 +88,7 @@ router.get("/", async function (req, res) {
  // console.log(userresult); // 输出: [0, 1]
 
   //var SQL = `SELECT id, title FROM ${tabelName} WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
-  //var SQL = `SELECT s.id, s.title, s.state, s.authorid, s.description, s.view_count, u.display_name, u.motto,u.images FROM ( SELECT id, title, state, authorid, description, view_count,time FROM ${search.type} WHERE state > 0 AND (title LIKE ? ) AND (src like ? ) AND (description like ? ) ${andid} ) s JOIN ow_Users u ON s.authorid = u.id ORDER BY ${orderby} ${ordersc} LIMIT ${(search.curr - 1) * search.limit}, ${ search.limit }`; var QUERY = [ `%${search.title}%`, `%${search.src}%`, `%${search.description}%`, ];
+  //var SQL = `SELECT s.id, s.title, s.state, s.authorid, s.description, s.view_count, u.display_name, u.motto,u.images FROM ( SELECT id, title, state, authorid, description, view_count,time FROM ${search.type} WHERE state > 0 AND (title LIKE ? ) AND (src like ? ) AND (description like ? ) ${andid} ) s JOIN ow_users u ON s.authorid = u.id ORDER BY ${orderby} ${ordersc} LIMIT ${(search.curr - 1) * search.limit}, ${ search.limit }`; var QUERY = [ `%${search.title}%`, `%${search.src}%`, `%${search.description}%`, ];
 
 
 
@@ -106,7 +106,7 @@ router.post("/user", function (req, res) {
     res.status(200).send([]);
     return;
   }
-  var SQL = `SELECT id, display_name, motto,images FROM ow_Users WHERE display_name LIKE ?`;
+  var SQL = `SELECT id, display_name, motto,images FROM ow_users WHERE display_name LIKE ?`;
   var WHERE = [`%${req.body.txt}%`];
   DB.qww(SQL, WHERE, function (err, data) {
     if (err) {

@@ -22,7 +22,7 @@ router.get("/", function (req, res) {
     //获取已分享的作品总数：1:普通作品，2：推荐的优秀作品
     var SQL =
       `SELECT ` +
-      ` (SELECT count(id) FROM ow_Projects WHERE state>0 ) AS python_count `;
+      ` (SELECT count(id) FROM ow_projects WHERE state>0 ) AS python_count `;
     DB.query(SQL, function (err, data) {
       if (err) {
         // console.error('数据库操作出错：');
@@ -42,7 +42,7 @@ router.get("/view/getPythonProjects", function (req, res) {
       type = "time";
     }
 
-    var SQL = `SELECT ow_Projects.id, ow_Projects.title, ow_Projects.state,ow_Projects.authorid, ow_Projects.description,ow_Projects.view_count,ow_Users.display_name,ow_Users.motto FROM ow_Projects JOIN ow_Users ON ow_Projects.authorid = ow_Users.id WHERE ow_Projects.state > 0 AND ow_Projects.type='python' ORDER BY ow_Projects.${type} DESC LIMIT ${
+    var SQL = `SELECT ow_projects.id, ow_projects.title, ow_projects.state,ow_projects.authorid, ow_projects.description,ow_projects.view_count,ow_users.display_name,ow_users.motto FROM ow_projects JOIN ow_users ON ow_projects.authorid = ow_users.id WHERE ow_projects.state > 0 AND ow_projects.type='python' ORDER BY ow_projects.${type} DESC LIMIT ${
       (curr - 1) * limit
     }, ${limit}`;
     DB.query(SQL, function (err, data) {
@@ -65,8 +65,8 @@ router.get("/view/seachPythonProjects", function (req, res) {
     if (req.query.searchall == "true") {
       searchinfo = "src";
     }
-    //var SQL = `SELECT id, title FROM ow_Projects WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
-    var SQL = `SELECT ow_Projects.id, ow_Projects.title, ow_Projects.state,ow_Projects.authorid,ow_Projects.description,ow_Projects.view_count, ow_Users.display_name,ow_Users.motto FROM ow_Projects JOIN ow_Users ON ow_Projects.authorid = ow_Users.id WHERE ow_Projects.state>0 AND (${searchinfo} LIKE ?) AND ow_Projects.type='${tabelName}'`;
+    //var SQL = `SELECT id, title FROM ow_projects WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
+    var SQL = `SELECT ow_projects.id, ow_projects.title, ow_projects.state,ow_projects.authorid,ow_projects.description,ow_projects.view_count, ow_users.display_name,ow_users.motto FROM ow_projects JOIN ow_users ON ow_projects.authorid = ow_users.id WHERE ow_projects.state>0 AND (${searchinfo} LIKE ?) AND ow_projects.type='${tabelName}'`;
     var WHERE = [`%${req.query.txt}%`];
     DB.qww(SQL, WHERE, function (err, data) {
       if (err) {
@@ -111,16 +111,16 @@ router.post('/getWork', function (req, res) {
          }
         //从指定文件加载默认作品：END============================================
         //*/
-        SQL = `SELECT * FROM ow_Projects WHERE id=1`;//默认作品为1号作品
+        SQL = `SELECT * FROM ow_projects WHERE id=1`;//默认作品为1号作品
     } else {
         if (!res.locals.login){//未登录时，只能打开已发布的作品
-            SQL = `SELECT * FROM ow_Projects WHERE id=${projectid} AND state>0`;
+            SQL = `SELECT * FROM ow_projects WHERE id=${projectid} AND state>0`;
         }else {
 
                 //作品编辑：能够打开一个作品的几种权限：
                 //1、自己的作品；
                 //2、开源的作品；
-                SQL = `SELECT * FROM ow_Projects WHERE id=${projectid} AND (authorid=${res.locals.userid} OR state>0)`;
+                SQL = `SELECT * FROM ow_projects WHERE id=${projectid} AND (authorid=${res.locals.userid} OR state>0)`;
 
 
         }
@@ -130,7 +130,7 @@ router.post('/getWork', function (req, res) {
         if (err||WORK.length==0) {
             res.status(200).send({status:'x', msg:"作品不存在或无权打开"});//需要前端内部处理
         } else {
-			var UPDATE = `UPDATE ow_Projects SET view_count=view_count+1 WHERE id=${projectid} LIMIT 1`;
+			var UPDATE = `UPDATE ow_projects SET view_count=view_count+1 WHERE id=${projectid} LIMIT 1`;
 			DB.query(UPDATE, function(err, s) { if (err) { } });
 
             if (WORK[0].id == 1) {
@@ -150,7 +150,7 @@ router.post('/save', function (req, res) {
 
     // 新作品
 	if (req.body.id == '0'){
-		var INSERT =`INSERT INTO ow_Projects (authorid, title,src) VALUES (${res.locals.userid}, ?, ?)`;
+		var INSERT =`INSERT INTO ow_projects (authorid, title,src) VALUES (${res.locals.userid}, ?, ?)`;
 		var SET = [req.body.title,req.body.data]
 		DB.qww(INSERT, SET, function (err, newPython) {
 			if (err || newPython.affectedRows==0) {
@@ -165,7 +165,7 @@ router.post('/save', function (req, res) {
 	}
 
     // 旧作品
-    var UPDATE =`UPDATE ow_Projects SET ? WHERE id=${req.body.id} AND authorid=${res.locals.userid} LIMIT 1`;
+    var UPDATE =`UPDATE ow_projects SET ? WHERE id=${req.body.id} AND authorid=${res.locals.userid} LIMIT 1`;
     var SET = {
         title:req.body.title,
         src:req.body.data,
@@ -188,7 +188,7 @@ router.post('/publish', function (req, res) {
     }
 
 	var state = req.body.s=="0"? 1:0;
-	var UPDATE = `UPDATE ow_Projects SET state=${state} WHERE id=${req.body.id} AND authorid=${res.locals.userid} LIMIT 1`;
+	var UPDATE = `UPDATE ow_projects SET state=${state} WHERE id=${req.body.id} AND authorid=${res.locals.userid} LIMIT 1`;
 	DB.query(UPDATE, function (err, u) {
 		if (err) {
 			res.status(200).send({status: "x", msg: "操作失败！"});
@@ -203,7 +203,7 @@ router.post('/publish', function (req, res) {
 
 // python 优秀作品
 router.post('/YxLibrary_count', function (req, res) {
-    var SQL = `SELECT count(id) AS c FROM ow_Projects WHERE state=2`;
+    var SQL = `SELECT count(id) AS c FROM ow_projects WHERE state=2`;
     DB.query(SQL, function (err, COUNT){
         if (err) {
             res.status(200).send({status:'ok', total: 0});
@@ -217,9 +217,9 @@ router.post('/YxLibrary_count', function (req, res) {
 router.post('/YxLibrary_data', function (req, res) {
     //获取当前数据集合：以被浏览次数降序排列，每次取16个
     var page = parseInt(req.body.page);
-    SQL = `SELECT ow_Projects.id, ow_Projects.authorid, ow_Projects.view_count, ow_Projects.time, ow_Projects.title, ow_Projects.description, ow_Users.display_name AS author_display_name FROM ow_Projects `+
-    ` LEFT JOIN ow_Users ON ow_Users.id=ow_Projects.authorid `+
-    ` WHERE ow_Projects.state=2 ORDER BY ow_Projects.view_count DESC LIMIT ${(page-1)*16},${16}`;
+    SQL = `SELECT ow_projects.id, ow_projects.authorid, ow_projects.view_count, ow_projects.time, ow_projects.title, ow_projects.description, ow_users.display_name AS author_display_name FROM ow_projects `+
+    ` LEFT JOIN ow_users ON ow_users.id=ow_projects.authorid `+
+    ` WHERE ow_projects.state=2 ORDER BY ow_projects.view_count DESC LIMIT ${(page-1)*16},${16}`;
     DB.query(SQL, function (err, data) {
         if (err) {
             res.status(200).send({status:'ok', data:[]});
@@ -241,7 +241,7 @@ router.all('*', function (req, res, next) {
 });
 
 router.post('/MyLibrary_count', function (req, res) {
-    var SQL = `SELECT count(id) AS c FROM ow_Projects WHERE authorid=${res.locals.userid}`;
+    var SQL = `SELECT count(id) AS c FROM ow_projects WHERE authorid=${res.locals.userid}`;
     DB.query(SQL, function (err, COUNT){
         if (err) {
             res.status(200).send({status:'ok', total: 0});
@@ -254,7 +254,7 @@ router.post('/MyLibrary_count', function (req, res) {
 router.post('/MyLibrary_data', function (req, res) {
     //获取当前数据集合：以被浏览次数降序排列，每次取16个
     var page = parseInt(req.body.page);
-    SQL = `SELECT id, state, time, title FROM ow_Projects WHERE authorid=${res.locals.userid} ORDER BY time DESC LIMIT ${(page-1)*16},${16}`;
+    SQL = `SELECT id, state, time, title FROM ow_projects WHERE authorid=${res.locals.userid} ORDER BY time DESC LIMIT ${(page-1)*16},${16}`;
     DB.query(SQL, function (err, data) {
         if (err) {
             res.status(200).send({status:'ok', data:[]});

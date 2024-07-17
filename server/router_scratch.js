@@ -22,7 +22,7 @@ router.get("/scratchcount", function (req, res) {
   //获取已分享的作品总数：1:普通作品，2：推荐的优秀作品
   var SQL =
     `SELECT ` +
-    ` (SELECT count(id) FROM ow_Projects WHERE state>0 AND type='scratch' ) AS scratch_count `;
+    ` (SELECT count(id) FROM ow_projects WHERE state>0 AND type='scratch' ) AS scratch_count `;
   DB.query(SQL, function (err, data) {
     if (err) {
       // console.error('数据库操作出错：');
@@ -42,7 +42,7 @@ router.get("/view/getScratchProjects", function (req, res) {
     type = "time";
   }
 
-  var SQL = `SELECT ow_Projects.id, ow_Projects.title, ow_Projects.state,ow_Projects.authorid,ow_Projects.view_count, ow_Users.display_name,ow_Users.motto,ow_Users.images FROM ow_Projects JOIN ow_Users ON ow_Projects.authorid = ow_Users.id WHERE ow_Projects.state > 0 AND ow_Projects.type='scratch' ORDER BY ow_Projects.${type} DESC LIMIT ${
+  var SQL = `SELECT ow_projects.id, ow_projects.title, ow_projects.state,ow_projects.authorid,ow_projects.view_count, ow_users.display_name,ow_users.motto,ow_users.images FROM ow_projects JOIN ow_users ON ow_projects.authorid = ow_users.id WHERE ow_projects.state > 0 AND ow_projects.type='scratch' ORDER BY ow_projects.${type} DESC LIMIT ${
     (curr - 1) * limit
   }, ${limit}`;
   DB.query(SQL, function (err, data) {
@@ -65,8 +65,8 @@ router.get("/view/seachScratchProjects", function (req, res) {
   if (req.query.searchall == "true") {
     searchinfo = "src";
   }
-  //var SQL = `SELECT id, title FROM ow_Projects WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
-  var SQL = `SELECT ow_Projects.id, ow_Projects.title, ow_Projects.state,ow_Projects.authorid,ow_Projects.description,ow_Projects.view_count, ow_Users.display_name,ow_Users.motto FROM ow_Projects JOIN ow_Users ON ow_Projects.authorid = ow_Users.id WHERE ow_Projects.state>0 AND (${searchinfo} LIKE ?) AND ow_Projects.type='${tabelName}'`;
+  //var SQL = `SELECT id, title FROM ow_projects WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
+  var SQL = `SELECT ow_projects.id, ow_projects.title, ow_projects.state,ow_projects.authorid,ow_projects.description,ow_projects.view_count, ow_users.display_name,ow_users.motto FROM ow_projects JOIN ow_users ON ow_projects.authorid = ow_users.id WHERE ow_projects.state>0 AND (${searchinfo} LIKE ?) AND ow_projects.type='${tabelName}'`;
   var WHERE = [`%${req.query.txt}%`];
   DB.qww(SQL, WHERE, function (err, data) {
     if (err) {
@@ -86,7 +86,7 @@ router.get("/play", function (req, res) {
 
 
   //浏览数+1
-  var SQL = `UPDATE ow_Projects SET view_count=view_count+1 WHERE id=${req.query.id} LIMIT 1`;
+  var SQL = `UPDATE ow_projects SET view_count=view_count+1 WHERE id=${req.query.id} LIMIT 1`;
   DB.query(SQL, function (err, U) {
     if (err || U.affectedRows == 0) {
       res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
@@ -103,15 +103,15 @@ router.get("/play", function (req, res) {
 
 router.get("/projectinfo", function (req, res) {
   SQL =
-  `SELECT ow_Projects.id,ow_Projects.authorid,ow_Projects.time,ow_Projects.view_count,ow_Projects.like_count,ow_Projects.type,` +
-  ` ow_Projects.favo_count,ow_Projects.title,ow_Projects.state,ow_Projects.description,` +
+  `SELECT ow_projects.id,ow_projects.authorid,ow_projects.time,ow_projects.view_count,ow_projects.like_count,ow_projects.type,` +
+  ` ow_projects.favo_count,ow_projects.title,ow_projects.state,ow_projects.description,` +
   ` '' AS likeid, '' AS favoid,` +
-  ` ow_Users.display_name AS author_display_name,` +
-  ` ow_Users.images AS author_images,` +
-  ` ow_Users.motto AS author_motto` +
-  ` FROM ow_Projects ` +
-  ` LEFT JOIN ow_Users ON (ow_Users.id=ow_Projects.authorid) ` +
-  ` WHERE ow_Projects.id=${req.query.id} AND (ow_Projects.state>=1 or ow_Projects.authorid=${res.locals.userid}) AND ow_Projects.type='scratch' LIMIT 1`;
+  ` ow_users.display_name AS author_display_name,` +
+  ` ow_users.images AS author_images,` +
+  ` ow_users.motto AS author_motto` +
+  ` FROM ow_projects ` +
+  ` LEFT JOIN ow_users ON (ow_users.id=ow_projects.authorid) ` +
+  ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state>=1 or ow_projects.authorid=${res.locals.userid}) AND ow_projects.type='scratch' LIMIT 1`;
   DB.query(SQL, function (err, SCRATCH) {
     if (err || SCRATCH.length == 0) {
       res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
@@ -129,15 +129,15 @@ router.get("/projectinfo", function (req, res) {
 
 router.get("/projectinfo2", function (req, res) {
   SQL =
-  `SELECT ow_Projects.id,ow_Projects.authorid,ow_Projects.time,ow_Projects.view_count,ow_Projects.like_count,ow_Projects.type` +
-  ` ow_Projects.favo_count,ow_Projects.title,ow_Projects.state,ow_Projects.description,` +
+  `SELECT ow_projects.id,ow_projects.authorid,ow_projects.time,ow_projects.view_count,ow_projects.like_count,ow_projects.type` +
+  ` ow_projects.favo_count,ow_projects.title,ow_projects.state,ow_projects.description,` +
   ` '' AS likeid, '' AS favoid,` +
-  ` ow_Users.display_name AS author_display_name,` +
-  ` ow_Users.images AS author_images,` +
-  ` ow_Users.motto AS author_motto` +
-  ` FROM ow_Projects ` +
-  ` LEFT JOIN ow_Users ON (ow_Users.id=ow_Projects.authorid) ` +
-  ` WHERE ow_Projects.id=${req.query.id} AND (ow_Projects.state>=1 or ow_Projects.authorid=${res.locals.userid}) AND ow_Projects.type='scratch' LIMIT 1`;
+  ` ow_users.display_name AS author_display_name,` +
+  ` ow_users.images AS author_images,` +
+  ` ow_users.motto AS author_motto` +
+  ` FROM ow_projects ` +
+  ` LEFT JOIN ow_users ON (ow_users.id=ow_projects.authorid) ` +
+  ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state>=1 or ow_projects.authorid=${res.locals.userid}) AND ow_projects.type='scratch' LIMIT 1`;
   DB.query(SQL, function (err, SCRATCH) {
     if (err || SCRATCH.length == 0) {
       res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
@@ -238,7 +238,7 @@ jsontw={
 });
 //Scratch_play获取源代码数据部分
 router.get("/play/project/:filename", function (req, res) {
-  var SQL = `SELECT src FROM ow_Projects WHERE id=${req.params.filename} LIMIT 1`;
+  var SQL = `SELECT src FROM ow_projects WHERE id=${req.params.filename} LIMIT 1`;
   DB.query(SQL, function (err, SCRATCH) {
     if (err) {
       return;
@@ -259,7 +259,7 @@ router.post("/play/openSrc", function (req, res) {
   }
 
   var pid = req.body["pid"];
-  var SQL = `SELECT state FROM ow_Projects WHERE id=${pid} AND authorid=${res.locals.userid} LIMIT 1`;
+  var SQL = `SELECT state FROM ow_projects WHERE id=${pid} AND authorid=${res.locals.userid} LIMIT 1`;
   DB.query(SQL, function (err, RECO) {
     if (err || RECO.length == 0) {
       res.status(200).send({ status: "failed", msg: "数据错误，请再试一次" });
@@ -271,7 +271,7 @@ router.post("/play/openSrc", function (req, res) {
       state = 2;
     }
 
-    var UPDATE = `UPDATE ow_Projects SET state=${state} WHERE id=${pid} LIMIT 1`;
+    var UPDATE = `UPDATE ow_projects SET state=${state} WHERE id=${pid} LIMIT 1`;
     DB.query(UPDATE, function (err, SCRATCH) {
       if (err) {
         res.status(200).send({ status: "failed", msg: "数据错误，请再试一次" });
@@ -310,10 +310,10 @@ router.post("/project/:projectid", function (req, res) {
         return;
         //从指定文件加载默认作品：END============================================
         //
-    SQL = `SELECT id, authorid, state, title, src FROM ow_Projects WHERE id=1`; //默认作品为1号作品
+    SQL = `SELECT id, authorid, state, title, src FROM ow_projects WHERE id=1`; //默认作品为1号作品
   } else {
     if (!res.locals.login) {
-      SQL = `SELECT * FROM ow_Projects WHERE id=${projectid} AND state>0`;
+      SQL = `SELECT * FROM ow_projects WHERE id=${projectid} AND state>0`;
     } else {
       //作品编辑：能够打开一个作品的几种权限：
       //0、管理员能打开所有作品;
@@ -322,9 +322,9 @@ router.post("/project/:projectid", function (req, res) {
       //3、课堂用例、作业模板：购买课程后可以打开；
       //4、课堂作业作品：课程老师可以打开；
       if (res.locals["is_admin"] == 1) {
-        SQL = `SELECT * FROM ow_Projects WHERE id=${projectid}`;
+        SQL = `SELECT * FROM ow_projects WHERE id=${projectid}`;
       } else {
-        SQL = `SELECT * FROM ow_Projects WHERE id=${projectid} AND (authorid=${res.locals.userid} OR state>0)`;
+        SQL = `SELECT * FROM ow_projects WHERE id=${projectid} AND (authorid=${res.locals.userid} OR state>0)`;
         //(AND (courseid IN (SELECT courseid FROM student WHERE studentid=${res.locals.userid} AND coursepayid>0)))
       }
     }
@@ -338,7 +338,7 @@ router.post("/project/:projectid", function (req, res) {
 
     if (SCRATCH.length == 0) {
       //4、课堂作业作品：课程老师可以打开；
-      SQL = `SELECT * FROM ow_Projects WHERE id=${projectid} AND courseid!=0 AND (courseid IN (SELECT courseid FROM class WHERE teacherid=${res.locals.userid}))`;
+      SQL = `SELECT * FROM ow_projects WHERE id=${projectid} AND courseid!=0 AND (courseid IN (SELECT courseid FROM class WHERE teacherid=${res.locals.userid}))`;
       DB.query(SQL, function (err, SCRATCH) {
         if (err || SCRATCH.length == 0) {
           res.status(200).send({ status: "作品不存在或无权打开" }); //需要Scratch内部处理
@@ -346,7 +346,7 @@ router.post("/project/:projectid", function (req, res) {
         }
 
         //作品被浏览次数+1
-        var UPDATE = `UPDATE ow_Projects SET view_count=view_count+1 WHERE id=${projectid} LIMIT 1`;
+        var UPDATE = `UPDATE ow_projects SET view_count=view_count+1 WHERE id=${projectid} LIMIT 1`;
         DB.query(UPDATE, function (err, s) {
           if (err) {
           }
@@ -368,7 +368,7 @@ router.post("/project/:projectid", function (req, res) {
     }
 
     //作品被浏览次数+1
-    var UPDATE = `UPDATE ow_Projects SET view_count=view_count+1 WHERE id=${projectid} LIMIT 1`;
+    var UPDATE = `UPDATE ow_projects SET view_count=view_count+1 WHERE id=${projectid} LIMIT 1`;
     DB.query(UPDATE, function (err, s) {
       if (err) {
       }
@@ -390,7 +390,7 @@ router.post("/saveProjcetTitle", function (req, res) {
     res.status(404);
     return;
   }
-  var UPDATE = `UPDATE ow_Projects SET title=? WHERE id=${req.body.id} AND authorid=${res.locals.userid} LIMIT 1`;
+  var UPDATE = `UPDATE ow_projects SET title=? WHERE id=${req.body.id} AND authorid=${res.locals.userid} LIMIT 1`;
   var VAL = [`${req.body.title}`];
   DB.qww(UPDATE, VAL, function (err, SCRATCH) {
     if (err) {
@@ -409,7 +409,7 @@ router.put("/projects/:projectid", function (req, res) {
     return;
   }
 
-  var SQL = `SELECT id, authorid FROM ow_Projects WHERE id=${req.params.projectid} LIMIT 1`;
+  var SQL = `SELECT id, authorid FROM ow_projects WHERE id=${req.params.projectid} LIMIT 1`;
   DB.query(SQL, function (err, SWork) {
     if (err || SWork.length == 0) {
       res.status(404).send({});
@@ -421,7 +421,7 @@ router.put("/projects/:projectid", function (req, res) {
       return;
     }
 
-    var UPDATE = `UPDATE ow_Projects SET src=? WHERE id=${req.params.projectid} LIMIT 1`;
+    var UPDATE = `UPDATE ow_projects SET src=? WHERE id=${req.params.projectid} LIMIT 1`;
     var VAL = [`${JSON.stringify(req.body)}`];
     DB.qww(UPDATE, VAL, function (err, SCRATCH) {
       if (err) {
@@ -476,7 +476,7 @@ router.post("/shareProject/:projectid", function (req, res) {
   }
 
   //只能分享自己的作品
-  var UPDATE = `UPDATE ow_Projects SET state=${s} WHERE id=${req.params.projectid} AND authorid=${res.locals.userid} LIMIT 1`;
+  var UPDATE = `UPDATE ow_projects SET state=${s} WHERE id=${req.params.projectid} AND authorid=${res.locals.userid} LIMIT 1`;
   DB.query(UPDATE, function (err, U) {
     if (err) {
       res.status(200).send({ status: "x" });
@@ -498,7 +498,7 @@ router.post("/projects", function (req, res) {
   }
 
 
-  var INSERT = `INSERT INTO ow_Projects (authorid, title, src,type) VALUES (${res.locals.userid}, ?, ?,'scratch')`;
+  var INSERT = `INSERT INTO ow_projects (authorid, title, src,type) VALUES (${res.locals.userid}, ?, ?,'scratch')`;
   var VAL = [title, `${JSON.stringify(req.body.work||req.body)}`];
   DB.qww(INSERT, VAL, function (err, newScratch) {
     if (err || newScratch.affectedRows == 0) {
@@ -647,7 +647,7 @@ router.post("/getMyProjectLibrary", function (req, res) {
     WHERE += ` AND title LIKE '%${req.body.f}%'`;
   }
 
-  var SELECT = `SELECT id, title, time, state FROM ow_Projects WHERE authorid=${res.locals["userid"]} ${WHERE} AND ow_Projects.type='scratch' ORDER BY time DESC LIMIT ${req.body.l},${req.body.n}`; //正式版本中，需要限定作者本身的作品
+  var SELECT = `SELECT id, title, time, state FROM ow_projects WHERE authorid=${res.locals["userid"]} ${WHERE} AND ow_projects.type='scratch' ORDER BY time DESC LIMIT ${req.body.l},${req.body.n}`; //正式版本中，需要限定作者本身的作品
   DB.query(SELECT, function (err, SCRATCH) {
     if (err) {
       res.status(200).send({ status: "err", data: [] });
@@ -660,8 +660,8 @@ router.post("/getMyProjectLibrary", function (req, res) {
 // 获取优秀作品列表
 router.post("/getYxProjectLibrary", function (req, res) {
   var SELECT =
-    ` SELECT s.id, s.title, s.view_count, s.authorid, u.display_name, u.images FROM ow_Projects s ` +
-    " LEFT JOIN ow_Users u ON u.id=s.authorid " +
+    ` SELECT s.id, s.title, s.view_count, s.authorid, u.display_name, u.images FROM ow_projects s ` +
+    " LEFT JOIN ow_users u ON u.id=s.authorid " +
     ` WHERE s.state=2 AND s.type='scratch' ORDER BY s.view_count DESC LIMIT ${req.body.l},${req.body.n}`;
   DB.query(SELECT, function (err, SCRATCH) {
     if (err) {

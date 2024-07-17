@@ -53,7 +53,7 @@ router.post("/login",captcha ,function (req, res) {
         return;
       }
 
-      var SQL = `SELECT * FROM ow_Users WHERE email=? LIMIT 1`;
+      var SQL = `SELECT * FROM ow_users WHERE email=? LIMIT 1`;
       var WHERE = [`${req.body["un"]}`];
       DB.qww(SQL, WHERE, function (err, USER) {
         if (err || USER.length == 0) {
@@ -171,7 +171,7 @@ router.post("/register",captcha,function (req, res) {
         //if (I.phoneTest(req.body.un)){res.status(200).send( { 'status':'手机号不能直接用于注册账号' });return;}
 
         var email = req.body.un;
-        SQL = `SELECT id FROM ow_Users WHERE email='${email}' LIMIT 1`;
+        SQL = `SELECT id FROM ow_users WHERE email='${email}' LIMIT 1`;
         DB.query(SQL, function (err, User) {
           if (err) {
             res.status(200).send({ message: "账号格式错误" });
@@ -194,7 +194,7 @@ router.post("/register",captcha,function (req, res) {
           //var display_name = email.substring(email.length-5);
           var display_name = req.body.pw;
           //console.log(display_name);
-          var INSERT = `INSERT INTO ow_Users (username,email,password,display_name) VALUES ('${Date.now()}','${email}','${pw}','${display_name}')`;
+          var INSERT = `INSERT INTO ow_users (username,email,password,display_name) VALUES ('${Date.now()}','${email}','${pw}','${display_name}')`;
           DB.query(INSERT, function (err, newUser) {
             if (err) {
               console.error(err);
@@ -288,7 +288,7 @@ router.post("/register",captcha,function (req, res) {
 router.post("/repw", captcha,function (req, res) {
 
       var email = req.body.un;
-      SQL = `SELECT * FROM ow_Users WHERE email='${email}' LIMIT 1`;
+      SQL = `SELECT * FROM ow_users WHERE email='${email}' LIMIT 1`;
       DB.query(SQL, function (err, User) {
         if (err) {
           res.status(200).send({ message: "账号格式错误或不存在" });
@@ -408,7 +408,7 @@ router.post("/torepw",captcha, function (req, res) {
       //console.log(newPW);
 
       SET = { password: newPW };
-      UPDATE = `UPDATE ow_Users SET ? WHERE id=${userid} LIMIT 1`;
+      UPDATE = `UPDATE ow_users SET ? WHERE id=${userid} LIMIT 1`;
       DB.qww(UPDATE, SET, function (err, u) {
         if (err) {
           res.status(200).send({ message: "请再试一次" });
@@ -434,7 +434,7 @@ router.get("/tuxiaochao", function (req, res) {
     res.redirect("https://support.qq.com/product/" + process.env.txcid);
   }
 
-  SQL = `SELECT images FROM ow_Users WHERE id = ${res.locals["userid"]};`;
+  SQL = `SELECT images FROM ow_users WHERE id = ${res.locals["userid"]};`;
 
   DB.query(SQL, function (err, USER) {
     if (err || USER.length == 0) {

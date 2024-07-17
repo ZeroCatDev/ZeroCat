@@ -113,7 +113,7 @@ model ow_Counter {
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model ow_Users {
+model ow_users {
   id           Int       @unique(map: "id_UNIQUE") @default(autoincrement())
   username     String    @unique(map: "user_UNIQUE") @db.Char(20)
   email        String    @db.Char(100)
@@ -238,7 +238,7 @@ model wl_Users {
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model ow_Projects {
+model ow_projects {
   id          Int      @id @default(autoincrement()) @db.UnsignedInt
   type        String?  @default("text") @db.VarChar(32)
   licence     String?  @db.VarChar(32)
@@ -248,7 +248,7 @@ model ow_Projects {
   like_count  Int?     @default(0)
   favo_count  Int?     @default(0)
   time        DateTime @default(now()) @db.Timestamp(0)
-  title       String?  @default("ow_Projects新项目") @db.VarChar(50)
-  description String?  @default("OurWorld上的ow_Projects项目") @db.VarChar(1000)
+  title       String?  @default("ow_projects新项目") @db.VarChar(50)
+  description String?  @default("OurWorld上的ow_projects项目") @db.VarChar(1000)
   src         String?  @db.MediumText
 }
