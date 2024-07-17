@@ -33,7 +33,7 @@
 					</div>
 					<div id="container_main">
 						<div id="project_slt"
-							style="background-image: url(<%= process.env.S3staticurl %>/scratch_slt/<%=project.id%>);">
+							style="background-image: url(<%= process.env.S3staticurl %>/scratch_slt/1);">
 							<mdui-button onclick="loadProject()" disabled class="remove-disabled" variant="filled"
 								icon="play_arrow" class="ow-center">运行</mdui-button>
 
@@ -107,11 +107,17 @@
 
 		</div><div class="mdui-col-xs-12">	<div id="waline"></div>
 		<script type="module">
+			function getQueryString(name) {
+			const queryString = window.location.search.slice(1);
+			const reg = new RegExp("(^|&)" + name + "=([^&]*)(&|$)", "i");
+			const r = queryString.match(reg);
+			return r ? decodeURIComponent(r[2]) : null;
+		}
 			import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
 			init({
 				el: '#waline',
 				serverURL: '<%= process.env.WalineServerURL %>',
-				path: 'project-<%=project.id%>',
+				path: 'project-'+getQueryString("id"),
 				copyright: false,
 				reaction: true,
 				pageview: true,
@@ -129,7 +135,6 @@
 
 
 
-	<!--	<input type="hidden" id="works_id" value="<%= project.id %>">-->
 	<%- include('../html-footer.ejs', {page: 'scratch' }); %>
 
 		<script type="text/javascript" src="<%= process.env.staticurl %>/js/social-share.js"></script>
