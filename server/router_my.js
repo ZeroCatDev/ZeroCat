@@ -334,7 +334,7 @@ router.post("/set/avatar",captcha, function (req, res) {
   });
 });
 //修改个人信息
-router.post("/set/userinfo",captcha, function (req, res) {
+router.post("/set/userinfo", function (req, res) {
   var UPDATE = `UPDATE ow_users SET ? WHERE id=${res.locals.userid} LIMIT 1`;
   var SET = {
     display_name: req.body["display_name"],
@@ -369,7 +369,7 @@ router.post("/set/userinfo",captcha, function (req, res) {
   });
 });
 //修改个人信息
-router.post("/set/username",captcha, function (req, res) {
+router.post("/set/username", function (req, res) {
   var UPDATE = `UPDATE ow_users SET ? WHERE id=${res.locals.userid} LIMIT 1`;
   var SET = {
     username: req.body["username"],
@@ -398,16 +398,16 @@ router.post("/set/username",captcha, function (req, res) {
   });
 });
 //修改密码：动作
-router.post("/set/pw",captcha, function (req, res) {
+router.post("/set/pw", function (req, res) {
   SQL = `SELECT password FROM ow_users WHERE id=? LIMIT 1`;
   id = res.locals.userid;
 
   DB.qww(SQL, id, function (err, USER) {
     if (err || USER.length == 0) {
-      res.status(200).send({ status: "错误" });
+      res.status(200).send({ status: "错误",message: "用户不存在" });
     }
     if (I.checkhash(req.body["oldpw"], USER[0]["password"]) == false) {
-      res.status(200).send({ status: "错误" });
+      res.status(200).send({ status: "错误" ,message: "旧密码错误"});
       return;
     }
     var newPW = I.hash(req.body["newpw"]);
@@ -418,7 +418,7 @@ router.post("/set/pw",captcha, function (req, res) {
         res.status(200).send({ status: "请再试一次" });
         return;
       }
-      res.status(200).send({ status: "ok" });
+      res.status(200).send({ status: "ok",message: "密码修改成功" });
     });
   });
 });

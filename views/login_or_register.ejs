@@ -8,7 +8,11 @@
           window.location.href = "<%= process.env.editorurl %>/editor.html?token=" + Cookies.get('token');
 
 
-        } else {
+        }  if (getQueryString('redirect') == 'new') {
+          window.location.href = "http://localhost:3003/account/callback?token=" + Cookies.get('token');
+
+
+        }else {
           window.location.href = '/';
         }
       }

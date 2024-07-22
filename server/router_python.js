@@ -17,7 +17,14 @@ router.get("/", function (req, res) {
 
 
   });
+//首页
+router.get("/next", function (req, res) {
 
+
+    res.render("python/next_python_play.ejs");
+
+
+});
   router.get("/pythoncount", function (req, res) {
     //获取已分享的作品总数：1:普通作品，2：推荐的优秀作品
     var SQL =
