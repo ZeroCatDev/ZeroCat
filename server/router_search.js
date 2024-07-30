@@ -11,6 +11,7 @@ const { join } = require("path");
 
 //搜索：Scratch项目列表：数据//只搜索标题
 router.get("/", async function (req, res) {
+  console.log(req.query.search_state);
   var search = {
     userid: req.query.search_userid,
     type: req.query.search_type,
@@ -20,10 +21,35 @@ router.get("/", async function (req, res) {
     orderby: req.query.search_orderby,
     curr: Number(req.query.curr),
     limit: Number(req.query.limit),
+    state: req.query.search_state,
   };
-  //console.log(search);
 
+  console.log(search.state);
+  if (search.state == "") {
+    if (
+      search.userid &&
+      res.locals.userid &&
+      search.userid == res.locals.userid
+    ) {
+      search.state = [0, 1, 2];
+    } else {
+      search.state = [1, 2];
+    }
+  } else if (search.state == "0") {
+    if (
+      search.userid &&
+      res.locals.userid &&
+      search.userid == res.locals.userid
+    ) {
+      search.state = [0];
+    } else {
+      search.state = [1];
+    }
+  } else {
+    search.state = [Number(req.query.search_state)];
+  }
 
+  console.log(search.state);
   orderby = search.orderby.split("_")[0];
 
   ordersc = search.orderby.split("_")[1];
@@ -52,7 +78,8 @@ router.get("/", async function (req, res) {
       src: { contains: search.src },
       description: { contains: search.description },
       type: { contains: search.type },
-      authorid: search.userid != ""?{equals:Number(search.userid)}:{},
+      state: { in: search.state },
+      authorid: search.userid != "" ? { equals: Number(search.userid) } : {},
     },
     select: {
       id: true,
@@ -73,8 +100,9 @@ router.get("/", async function (req, res) {
       src: { contains: search.src },
       description: { contains: search.description },
       type: { contains: search.type },
-      authorid: search.userid != ""?{equals:Number(search.userid)}:{},
+      state: { in: search.state },
 
+      authorid: search.userid != "" ? { equals: Number(search.userid) } : {},
     },
   });
   //console.log(projectcount);
@@ -93,7 +121,7 @@ router.get("/", async function (req, res) {
       images: true,
     },
   });
-   //console.log(userresult); // 输出: [0, 1]
+  //console.log(userresult); // 输出: [0, 1]
 
   //var SQL = `SELECT id, title FROM ${tabelName} WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
   //var SQL = `SELECT s.id, s.title, s.state, s.authorid, s.description, s.view_count, u.display_name, u.motto,u.images FROM ( SELECT id, title, state, authorid, description, view_count,time FROM ${search.type} WHERE state > 0 AND (title LIKE ? ) AND (src like ? ) AND (description like ? ) ${andid} ) s JOIN ow_users u ON s.authorid = u.id ORDER BY ${orderby} ${ordersc} LIMIT ${(search.curr - 1) * search.limit}, ${ search.limit }`; var QUERY = [ `%${search.title}%`, `%${search.src}%`, `%${search.description}%`, ];

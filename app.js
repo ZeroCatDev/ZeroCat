@@ -18,13 +18,7 @@ const { Resource } = require("@opentelemetry/resources");
 const {
   SemanticResourceAttributes,
 } = require("@opentelemetry/semantic-conventions");
-const traceExporter = new OTLPTraceExporter({
-  url: "https://api.axiom.co/v1/traces",
-  headers: {
-    Authorization: `Bearer ${process.env.AXIOM_TOKEN}`,
-    "X-Axiom-Dataset": process.env.AXIOM_DATASET,
-  },
-});
+//const traceExporter = new OTLPTraceExporter({ url: "https://api.axiom.co/v1/traces", headers: { Authorization: `Bearer ${process.env.AXIOM_TOKEN}`, "X-Axiom-Dataset": process.env.AXIOM_DATASET, }, });
 const resource = new Resource({
   [SemanticResourceAttributes.SERVICE_NAME]: "node traces",
 });
@@ -236,6 +230,10 @@ app.use("/scratch", router_scratch);
 //api路由
 var apiserver = require("./server/router_api.js");
 app.use("/api", apiserver);
+
+//api路由
+var router_project = require("./server/router_project.js");
+app.use("/project", router_project);
 
 app.get("/about", function (req, res, next) {
   res.render("about.ejs");
