@@ -18,7 +18,7 @@ const { Resource } = require("@opentelemetry/resources");
 const {
   SemanticResourceAttributes,
 } = require("@opentelemetry/semantic-conventions");
-//const traceExporter = new OTLPTraceExporter({ url: "https://api.axiom.co/v1/traces", headers: { Authorization: `Bearer ${process.env.AXIOM_TOKEN}`, "X-Axiom-Dataset": process.env.AXIOM_DATASET, }, });
+const traceExporter = new OTLPTraceExporter({ url: "https://api.axiom.co/v1/traces", headers: { Authorization: `Bearer ${process.env.AXIOM_TOKEN}`, "X-Axiom-Dataset": process.env.AXIOM_DATASET, }, });
 const resource = new Resource({
   [SemanticResourceAttributes.SERVICE_NAME]: "node traces",
 });
