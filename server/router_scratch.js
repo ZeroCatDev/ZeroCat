@@ -86,19 +86,7 @@ router.get("/play", function (req, res) {
 
   res.render("scratch/scratch_play.ejs");
 
-  //浏览数+1
-  var SQL = `UPDATE ow_projects SET view_count=view_count+1 WHERE id=${req.query.id} LIMIT 1`;
-  DB.query(SQL, function (err, U) {
-    if (err || U.affectedRows == 0) {
-      res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
-      res.render("404.ejs");
-      return;
-    }
 
-    //res.render("scratch/scratch_play.ejs");
-
-      ////console.log(SCRATCH[0]);
-    });
   });
 
 
@@ -247,8 +235,20 @@ router.get("/play/project/:filename", function (req, res) {
     if (SCRATCH.length == 0) {
       return;
     }
+ //浏览数+1
+ var SQL = `UPDATE ow_projects SET view_count=view_count+1 WHERE id=${req.query.id} LIMIT 1`;
+ DB.query(SQL, function (err, U) {
+   if (err || U.affectedRows == 0) {
+     res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
+     res.render("404.ejs");
+     return;
+   }
+   res.status(200).json(JSON.parse(SCRATCH[0].src));
 
-    res.status(200).json(JSON.parse(SCRATCH[0].src));
+   //res.render("scratch/scratch_play.ejs");
+
+     ////console.log(SCRATCH[0]);
+   });
   });
 });
 
