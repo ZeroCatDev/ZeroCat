@@ -84,6 +84,7 @@ router.get("/view/seachScratchProjects", function (req, res) {
 //Scratch项目展示
 router.get("/play", function (req, res) {
 
+  res.render("scratch/scratch_play.ejs");
 
   //浏览数+1
   var SQL = `UPDATE ow_projects SET view_count=view_count+1 WHERE id=${req.query.id} LIMIT 1`;
@@ -94,9 +95,9 @@ router.get("/play", function (req, res) {
       return;
     }
 
+    //res.render("scratch/scratch_play.ejs");
 
       ////console.log(SCRATCH[0]);
-      res.render("scratch/scratch_play.ejs");
     });
   });
 
