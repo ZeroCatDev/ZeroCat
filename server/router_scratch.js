@@ -12,10 +12,7 @@ router.all("*", function (req, res, next) {
 
 //首页
 router.get("/", function (req, res) {
-
-      res.render("scratch/scratch_projects.ejs");
-
-
+  res.render("scratch/scratch_projects.ejs");
 });
 
 router.get("/scratchcount", function (req, res) {
@@ -30,7 +27,7 @@ router.get("/scratchcount", function (req, res) {
     } else {
       res.locals.scratch_count = data[0].scratch_count;
     }
-    res.status(200).send({scratch_count: res.locals.scratch_count});
+    res.status(200).send({ scratch_count: res.locals.scratch_count });
   });
 });
 //翻页：Scratch作品列表：数据
@@ -38,7 +35,7 @@ router.get("/view/getScratchProjects", function (req, res) {
   var curr = parseInt(req.query.curr); //当前要显示的页码
   var limit = parseInt(req.query.limit); //每页显示的作品数
   var type = "view_count";
-  if (req.query.type === "new"){
+  if (req.query.type === "new") {
     type = "time";
   }
 
@@ -83,28 +80,24 @@ router.get("/view/seachScratchProjects", function (req, res) {
 //2：已开源；（开源的必须发布）
 //Scratch项目展示
 router.get("/play", function (req, res) {
-
   res.render("scratch/scratch_play.ejs");
-
-
-  });
-
+});
 
 router.get("/projectinfo", function (req, res) {
   SQL =
-  `SELECT ow_projects.id,ow_projects.authorid,ow_projects.time,ow_projects.view_count,ow_projects.like_count,ow_projects.type,` +
-  ` ow_projects.favo_count,ow_projects.title,ow_projects.state,ow_projects.description,` +
-  ` '' AS likeid, '' AS favoid,` +
-  ` ow_users.display_name AS author_display_name,` +
-  ` ow_users.images AS author_images,` +
-  ` ow_users.motto AS author_motto` +
-  ` FROM ow_projects ` +
-  ` LEFT JOIN ow_users ON (ow_users.id=ow_projects.authorid) ` +
-  ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state>=1 or ow_projects.authorid=${res.locals.userid}) AND ow_projects.type='scratch' LIMIT 1`;
+    `SELECT ow_projects.id,ow_projects.authorid,ow_projects.time,ow_projects.view_count,ow_projects.like_count,ow_projects.type,` +
+    ` ow_projects.favo_count,ow_projects.title,ow_projects.state,ow_projects.description,` +
+    ` '' AS likeid, '' AS favoid,` +
+    ` ow_users.display_name AS author_display_name,` +
+    ` ow_users.images AS author_images,` +
+    ` ow_users.motto AS author_motto` +
+    ` FROM ow_projects ` +
+    ` LEFT JOIN ow_users ON (ow_users.id=ow_projects.authorid) ` +
+    ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state>=1 or ow_projects.authorid=${res.locals.userid}) AND ow_projects.type='scratch' LIMIT 1`;
   DB.query(SQL, function (err, SCRATCH) {
     if (err || SCRATCH.length == 0) {
       res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
-      res.send({code:404,status:"404",msg:"项目不存在或未发布"})
+      res.send({ code: 404, status: "404", msg: "项目不存在或未发布" });
       return;
     }
 
@@ -112,117 +105,122 @@ router.get("/projectinfo", function (req, res) {
       SCRATCH[0].authorid == res.locals.userid ? true : false;
 
     ////console.log(SCRATCH[0]);
-    res.json(SCRATCH[0])
+    res.json(SCRATCH[0]);
   });
 });
 
 router.get("/projectinfo2", function (req, res) {
   SQL =
-  `SELECT ow_projects.id,ow_projects.authorid,ow_projects.time,ow_projects.view_count,ow_projects.like_count,ow_projects.type` +
-  ` ow_projects.favo_count,ow_projects.title,ow_projects.state,ow_projects.description,` +
-  ` '' AS likeid, '' AS favoid,` +
-  ` ow_users.display_name AS author_display_name,` +
-  ` ow_users.images AS author_images,` +
-  ` ow_users.motto AS author_motto` +
-  ` FROM ow_projects ` +
-  ` LEFT JOIN ow_users ON (ow_users.id=ow_projects.authorid) ` +
-  ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state>=1 or ow_projects.authorid=${res.locals.userid}) AND ow_projects.type='scratch' LIMIT 1`;
+    `SELECT ow_projects.id,ow_projects.authorid,ow_projects.time,ow_projects.view_count,ow_projects.like_count,ow_projects.type` +
+    ` ow_projects.favo_count,ow_projects.title,ow_projects.state,ow_projects.description,` +
+    ` '' AS likeid, '' AS favoid,` +
+    ` ow_users.display_name AS author_display_name,` +
+    ` ow_users.images AS author_images,` +
+    ` ow_users.motto AS author_motto` +
+    ` FROM ow_projects ` +
+    ` LEFT JOIN ow_users ON (ow_users.id=ow_projects.authorid) ` +
+    ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state>=1 or ow_projects.authorid=${res.locals.userid}) AND ow_projects.type='scratch' LIMIT 1`;
   DB.query(SQL, function (err, SCRATCH) {
     if (err || SCRATCH.length == 0) {
       res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
-      res.send({code:404,status:"404",msg:"项目不存在或未发布"})
+      res.send({ code: 404, status: "404", msg: "项目不存在或未发布" });
       return;
     }
     res.locals["is_author"] =
       SCRATCH[0].authorid == res.locals.userid ? true : false;
-json40code = {
-  "code": 1,
-  "data": {
-    "id": SCRATCH[0].id,
-    "opensource": 1,
-    "publish": 1,
-    "author": SCRATCH[0].authorid,
-    "introduce": "",
-    "name": SCRATCH[0].title,
-    "time": SCRATCH[0].time,
-    "image": SCRATCH[0].id,
-    "look": SCRATCH[0].view_count,
-    "oldlook": 0,
-    "like": 0,
-    "delete": 0,
-    "publish_time": 1861891200,
-    "update_time": 1861891200,
-    "featuredLevel": 0,
-    "ban": null,
-    "version": 1861891200,
-    "size": 1,
-    "num_collections": 0,
-    "ns": null,
-    "raw": null,
-    "onlyFirefox": null,
-    "issign": 1,
-    "isauthor": SCRATCH[0].authorid == res.locals.userid ? 1 : 0,
-    "islike": 0,
-    "is_collection": 0,
-    "nickname": SCRATCH[0].author_display_name,
-    "head": SCRATCH[0].author_images
-  }
-}
-jsontw={
-  "id": SCRATCH[0].id,
-  "title": SCRATCH[0].title,
-  "description": SCRATCH[0].description,
-  "instructions": "ZeroCat",
-  "visibility": "visible",
-  "public": SCRATCH[0].state>=1 ? true : false,
-  "comments_allowed": true,
-  "is_published": SCRATCH[0].state>=1 ? true : false,
-  "author": {
-      "id": SCRATCH[0].authorid,
-      "username":  SCRATCH[0].author_display_name,
-      "scratchteam": false,
-      "history": {
-          "joined": "1900-01-01T00:00:00.000Z"
+    json40code = {
+      code: 1,
+      data: {
+        id: SCRATCH[0].id,
+        opensource: 1,
+        publish: 1,
+        author: SCRATCH[0].authorid,
+        introduce: "",
+        name: SCRATCH[0].title,
+        time: SCRATCH[0].time,
+        image: SCRATCH[0].id,
+        look: SCRATCH[0].view_count,
+        oldlook: 0,
+        like: 0,
+        delete: 0,
+        publish_time: 1861891200,
+        update_time: 1861891200,
+        featuredLevel: 0,
+        ban: null,
+        version: 1861891200,
+        size: 1,
+        num_collections: 0,
+        ns: null,
+        raw: null,
+        onlyFirefox: null,
+        issign: 1,
+        isauthor: SCRATCH[0].authorid == res.locals.userid ? 1 : 0,
+        islike: 0,
+        is_collection: 0,
+        nickname: SCRATCH[0].author_display_name,
+        head: SCRATCH[0].author_images,
       },
-      "profile": {
-          "id": null,
-          "images": {
-              "90x90": "https://s4-1.wuyuan.1r.ink/user/"+SCRATCH[0].author_images,
-              "60x60": "https://s4-1.wuyuan.1r.ink/user/"+SCRATCH[0].author_images,
-              "55x55": "https://s4-1.wuyuan.1r.ink/user/"+SCRATCH[0].author_images,
-              "50x50": "https://s4-1.wuyuan.1r.ink/user/"+SCRATCH[0].author_images,
-              "32x32": "https://s4-1.wuyuan.1r.ink/user/"+SCRATCH[0].author_images
-          }
-      }
-  },
-  "image": "https://s4-1.wuyuan.1r.ink/scratch_slt/"+SCRATCH[0].id,
-  "images": {
-      "282x218": "https://s4-1.wuyuan.1r.ink/scratch_slt/"+SCRATCH[0].id,
-      "216x163": "https://s4-1.wuyuan.1r.ink/scratch_slt/"+SCRATCH[0].id,
-      "200x200": "https://s4-1.wuyuan.1r.ink/scratch_slt/"+SCRATCH[0].id,
-      "144x108": "https://s4-1.wuyuan.1r.ink/scratch_slt/"+SCRATCH[0].id,
-      "135x102": "https://s4-1.wuyuan.1r.ink/scratch_slt/"+SCRATCH[0].id,
-      "100x80": "https://s4-1.wuyuan.1r.ink/scratch_slt/"+SCRATCH[0].id
-  },
-  "history": {
-      "created": SCRATCH[0].time,
-      "modified": SCRATCH[0].time,
-      "shared": SCRATCH[0].time
-  },
-  "stats": {
-      "views": SCRATCH[0].view_count,
-      "loves": 0,
-      "favorites": 0,
-      "remixes": 0
-  },
-  "remix": {
-      "parent": null,
-      "root": null
-  },
-  "project_token": ""
-}
+    };
+    jsontw = {
+      id: SCRATCH[0].id,
+      title: SCRATCH[0].title,
+      description: SCRATCH[0].description,
+      instructions: "ZeroCat",
+      visibility: "visible",
+      public: SCRATCH[0].state >= 1 ? true : false,
+      comments_allowed: true,
+      is_published: SCRATCH[0].state >= 1 ? true : false,
+      author: {
+        id: SCRATCH[0].authorid,
+        username: SCRATCH[0].author_display_name,
+        scratchteam: false,
+        history: {
+          joined: "1900-01-01T00:00:00.000Z",
+        },
+        profile: {
+          id: null,
+          images: {
+            "90x90":
+              "https://s4-1.wuyuan.1r.ink/user/" + SCRATCH[0].author_images,
+            "60x60":
+              "https://s4-1.wuyuan.1r.ink/user/" + SCRATCH[0].author_images,
+            "55x55":
+              "https://s4-1.wuyuan.1r.ink/user/" + SCRATCH[0].author_images,
+            "50x50":
+              "https://s4-1.wuyuan.1r.ink/user/" + SCRATCH[0].author_images,
+            "32x32":
+              "https://s4-1.wuyuan.1r.ink/user/" + SCRATCH[0].author_images,
+          },
+        },
+      },
+      image: "https://s4-1.wuyuan.1r.ink/scratch_slt/" + SCRATCH[0].id,
+      images: {
+        "282x218": "https://s4-1.wuyuan.1r.ink/scratch_slt/" + SCRATCH[0].id,
+        "216x163": "https://s4-1.wuyuan.1r.ink/scratch_slt/" + SCRATCH[0].id,
+        "200x200": "https://s4-1.wuyuan.1r.ink/scratch_slt/" + SCRATCH[0].id,
+        "144x108": "https://s4-1.wuyuan.1r.ink/scratch_slt/" + SCRATCH[0].id,
+        "135x102": "https://s4-1.wuyuan.1r.ink/scratch_slt/" + SCRATCH[0].id,
+        "100x80": "https://s4-1.wuyuan.1r.ink/scratch_slt/" + SCRATCH[0].id,
+      },
+      history: {
+        created: SCRATCH[0].time,
+        modified: SCRATCH[0].time,
+        shared: SCRATCH[0].time,
+      },
+      stats: {
+        views: SCRATCH[0].view_count,
+        loves: 0,
+        favorites: 0,
+        remixes: 0,
+      },
+      remix: {
+        parent: null,
+        root: null,
+      },
+      project_token: "",
+    };
     ////console.log(SCRATCH[0]);
-    res.json(jsontw)
+    res.json(jsontw);
   });
 });
 //Scratch_play获取源代码数据部分
@@ -235,20 +233,20 @@ router.get("/play/project/:filename", function (req, res) {
     if (SCRATCH.length == 0) {
       return;
     }
- //浏览数+1
- var SQL = `UPDATE ow_projects SET view_count=view_count+1 WHERE id=${req.query.id} LIMIT 1`;
- DB.query(SQL, function (err, U) {
-   if (err || U.affectedRows == 0) {
-     res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
-     res.render("404.ejs");
-     return;
-   }
-   res.status(200).json(JSON.parse(SCRATCH[0].src));
+    //浏览数+1
+    var SQL = `UPDATE ow_projects SET view_count=view_count+1 WHERE id=${req.query.id} LIMIT 1`;
+    DB.query(SQL, function (err, U) {
+      if (err || U.affectedRows == 0) {
+        res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
+        res.render("404.ejs");
+        return;
+      }
+      res.status(200).json(JSON.parse(SCRATCH[0].src));
 
-   //res.render("scratch/scratch_play.ejs");
+      //res.render("scratch/scratch_play.ejs");
 
-     ////console.log(SCRATCH[0]);
-   });
+      ////console.log(SCRATCH[0]);
+    });
   });
 });
 
@@ -304,13 +302,13 @@ router.post("/project/:projectid", function (req, res) {
 
   if (projectid == 0) {
     // 默认作品
-// 当把该块注释后，则从数据库加载默认作品
-        //从指定文件加载默认作品：BEGIN==========================================
-        var _SDP = require("./lib/scratch_default_project.js");
-        res.status(200).send({status:'ok', src:_SDP});
-        return;
-        //从指定文件加载默认作品：END============================================
-        //
+    // 当把该块注释后，则从数据库加载默认作品
+    //从指定文件加载默认作品：BEGIN==========================================
+    var _SDP = require("./lib/scratch_default_project.js");
+    res.status(200).send({ status: "ok", src: _SDP });
+    return;
+    //从指定文件加载默认作品：END============================================
+    //
     SQL = `SELECT id, authorid, state, title, src FROM ow_projects WHERE id=1`; //默认作品为1号作品
   } else {
     if (!res.locals.login) {
@@ -455,7 +453,11 @@ router.post("/thumbnail/:projectid", function (req, res) {
         //console.log(err);
         //console.log("保存缩略图失败：" + strFileName);
       } else {
-        I.S3update("scratch_slt/" + req.params.projectid, strFileName,res.locals.email);
+        I.S3update(
+          "scratch_slt/" + req.params.projectid,
+          strFileName,
+          res.locals.email
+        );
 
         ////console.log('保存缩略图成功：'+strFileName);
         res.status(200).send({ status: "ok" });
@@ -498,9 +500,8 @@ router.post("/projects", function (req, res) {
     title = req.query.title;
   }
 
-
   var INSERT = `INSERT INTO ow_projects (authorid, title, src,type) VALUES (${res.locals.userid}, ?, ?,'scratch')`;
-  var VAL = [title, `${JSON.stringify(req.body.work||req.body)}`];
+  var VAL = [title, `${JSON.stringify(req.body.work || req.body)}`];
   DB.qww(INSERT, VAL, function (err, newScratch) {
     if (err || newScratch.affectedRows == 0) {
       res.send(404);
@@ -516,11 +517,13 @@ router.post("/projects", function (req, res) {
 //新作品：保存作品素材
 router.post("/assets/:filename", function (req, res) {
   var strFileName = "./data/material/asset/" + req.params.filename;
-  fs.exists(strFileName, function (bExists) {
-    //if (bExists) {
-    //  console.log("素材已存在：" + strFileName);
-    //  res.status(200).send({ status: "ok" });
-    //} else {
+  fs.exists(
+    strFileName,
+    function (bExists) {
+      //if (bExists) {
+      //  console.log("素材已存在：" + strFileName);
+      //  res.status(200).send({ status: "ok" });
+      //} else {
       var _data = [];
       req.on("data", function (data) {
         if (data) {
@@ -534,7 +537,11 @@ router.post("/assets/:filename", function (req, res) {
             res.send(404);
             //console.log("素材保存失败：" + strFileName);
           } else {
-            I.S3update("material/asset/" + req.params.filename, strFileName,res.locals.email);
+            I.S3update(
+              "material/asset/" + req.params.filename,
+              strFileName,
+              res.locals.email
+            );
 
             console.log("素材保存成功：" + strFileName);
             res.status(200).send({ status: "ok" });
@@ -543,7 +550,7 @@ router.post("/assets/:filename", function (req, res) {
         });
       });
     }
-  //}
+    //}
   );
 });
 
