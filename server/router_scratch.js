@@ -224,8 +224,8 @@ router.get("/projectinfo2", function (req, res) {
   });
 });
 //Scratch_play获取源代码数据部分
-router.get("/play/project/:filename", function (req, res) {
-  var SQL = `SELECT src FROM ow_projects WHERE id=${req.params.filename} LIMIT 1`;
+router.get("/play/project/:id", function (req, res) {
+  var SQL = `SELECT src FROM ow_projects WHERE id=${req.params.id} LIMIT 1`;
   DB.query(SQL, function (err, SCRATCH) {
     if (err) {
       return;
@@ -234,7 +234,7 @@ router.get("/play/project/:filename", function (req, res) {
       return;
     }
     //浏览数+1
-    var SQL = `UPDATE ow_projects SET view_count=view_count+1 WHERE id=${req.query.id} LIMIT 1`;
+    var SQL = `UPDATE ow_projects SET view_count=view_count+1 WHERE id=${req.params.id} LIMIT 1`;
     DB.query(SQL, function (err, U) {
       if (err || U.affectedRows == 0) {
         res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
