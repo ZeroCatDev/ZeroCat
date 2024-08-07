@@ -233,6 +233,8 @@ router.get("/play/project/:id", function (req, res) {
     if (SCRATCH.length == 0) {
       return;
     }
+    res.status(200).send(SCRATCH[0].src);
+
     //浏览数+1
     var SQL = `UPDATE ow_projects SET view_count=view_count+1 WHERE id=${req.params.id} LIMIT 1`;
     DB.query(SQL, function (err, U) {
@@ -241,7 +243,6 @@ router.get("/play/project/:id", function (req, res) {
         res.render("404.ejs");
         return;
       }
-      res.status(200).json(JSON.parse(SCRATCH[0].src));
 
       //res.render("scratch/scratch_play.ejs");
 
