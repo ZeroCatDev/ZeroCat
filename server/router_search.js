@@ -63,6 +63,14 @@ router.get("/", async function (req, res) {
   ordersclist = { up: "desc", down: "asc" };
   ordersc = ordersclist[ordersc];
   //  console.log(ordersc);
+  searchinfo ={
+    title: { contains: search.title },
+    src: search.src != "" ? { contains: search.src } : {},
+    description: { contains: search.description },
+    type: { contains: search.type },
+    state: { in: search.state },
+    authorid: search.userid != "" ? { equals: Number(search.userid) } : {},
+  }
   var projectresult = await I.prisma.ow_projects.findMany({
     orderBy: [
       orderby === "view_count"
@@ -73,14 +81,7 @@ router.get("/", async function (req, res) {
         ? { id: ordersc }
         : {},
     ],
-    where: {
-      title: { contains: search.title },
-      src: { contains: search.src },
-      description: { contains: search.description },
-      type: { contains: search.type },
-      state: { in: search.state },
-      authorid: search.userid != "" ? { equals: Number(search.userid) } : {},
-    },
+    where: searchinfo,
     select: {
       id: true,
       type: true,
@@ -95,15 +96,7 @@ router.get("/", async function (req, res) {
     take: search.limit,
   });
   var projectcount = await I.prisma.ow_projects.count({
-    where: {
-      title: { contains: search.title },
-      src: { contains: search.src },
-      description: { contains: search.description },
-      type: { contains: search.type },
-      state: { in: search.state },
-
-      authorid: search.userid != "" ? { equals: Number(search.userid) } : {},
-    },
+    where: searchinfo,
   });
   //console.log(projectcount);
   const authorIds = new Set(projectresult.map((item) => item.authorid));
