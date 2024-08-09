@@ -166,4 +166,22 @@ router.get("/getproject/src/:id", function (req, res) {
     });
   });
 });
+
+//删除Scratch项目
+router.delete("/deleteProject/:id", function (req, res) {
+  var DEL = `DELETE FROM ow_projects WHERE id=${req.params.id} AND authorid=${res.locals.userid} LIMIT 1`;
+  DB.query(DEL, function (err, d) {
+    if (err) {
+      res.status(200).send(I.msg_fail);
+      return;
+    }
+
+    if (d.affectedRows == 0) {
+      res.status(200).send({ status: "failed", msg: "删除失败" });
+      return;
+    }
+
+    res.status(200).send({ status: "success", msg: "删除成功" });
+  });
+});
 module.exports = router;
