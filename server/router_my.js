@@ -7,7 +7,6 @@ var crypto = require("crypto");
 var I = require("./lib/global.js");
 //数据库
 var DB = require("./lib/database.js");
-const captcha = require('./captcha.js');
 const geetest = require('./geetest.js');
 
 router.all("*", function (req, res, next) {
