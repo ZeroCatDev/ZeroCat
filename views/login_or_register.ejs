@@ -8,11 +8,11 @@
           window.location.href = "<%= process.env.editorurl %>/editor.html?token=" + Cookies.get('token');
 
 
-        }  if (getQueryString('redirect') == 'new') {
+        } if (getQueryString('redirect') == 'new') {
           window.location.href = "http://localhost:3003/account/callback?token=" + Cookies.get('token');
 
 
-        }else {
+        } else {
           window.location.href = '/';
         }
       }
@@ -39,85 +39,65 @@
     </style>
 
     <div class="layui-col-md6" style="padding: 30px 0 0 0px;">
-      <div id='login-page'>
-        <div class="mdui-typo-display-2">
-          <%= process.env.SiteName %> 登录
+      <div>
+        <div class='login-page'>
+          <div class="mdui-typo-display-2">
+            <%= process.env.SiteName %> 登录
+          </div>
+
+          <mdui-text-field variant="filled" label="邮箱" id='email' type="email" autocomplete="on" name="email"
+            style="margin-bottom: 10px;"></mdui-text-field>
+          <mdui-text-field variant="filled" label="密码" id='password' type="password" toggle-password name="password"
+            autocomplete="on" style="margin-bottom: 10px;"></mdui-text-field>
         </div>
-
-        <div class="reply-form" style="height: max-content;">
-          <div>
-            <mdui-text-field variant="filled" label="邮箱" id='email' type="email" autocomplete="on" name="email"
-              style="margin-bottom: 10px;"></mdui-text-field>
-            <mdui-text-field variant="filled" label="密码" id='password' type="password" toggle-password name="password"
-              autocomplete="on" style="margin-bottom: 10px;"></mdui-text-field>
-
-            <mdui-button class="open-captchadialog" variant="tonal">完成验证码</mdui-button>
-
-
-
-
-            <div style="display:flex; height: 50px;">
-
-                <mdui-button variant="text" onclick="switchPage('reg-page')">注册账户</mdui-button>
-
-                  <mdui-button variant="text" onclick="switchPage('getPW-page')">忘记密码</mdui-button>
-            </div>
-            <mdui-button onclick="login()">登录</mdui-button>
+        <div class='reg-page' style="display: none;">
+          <div class="mdui-typo-display-2">
+            <%= process.env.SiteName %> 注册
           </div>
-          <div>
+
+          <mdui-text-field variant="filled" label="邮箱" id='reg_email' type="email"
+            style="margin-bottom: 10px;"></mdui-text-field>
+          <mdui-text-field variant="filled" label="昵称" id='reg_password' type="text"
+            style="margin-bottom: 10px;"></mdui-text-field>
+        </div>
+        <div class='getPW-page' style="display: none;">
+          <div class="mdui-typo-display-2">
+            <%= process.env.SiteName %> 找回密码
           </div>
+
+          <mdui-text-field variant="filled" label="邮箱" id='getPW_email' type="email"
+            style="margin-bottom: 10px;"></mdui-text-field>
         </div>
       </div>
+      <div style="display:flex;">
 
-      <div id='reg-page' style="display: none;">
-        <div class="mdui-typo-display-2">
-          <%= process.env.SiteName %> 注册
-        </div>
-        <div class="reply-form" style="height: max-content;">
-
-
-          <div>
-            <mdui-text-field variant="filled" label="邮箱" id='reg_email' type="email"
-              style="margin-bottom: 10px;"></mdui-text-field>
-            <mdui-text-field variant="filled" label="昵称" id='reg_password' type="text"
-              style="margin-bottom: 10px;"></mdui-text-field>
-
-            <mdui-button class="open-captchadialog" variant="tonal">完成验证码</mdui-button>
-            <div style="display:flex; height: 50px;">
-              <mdui-button variant="text" onclick="switchPage('login-page')">去登录</mdui-button>
-
-            </div>
-
-
-
-            <mdui-button type="button" mdui-dialog="{target: '#privacy'}">注册</mdui-button>
-
-          </div>
-          <div>
-          </div>
-        </div>
+        <div id="captcha-div"></div><mdui-button slot="action" variant="text" onclick="reloudcaptcha()">刷新</mdui-button>
       </div>
-      <div id='getPW-page' style="display: none;">
-        <div class="mdui-typo-display-2">
-          <%= process.env.SiteName %> 找回密码
+      <br />
+      <div style="display:flex; height: 50px;">
+
+        <div class='login-page'>
+
+          <mdui-button variant="text" onclick="switchPage('reg-page')">注册账户</mdui-button>
+          <mdui-button variant="text" onclick="switchPage('getPW-page')">忘记密码</mdui-button>
+          <mdui-button onclick="login()">登录</mdui-button>
         </div>
-        <div class="reply-form" style="height: max-content;">
-          <div>
-            <mdui-text-field variant="filled" label="邮箱" id='getPW_email' type="email"
-              style="margin-bottom: 10px;"></mdui-text-field>
-            <mdui-button class="open-captchadialog" variant="tonal">完成验证码</mdui-button>
-            <br /><br />
-            <mdui-button onclick="getPW()">找回密码</mdui-button>
-            <mdui-button onclick="switchPage('login-page')" variant="text">去登录</mdui-button>
-          </div>
+        <div class='reg-page' style="display: none;">
+          <mdui-button variant="text" onclick="switchPage('login-page')">去登录</mdui-button>
+          <mdui-button type="button" mdui-dialog="{target: '#privacy'}">注册</mdui-button>
         </div>
+        <div class="getPW-page" style="display: none;"> <mdui-button variant="text"
+            onclick="switchPage('login-page')">去登录</mdui-button>
+          <mdui-button onclick="getPW()">找回密码</mdui-button>
+        </div>
+
       </div>
     </div>
 
 
+  </div>
 
-  </div>
-  </div>
+
   </body>
 
   <div class="mdui-dialog" id="privacy" style='border-radius: 15px;'>
@@ -164,30 +144,14 @@
         onclick="register()">注册</button>
     </div>
   </div>
-  <mdui-dialog close-on-overlay-click close-on-esc class="captchadialog">
-    <span slot="headline">请完成验证码</span>
-    <span slot="description">部分地区加载可能较慢，请耐心等待。</span>
-    <div id="captcha-div"></div>
-
-    <mdui-button slot="action" variant="text" class="zc-feedback">反馈</mdui-button>
-    <mdui-button slot="action" variant="text" onclick="reloudcaptcha()">刷新</mdui-button>
-
-    <mdui-button slot="action" variant="tonal" class="close-captchadialog">完成</mdui-button>
-  </mdui-dialog>
 
 
-  <script>
-    const captchadialog = document.querySelector(".captchadialog");
-    const opencaptchadialogButtons = document.querySelectorAll(".open-captchadialog");
-    const closecaptchadialogButton = document.querySelector(".close-captchadialog");
-    opencaptchadialogButtons.forEach(button => { button.addEventListener("click", () => { captchadialog.open = true }); });
-    closecaptchadialogButton.addEventListener("click", () => captchadialog.open = false);
 
-  </script>
+
   <%- include('./html-footer.ejs', {page: 'login' }); %>
     <script type="text/javascript" src="<%= process.env.staticurl %>/js/gter.js"></script>
     <script type="text/javascript" src="<%= process.env.staticurl %>/js/login.js"></script>
 
-		<script>captchaid = '<%= process.env.GEE_CAPTCHA_ID %>'</script>
+    <script>captchaid = '<%= process.env.GEE_CAPTCHA_ID %>'</script>
     <script type="text/javascript" src="https://static.geetest.com/v4/gt4.js"></script>
-		<script type="text/javascript" src="<%= process.env.staticurl %>/page/geetest.js"></script>
+    <script type="text/javascript" src="<%= process.env.staticurl %>/page/geetest.js"></script>
