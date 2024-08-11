@@ -8,6 +8,7 @@ var I = require("./lib/global.js");
 //数据库
 var DB = require("./lib/database.js");
 const captcha = require('./captcha.js');
+const geetest = require('./geetest.js');
 
 router.all("*", function (req, res, next) {
   //限定访问该模块的权限：必须已登录
@@ -294,7 +295,7 @@ router.get("/info", function (req, res) {
     res.render("my_info.ejs");
 });
 //修改头像
-router.post("/set/avatar",captcha, function (req, res) {
+router.post("/set/avatar", geetest,function (req, res) {
   //保存文件到正确位置
   if (!req["files"]["file"]) {
     res.status(200).send({ status: "文件上传失败" });
@@ -334,7 +335,7 @@ router.post("/set/avatar",captcha, function (req, res) {
   });
 });
 //修改个人信息
-router.post("/set/userinfo", function (req, res) {
+router.post("/set/userinfo",geetest, function (req, res) {
   var UPDATE = `UPDATE ow_users SET ? WHERE id=${res.locals.userid} LIMIT 1`;
   var SET = {
     display_name: req.body["display_name"],
@@ -369,7 +370,7 @@ router.post("/set/userinfo", function (req, res) {
   });
 });
 //修改个人信息
-router.post("/set/username", function (req, res) {
+router.post("/set/username",geetest, function (req, res) {
   var UPDATE = `UPDATE ow_users SET ? WHERE id=${res.locals.userid} LIMIT 1`;
   var SET = {
     username: req.body["username"],
@@ -398,7 +399,7 @@ router.post("/set/username", function (req, res) {
   });
 });
 //修改密码：动作
-router.post("/set/pw", function (req, res) {
+router.post("/set/pw",geetest, function (req, res) {
   SQL = `SELECT password FROM ow_users WHERE id=? LIMIT 1`;
   id = res.locals.userid;
 

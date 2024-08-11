@@ -17,9 +17,7 @@ router.all("*", function (req, res, next) {
 const request = require("request");
 var nodemailer = require("nodemailer");
 router.get("/", function (req, res) {
-
       res.render("user.ejs");
-
 });
 //登录、注册、找回密码三合一界面
 router.get("/login", function (req, res) {
@@ -40,9 +38,10 @@ router.get("/repw", function (req, res) {
   res.render("repw.ejs");
 });
 const captcha = require('./captcha.js');
+const geetest = require('./geetest.js');
 
 //登录
-router.post("/login",captcha ,function (req, res) {
+router.post("/login",geetest ,function (req, res) {
       if (
         !req.body.pw ||
         !I.userpwTest(req.body.pw) ||
@@ -135,8 +134,6 @@ router.post("/login",captcha ,function (req, res) {
       });
     }
   );
-
-
 //退出
 var logout = function (req, res) {
   //req.session.destroy();
@@ -155,17 +152,9 @@ router.get("/logout", function (req, res) {
 });
 
 //注册
-router.post("/register",captcha,function (req, res) {
+router.post("/register",geetest,function (req, res) {
 
-      // 选择判断是否已关系注册通道
-      var SQL = `SELECT id FROM sys_ini WHERE iniKey='regist' AND iniValue=1 LIMIT 1`;
-      DB.query(SQL, function (err, Regist) {
-        if (err || Regist.length == 0) {
-          res
-            .status(200)
-            .send({ message: "系统已关闭注册通道，请联系管理员处理" });
-          return;
-        }
+
 
         //if (!req.body.pw|| !I.userpwTest(req.body.pw) || !req.body.un|| !I.emailTest(req.body.un)){ res.status(200).send( { 'status':'账号或密码格式错误' });return;}
         //if (I.phoneTest(req.body.un)){res.status(200).send( { 'status':'手机号不能直接用于注册账号' });return;}
@@ -282,10 +271,10 @@ router.post("/register",captcha,function (req, res) {
           });
         });
       });
-    }
-  );
+
+
 //找回密码
-router.post("/repw", captcha,function (req, res) {
+router.post("/repw", geetest,function (req, res) {
 
       var email = req.body.un;
       SQL = `SELECT * FROM ow_users WHERE email='${email}' LIMIT 1`;
@@ -387,7 +376,7 @@ router.post("/repw", captcha,function (req, res) {
 
 
 //找回密码
-router.post("/torepw",captcha, function (req, res) {
+router.post("/torepw",geetest, function (req, res) {
 
       //console.log(req.body.token);
       var user1 = jwt.verify(

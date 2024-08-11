@@ -17,18 +17,20 @@
 
 			<div>
 				<div class="mdui-col-xs-12 mdui-col-md-2" style="margin-bottom: 10px">
-					<mdui-text-field variant="outlined" class="my_display_name" maxlength="10" value="<%= display_name %>"
+					<mdui-text-field variant="outlined" class="my_display_name" maxlength="10" value="加载中" id="my_display_name"
 						label="昵称"></mdui-text-field>
 				</div>
 				<br />
 				<div class="mdui-col-xs-12" style="margin-bottom: 10px">
-					<mdui-text-field variant="outlined" class="my_aboutme" maxlength="1000" value="加载中" label="简介" autosize
+					<mdui-text-field variant="outlined" class="my_aboutme" maxlength="1000" value="加载中" label="简介" autosize id="my_aboutme"
 						min-rows="2"></mdui-text-field>
 				</div>
 				<br />
 				<mdui-select variant="outlined" id="sex-chick" label="性别" class="sex-chick mdui-col-xs-6 mdui-col-md-3">
 					<mdui-menu-item value="1">男</mdui-menu-item>
 					<mdui-menu-item value="0">女</mdui-menu-item>
+					<mdui-menu-item value="2">猫娘</mdui-menu-item>
+
 				</mdui-select>
 			</div>
 			<mdui-button class="open-captchadialog" variant="tonal">完成验证码</mdui-button>
@@ -109,5 +111,8 @@
 	<%- include('./html-footer.ejs', {page: 'myinfo' }); %>
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.11/purify.min.js"></script>
 		<script type="text/javascript" src="<%= process.env.staticurl %>/page/user/info.js"></script>
-		   <script src="<%= process.env.reurl %>?compat=recaptcha&onload=onloadCallback" async defer></script>
-		<script>rekey = '<%= process.env.rekey %>'</script>
+
+		<script>captchaid = '<%= process.env.GEE_CAPTCHA_ID %>'</script>
+    <script type="text/javascript" src="http://static.geetest.com/v4/gt4.js"></script>
+		<script type="text/javascript" src="<%= process.env.staticurl %>/page/geetest.js"></script>
+    	<!--<script src="<%= process.env.reurl %>?compat=recaptcha&onload=onloadCallback" async defer></script>-->

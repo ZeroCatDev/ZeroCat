@@ -121,7 +121,7 @@
   </body>
 
   <div class="mdui-dialog" id="privacy" style='border-radius: 15px;'>
-    <div class="mdui-dialog-title">您正在使用由孙悟元提供的服务</div>
+    <div class="mdui-dialog-title">您正在使用由厚浪(孙悟元)提供的服务</div>
     <div class="mdui-dialog-content">
       我们可能会收集您的个人信息,具体参见<a href="<%= process.env.SitePrivacyPolicy %>" target="_blank"
         class="mdui-text-color-blue">隐私策略</a><br />
@@ -187,5 +187,8 @@
   <%- include('./html-footer.ejs', {page: 'login' }); %>
     <script type="text/javascript" src="<%= process.env.staticurl %>/js/gter.js"></script>
     <script type="text/javascript" src="<%= process.env.staticurl %>/js/login.js"></script>
-    <script src="<%= process.env.reurl %>?compat=recaptcha&onload=onloadCallback" async defer></script>
-    <script>rekey = '<%= process.env.rekey %>'</script>
+
+		<script>captchaid = '<%= process.env.GEE_CAPTCHA_ID %>'</script>
+    <script type="text/javascript" src="http://static.geetest.com/v4/gt4.js"></script>
+		<script type="text/javascript" src="<%= process.env.staticurl %>/page/geetest.js"></script>
+    	<!--<script src="<%= process.env.reurl %>?compat=recaptcha&onload=onloadCallback" async defer></script>-->

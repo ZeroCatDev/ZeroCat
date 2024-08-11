@@ -2,7 +2,7 @@
 <%- include('./html-head.ejs', {pageTitle: '找回密码'}); %>
 
 <% if (login) { %>
-  <script>window.location.href = '/';</script>
+  <!--<script>window.location.href = '/';</script>-->
   <% } %>
 
           <div class="layui-row">
@@ -30,7 +30,7 @@
                   <mdui-text-field variant="filled" label="密码" id='password' type="password" toggle-password
                   style="margin-bottom: 10px;"></mdui-text-field>
 
-                  <div id="recaptcha-div-rePW-page">验证码加载中</div>
+                  <div id="captcha-div">验证码加载中</div>
 
 
 
@@ -59,15 +59,8 @@
         <script type="text/javascript" src="<%= process.env.staticurl %>/js/login.js"></script>
 
 
-<script src="<%= process.env.reurl %>?compat=recaptcha&onload=repwonloadCallback" async defer></script>
 
-<script>
-rekey='<%= process.env.rekey %>'
-
-function repwonloadCallback() {
-grecaptcha.render("#recaptcha-div-rePW-page", {
-    sitekey: rekey,
-  });
-
-}
-</script>
+        <script>captchaid = '<%= process.env.GEE_CAPTCHA_ID %>'</script>
+        <script type="text/javascript" src="http://static.geetest.com/v4/gt4.js"></script>
+        <script type="text/javascript" src="<%= process.env.staticurl %>/page/geetest.js"></script>
+          <!--<script src="<%= process.env.reurl %>?compat=recaptcha&onload=onloadCallback" async defer></script>-->
