@@ -13,13 +13,25 @@ const API_URL = API_SERVER + "/validate" + "?captcha_id=" + CAPTCHA_ID;
 app.use((req, res, next) => {
     var geetest = {};
     if (req.body.captcha) {
-        geetest = JSON.parse(req.body.captcha);
+        console.log("1");
+        console.log(req.body.captcha);
+        try {
+            geetest = JSON.parse(String(req.body.captcha));
+          } catch (e) {
+            geetest = req.body.captcha;
+          }
     } else if (querystring.parse(req.url.split("?")[1]).captcha) {
+        console.log("2");
+
         geetest = JSON.parse(querystring.parse(req.url.split("?")[1]).captcha);
     } else {
         if (req.method == "GET") {
+            console.log("3");
+
             geetest = querystring.parse(req.url.split("?")[1]);
         } else {
+            console.log("4");
+
             geetest = req.body;
         }
     }
