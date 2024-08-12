@@ -17,13 +17,13 @@
 
 			<div>
 				<div class="mdui-col-xs-12 mdui-col-md-2" style="margin-bottom: 10px">
-					<mdui-text-field variant="outlined" class="my_display_name" maxlength="10" value="加载中" id="my_display_name"
-						label="昵称"></mdui-text-field>
+					<mdui-text-field variant="outlined" class="my_display_name" maxlength="10" value="加载中"
+						id="my_display_name" label="昵称"></mdui-text-field>
 				</div>
 				<br />
 				<div class="mdui-col-xs-12" style="margin-bottom: 10px">
-					<mdui-text-field variant="outlined" class="my_aboutme" maxlength="1000" value="加载中" label="简介" autosize id="my_aboutme"
-						min-rows="2"></mdui-text-field>
+					<mdui-text-field variant="outlined" class="my_aboutme" maxlength="1000" value="加载中" label="简介"
+						autosize id="my_aboutme" min-rows="2"></mdui-text-field>
 				</div>
 				<br />
 				<mdui-select variant="outlined" id="sex-chick" label="性别" class="sex-chick mdui-col-xs-6 mdui-col-md-3">
@@ -33,7 +33,7 @@
 
 				</mdui-select>
 			</div>
-			<mdui-button class="open-captchadialog" variant="tonal">完成验证码</mdui-button>
+
 
 			<div style="float: right">
 				<mdui-button href="/my/info">取消</mdui-button>
@@ -47,7 +47,6 @@
 			<br />
 			<!--	<mdui-button class="avatarUpload " lay-data="{exts:'png|jpg', size:1024}">修改头像</mdui-button>-->
 			<script src="<%= process.env.staticurl %>/js/compressorjs.js"></script>
-			<mdui-button class="open-captchadialog" variant="tonal">完成验证码</mdui-button>
 
 			<mdui-button icon="attach_file" id="updateinages" onclick="updateinages()">修改头像</mdui-button>
 
@@ -60,23 +59,23 @@
 			<mdui-text-field variant="outlined" id="new_password" type="password" label="新密码" autocomplete="off"
 				toggle-password></mdui-text-field><br />
 			<div style="float: right">
-				<mdui-button class="open-captchadialog" variant="tonal">完成验证码</mdui-button>
+
 
 				<mdui-button onclick="updatePassword()">确认</mdui-button>
 			</div>
 		</mdui-tab-panel>
-				<mdui-tab-panel slot="panel" value="tab-4">
+		<mdui-tab-panel slot="panel" value="tab-4">
 			<br />
 
 			<mdui-text-field variant="outlined" id="my_username" type="text" label="用户名" autocomplete="off"
 				toggle-password></mdui-text-field><br />
 			<div style="float: right">
-				<mdui-button class="open-captchadialog" variant="tonal">完成验证码</mdui-button>
 
 				<mdui-button onclick="updateUsername()">确认</mdui-button>
 			</div>
 		</mdui-tab-panel>
-	</mdui-tabs>
+	</mdui-tabs><br />
+	<div id="captcha-div"></div>
 
 	<script>
 		const passwordialog = document.querySelector(".password-dialog");
@@ -86,26 +85,26 @@
 		openpwButton.addEventListener("click", () => (passwordialog.open = true));
 		closepwButton.addEventListener("click", () => (passwordialog.open = false));
 	</script>
-  <mdui-dialog close-on-overlay-click close-on-esc class="captchadialog">
-    <span slot="headline">请完成验证码</span>
-    <span slot="description">部分地区加载可能较慢，请耐心等待。</span>
-    <div id="captcha-div"></div>
+	<mdui-dialog close-on-overlay-click close-on-esc class="captchadialog">
+		<span slot="headline">请完成验证码</span>
+		<span slot="description">部分地区加载可能较慢，请耐心等待。</span>
+		<!--<div id="captcha-div"></div>
+  -->
+		<mdui-button slot="action" variant="text" class="zc-feedback">反馈</mdui-button>
+		<mdui-button slot="action" variant="text" onclick="reloudcaptcha()">刷新</mdui-button>
 
-    <mdui-button slot="action" variant="text" class="zc-feedback">反馈</mdui-button>
-    <mdui-button slot="action" variant="text" onclick="reloudcaptcha()">刷新</mdui-button>
-
-    <mdui-button slot="action" variant="tonal" class="close-captchadialog">完成</mdui-button>
-  </mdui-dialog>
+		<mdui-button slot="action" variant="tonal" class="close-captchadialog">完成</mdui-button>
+	</mdui-dialog>
 
 
-  <script>
-    const captchadialog = document.querySelector(".captchadialog");
-    const opencaptchadialogButtons = document.querySelectorAll(".open-captchadialog");
-    const closecaptchadialogButton = document.querySelector(".close-captchadialog");
-    opencaptchadialogButtons.forEach(button => { button.addEventListener("click", () => { captchadialog.open = true }); });
-    closecaptchadialogButton.addEventListener("click", () => captchadialog.open = false);
+	<script>
+		const captchadialog = document.querySelector(".captchadialog");
+		const opencaptchadialogButtons = document.querySelectorAll(".open-captchadialog");
+		const closecaptchadialogButton = document.querySelector(".close-captchadialog");
+		opencaptchadialogButtons.forEach(button => { button.addEventListener("click", () => { captchadialog.open = true }); });
+		closecaptchadialogButton.addEventListener("click", () => captchadialog.open = false);
 
-  </script>
+	</script>
 	<script type="text/javascript" src="<%= process.env.staticurl %>/js/gter.js"></script>
 
 	<%- include('./html-footer.ejs', {page: 'myinfo' }); %>
@@ -113,6 +112,6 @@
 		<script type="text/javascript" src="<%= process.env.staticurl %>/page/user/info.js"></script>
 
 		<script>captchaid = '<%= process.env.GEE_CAPTCHA_ID %>'</script>
-    <script type="text/javascript" src="https://static.geetest.com/v4/gt4.js"></script>
+		<script type="text/javascript" src="https://static.geetest.com/v4/gt4.js"></script>
 		<script type="text/javascript" src="<%= process.env.staticurl %>/page/geetest.js"></script>
-    	<!--<script src="?compat=recaptcha&onload=onloadCallback" async defer></script>-->
+		<!--<script src="?compat=recaptcha&onload=onloadCallback" async defer></script>-->
