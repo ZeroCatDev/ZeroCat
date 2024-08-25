@@ -208,6 +208,9 @@ app.get("/", function (req, res) {
 
 //放在最后，确保路由时能先执行app.all=====================
 //注册、登录等功能路由
+var router_register = require("./server/router_account.js");
+app.use("/account", router_register);
+
 var router_register = require("./server/router_user.js");
 app.use("/user", router_register);
 
