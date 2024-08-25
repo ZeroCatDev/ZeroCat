@@ -16,7 +16,7 @@ router.get("/", async function (req, res) {
     userid: req.query.search_userid,
     type: req.query.search_type,
     title: req.query.search_title,
-    src: req.query.search_src,
+    production: req.query.search_src,
     description: req.query.search_description,
     orderby: req.query.search_orderby,
     curr: Number(req.query.curr),
@@ -65,7 +65,7 @@ router.get("/", async function (req, res) {
   //  console.log(ordersc);
   searchinfo ={
     title: { contains: search.title },
-    src: search.src != "" ? { contains: search.src } : {},
+    production: search.src != "" ? { contains: search.src } : {},
     description: { contains: search.description },
     type: { contains: search.type },
     state: { in: search.state },

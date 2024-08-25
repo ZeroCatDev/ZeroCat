@@ -13,7 +13,7 @@ router.all("*", function (req, res, next) {
   //限定访问该模块的权限：必须已登录
   if (!res.locals.login) {
     //未登录时，跳转到登录界面
-    res.redirect("/user/login");
+    res.redirect("/account/login");
     return;
   }
 

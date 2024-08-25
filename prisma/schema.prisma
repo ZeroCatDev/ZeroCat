@@ -221,7 +221,11 @@ model ow_projects {
   time        DateTime @default(now()) @db.Timestamp(0)
   title       String?  @default("ow_projects新项目") @db.VarChar(50)
   description String?  @default("OurWorld上的ow_projects项目") @db.VarChar(1000)
-  src         String?  @db.MediumText
+  production  String?  @db.MediumText
+  development String?  @db.MediumText
+  testing     String?  @db.MediumText
+  environment Json?
+  mainbranche String?  @default("main") @db.VarChar(45)
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -253,4 +257,19 @@ model ow_users {
   label        String?   @db.VarChar(255)
 
   @@id([id, username])
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model ow_project {
+  id          Int      @id @default(autoincrement()) @db.UnsignedInt
+  authorid    Int      @db.UnsignedInt
+  projectid   Int      @db.UnsignedInt
+  branche     String?  @default("main") @db.VarChar(45)
+  type        String?  @default("commit") @db.VarChar(32)
+  view_count  Int?     @default(0) @db.UnsignedInt
+  time        DateTime @default(now()) @db.Timestamp(0)
+  title       String?  @default("ZeroCat新项目") @db.VarChar(50)
+  commit      String?  @default("commit") @db.VarChar(1000)
+  source      String?  @db.MediumText
+  environment Json?
 }

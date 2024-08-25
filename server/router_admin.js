@@ -323,7 +323,7 @@ router.post('/works/scratch/setDefaultWork',function(req,res){
         return;
     }
 
-    const SELECT = `SELECT title, src FROM scratch WHERE id=${req.body.id}`;
+    const SELECT = `SELECT title, production FROM scratch WHERE id=${req.body.id}`;
     DB.query(SELECT, function(err,d){
         if(err || d.length==0){
             res.status(200).send({status:"x", msg:"再试一次"});
@@ -331,7 +331,7 @@ router.post('/works/scratch/setDefaultWork',function(req,res){
         }
 
 
-        const UPDATE = `UPDATE scratch SET title=?, src=? WHERE id=1`;
+        const UPDATE = `UPDATE scratch SET title=?, production=? WHERE id=1`;
         const VAL = [d[0].title, d[0].src]
         DB.qww(UPDATE, VAL, function(err,d){
             if(err){
@@ -429,7 +429,7 @@ router.post('/works/python/setDefaultWork',function(req,res){
         return;
     }
 
-    const SELECT = `SELECT title, src FROM python WHERE id=${req.body.id}`;
+    const SELECT = `SELECT title, production FROM python WHERE id=${req.body.id}`;
     DB.query(SELECT, function(err,d){
         if(err || d.length==0){
             res.status(200).send({status:"x", msg:"再试一次"});
@@ -437,7 +437,7 @@ router.post('/works/python/setDefaultWork',function(req,res){
         }
 
 
-        const UPDATE = `UPDATE python SET title=?, src=? WHERE id=1`;
+        const UPDATE = `UPDATE python SET title=?, production=? WHERE id=1`;
         const VAL = [d[0].title, d[0].src]
         DB.qww(UPDATE, VAL, function(err,d){
             if(err){
@@ -1024,7 +1024,7 @@ router.get('/material/sprite/worklist', function (req, res) {
 // 角色管理：导入角色：导入{tagid: _tagId, workid:select_data.id}
 router.post('/material/sprite/import', function (req, res) {
     // 1、获取作品src
-    var SELECT = `SELECT src FROM scratch WHERE id=${req.body.workid} LIMIT 1`;
+    var SELECT = `SELECT production FROM scratch WHERE id=${req.body.workid} LIMIT 1`;
     DB.query(SELECT, function(err,SRC){
         if (err || SRC.length == 0){
             res.status(200).send({status: 'x', msg: '再试一次'});

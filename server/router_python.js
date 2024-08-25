@@ -157,7 +157,7 @@ router.post('/save', function (req, res) {
 
     // 新作品
 	if (req.body.id == '0'){
-		var INSERT =`INSERT INTO ow_projects (authorid, title,src) VALUES (${res.locals.userid}, ?, ?)`;
+		var INSERT =`INSERT INTO ow_projects (authorid, title,production) VALUES (${res.locals.userid}, ?, ?)`;
 		var SET = [req.body.title,req.body.data]
 		DB.qww(INSERT, SET, function (err, newPython) {
 			if (err || newPython.affectedRows==0) {
@@ -175,7 +175,7 @@ router.post('/save', function (req, res) {
     var UPDATE =`UPDATE ow_projects SET ? WHERE id=${req.body.id} AND authorid=${res.locals.userid} LIMIT 1`;
     var SET = {
         title:req.body.title,
-        src:req.body.data,
+        production:req.body.data,
         description:req.body.description
     }
     DB.qww(UPDATE, SET, function (err, u) {

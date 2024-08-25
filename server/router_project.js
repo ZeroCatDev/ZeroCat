@@ -4,9 +4,9 @@ const { encode, decode } = require("html-entities");
 
 var DB = require("./lib/database.js"); // 数据库
 
-router.all("*", function (req, res, next) {
-  next();
-});
+//功能函数集
+var I = require("./lib/global.js");
+
 //router.get('/', function (req, res) {})
 
 //保存作品：标题
@@ -149,7 +149,7 @@ router.get("/getproject/:id", function (req, res) {
 
 //获取源代码数据
 router.get("/getproject/src/:id", function (req, res) {
-  var SQL = `SELECT src FROM ow_projects WHERE id=${req.params.id} LIMIT 1`;
+  var SQL = `SELECT production FROM ow_projects WHERE id=${req.params.id} LIMIT 1`;
   DB.query(SQL, function (err, PROJECT) {
     if (err) {
       return;
@@ -157,7 +157,7 @@ router.get("/getproject/src/:id", function (req, res) {
     if (PROJECT.length == 0) {
       return;
     }
-    res.status(200).send(PROJECT[0].src);
+    res.status(200).send(PROJECT[0].production);
 
     //浏览数+1
     var SQL = `UPDATE ow_projects SET view_count=view_count+1 WHERE id=${req.params.id} LIMIT 1`;
@@ -190,8 +190,8 @@ router.delete("/deleteProject/:id", function (req, res) {
 });
 
 //获取源代码数据
-router.get("/:id/*", function (req, res) {
-  var SQL = `SELECT src FROM ow_projects WHERE id=${req.params.id} LIMIT 1`;
+router.get("/web/:id/*", function (req, res) {
+  var SQL = `SELECT production FROM ow_projects WHERE id=${req.params.id} LIMIT 1`;
   DB.query(SQL, function (err, PROJECT) {
     if (err) {
       res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
@@ -222,13 +222,13 @@ router.get("/:id/*", function (req, res) {
     filename.splice(0, 2);
     //console.log(filename)
     //console.log(req.params.filename)
-    //console.log(JSON.parse(PROJECT[0].src));
+    //console.log(JSON.parse(PROJECT[0].production));
 
-    if (getValue(filename, JSON.parse(PROJECT[0].src)) != false) {
-      filestr = decode(getValue(filename, JSON.parse(PROJECT[0].src)));
+    if (getValue(filename, JSON.parse(PROJECT[0].production)) != false) {
+      filestr = decode(getValue(filename, JSON.parse(PROJECT[0].production)));
       console.log(filestr);
 
-      res.type('html').send(decode(filestr));
+      res.type("html").send(decode(filestr));
     } else {
       res.status(404).send({ code: 404, status: "failed", msg: "文件不存在" });
     }
@@ -290,5 +290,230 @@ router.post("/update/:id", function (req, res) {
     res.status(200).send({ status: "ok", msg: "保存成功" });
   });
 });
+function getEnvironment(environment) {
+  if (environment == "prod" || environment == "production") {
+    return "production";
+  } else if (environment == "dev" || environment == "development") {
+    return "development";
+  } else if (environment == "test" || environment == "testing") {
+    return "testing";
+  } else {
+    return "production";
+  }
+}
+// 获取作品信息
+router.get("/:id", async function (req, res) {
+  var projectid = req.params.id.split("-")[0];
+  var environment = getEnvironment(req.params.id.split("-")[1] || "production")
 
+  await I.prisma.ow_projects
+    .findFirst({
+      where: {
+        id: Number(projectid),
+        OR: [{ state: { gte: 1 } }, { authorid: res.locals.userid }],
+      },
+      select: {
+        id: true,
+        type: true,
+        licence: true,
+        authorid: true,
+        state: true,
+        view_count: true,
+        like_count: true,
+        favo_count: true,
+        time: true,
+        title: true,
+        description: true,
+        production: environment == "production" ? true : false,
+        development: environment == "development" ? true : false,
+        testing: environment == "testing" ? true : false,
+        environment: true,
+      },
+    })
+    .catch((e) => {
+      console.log(e);
+      res.status(200).send({ status: "0", message: "出现错误" });
+    })
+    .then((result) => {
+      if (!result) {
+        res.status(200).send({ status: "0", message: "项目不存在" });
+      } else {
+        res.status(200).send({ status: "1", message: "成功", project: result });
+      }
+    });
+});
+// 获取作品源代码
+router.get("/:id/src", async function (req, res) {
+  var projectid = req.params.id.split("-")[0];
+  var environment = getEnvironment(req.params.id.split("-")[1] || "production")
+
+
+  await I.prisma.ow_projects
+    .findFirst({
+      where: {
+        id: Number(projectid),
+        OR: [{ state: { gte: 1 } }, { authorid: res.locals.userid }],
+      },
+      select: {
+        production: environment == "production" ? true : false,
+        development: environment == "development" ? true : false,
+        testing: environment == "testing" ? true : false,
+      },
+    })
+    .catch((e) => {
+      console.log(e);
+      res.status(200).send({ status: "0", message: "出现错误" });
+    })
+    .then((result) => {
+      if (!result) {
+        res.status(200).send({ status: "0", message: "项目不存在" });
+      } else {
+        res.status(200).send(result[environment]);
+      }
+    });
+});
+
+// 新建作品
+router.post("/", async function (req, res) {
+  if (!res.locals.login) {
+    res.status(404);
+    return;
+  }
+  await I.prisma.ow_projects
+    .create({
+      data: {
+        type: req.body.type || "text",
+        licence: req.body.licence || "MIT",
+        authorid: res.locals.userid,
+        state: Number(req.body.state) || 0,
+        title: req.body.title || "新作品",
+        description: req.body.description || "ZeroCat",
+        production: req.body.production || "",
+        development: req.body.development || "",
+        testing: req.body.testing || "",
+      },
+    })
+    .catch((e) => {
+      console.log(e);
+    })
+    .then((result) => {
+      if (!result) {
+        res.status(200).send({ status: "0", message: "创建失败" });
+      } else {
+        res
+          .status(200)
+          .send({ status: "1", message: "创建成功", id: result.id });
+      }
+    });
+});
+// 更新作品
+router.put("/:id", async function (req, res) {
+  if (!res.locals.login) {
+    res.status(404);
+    return;
+  }
+  var projectid = req.params.id.split("-")[0];
+  var environment = getEnvironment(req.params.id.split("-")[1] || "production")
+
+  console.log(req.body.type != undefined);
+  var data = {};
+  const keys = Object.keys(req.body);
+  allows = [
+    "type",
+    "licence",
+    "state",
+    "title",
+    "description",
+    "production",
+    "development",
+    "testing",
+    "environment",
+  ];
+  keys.forEach((key) => {
+    if (req.body[key] !== undefined && allows.includes(key)) {
+      data[key] = req.body[key];
+    } else {
+      //console.log(key);
+      //console.log(req.body[key]);
+    }
+  });
+  // 简单检查下有没有不合规的数据
+  // 不检查了，反正精选作品没有实际意义
+
+  await I.prisma.ow_projects
+    .update({
+      where: {
+        id: Number(projectid),
+        authorid: res.locals.userid,
+      },
+      data: data,
+    })
+    .catch((e) => {
+      console.log(e);
+    })
+    .then((result) => {
+      if (!result) {
+        res.status(200).send({ status: "0", message: "创建失败" });
+      } else {
+        res.status(200).send({ status: "1", message: "成功" });
+      }
+    });
+});
+
+// 更新作品
+router.put("/:id/src", async function (req, res) {
+  if (!res.locals.login) {
+    res.status(404);
+    return;
+  }
+  var projectid = req.params.id.split("-")[0];
+  var environment = getEnvironment(req.params.id.split("-")[1] || "production")
+
+  await I.prisma.ow_projects
+    .update({
+      where: {
+        id: Number(projectid),
+        authorid: res.locals.userid,
+      },
+      data: {
+        production: environment == "production" ? req.body : {},
+        development: environment == "development" ? req.body : {},
+        testing: environment == "testing" ? req.body : {},
+      },
+    })
+    .catch((e) => {
+      console.log(e);
+    })
+    .then((result) => {
+      if (!result) {
+        res.status(200).send({ status: "0", message: "创建失败" });
+      } else {
+        res.status(200).send({ status: "1", message: "成功" });
+      }
+    });
+});
+// 删除作品
+router.delete("/:id", async function (req, res) {
+  if (!res.locals.login) {
+    res.status(404);
+    return;
+  }
+  await I.prisma.ow_projects
+    .delete({
+      where: {
+        id: Number(req.params.id),
+        authorid: res.locals.userid,
+      },
+    })
+    .catch((e) => {
+      console.log(e);
+    })
+    .then((result) => {
+      if (!result) {
+        res.status(200).send({ status: "0", message: "删除失败" });
+      } else {
+        res.status(200).send({ status: "1", message: "成功" });
+      }
+    });
+});
 module.exports = router;

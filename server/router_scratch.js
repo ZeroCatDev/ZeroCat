@@ -39,9 +39,8 @@ router.get("/view/getScratchProjects", function (req, res) {
     type = "time";
   }
 
-  var SQL = `SELECT ow_projects.id, ow_projects.title, ow_projects.state,ow_projects.authorid,ow_projects.view_count, ow_users.display_name,ow_users.motto,ow_users.images FROM ow_projects JOIN ow_users ON ow_projects.authorid = ow_users.id WHERE ow_projects.state > 0 AND ow_projects.type='scratch' ORDER BY ow_projects.${type} DESC LIMIT ${
-    (curr - 1) * limit
-  }, ${limit}`;
+  var SQL = `SELECT ow_projects.id, ow_projects.title, ow_projects.state,ow_projects.authorid,ow_projects.view_count, ow_users.display_name,ow_users.motto,ow_users.images FROM ow_projects JOIN ow_users ON ow_projects.authorid = ow_users.id WHERE ow_projects.state > 0 AND ow_projects.type='scratch' ORDER BY ow_projects.${type} DESC LIMIT ${(curr - 1) * limit
+    }, ${limit}`;
   DB.query(SQL, function (err, data) {
     if (err) {
       res.status(200).send([]);
@@ -111,7 +110,7 @@ router.get("/projectinfo", function (req, res) {
 
 router.get("/projectinfo2", function (req, res) {
   SQL =
-    `SELECT ow_projects.id,ow_projects.authorid,ow_projects.time,ow_projects.view_count,ow_projects.like_count,ow_projects.type` +
+    `SELECT ow_projects.id,ow_projects.authorid,ow_projects.time,ow_projects.view_count,ow_projects.like_count,ow_projects.type,` +
     ` ow_projects.favo_count,ow_projects.title,ow_projects.state,ow_projects.description,` +
     ` '' AS likeid, '' AS favoid,` +
     ` ow_users.display_name AS author_display_name,` +
@@ -123,7 +122,7 @@ router.get("/projectinfo2", function (req, res) {
   DB.query(SQL, function (err, SCRATCH) {
     if (err || SCRATCH.length == 0) {
       res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
-      res.send({ code: 404, status: "404", msg: "项目不存在或未发布" });
+      res.send({ code: 404, status: "404", msg: "项目不存在或未发布", error: err });
       return;
     }
     res.locals["is_author"] =
@@ -225,7 +224,7 @@ router.get("/projectinfo2", function (req, res) {
 });
 //Scratch_play获取源代码数据部分
 router.get("/play/project/:id", function (req, res) {
-  var SQL = `SELECT src FROM ow_projects WHERE id=${req.params.id} LIMIT 1`;
+  var SQL = `SELECT production FROM ow_projects WHERE id=${req.params.id} LIMIT 1`;
   DB.query(SQL, function (err, SCRATCH) {
     if (err) {
       return;
@@ -233,7 +232,7 @@ router.get("/play/project/:id", function (req, res) {
     if (SCRATCH.length == 0) {
       return;
     }
-    res.status(200).send(SCRATCH[0].src);
+    res.status(200).send(SCRATCH[0].production);
 
     //浏览数+1
     var SQL = `UPDATE ow_projects SET view_count=view_count+1 WHERE id=${req.params.id} LIMIT 1`;
@@ -310,7 +309,7 @@ router.post("/project/:projectid", function (req, res) {
     return;
     //从指定文件加载默认作品：END============================================
     //
-    SQL = `SELECT id, authorid, state, title, src FROM ow_projects WHERE id=1`; //默认作品为1号作品
+    SQL = `SELECT id, authorid, state, title, production FROM ow_projects WHERE id=1`; //默认作品为1号作品
   } else {
     if (!res.locals.login) {
       SQL = `SELECT * FROM ow_projects WHERE id=${projectid} AND state>0`;
@@ -421,7 +420,7 @@ router.put("/projects/:projectid", function (req, res) {
       return;
     }
 
-    var UPDATE = `UPDATE ow_projects SET src=? WHERE id=${req.params.projectid} LIMIT 1`;
+    var UPDATE = `UPDATE ow_projects SET production=? WHERE id=${req.params.projectid} LIMIT 1`;
     var VAL = [`${JSON.stringify(req.body)}`];
     DB.qww(UPDATE, VAL, function (err, SCRATCH) {
       if (err) {
@@ -501,7 +500,7 @@ router.post("/projects", function (req, res) {
     title = req.query.title;
   }
 
-  var INSERT = `INSERT INTO ow_projects (authorid, title, src,type) VALUES (${res.locals.userid}, ?, ?,'scratch')`;
+  var INSERT = `INSERT INTO ow_projects (authorid, title, development,type) VALUES (${res.locals.userid}, ?, ?,'scratch')`;
   var VAL = [title, `${JSON.stringify(req.body.work || req.body)}`];
   DB.qww(INSERT, VAL, function (err, newScratch) {
     if (err || newScratch.affectedRows == 0) {
@@ -900,7 +899,6 @@ router.post("/getSession", (req, res) => {
       userid: 0,
       email: "",
       username: "",
-
       display_name: "",
       avatar: ``,
     };
@@ -922,5 +920,178 @@ router.post("/logout", function (req, res) {
   logout(req, res);
   var login_info = [{ email: "ZeroCatExampleUser", success: 1 }];
   res.status(200).send(login_info);
+});
+
+
+
+
+
+router.get("/branche/:id?", async function (req, res) {
+  if (!res.locals.login) {
+    res.status(404);
+    return;
+  }
+  I.prisma.ow_project
+    .findFirst({
+      where: {
+        id: Number(req.params.id || req.body.id),
+        authorid: res.locals.userid,
+      },
+      select: {
+        source: true
+      }
+    })
+    .catch((e) => {
+      console.log(e);
+    })
+    .then((result) => {
+      if (!result) {
+        res.status(200).send({ status: "0", message: "获取失败" });
+      } else {
+        res
+          .status(200)
+          .send(result.source);
+      }
+    });
+});
+
+
+router.get("/commitinfo", function (req, res) {
+  I.prisma.ow_project.findFirst({
+    where: {
+      id: Number(req.query.id),
+    },
+    orderBy: {
+      id: "desc",
+    },
+  }).then((result) => {
+    console.log(result);
+    I.prisma.ow_projects.findFirst({
+      where: {
+        id: Number(result.projectid),
+      },
+
+
+    }).then(async (result) => {
+      var user = await I.prisma.ow_users.findFirst({
+        where: {
+          id: Number(result.authorid),
+        },
+
+
+      })
+      console.log(result);
+      resultjson={
+        id:  result.id,
+        authorid: result.authorid,
+        time:result.time,
+        view_count: result.view_count,
+        like_count: 0,
+        type: "scratch",
+        favo_count: 0,
+        title: result.title,
+        state: result.state,
+        description: result.description,
+        likeid: "",
+        favoid: "",
+        author_display_name: user.display_name,
+        author_images: user.images,
+        author_motto: user.motto
+    }
+
+      res.json(resultjson);
+    })
+  })
+
+});
+
+router.get("/commitinfotw", function (req, res) {
+  I.prisma.ow_project.findFirst({
+    where: {
+      id: Number(req.query.id),
+    },
+    orderBy: {
+      id: "desc",
+    },
+  }).then((result) => {
+    console.log(result);
+    I.prisma.ow_projects.findFirst({
+      where: {
+        id: Number(result.projectid),
+      },
+
+
+    }).then(async (result) => {
+      var user = await I.prisma.ow_users.findFirst({
+        where: {
+          id: Number(result.authorid),
+        },
+
+
+      })
+      console.log(result);
+      jsontw = {
+        id: result.id,
+        title: result.title,
+        description: result.description,
+        instructions: "ZeroCat",
+        visibility: "visible",
+        public: result.state >= 1 ? true : false,
+        comments_allowed: true,
+        is_published: result.state >= 1 ? true : false,
+        author: {
+          id: result.authorid,
+          username: user.display_name,
+          scratchteam: false,
+          history: {
+            joined: "1900-01-01T00:00:00.000Z",
+          },
+          profile: {
+            id: null,
+            images: {
+              "90x90":
+                "https://s4-1.wuyuan.1r.ink/user/" + user.images,
+              "60x60":
+                "https://s4-1.wuyuan.1r.ink/user/" + user.images,
+              "55x55":
+                "https://s4-1.wuyuan.1r.ink/user/" + user.images,
+              "50x50":
+                "https://s4-1.wuyuan.1r.ink/user/" + user.images,
+              "32x32":
+                "https://s4-1.wuyuan.1r.ink/user/" + user.images,
+            },
+          },
+        },
+        image: "https://s4-1.wuyuan.1r.ink/scratch_slt/" + result.id,
+        images: {
+          "282x218": "https://s4-1.wuyuan.1r.ink/scratch_slt/" + result.id,
+          "216x163": "https://s4-1.wuyuan.1r.ink/scratch_slt/" + result.id,
+          "200x200": "https://s4-1.wuyuan.1r.ink/scratch_slt/" + result.id,
+          "144x108": "https://s4-1.wuyuan.1r.ink/scratch_slt/" + result.id,
+          "135x102": "https://s4-1.wuyuan.1r.ink/scratch_slt/" + result.id,
+          "100x80": "https://s4-1.wuyuan.1r.ink/scratch_slt/" + result.id,
+        },
+        history: {
+          created: result.time,
+          modified: result.time,
+          shared: result.time,
+        },
+        stats: {
+          views: result.view_count,
+          loves: 0,
+          favorites: 0,
+          remixes: 0,
+        },
+        remix: {
+          parent: null,
+          root: null,
+        },
+        project_token: "",
+      };
+      ////console.log(SCRATCH[0]);
+      res.json(jsontw);
+    })
+  })
+
 });
 module.exports = router;

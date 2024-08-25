@@ -4,7 +4,7 @@ var http = require("http");
 const jwt = require("jsonwebtoken");
 
 require("dotenv").config({ override: true });
-
+/*
 // 日志部分
 const opentelemetry = require("@opentelemetry/sdk-node");
 const {
@@ -27,7 +27,7 @@ const sdk = new opentelemetry.NodeSDK({
   resource: resource,
   instrumentations: [getNodeAutoInstrumentations()],
 });
-sdk.start();
+sdk.start();*/
 
 var morganlogger = require("morgan");
 morganlogger.token("colored-status", (req, res) => {
@@ -47,13 +47,24 @@ morganlogger.token("colored-status", (req, res) => {
 app.use(
   morganlogger(":method :colored-status :response-time ms :remote-addr :url")
 );
+function isDomainInList(domain, domainList) {
+  // Convert the domain list to a regular expression with wildcards
+  const regex = new RegExp('^' + new URL(domain).hostname.replace(/\*/g, '.*') + '$', 'i');
+  // Check if the domain is in the list
+  // 如果 domainList 包含 *，直接返回 true
+  if (domainList.includes('*')) {
+    return true;
+  }
 
+  return domainList.split(',').some(item => regex.test(item));
+}
 // cors配置
 var cors = require("cors");
 var corsOptions = {
   origin: (origin, callback) => {
+
     console.log(origin);
-    if (process.env.corslist.indexOf(origin) !== -1 || !origin) {
+    if ( !origin||isDomainInList(origin,process.env.corslist) ) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));
@@ -208,6 +219,10 @@ app.get("/", function (req, res) {
 
 //放在最后，确保路由时能先执行app.all=====================
 //注册、登录等功能路由
+var router_register = require("./server/router_account.js");
+app.use("/account", router_register);
+
+//个人中心路由
 var router_register = require("./server/router_user.js");
 app.use("/user", router_register);
 
@@ -233,6 +248,10 @@ app.use("/api", apiserver);
 //api路由
 var router_project = require("./server/router_project.js");
 app.use("/project", router_project);
+
+//api路由
+var router_project = require("./server/router_project2.js");
+app.use("/project2", router_project);
 
 app.get("/about", function (req, res, next) {
   res.render("about.ejs");
