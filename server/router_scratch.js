@@ -111,7 +111,7 @@ router.get("/projectinfo", function (req, res) {
 
 router.get("/projectinfo2", function (req, res) {
   SQL =
-    `SELECT ow_projects.id,ow_projects.authorid,ow_projects.time,ow_projects.view_count,ow_projects.like_count,ow_projects.type` +
+    `SELECT ow_projects.id,ow_projects.authorid,ow_projects.time,ow_projects.view_count,ow_projects.like_count,ow_projects.type,` +
     ` ow_projects.favo_count,ow_projects.title,ow_projects.state,ow_projects.description,` +
     ` '' AS likeid, '' AS favoid,` +
     ` ow_users.display_name AS author_display_name,` +
