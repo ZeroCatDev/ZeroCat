@@ -274,7 +274,10 @@ router.post("/register",geetest,function (req, res) {
 
 //找回密码
 router.post("/repw", geetest,function (req, res) {
-
+      if (req.body.un == "" || req.body.un == null) {
+        res.status(200).send({ message: "账号格式错误" });
+        return;
+      }
       var email = req.body.un;
       SQL = `SELECT * FROM ow_users WHERE email=? LIMIT 1`;
       w=[email];
@@ -365,8 +368,12 @@ router.post("/repw", geetest,function (req, res) {
           (err, data) => {
             if (err) {
               console.error(err);
+              res.status(200).send({ message: "出现错误" });
+
             } else {
               console.log(data);
+              res.status(200).send({ message: "请查看邮箱" });
+
             }
           }
         );
