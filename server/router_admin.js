@@ -146,7 +146,7 @@ router.post('/user_new',function(req,res){
         res.status(200).send({"status":"failed","msg":"再试一次"});
         return;
     }
-    //检查账号是否已存在
+    //检查账户是否已存在
     var SQL = `SELECT id FROM ow_users WHERE email='${req.body.un}' LIMIT 1`;
     DB.query(SQL, function (err, User) {
         if (err) {
@@ -154,7 +154,7 @@ router.post('/user_new',function(req,res){
             return;
         }
         if (User.length != 0) {
-            res.status(200).send( {'status': 'fail','msg':'该账号已存在'});
+            res.status(200).send( {'status': 'fail','msg':'该账户已存在'});
             return;
         }
 
@@ -201,7 +201,7 @@ router.post('/user_new100',function(req,res){
         return;
     }
 
-    // 生成账号
+    // 生成账户
 
     for (var i=0; i<sl; i++){
         if (i<10){

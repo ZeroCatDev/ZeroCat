@@ -1,4 +1,4 @@
-//用户账号功能路由：注册、登录等
+//用户账户功能路由：注册、登录等
 var express = require("express");
 var router = express["Router"]();
 var fs = require("fs");

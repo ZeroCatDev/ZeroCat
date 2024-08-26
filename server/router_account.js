@@ -1,4 +1,4 @@
-//用户账号功能路由：注册、登录等
+//用户账户功能路由：注册、登录等
 var express = require("express");
 var router = express["Router"]();
 var fs = require("fs");
@@ -47,7 +47,7 @@ router.post("/login",geetest ,function (req, res) {
         !req.body.un ||
         !I.emailTest(req.body.un)
       ) {
-        res.status(200).send({ message: "账号或密码错误" });
+        res.status(200).send({ message: "账户或密码错误" });
         return;
       }
 
@@ -55,14 +55,14 @@ router.post("/login",geetest ,function (req, res) {
       var WHERE = [`${req.body["un"]}`];
       DB.qww(SQL, WHERE, function (err, USER) {
         if (err || USER.length == 0) {
-          res.status(200).send({ message: "账号或密码错误" });
+          res.status(200).send({ message: "账户或密码错误" });
           return;
         }
 
         var User = USER[0];
         pw = I.hash(req.body.pw)
         if (I.checkhash(req.body.pw,User["password"])==false) {
-          res.status(200).send({ message: "账号或密码错误" });
+          res.status(200).send({ message: "账户或密码错误" });
         } else if (User["state"] == 2) {
           res.status(200).send({ message: "您已经被封号，请联系管理员" });
         } else {
@@ -155,18 +155,18 @@ router.post("/register",geetest,function (req, res) {
 
 
 
-        //if (!req.body.pw|| !I.userpwTest(req.body.pw) || !req.body.un|| !I.emailTest(req.body.un)){ res.status(200).send( { 'status':'账号或密码格式错误' });return;}
-        //if (I.phoneTest(req.body.un)){res.status(200).send( { 'status':'手机号不能直接用于注册账号' });return;}
+        //if (!req.body.pw|| !I.userpwTest(req.body.pw) || !req.body.un|| !I.emailTest(req.body.un)){ res.status(200).send( { 'status':'账户或密码格式错误' });return;}
+        //if (I.phoneTest(req.body.un)){res.status(200).send( { 'status':'手机号不能直接用于注册账户' });return;}
 
         var email = req.body.un;
         SQL = `SELECT id FROM ow_users WHERE email='${email}' LIMIT 1`;
         DB.query(SQL, function (err, User) {
           if (err) {
-            res.status(200).send({ message: "账号格式错误" });
+            res.status(200).send({ message: "账户格式错误" });
             return;
           }
           if (User.length > 0) {
-            res.status(200).send({ message: "账号已存在" });
+            res.status(200).send({ message: "账户已存在" });
             return;
           }
 
@@ -275,7 +275,7 @@ router.post("/register",geetest,function (req, res) {
 //找回密码
 router.post("/repw", geetest,function (req, res) {
       if (req.body.un == "" || req.body.un == null) {
-        res.status(200).send({ message: "账号格式错误" });
+        res.status(200).send({ message: "账户格式错误" });
         return;
       }
       var email = req.body.un;
@@ -283,7 +283,7 @@ router.post("/repw", geetest,function (req, res) {
       w=[email];
       DB.qww(SQL,w, function (err, User) {
         if (err) {
-          res.status(200).send({ message: "账号格式错误或不存在" });
+          res.status(200).send({ message: "账户格式错误或不存在" });
           return;
         }
         var user = User[0];
