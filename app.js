@@ -52,8 +52,7 @@ app.use(
 var cors = require("cors");
 var corsOptions = {
   origin: (origin, callback) => {
-    console.log(origin);
-    if (process.env.corslist.indexOf(origin) !== -1 || !origin) {
+    if (!origin || process.env.corslist.indexOf(new URL(origin).hostname) !== -1) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));

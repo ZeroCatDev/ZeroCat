@@ -276,8 +276,9 @@ router.post("/register",geetest,function (req, res) {
 router.post("/repw", geetest,function (req, res) {
 
       var email = req.body.un;
-      SQL = `SELECT * FROM ow_users WHERE email='${email}' LIMIT 1`;
-      DB.query(SQL, function (err, User) {
+      SQL = `SELECT * FROM ow_users WHERE email=? LIMIT 1`;
+      w=[email];
+      DB.qww(SQL,w, function (err, User) {
         if (err) {
           res.status(200).send({ message: "账号格式错误或不存在" });
           return;
