@@ -34,7 +34,7 @@ try {
 } catch (err) {
   console.log("S3 update Error: ", err);
 }
-  
+
 };
 
 //以md5的格式创建一个哈希值
@@ -96,3 +96,19 @@ exports.GenerateJwt = function (json) {
   );
   return token;
 };
+exports.isJSON = function (str) {
+  if (typeof str == 'string') {
+      try {
+          var obj=JSON.parse(str);
+          if(typeof obj == 'object' && obj ){
+              return true;
+          }else{
+              return false;
+          }
+
+      } catch(e) {
+          console.log('error：'+str+'!!!'+e);
+          return false;
+      }
+  }
+}

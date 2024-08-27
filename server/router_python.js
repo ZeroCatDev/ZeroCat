@@ -70,7 +70,7 @@ router.get("/view/seachPythonProjects", function (req, res) {
     var tabelName = "python";
     var searchinfo = "title";
     if (req.query.searchall == "true") {
-      searchinfo = "src";
+      searchinfo = "source";
     }
     //var SQL = `SELECT id, title FROM ow_projects WHERE state='public' AND (${searchinfo} LIKE ?) LIMIT 12`;
     var SQL = `SELECT ow_projects.id, ow_projects.title, ow_projects.state,ow_projects.authorid,ow_projects.description,ow_projects.view_count, ow_users.display_name,ow_users.motto FROM ow_projects JOIN ow_users ON ow_projects.authorid = ow_users.id WHERE ow_projects.state='public' AND (${searchinfo} LIKE ?) AND ow_projects.type='${tabelName}'`;
@@ -110,7 +110,7 @@ router.post('/getWork', function (req, res) {
              "id":0,
              "title":"Python新项目",
              "state":0,
-             "src":`import turtle\n\nt = turtle.Turtle()\nt.forward(100)\n\nprint ("Welcome to ZeroCat!")`
+             "source":`import turtle\n\nt = turtle.Turtle()\nt.forward(100)\n\nprint ("Welcome to ZeroCat!")`
          };
          if (projectid == 1){
          	res.status(200).send({status:'ok',work:DefaultPython});
@@ -151,17 +151,17 @@ router.post('/getWork', function (req, res) {
 // python 保存
 router.post('/save', function (req, res) {
     if (!res.locals.userid){
-        res.status(200).send({status: "x", msg: "请先登录" });
+        res.status(200).send({status: "0", msg: "请先登录" });
         return;
     }
 
     // 新作品
 	if (req.body.id == '0'){
-		var INSERT =`INSERT INTO ow_projects (authorid, title,src) VALUES (${res.locals.userid}, ?, ?)`;
+		var INSERT =`INSERT INTO ow_projects (authorid, title,source) VALUES (${res.locals.userid}, ?, ?)`;
 		var SET = [req.body.title,req.body.data]
 		DB.qww(INSERT, SET, function (err, newPython) {
 			if (err || newPython.affectedRows==0) {
-				res.status(200).send({status: "x", msg: "保存失败" });
+				res.status(200).send({status: "0", msg: "保存失败" });
 				return;
 			}
 
@@ -175,12 +175,12 @@ router.post('/save', function (req, res) {
     var UPDATE =`UPDATE ow_projects SET ? WHERE id=${req.body.id} AND authorid=${res.locals.userid} LIMIT 1`;
     var SET = {
         title:req.body.title,
-        src:req.body.data,
+        source:req.body.data,
         description:req.body.description
     }
     DB.qww(UPDATE, SET, function (err, u) {
         if (err) {
-            res.status(200).send({status: "x", msg: "保存失败" });
+            res.status(200).send({status: "0", msg: "保存失败" });
             return;
         }
 
@@ -190,7 +190,7 @@ router.post('/save', function (req, res) {
 
 router.post('/publish', function (req, res) {
     if (!res.locals.userid){
-        res.status(200).send({status: "x", msg: "请先登录" });
+        res.status(200).send({status: "0", msg: "请先登录" });
         return;
     }
 
@@ -198,7 +198,7 @@ router.post('/publish', function (req, res) {
 	var UPDATE = `UPDATE ow_projects SET state=${state} WHERE id=${req.body.id} AND authorid=${res.locals.userid} LIMIT 1`;
 	DB.query(UPDATE, function (err, u) {
 		if (err) {
-			res.status(200).send({status: "x", msg: "操作失败！"});
+			res.status(200).send({status: "0", msg: "操作失败！"});
 			return;
 		}
 
@@ -240,7 +240,7 @@ router.post('/YxLibrary_data', function (req, res) {
 
 router.all('*', function (req, res, next) {
     if (!res.locals.userid){
-        res.status(200).send({status: "x", msg: "请先登录" });
+        res.status(200).send({status: "0", msg: "请先登录" });
         return;
     }
 

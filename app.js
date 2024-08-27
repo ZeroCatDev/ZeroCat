@@ -145,18 +145,7 @@ app.all("*", function (req, res, next) {
           res.locals["is_admin"] = 1;
         }
         //console.log("JWT验证成功: " + userInfo.email);
-        console.log(
-          "调试用户信息(session)：" +
-            res.locals.userid +
-            "," +
-            res.locals.email +
-            "," +
-            res.locals.username +
-            "," +
-            res.locals.display_name +
-            "," +
-            res.locals.is_admin
-        );
+        //console.log( "调试用户信息(session)：" + res.locals.userid + "," + res.locals.email + "," + res.locals.username + "," + res.locals.display_name + "," + res.locals.is_admin );
 
         res.locals = {
           login: true,
@@ -168,18 +157,7 @@ app.all("*", function (req, res, next) {
           is_admin: res.locals["is_admin"],
         };
 
-        console.log(
-          "调试用户信息(locals )：" +
-            res.locals.userid +
-            "," +
-            res.locals.email +
-            "," +
-            res.locals.username +
-            "," +
-            res.locals.display_name +
-            "," +
-            res.locals.is_admin
-        );
+        //console.log( "调试用户信息(locals )：" + res.locals.userid + "," + res.locals.email + "," + res.locals.username + "," + res.locals.display_name + "," + res.locals.is_admin );
       }
 
       next();

@@ -60,7 +60,7 @@ router.get("/view/seachScratchProjects", function (req, res) {
   var tabelName = "scratch";
   var searchinfo = "title";
   if (req.query.searchall == "true") {
-    searchinfo = "src";
+    searchinfo = "source";
   }
   //var SQL = `SELECT id, title FROM ow_projects WHERE state='public' AND (${searchinfo} LIKE ?) LIMIT 12`;
   var SQL = `SELECT ow_projects.id, ow_projects.title, ow_projects.state,ow_projects.authorid,ow_projects.description,ow_projects.view_count, ow_users.display_name,ow_users.motto FROM ow_projects JOIN ow_users ON ow_projects.authorid = ow_users.id WHERE ow_projects.state='public' AND (${searchinfo} LIKE ?) AND ow_projects.type='${tabelName}'`;
@@ -225,7 +225,7 @@ router.get("/projectinfo2", function (req, res) {
 });
 //Scratch_play获取源代码数据部分
 router.get("/play/project/:id", function (req, res) {
-  var SQL = `SELECT src FROM ow_projects WHERE id=${req.params.id} LIMIT 1`;
+  var SQL = `SELECT source FROM ow_projects WHERE id=${req.params.id} LIMIT 1`;
   DB.query(SQL, function (err, SCRATCH) {
     if (err) {
       return;
@@ -233,7 +233,7 @@ router.get("/play/project/:id", function (req, res) {
     if (SCRATCH.length == 0) {
       return;
     }
-    res.status(200).send(SCRATCH[0].src);
+    res.status(200).send(SCRATCH[0].source);
 
     //浏览数+1
     var SQL = `UPDATE ow_projects SET view_count=view_count+1 WHERE id=${req.params.id} LIMIT 1`;
@@ -310,7 +310,7 @@ router.post("/project/:projectid", function (req, res) {
     return;
     //从指定文件加载默认作品：END============================================
     //
-    SQL = `SELECT id, authorid, state, title, src FROM ow_projects WHERE id=1`; //默认作品为1号作品
+    SQL = `SELECT id, authorid, state, title, source FROM ow_projects WHERE id=1`; //默认作品为1号作品
   } else {
     if (!res.locals.login) {
       SQL = `SELECT * FROM ow_projects WHERE id=${projectid} AND state='public'`;
@@ -421,7 +421,7 @@ router.put("/projects/:projectid", function (req, res) {
       return;
     }
 
-    var UPDATE = `UPDATE ow_projects SET src=? WHERE id=${req.params.projectid} LIMIT 1`;
+    var UPDATE = `UPDATE ow_projects SET source=? WHERE id=${req.params.projectid} LIMIT 1`;
     var VAL = [`${JSON.stringify(req.body)}`];
     DB.qww(UPDATE, VAL, function (err, SCRATCH) {
       if (err) {
@@ -470,7 +470,7 @@ router.post("/thumbnail/:projectid", function (req, res) {
 //分享作品：
 router.post("/shareProject/:projectid", function (req, res) {
   if (!res.locals.login) {
-    res.status(200).send({ status: "x" });
+    res.status(200).send({ status: "0" });
     return;
   }
 
@@ -483,7 +483,7 @@ router.post("/shareProject/:projectid", function (req, res) {
   var UPDATE = `UPDATE ow_projects SET state=${s} WHERE id=${req.params.projectid} AND authorid=${res.locals.userid} LIMIT 1`;
   DB.query(UPDATE, function (err, U) {
     if (err) {
-      res.status(200).send({ status: "x" });
+      res.status(200).send({ status: "0" });
       return;
     }
 
@@ -501,7 +501,7 @@ router.post("/projects", function (req, res) {
     title = req.query.title;
   }
 
-  var INSERT = `INSERT INTO ow_projects (authorid, title, src,type) VALUES (${res.locals.userid}, ?, ?,'scratch')`;
+  var INSERT = `INSERT INTO ow_projects (authorid, title, source,type) VALUES (${res.locals.userid}, ?, ?,'scratch')`;
   var VAL = [title, `${JSON.stringify(req.body.work || req.body)}`];
   DB.qww(INSERT, VAL, function (err, newScratch) {
     if (err || newScratch.affectedRows == 0) {
@@ -917,6 +917,7 @@ router.post("/getSession", (req, res) => {
 
   res.status(200).send(JSON.stringify(new_session));
 });
+
 //从Scratch中退出
 router.post("/logout", function (req, res) {
   logout(req, res);

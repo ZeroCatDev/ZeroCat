@@ -36,34 +36,34 @@
 
 
 
-			<div style="height: 100vh;">
-				<link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css" />
+	<div style="height: 100vh;">
+		<link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css" />
 
 
-					<div id="canvas_box" style="height:50vh">
-						<div id="pythoncanvas"></div>
-					</div>
-					<div style="background-color: rgba(0, 0, 0, 0);height:50vh;">
-						<textarea id="output" style="height: 100%;width: 100%;border:0" disabled>终端打印输出区</textarea>
-					</div>
+		<div id="canvas_box" style="height:50vh">
+			<div id="pythoncanvas"></div>
+		</div>
+		<div style="background-color: rgba(0, 0, 0, 0);height:50vh;">
+			<textarea id="output" style="height: 100%;width: 100%;border:0" disabled>终端打印输出区</textarea>
+		</div>
 
-<div style="position: fixed;
+		<div style="position: fixed;
 left: 0;
 bottom: 0;
 display: flex;
 justify-content: center;
 align-items: center;
 margin: 10px;">
-				<mdui-button id="run-code" onclick="run_it()" variant="filled" icon="play_arrow" style="">运行</mdui-button>
+			<mdui-button id="run-code" onclick="run_it()" variant="filled" icon="play_arrow" style="">运行</mdui-button>
 
-				<mdui-button onclick="run_clear()" variant="tonal" icon="clear">清除</mdui-button>
+			<mdui-button onclick="run_clear()" variant="tonal" icon="clear">清除</mdui-button>
 
-</div>
-			</div>
+		</div>
+	</div>
 
-			<div style="display: none;">
-				<textarea id="code_textarea"></textarea>
-			</div>
+	<div style="display: none;">
+		<textarea id="code_textarea"></textarea>
+	</div>
 
 
 </body>

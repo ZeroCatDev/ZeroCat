@@ -221,7 +221,10 @@ model ow_projects {
   time        DateTime @default(now()) @db.Timestamp(0)
   title       String?  @default("ow_projects新项目") @db.VarChar(50)
   description String?  @default("OurWorld上的ow_projects项目") @db.VarChar(1000)
-  src         String?  @db.MediumText
+  source      String?  @db.MediumText
+  history     Int      @default(1) @db.TinyInt
+  devenv      Int?     @default(1) @db.TinyInt
+  devsource   String?  @db.MediumText
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -268,4 +271,18 @@ model ow_project {
   commit      String?  @default("commit") @db.VarChar(1000)
   source      String?  @db.MediumText
   environment Json?
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model ow_projects_history {
+  id          Int      @id @default(autoincrement()) @db.UnsignedInt
+  authorid    Int      @db.UnsignedInt
+  projectid   Int      @db.UnsignedInt
+  type        String?  @default("text") @db.VarChar(32)
+  time        DateTime @default(now()) @db.Timestamp(0)
+  title       String?  @default("ZeroCat新项目") @db.VarChar(50)
+  description String?  @default("commit") @db.VarChar(1000)
+  source      String?  @db.MediumText
+  state       String?  @default("private") @db.VarChar(32)
+  licence     String?  @db.VarChar(45)
 }

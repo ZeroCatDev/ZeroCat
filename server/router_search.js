@@ -11,7 +11,7 @@ const { join } = require("path");
 
 //搜索：Scratch项目列表：数据//只搜索标题
 router.get("/", async function (req, res) {
-  console.log(req.query.search_state);
+  //console.log(req.query.search_state);
   var search = {
     userid: req.query.search_userid,
     type: req.query.search_type,
@@ -24,7 +24,7 @@ router.get("/", async function (req, res) {
     state: req.query.search_state,
   };
 
-  console.log(search.state);
+  //console.log(search.state);
   if (search.state == "") {
     if (
       search.userid &&
@@ -49,7 +49,7 @@ router.get("/", async function (req, res) {
     search.state = [req.query.search_state];
   }
 
-  console.log(search.state);
+  //console.log(search.state);
   orderby = search.orderby.split("_")[0];
 
   ordersc = search.orderby.split("_")[1];
@@ -65,7 +65,7 @@ router.get("/", async function (req, res) {
   //  console.log(ordersc);
   searchinfo ={
     title: { contains: search.title },
-    src: search.src != "" ? { contains: search.src } : {},
+    source: search.source != "" ? { contains: search.source } : {},
     description: { contains: search.description },
     type: { contains: search.type },
     state: { in: search.state },
