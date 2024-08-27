@@ -83,7 +83,7 @@ router.post("/setType", function (req, res) {
 
 //开源项目
 router.post("/share", function (req, res) {
-  var SQL = `UPDATE ow_projects SET state=1 WHERE id=${String(
+  var SQL = `UPDATE ow_projects SET state='public' WHERE id=${String(
     Number(req.body["id"])
   )} AND authorid=${res.locals.userid} LIMIT 1`;
   DB.query(SQL, function (err, d) {
@@ -110,7 +110,7 @@ router.get("/getproject/:id", function (req, res) {
     var DefaultPython = {
       id: 0,
       title: "Python新项目",
-      state: 0,
+      state: 'private',
       src: `import turtle\n\nt = turtle.Turtle()\nt.forward(100)\n\nprint ("Welcome to ZeroCat!")`,
     };
     if (projectid == 1) {
@@ -123,12 +123,12 @@ router.get("/getproject/:id", function (req, res) {
   } else {
     if (!res.locals.login) {
       //未登录时，只能打开已发布的作品
-      SQL = `SELECT * FROM ow_projects WHERE id=${projectid} AND state>0`;
+      SQL = `SELECT * FROM ow_projects WHERE id=${projectid} AND state='public'`;
     } else {
       //作品编辑：能够打开一个作品的几种权限：
       //1、自己的作品；
       //2、开源的作品；
-      SQL = `SELECT * FROM ow_projects WHERE id=${projectid} AND (authorid=${res.locals.userid} OR state>0)`;
+      SQL = `SELECT * FROM ow_projects WHERE id=${projectid} AND (authorid=${res.locals.userid} OR state='public')`;
     }
   }
 

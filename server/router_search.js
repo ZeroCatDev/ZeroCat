@@ -31,22 +31,22 @@ router.get("/", async function (req, res) {
       res.locals.userid &&
       search.userid == res.locals.userid
     ) {
-      search.state = [0, 1, 2];
+      search.state = ['private', 'public'];
     } else {
-      search.state = [1, 2];
+      search.state = ['public'];
     }
-  } else if (search.state == "0") {
+  } else if (search.state == 'private') {
     if (
       search.userid &&
       res.locals.userid &&
       search.userid == res.locals.userid
     ) {
-      search.state = [0];
+      search.state = ['private'];
     } else {
-      search.state = [1];
+      search.state = ['public'];
     }
   } else {
-    search.state = [Number(req.query.search_state)];
+    search.state = [req.query.search_state];
   }
 
   console.log(search.state);
@@ -116,8 +116,8 @@ router.get("/", async function (req, res) {
   });
   //console.log(userresult); // 输出: [0, 1]
 
-  //var SQL = `SELECT id, title FROM ${tabelName} WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
-  //var SQL = `SELECT s.id, s.title, s.state, s.authorid, s.description, s.view_count, u.display_name, u.motto,u.images FROM ( SELECT id, title, state, authorid, description, view_count,time FROM ${search.type} WHERE state > 0 AND (title LIKE ? ) AND (src like ? ) AND (description like ? ) ${andid} ) s JOIN ow_users u ON s.authorid = u.id ORDER BY ${orderby} ${ordersc} LIMIT ${(search.curr - 1) * search.limit}, ${ search.limit }`; var QUERY = [ `%${search.title}%`, `%${search.src}%`, `%${search.description}%`, ];
+  //var SQL = `SELECT id, title FROM ${tabelName} WHERE state='public' AND (${searchinfo} LIKE ?) LIMIT 12`;
+  //var SQL = `SELECT s.id, s.title, s.state, s.authorid, s.description, s.view_count, u.display_name, u.motto,u.images FROM ( SELECT id, title, state, authorid, description, view_count,time FROM ${search.type} WHERE state='public' AND (title LIKE ? ) AND (src like ? ) AND (description like ? ) ${andid} ) s JOIN ow_users u ON s.authorid = u.id ORDER BY ${orderby} ${ordersc} LIMIT ${(search.curr - 1) * search.limit}, ${ search.limit }`; var QUERY = [ `%${search.title}%`, `%${search.src}%`, `%${search.description}%`, ];
 
   res.status(200).send({
     data: projectresult,

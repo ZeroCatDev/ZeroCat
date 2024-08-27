@@ -13,8 +13,8 @@ router.get("/", function (req, res) {
   //获取已分享的作品总数：1:普通作品，2：推荐的优秀作品
   var SQL =
     `SELECT ` +
-    ` (SELECT count(id) FROM ow_projects WHERE state>0 AND type='scratch' ) AS scratch_count, ` +
-    ` (SELECT count(id) FROM ow_projects WHERE state>0 AND type='python') AS python_count `;
+    ` (SELECT count(id) FROM ow_projects WHERE state='public' AND type='scratch' ) AS scratch_count, ` +
+    ` (SELECT count(id) FROM ow_projects WHERE state='public' AND type='python') AS python_count `;
   DB.query(SQL, function (err, data) {
     if (err) {
       // console.error('数据库操作出错：');
@@ -33,7 +33,7 @@ router.post("/getUserScratchProjects", function (req, res) {
   var curr = parseInt(req.body.curr); //当前要显示的页码
   var limit = parseInt(req.body.limit); //每页显示的作品数
   var userid = parseInt(req.body.userid); //
-  var SQL = `SELECT id, title,state,view_count,description FROM ow_projects WHERE authorid=${userid} AND state>0 AND type='scratch' ORDER BY view_count DESC LIMIT ${
+  var SQL = `SELECT id, title,state,view_count,description FROM ow_projects WHERE authorid=${userid} AND state='public' AND type='scratch' ORDER BY view_count DESC LIMIT ${
     (curr - 1) * limit
   }, ${limit}`;
   DB.query(SQL, function (err, data) {
@@ -50,7 +50,7 @@ router.post("/getUserPythonProjects", function (req, res) {
   var curr = parseInt(req.body.curr); //当前要显示的页码
   var limit = parseInt(req.body.limit); //每页显示的作品数
   var userid = parseInt(req.body.userid); //
-  var SQL = `SELECT id, title,state,view_count,description FROM ow_projects WHERE authorid=${userid} AND state>0 AND type='python' ORDER BY view_count DESC LIMIT ${
+  var SQL = `SELECT id, title,state,view_count,description FROM ow_projects WHERE authorid=${userid} AND state='public' AND type='python' ORDER BY view_count DESC LIMIT ${
     (curr - 1) * limit
   }, ${limit}`;
   DB.query(SQL, function (err, data) {
@@ -104,13 +104,13 @@ router.get("/getuserinfo", async function (req, res) {
   scratchcount =await  I.prisma.ow_projects.count({
     where: {
       type: 'scratch',
-      state: {in:[1,2]},
+      state: 'public',
     },
   });
   pythoncount =await  I.prisma.ow_projects.count({
     where: {
       type: 'python',
-      state: {in:[1,2]},
+      state: 'public',
     },
   });
   if (!user[0]) {
@@ -145,9 +145,9 @@ router.get("/myprojectcount", function (req, res) {
   }
   var SQL =
     `SELECT ` +
-    ` count(case when state=0 then 1 end) AS state0_count, ` +
-    ` count(case when state=1 then 1 end) AS state1_count, ` +
-    ` count(case when state=2 then 1 end) AS state2_count ` +
+    ` count(case when state='private' then 1 end) AS state0_count, ` +
+    ` count(case when state='public' then 1 end) AS state1_count, ` +
+    ` '' AS state2_count ` +
     ` FROM ow_projects WHERE authorid=${res.locals["userid"]} AND type='${res.locals.type}'`;
 
   DB.query(SQL, function (err, data) {
@@ -177,9 +177,9 @@ router.get("/work/info", function (req, res) {
   }
   var SQL =
     `SELECT ` +
-    ` count(case when state=0 then 1 end) AS state0_count, ` +
-    ` count(case when state=1 then 1 end) AS state1_count, ` +
-    ` count(case when state=2 then 1 end) AS state2_count ` +
+    ` count(case when state='private' then 1 end) AS state0_count, ` +
+    ` count(case when state='public' then 1 end) AS state1_count, ` +
+    `'' AS state2_count ` +
     ` FROM ow_projects WHERE authorid=${res.locals["userid"]} AND type='${res.locals.type}'`;
 
   DB.query(SQL, function (err, data) {
@@ -206,7 +206,7 @@ router.get("/projectinfo", function (req, res) {
   ` ow_users.motto AS author_motto` +
   ` FROM ow_projects ` +
   ` LEFT JOIN ow_users ON (ow_users.id=ow_projects.authorid) ` +
-  ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state>=1 or ow_projects.authorid=${res.locals.userid}) LIMIT 1`;
+  ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state='public' or ow_projects.authorid=${res.locals.userid}) LIMIT 1`;
   DB.query(SQL, function (err, SCRATCH) {
     if (err || SCRATCH.length == 0) {
       res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };

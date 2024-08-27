@@ -214,7 +214,7 @@ model ow_projects {
   type        String?  @default("text") @db.VarChar(32)
   licence     String?  @db.VarChar(32)
   authorid    Int      @db.UnsignedInt
-  state       Int?     @default(0) @db.UnsignedTinyInt
+  state       String?  @default("private") @db.VarChar(32)
   view_count  Int?     @default(0) @db.UnsignedInt
   like_count  Int?     @default(0)
   favo_count  Int?     @default(0)

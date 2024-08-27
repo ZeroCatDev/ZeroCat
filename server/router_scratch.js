@@ -19,7 +19,7 @@ router.get("/scratchcount", function (req, res) {
   //获取已分享的作品总数：1:普通作品，2：推荐的优秀作品
   var SQL =
     `SELECT ` +
-    ` (SELECT count(id) FROM ow_projects WHERE state>0 AND type='scratch' ) AS scratch_count `;
+    ` (SELECT count(id) FROM ow_projects WHERE state='public' AND type='scratch' ) AS scratch_count `;
   DB.query(SQL, function (err, data) {
     if (err) {
       // console.error('数据库操作出错：');
@@ -39,7 +39,7 @@ router.get("/view/getScratchProjects", function (req, res) {
     type = "time";
   }
 
-  var SQL = `SELECT ow_projects.id, ow_projects.title, ow_projects.state,ow_projects.authorid,ow_projects.view_count, ow_users.display_name,ow_users.motto,ow_users.images FROM ow_projects JOIN ow_users ON ow_projects.authorid = ow_users.id WHERE ow_projects.state > 0 AND ow_projects.type='scratch' ORDER BY ow_projects.${type} DESC LIMIT ${
+  var SQL = `SELECT ow_projects.id, ow_projects.title, ow_projects.state,ow_projects.authorid,ow_projects.view_count, ow_users.display_name,ow_users.motto,ow_users.images FROM ow_projects JOIN ow_users ON ow_projects.authorid = ow_users.id WHERE ow_projects.state='public' AND ow_projects.type='scratch' ORDER BY ow_projects.${type} DESC LIMIT ${
     (curr - 1) * limit
   }, ${limit}`;
   DB.query(SQL, function (err, data) {
@@ -62,8 +62,8 @@ router.get("/view/seachScratchProjects", function (req, res) {
   if (req.query.searchall == "true") {
     searchinfo = "src";
   }
-  //var SQL = `SELECT id, title FROM ow_projects WHERE state>0 AND (${searchinfo} LIKE ?) LIMIT 12`;
-  var SQL = `SELECT ow_projects.id, ow_projects.title, ow_projects.state,ow_projects.authorid,ow_projects.description,ow_projects.view_count, ow_users.display_name,ow_users.motto FROM ow_projects JOIN ow_users ON ow_projects.authorid = ow_users.id WHERE ow_projects.state>0 AND (${searchinfo} LIKE ?) AND ow_projects.type='${tabelName}'`;
+  //var SQL = `SELECT id, title FROM ow_projects WHERE state='public' AND (${searchinfo} LIKE ?) LIMIT 12`;
+  var SQL = `SELECT ow_projects.id, ow_projects.title, ow_projects.state,ow_projects.authorid,ow_projects.description,ow_projects.view_count, ow_users.display_name,ow_users.motto FROM ow_projects JOIN ow_users ON ow_projects.authorid = ow_users.id WHERE ow_projects.state='public' AND (${searchinfo} LIKE ?) AND ow_projects.type='${tabelName}'`;
   var WHERE = [`%${req.query.txt}%`];
   DB.qww(SQL, WHERE, function (err, data) {
     if (err) {
@@ -93,7 +93,7 @@ router.get("/projectinfo", function (req, res) {
     ` ow_users.motto AS author_motto` +
     ` FROM ow_projects ` +
     ` LEFT JOIN ow_users ON (ow_users.id=ow_projects.authorid) ` +
-    ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state>=1 or ow_projects.authorid=${res.locals.userid}) AND ow_projects.type='scratch' LIMIT 1`;
+    ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state='public' or ow_projects.authorid=${res.locals.userid}) AND ow_projects.type='scratch' LIMIT 1`;
   DB.query(SQL, function (err, SCRATCH) {
     if (err || SCRATCH.length == 0) {
       res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
@@ -119,7 +119,7 @@ router.get("/projectinfo2", function (req, res) {
     ` ow_users.motto AS author_motto` +
     ` FROM ow_projects ` +
     ` LEFT JOIN ow_users ON (ow_users.id=ow_projects.authorid) ` +
-    ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state>=1 or ow_projects.authorid=${res.locals.userid}) AND ow_projects.type='scratch' LIMIT 1`;
+    ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state='public' or ow_projects.authorid=${res.locals.userid}) AND ow_projects.type='scratch' LIMIT 1`;
   DB.query(SQL, function (err, SCRATCH) {
     if (err || SCRATCH.length == 0) {
       res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
@@ -313,7 +313,7 @@ router.post("/project/:projectid", function (req, res) {
     SQL = `SELECT id, authorid, state, title, src FROM ow_projects WHERE id=1`; //默认作品为1号作品
   } else {
     if (!res.locals.login) {
-      SQL = `SELECT * FROM ow_projects WHERE id=${projectid} AND state>0`;
+      SQL = `SELECT * FROM ow_projects WHERE id=${projectid} AND state='public'`;
     } else {
       //作品编辑：能够打开一个作品的几种权限：
       //0、管理员能打开所有作品;
@@ -324,7 +324,7 @@ router.post("/project/:projectid", function (req, res) {
       if (res.locals["is_admin"] == 1) {
         SQL = `SELECT * FROM ow_projects WHERE id=${projectid}`;
       } else {
-        SQL = `SELECT * FROM ow_projects WHERE id=${projectid} AND (authorid=${res.locals.userid} OR state>0)`;
+        SQL = `SELECT * FROM ow_projects WHERE id=${projectid} AND (authorid=${res.locals.userid} OR state='public')`;
         //(AND (courseid IN (SELECT courseid FROM student WHERE studentid=${res.locals.userid} AND coursepayid>0)))
       }
     }
@@ -646,10 +646,10 @@ router.post("/getMyProjectLibrary", function (req, res) {
 
   var WHERE = "";
   if (req.body.t == 0) {
-    WHERE = " AND state=0";
+    WHERE = " AND state='private'";
   } else if (req.body.t == 1) {
     // 包括1发而的、2推荐的
-    WHERE = " AND state>0";
+    WHERE = " AND state='public'";
   }
 
   if (req.body.f && req.body.f != "") {
@@ -671,7 +671,7 @@ router.post("/getYxProjectLibrary", function (req, res) {
   var SELECT =
     ` SELECT s.id, s.title, s.view_count, s.authorid, u.display_name, u.images FROM ow_projects s ` +
     " LEFT JOIN ow_users u ON u.id=s.authorid " +
-    ` WHERE s.state=2 AND s.type='scratch' ORDER BY s.view_count DESC LIMIT ${req.body.l},${req.body.n}`;
+    ` WHERE s.state='public' AND s.type='scratch' ORDER BY s.view_count DESC LIMIT ${req.body.l},${req.body.n}`;
   DB.query(SELECT, function (err, SCRATCH) {
     if (err) {
       res.status(200).send({ status: "err", data: [] });
@@ -693,7 +693,7 @@ router.post("/getBackdropLibrary", function (req, res) {
     WHERE += ` AND name LIKE '%${req.body.f}%'`;
   }
 
-  var SELECT = `SELECT id, name, md5, info0, info1, info2  FROM material_backdrop WHERE state=1 ${WHERE} ORDER BY name DESC LIMIT ${req.body.l},${req.body.n}`;
+  var SELECT = `SELECT id, name, md5, info0, info1, info2  FROM material_backdrop WHERE state='public' ${WHERE} ORDER BY name DESC LIMIT ${req.body.l},${req.body.n}`;
   DB.query(SELECT, function (err, Backdrop) {
     if (err) {
       res.status(200).send({ status: "err", data: [], tags: [] });
@@ -722,8 +722,8 @@ router.post("/getBackdropLibrary", function (req, res) {
 router.post("/getRandomBackdrop", function (req, res) {
   const SELECT =
     `SELECT name, md5, info0, info1, info2 FROM material_backdrop` +
-    ` JOIN (SELECT MAX(id) AS maxId, MIN(id) AS minId FROM material_backdrop WHERE state=1) AS m ` +
-    ` WHERE id >= ROUND(RAND()*(m.maxId - m.minId) + m.minId) AND state=1 LIMIT 1`;
+    ` JOIN (SELECT MAX(id) AS maxId, MIN(id) AS minId FROM material_backdrop WHERE state='public') AS m ` +
+    ` WHERE id >= ROUND(RAND()*(m.maxId - m.minId) + m.minId) AND state='public' LIMIT 1`;
   DB.query(SELECT, function (err, B) {
     if (err || B.length < 1) {
       res.status(200).send({ status: "err", data: {} });
@@ -748,7 +748,7 @@ router.post("/getCostumeLibrary", function (req, res) {
     WHERE += ` AND name LIKE '%${req.body.f}%'`;
   }
 
-  var SELECT = `SELECT id, name, md5, info0, info1, info2  FROM material_costume WHERE state=1 ${WHERE} ORDER BY name DESC LIMIT ${req.body.l},${req.body.n}`;
+  var SELECT = `SELECT id, name, md5, info0, info1, info2  FROM material_costume WHERE state='public' ${WHERE} ORDER BY name DESC LIMIT ${req.body.l},${req.body.n}`;
   DB.query(SELECT, function (err, Backdrop) {
     if (err) {
       res.status(200).send({ status: "err", data: [], tags: [] });
@@ -777,8 +777,8 @@ router.post("/getCostumeLibrary", function (req, res) {
 router.post("/getRandomCostume", function (req, res) {
   const SELECT =
     `SELECT name, md5, info0, info1, info2 FROM material_costume` +
-    ` JOIN (SELECT MAX(id) AS maxId, MIN(id) AS minId FROM material_costume WHERE state=1) AS m ` +
-    ` WHERE id >= ROUND(RAND()*(m.maxId - m.minId) + m.minId) AND state=1 LIMIT 1`;
+    ` JOIN (SELECT MAX(id) AS maxId, MIN(id) AS minId FROM material_costume WHERE state='public') AS m ` +
+    ` WHERE id >= ROUND(RAND()*(m.maxId - m.minId) + m.minId) AND state='public' LIMIT 1`;
   DB.query(SELECT, function (err, B) {
     if (err || B.length < 1) {
       res.status(200).send({ status: "err", data: {} });
@@ -801,7 +801,7 @@ router.post("/getSoundLibrary", function (req, res) {
     WHERE += ` AND name LIKE '%${req.body.f}%'`;
   }
 
-  var SELECT = `SELECT id, name, md5, format, rate, sampleCount FROM material_sound WHERE state=1 ${WHERE} ORDER BY name DESC LIMIT ${req.body.l},${req.body.n}`;
+  var SELECT = `SELECT id, name, md5, format, rate, sampleCount FROM material_sound WHERE state='public' ${WHERE} ORDER BY name DESC LIMIT ${req.body.l},${req.body.n}`;
   DB.query(SELECT, function (err, Backdrop) {
     if (err) {
       res.status(200).send({ status: "err", data: [], tags: [] });
@@ -829,8 +829,8 @@ router.post("/getSoundLibrary", function (req, res) {
 router.post("/getRandomSound", function (req, res) {
   const SELECT =
     `SELECT name, md5, format, rate, sampleCount FROM material_sound` +
-    ` JOIN (SELECT MAX(id) AS maxId, MIN(id) AS minId FROM material_sound WHERE state=1) AS m ` +
-    ` WHERE id >= ROUND(RAND()*(m.maxId - m.minId) + m.minId) AND state=1 LIMIT 1`;
+    ` JOIN (SELECT MAX(id) AS maxId, MIN(id) AS minId FROM material_sound WHERE state='public') AS m ` +
+    ` WHERE id >= ROUND(RAND()*(m.maxId - m.minId) + m.minId) AND state='public' LIMIT 1`;
   DB.query(SELECT, function (err, B) {
     if (err || B.length < 1) {
       res.status(200).send({ status: "err", data: {} });
@@ -853,7 +853,7 @@ router.post("/getSpriteLibrary", function (req, res) {
     WHERE += ` AND name LIKE '%${req.body.f}%'`;
   }
 
-  var SELECT = `SELECT id, name, json FROM material_sprite WHERE state=1 ${WHERE} ORDER BY name DESC LIMIT ${req.body.l},${req.body.n}`;
+  var SELECT = `SELECT id, name, json FROM material_sprite WHERE state='public' ${WHERE} ORDER BY name DESC LIMIT ${req.body.l},${req.body.n}`;
   DB.query(SELECT, function (err, Backdrop) {
     if (err) {
       res.status(200).send({ status: "err", data: [], tags: [] });
@@ -881,8 +881,8 @@ router.post("/getSpriteLibrary", function (req, res) {
 router.post("/getRandomSprite", function (req, res) {
   const SELECT =
     `SELECT name, json FROM material_sprite` +
-    ` JOIN (SELECT MAX(id) AS maxId, MIN(id) AS minId FROM material_sprite WHERE state=1) AS m ` +
-    ` WHERE id >= ROUND(RAND()*(m.maxId - m.minId) + m.minId) AND state=1 LIMIT 1`;
+    ` JOIN (SELECT MAX(id) AS maxId, MIN(id) AS minId FROM material_sprite WHERE state='public') AS m ` +
+    ` WHERE id >= ROUND(RAND()*(m.maxId - m.minId) + m.minId) AND state='public' LIMIT 1`;
   DB.query(SELECT, function (err, B) {
     if (err || B.length < 1) {
       res.status(200).send({ status: "err", data: {} });

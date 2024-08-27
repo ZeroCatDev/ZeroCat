@@ -247,11 +247,11 @@ router.get('/works/scratch/data', function(req, res) {
     WHERE='';
     NICKNAME = '';//根据昵称查找
     if (req.query.w == 'search_state0'){
-        WHERE = ` WHERE scratch.state=0 `;
+        WHERE = ` WHERE scratch.state='private' `;
     } else if (req.query.w == 'search_state1'){
-        WHERE = ` WHERE scratch.state=1 `;
+        WHERE = ` WHERE scratch.state='public' `;
     } else if (req.query.w == 'search_state2'){
-        WHERE = ` WHERE scratch.state=2 `;
+        WHERE = ` WHERE scratch.state='public' `;
     } else if (req.query.w == 'search_workname'){
         WHERE = ` WHERE scratch.title LIKE '%${req.query.v}%' `;
     } else if (req.query.w == 'search_display_name'){
@@ -353,11 +353,11 @@ router.get('/works/python/data', function(req, res) {
     WHERE='';
     NICKNAME = '';//根据昵称查找
     if (req.query.w == 'search_state0'){
-        WHERE = ` WHERE python.state=0 `;
+        WHERE = ` WHERE python.state='private' `;
     } else if (req.query.w == 'search_state1'){
-        WHERE = ` WHERE python.state=1 `;
+        WHERE = ` WHERE python.state='public' `;
     } else if (req.query.w == 'search_state2'){
-        WHERE = ` WHERE python.state=2 `;
+        WHERE = ` WHERE python.state='public' `;
     } else if (req.query.w == 'search_workname'){
         WHERE = ` WHERE python.title LIKE '%${req.query.v}%' `;
     } else if (req.query.w == 'search_display_name'){

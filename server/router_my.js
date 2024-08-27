@@ -34,9 +34,9 @@ router.get("/project", function (req, res) {
 router.get("/scratch", function (req, res) {
   var SQL =
     `SELECT ` +
-    ` count(case when state=0 then 1 end) AS state0_count, ` +
-    ` count(case when state=1 then 1 end) AS state1_count, ` +
-    ` count(case when state=2 then 1 end) AS state2_count ` +
+    ` count(case when state='private' then 1 end) AS state0_count, ` +
+    ` count(case when state='public' then 1 end) AS state1_count, ` +
+    ` '' AS state2_count ` +
     ` FROM scratch WHERE authorid=${res.locals["userid"]}`;
 
   DB.query(SQL, function (err, data) {
@@ -57,9 +57,9 @@ router.get("/scratch", function (req, res) {
 router.get("/python", function (req, res) {
   var SQL =
     `SELECT ` +
-    ` count(case when state=0 then 1 end) AS state0_count, ` +
-    ` count(case when state=1 then 1 end) AS state1_count, ` +
-    ` count(case when state=2 then 1 end) AS state2_count ` +
+    ` count(case when state='private' then 1 end) AS state0_count, ` +
+    ` count(case when state='public' then 1 end) AS state1_count, ` +
+    ` '' AS state2_count ` +
     ` FROM python WHERE authorid=${res.locals.userid}`;
 
   DB.query(SQL, function (err, data) {
@@ -115,9 +115,10 @@ router.get("/getPythonProjects", function (req, res) {
   });
 });
 
+// 弃用
 //分享Scratch项目
 router.post("/scratch/share", function (req, res) {
-  var SQL = `UPDATE ow_projects SET state=1 WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
+  var SQL = `UPDATE ow_projects SET state='public' WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
   DB.query(SQL, function (err, d) {
     if (err) {
       res.status(200).send(I.msg_fail);
@@ -128,9 +129,10 @@ router.post("/scratch/share", function (req, res) {
   });
 });
 
+// 弃用
 //分享Scratch项目
 router.post("/python/share", function (req, res) {
-  var SQL = `UPDATE ow_projects SET state=1 WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
+  var SQL = `UPDATE ow_projects SET state='public' WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
   DB.query(SQL, function (err, d) {
     if (err) {
       res.status(200).send(I.msg_fail);
@@ -143,7 +145,7 @@ router.post("/python/share", function (req, res) {
 
 //分享Scratch项目
 router.post("/project/share", function (req, res) {
-  var SQL = `UPDATE ow_projects SET state=1 WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
+  var SQL = `UPDATE ow_projects SET state='public' WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
   DB.query(SQL, function (err, d) {
     if (err) {
       res.status(200).send(I.msg_fail);
@@ -196,7 +198,7 @@ router.post("/project/setdescription", function (req, res) {
 
 //取消分享Scratch项目
 router.post("/scratch/noshare", function (req, res) {
-  var SQL = `UPDATE ow_projects SET state=0 WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
+  var SQL = `UPDATE ow_projects SET state='private' WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
   DB.query(SQL, function (err, d) {
     if (err) {
       res.status(200).send(I.msg_fail);
@@ -209,7 +211,7 @@ router.post("/scratch/noshare", function (req, res) {
 
 //取消分享Scratch项目
 router.post("/python/noshare", function (req, res) {
-  var SQL = `UPDATE ow_projects SET state=0 WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
+  var SQL = `UPDATE ow_projects SET state='private' WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
   DB.query(SQL, function (err, d) {
     if (err) {
       res.status(200).send(I.msg_fail);
@@ -222,7 +224,7 @@ router.post("/python/noshare", function (req, res) {
 
 //取消分享Scratch项目
 router.post("/project/noshare", function (req, res) {
-  var SQL = `UPDATE ow_projects SET state=0 WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
+  var SQL = `UPDATE ow_projects SET state='private' WHERE id=${req.body["id"]} AND authorid=${res.locals.userid} LIMIT 1`;
   DB.query(SQL, function (err, d) {
     if (err) {
       res.status(200).send(I.msg_fail);
