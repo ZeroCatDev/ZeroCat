@@ -122,6 +122,7 @@ router.get("/projectinfo2", function (req, res) {
     ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state='public' or ow_projects.authorid=${res.locals.userid}) AND ow_projects.type='scratch' LIMIT 1`;
   DB.query(SQL, function (err, SCRATCH) {
     if (err || SCRATCH.length == 0) {
+      console.log(err);
       res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
       res.send({ code: 404, status: "404", msg: "项目不存在或未发布" });
       return;
