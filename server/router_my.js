@@ -374,7 +374,7 @@ router.post("/set/userinfo",geetest, function (req, res) {
 router.post("/set/username",geetest, function (req, res) {
   var UPDATE = `UPDATE ow_users SET ? WHERE id=${res.locals.userid} LIMIT 1`;
   var SET = {
-    username: req.body["username"],
+    username: req.body.username,
   };
   DB.qww(UPDATE, SET, function (err, u) {
     if (err) {

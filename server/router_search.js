@@ -19,6 +19,7 @@ router.get("/", async function (req, res) {
     src: req.query.search_src,
     description: req.query.search_description,
     orderby: req.query.search_orderby,
+    tags: req.query.search_tag,
     curr: Number(req.query.curr),
     limit: Number(req.query.limit),
     state: req.query.search_state,
@@ -69,8 +70,10 @@ router.get("/", async function (req, res) {
     description: { contains: search.description },
     type: { contains: search.type },
     state: { in: search.state },
+    tags: { contains: search.tags },
     authorid: search.userid != "" ? { equals: Number(search.userid) } : {},
   }
+  console.log(searchinfo);
   var projectresult = await I.prisma.ow_projects.findMany({
     orderBy: [
       orderby === "view_count"
@@ -91,6 +94,7 @@ router.get("/", async function (req, res) {
       description: true,
       view_count: true,
       time: true,
+      tags: true,
     },
     skip: (search.curr - 1) * search.limit,
     take: search.limit,

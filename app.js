@@ -6,6 +6,7 @@ const jwt = require("jsonwebtoken");
 require("dotenv").config({ override: true });
 
 // 日志部分
+/*
 const opentelemetry = require("@opentelemetry/sdk-node");
 const {
   getNodeAutoInstrumentations,
@@ -28,7 +29,7 @@ const sdk = new opentelemetry.NodeSDK({
   instrumentations: [getNodeAutoInstrumentations()],
 });
 sdk.start();
-
+*/
 var morganlogger = require("morgan");
 morganlogger.token("colored-status", (req, res) => {
   const status = res.statusCode;

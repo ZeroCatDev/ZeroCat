@@ -10,63 +10,86 @@ router.all("*", function (req, res, next) {
   next();
 });
 //router.get('/', function (req, res) {})
-
+var default_project = require("./lib/default_project.js");
 //新作品
 router.post("/", function (req, res) {
   if (!res.locals.login) {
     res.status(404);
     return;
   }
+  try {
 
-  const allowable = [
-    "type",
-    "license",
-    "state",
-    "title",
-    "description",
-    "devsource",
-    "source",
-    "history",
-  ];
+    const allowable = [
+      "type",
+      "license",
+      "state",
+      "title",
+      "description",
+      "devsource",
+      "source",
+      "history",
+      "tags",
+    ];
 
-  // 定义一个新的JSON对象来存储符合条件的键值对
-  var outputJson = {};
+    // 定义一个新的JSON对象来存储符合条件的键值对
+    var outputJson = {};
 
-  // 遍历输入的JSON对象
-  for (const key in req.body) {
-    if (req.body.hasOwnProperty(key)) {
-      // 检查当前键是否在指定的名称列表中
-      if (allowable.includes(key)) {
-        // 如果在，则将该键值对加入到outputJson中
-        outputJson[key] = req.body[key];
+    // 遍历输入的JSON对象
+    for (const key in req.body) {
+      if (req.body.hasOwnProperty(key)) {
+        // 检查当前键是否在指定的名称列表中
+        if (allowable.includes(key)) {
+          // 如果在，则将该键值对加入到outputJson中
+          outputJson[key] = req.body[key];
+        }
       }
     }
+    if (outputJson.devsource && outputJson.source == undefined) {
+      // 如果指定了devsource没传source则都为devsource
+      outputJson.source = outputJson.devsource;
+    } else if (outputJson.source && outputJson.devsource == undefined) {
+      // 如果指定了source没传devsource则都为source
+      outputJson.devsource = outputJson.source;
+    } else if (outputJson.source == undefined && outputJson.devsource == undefined && outputJson.type!= undefined) {
+      // 如果指定了类型没传源码则默认为该类型的源码
+      console.log(outputJson.type);
+      console.log(default_project[outputJson.type]);
+      outputJson.source = default_project[outputJson.type];
+      outputJson.devsource = default_project[outputJson.type];
+    } else {
+      console.log("没指定类型");
+      // 如果全都不指定则默认为scratch
+      outputJson.source = default_project.scratch;
+      outputJson.devsource = default_project.scratch;
+    }
+    outputJson.authorid = res.locals.userid;
+    console.log(outputJson);
+    I.prisma.ow_projects
+      .create({
+        data: outputJson,
+      })
+      .catch((err) => {
+        console.log(err);
+        res
+          .status(200)
+          .send({
+            status: "0",
+            msg: "保存失败",
+            message: "保存失败",
+            error: err,
+          });
+        return;
+      })
+      .then(async (result) => {
+        res
+          .status(200)
+          .send({ status: "1", msg: "保存成功", message: "保存成功", id: result.id });
+      });
+  } catch (err) {
+    console.log(err);
+    res.status(200).send({ status: "0", msg: "保存失败", error: err });
+    return;
   }
-  if (outputJson.devsource && outputJson.source == undefined) {
-    outputJson.source = outputJson.devsource;
-  }
-  outputJson.authorid = res.locals.userid;
-  I.prisma.ow_projects
-    .create({
-      data: outputJson,
-    })
-    .catch((err) => {
-      console.log(err);
-      res
-        .status(200)
-        .send({
-          status: "0",
-          msg: "保存失败",
-          message: "保存失败",
-          error: err,
-        });
-      return;
-    })
-    .then(async (result) => {
-      res
-        .status(200)
-        .send({ status: "1", msg: "保存成功", message: "保存成功", id: result.id });
-    });
 });
 
 //fork作品
@@ -93,6 +116,7 @@ router.post("/:id/fork", function (req, res) {
               type: result.type,
               source: result.source,
               devsource: result.source,
+              tags: result.tags,
             },
           }).catch((err) => {
             console.log(err);
@@ -118,45 +142,52 @@ router.put("/:id/source/dev", function (req, res) {
     res.status(200).send({ status: "0", msg: "请先登录" });
     return;
   }
-  console.log(req.body);
-  I.prisma.ow_projects
-    .update({
-      where: { id: Number(req.params.id), authorid: Number(res.locals.userid) },
-      data: {
-        devsource: JSON.stringify(req.body),
-      },
-    })
-    .catch((err) => {
-      console.log(err);
-      res.status(200).send({ status: "0", msg: "保存失败", error: err });
-      return;
-    })
-    .then(async (result) => {
-      console.log(result);
-      if (result.devenv == 0) {
-        I.prisma.ow_projects
-          .update({
-            where: {
-              id: Number(req.params.id),
-              authorid: Number(res.locals.userid),
-            },
-            data: {
-              source: JSON.stringify(req.body),
-            },
-          })
-          .catch((err) => {
-            console.log(err);
-            res.status(200).send({ status: "0", msg: "保存失败", error: err });
-            return;
-          })
-          .then(async (result) => {
-            res.status(200).send({ status: "1", msg: "保存成功" });
-            console.log(result);
-          });
-      } else {
-        res.status(200).send({ status: "1", msg: "保存成功" });
-      }
-    });
+  //console.log(req.body);
+  try {
+    I.prisma.ow_projects
+      .update({
+        where: { id: Number(req.params.id), authorid: Number(res.locals.userid) },
+        data: {
+          devsource: JSON.stringify(req.body),
+        },
+      })
+      .catch((err) => {
+        console.log(err);
+        res.status(200).send({ status: "0", msg: "保存失败", error: err });
+        return;
+      })
+      .then(async (result) => {
+        console.log(result);
+        if (result.devenv == 0) {
+          I.prisma.ow_projects
+            .update({
+              where: {
+                id: Number(req.params.id),
+                authorid: Number(res.locals.userid),
+              },
+              data: {
+                source: JSON.stringify(req.body),
+              },
+            })
+            .catch((err) => {
+              console.log(err);
+              res.status(200).send({ status: "0", msg: "保存失败", error: err });
+              return;
+            })
+            .then(async (result) => {
+              res.status(200).send({ status: "1", msg: "保存成功" });
+              console.log(result);
+            });
+        } else {
+          res.status(200).send({ status: "1", msg: "保存成功" });
+        }
+      });
+  } catch (error) {
+    console.log(error);
+    res.status(200).send({ status: "0", msg: "保存失败", error: error });
+    return;
+  }
+
 });
 
 // 保存
@@ -175,6 +206,7 @@ router.put("/:id", function (req, res) {
     "devsource",
     "source",
     "history",
+    "tags",
   ];
 
   // 定义一个新的JSON对象来存储符合条件的键值对
@@ -293,7 +325,7 @@ router.post("/:id/push", async function (req, res) {
       .then(async (result) => {
         res
           .status(200)
-          .send({ status: "1", msg: "推送成功", message: "推送成功"  });
+          .send({ status: "1", msg: "推送成功", message: "推送成功" });
         if (project.history == 1) {
           //console.log(project.devsource)
           //console.log(result.source)
@@ -311,6 +343,7 @@ router.post("/:id/push", async function (req, res) {
                   description: project.description,
                   state: project.state,
                   license: project.license,
+                  tags: project.tags,
                 },
               })
               .catch((err) => {
