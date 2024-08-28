@@ -123,7 +123,7 @@ model register {
 model scratch1 {
   id          Int      @id @default(autoincrement()) @db.UnsignedInt
   type        String?  @default("scratch") @db.VarChar(32)
-  licence     String?  @db.VarChar(32)
+  license     String?  @db.VarChar(32)
   authorid    Int
   state       Int?     @default(0) @db.UnsignedTinyInt
   view_count  Int?     @default(0) @db.UnsignedInt
@@ -179,7 +179,7 @@ model wl_Users {
 model ow_Projects1 {
   id          Int       @id @default(autoincrement()) @db.UnsignedInt
   type        String?   @default("text") @db.VarChar(32)
-  licence     String?   @db.VarChar(32)
+  license     String?   @db.VarChar(32)
   authorid    String    @db.VarChar(32)
   teacherid   Int?      @default(0) @db.UnsignedInt
   state       Int?      @default(0) @db.UnsignedTinyInt
@@ -196,7 +196,7 @@ model ow_Projects1 {
 model python1 {
   id          Int      @id @default(autoincrement()) @db.UnsignedInt
   type        String?  @default("python") @db.VarChar(32)
-  licence     String?  @db.VarChar(32)
+  license     String?  @db.VarChar(32)
   authorid    String   @db.VarChar(32)
   state       Int?     @default(0) @db.UnsignedTinyInt
   view_count  Int?     @default(0) @db.UnsignedInt
@@ -212,7 +212,7 @@ model python1 {
 model ow_projects {
   id          Int      @id @default(autoincrement()) @db.UnsignedInt
   type        String?  @default("text") @db.VarChar(32)
-  licence     String?  @db.VarChar(32)
+  license     String?  @db.VarChar(32)
   authorid    Int      @db.UnsignedInt
   state       String?  @default("private") @db.VarChar(32)
   view_count  Int?     @default(0) @db.UnsignedInt
@@ -259,21 +259,6 @@ model ow_users {
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model ow_project {
-  id          Int      @id @default(autoincrement()) @db.UnsignedInt
-  authorid    Int      @db.UnsignedInt
-  projectid   Int      @db.UnsignedInt
-  branche     String?  @default("main") @db.VarChar(45)
-  type        String?  @default("commit") @db.VarChar(32)
-  view_count  Int?     @default(0) @db.UnsignedInt
-  time        DateTime @default(now()) @db.Timestamp(0)
-  title       String?  @default("ZeroCat新项目") @db.VarChar(50)
-  commit      String?  @default("commit") @db.VarChar(1000)
-  source      String?  @db.MediumText
-  environment Json?
-}
-
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model ow_projects_history {
   id          Int      @id @default(autoincrement()) @db.UnsignedInt
   authorid    Int      @db.UnsignedInt
@@ -284,5 +269,5 @@ model ow_projects_history {
   description String?  @default("commit") @db.VarChar(1000)
   source      String?  @db.MediumText
   state       String?  @default("private") @db.VarChar(32)
-  licence     String?  @db.VarChar(45)
+  license     String?  @db.VarChar(45)
 }

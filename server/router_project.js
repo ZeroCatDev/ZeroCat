@@ -20,7 +20,7 @@ router.post("/", function (req, res) {
 
   const allowable = [
     "type",
-    "licence",
+    "license",
     "state",
     "title",
     "description",
@@ -67,6 +67,50 @@ router.post("/", function (req, res) {
         .status(200)
         .send({ status: "1", msg: "保存成功", message: "保存成功", id: result.id });
     });
+});
+
+//fork作品
+router.post("/:id/fork", function (req, res) {
+  if (!res.locals.login) {
+    res.status(404);
+    return;
+  }
+  try {
+    I.prisma.ow_projects.findFirst({
+      where: {
+        id: Number(req.params.id),
+      },
+    }).then((result) => {
+      if (result.state == 'public') {
+        I.prisma.ow_projects
+          .create({
+            data: {
+              authorid: res.locals.userid,
+              title: result.title + '改编',
+              description: result.description,
+              license: result.license,
+              state: 'private',
+              type: result.type,
+              source: result.source,
+              devsource: result.source,
+            },
+          }).catch((err) => {
+            console.log(err);
+            res.status(200).send({ status: "0", msg: "改编失败", error: err });
+          }).then((result) => {
+            res.status(200).send({ status: "1", msg: "改编成功", id: result.id });
+          })
+      } else {
+        res.status(200).send({ status: "0", msg: "改编失败" });
+      }
+    })
+  }
+  catch (err) {
+    console.log(err);
+    res.status(200).send({ status: "0", msg: "改编失败", error: err });
+    return;
+  }
+
 });
 // 保存
 router.put("/:id/source/dev", function (req, res) {
@@ -124,7 +168,7 @@ router.put("/:id", function (req, res) {
 
   const allowable = [
     "type",
-    "licence",
+    "license",
     "state",
     "title",
     "description",
@@ -249,7 +293,7 @@ router.post("/:id/push", async function (req, res) {
       .then(async (result) => {
         res
           .status(200)
-          .send({ status: "1", msg: "推送成功", message: "推送成功" });
+          .send({ status: "1", msg: "推送成功", message: "推送成功"  });
         if (project.history == 1) {
           //console.log(project.devsource)
           //console.log(result.source)
@@ -266,7 +310,7 @@ router.post("/:id/push", async function (req, res) {
                   title: project.title,
                   description: project.description,
                   state: project.state,
-                  licence: project.licence,
+                  license: project.license,
                 },
               })
               .catch((err) => {

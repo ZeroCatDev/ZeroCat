@@ -6,7 +6,7 @@ console.log({
   description: 'ZeroCat',
   source: '{"111":"111","title":"111"}',
   state: 'private',
-  licence: 'MIT'
+  license: 'MIT'
 }===
 {
   authorid: 1,
@@ -16,5 +16,5 @@ console.log({
   description: 'ZeroCat',
   source: '{"111":"111","title":"111"}',
   state: 'private',
-  licence: 'MIT'
+  license: 'MIT'
 })
