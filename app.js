@@ -1,10 +1,9 @@
 var express = require("express");
 var app = express();
-var http = require("http");
 const jwt = require("jsonwebtoken");
 
 require("dotenv").config({ override: true });
-
+//console.log(global.config);
 // 日志部分
 /*
 const opentelemetry = require("@opentelemetry/sdk-node");
@@ -30,6 +29,7 @@ const sdk = new opentelemetry.NodeSDK({
 });
 sdk.start();
 */
+
 var morganlogger = require("morgan");
 morganlogger.token("colored-status", (req, res) => {
   const status = res.statusCode;
@@ -51,9 +51,10 @@ app.use(
 
 // cors配置
 var cors = require("cors");
+corslist = global.config.cors;
 var corsOptions = {
   origin: (origin, callback) => {
-    if (!origin || process.env.corslist.indexOf(new URL(origin).hostname) !== -1) {
+    if (!origin || corslist.indexOf(new URL(origin).hostname) !== -1) {
       callback(null, true);
     } else {
       callback(new Error("Not allowed by CORS"));
@@ -67,10 +68,10 @@ var corsOptions = {
 app.use(cors(corsOptions)); // 应用CORS配置函数
 
 //设置环境变量
-//var session = require("express-session"); app.use( session({ secret: process.env.SessionSecret, resave: false, name: "ZeroCat-session", saveUninitialized: true, cookie: { secure: false }, }) );
+//var session = require("express-session"); app.use( session({ secret: global.config.security.SessionSecret, resave: false, name: "ZeroCat-session", saveUninitialized: true, cookie: { secure: false }, }) );
 //express 的cookie的解析组件
 var cookieParser = require("cookie-parser");
-app.use(cookieParser(process.env.SessionSecret));
+app.use(cookieParser(global.config.security.SessionSecret));
 
 //express 的http请求体进行解析组件
 var bodyParser = require("body-parser");
@@ -93,18 +94,14 @@ app.set("view engine", "ejs");
 //数据库
 var DB = require("./server/lib/database.js");
 
-//设置静态资源路径
-if (process.env.localstatic == "true") {
-  app.use(process.env.staticurl, express.static(process.env.staticpath));
-  console.log("local static");
-}
+
 //全局变量
 global.dirname = __dirname;
 
 //启动http(80端口)==================================
-http.createServer(app).listen(3000, "0.0.0.0", function () {
-  console.log("Listening on http://localhost:3000");
-}); // 平台总入口
+//http.createServer(app).listen(3000, "0.0.0.0", function () {
+//  console.log("Listening on http://localhost:3000");
+//}); // 平台总入口
 app.options("*", cors());
 app.all("*", function (req, res, next) {
   //console.log(req.method +' '+ req.url + " IP:" + req.ip);
@@ -117,7 +114,7 @@ app.all("*", function (req, res, next) {
     req.query.token; // 获取JWT令牌
 
   if (token) {
-    jwt.verify(token, process.env.jwttoken, (err, decodedToken) => {
+    jwt.verify(token, global.config.security.jwttoken, (err, decodedToken) => {
       // 解析并验证JWT
       if (err) {
         // 如果验证失败，清除本地登录状态
@@ -142,7 +139,7 @@ app.all("*", function (req, res, next) {
         res.locals.avatar = userInfo.avatar;
 
         res.locals["is_admin"] = 0;
-        if (userInfo.email == process.env.adminuser) {
+        if (userInfo.email == global.config.security.adminuser) {
           res.locals["is_admin"] = 1;
         }
         //console.log("JWT验证成功: " + userInfo.email);
@@ -211,7 +208,7 @@ app.use("/scratch", router_scratch);
 var apiserver = require("./server/router_api.js");
 app.use("/api", apiserver);
 
-//api路由
+//项目处理路由
 var router_project = require("./server/router_project.js");
 app.use("/project", router_project);
 
@@ -239,3 +236,5 @@ app.all("*", function (req, res, next) {
   res.locals.tipType = "访问错误";
   res.render("404.ejs");
 });
+
+module.exports = app;

@@ -1,7 +1,7 @@
 
-<script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/layui/jquery.min.js"></script>
-  <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">	
+<script type="text/javascript" src="<%= global.config.urls.static %>/layui/layui.all.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/layui/jquery.min.js"></script>
+  <link rel="stylesheet" href="<%= global.config.urls.static %>/layui/css/layui.css">
 <!-- 内容主体区域 -->
 <div style="margin:12px 12px 8px 12px;">
 	<table class="layui-hide" id="TableOne" lay-filter="TableOne"></table>
@@ -24,7 +24,7 @@
 		{{#  } }}
 
 		<span class="modSoundMate layui-btn layui-btn-xs layui-btn-warm" lay-event="modSoundMate">更换声音文件</span>
-		
+
 		{{#  if(d.state === 0){ }}
 		<span class="layui-btn layui-btn-xs" lay-event="setState" data-v='1'>启用</span>
 		{{#  } else { }}
@@ -33,5 +33,5 @@
 		<span class="layui-btn layui-btn-xs layui-btn-danger" lay-event="DelMate">删除</span>
 	</script>
 </body>
-<script type="text/javascript" src="<%= process.env.staticurl %>/js/admin/material_sound.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/js/admin/material_sound.js"></script>
 </html>

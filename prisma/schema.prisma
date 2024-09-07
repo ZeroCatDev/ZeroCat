@@ -225,7 +225,7 @@ model ow_projects {
   history     Int      @default(1) @db.TinyInt
   devenv      Int?     @default(1) @db.TinyInt
   devsource   String?  @db.MediumText
-  tags        String?  @db.VarChar(100)
+  tags        String?  @default("") @db.VarChar(100)
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -272,4 +272,9 @@ model ow_projects_history {
   state       String?  @default("private") @db.VarChar(32)
   licence     String?  @db.VarChar(45)
   tags        String?  @db.VarChar(100)
+}
+
+model ow_config {
+  name   String @id @db.VarChar(45)
+  config Json?
 }

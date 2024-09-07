@@ -1,7 +1,7 @@
 
-<script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/layui/jquery.min.js"></script>
-  <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">	
+<script type="text/javascript" src="<%= global.config.urls.static %>/layui/layui.all.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/layui/jquery.min.js"></script>
+  <link rel="stylesheet" href="<%= global.config.urls.static %>/layui/css/layui.css">
 <!-- 内容主体区域 -->
 <div style="margin:12px 12px 8px 12px;">
     <table class="layui-hide" id="TableOne" lay-filter="TableOne"></table>
@@ -15,7 +15,7 @@
     <button class="layui-btn layui-btn-sm layui-btn-primary" lay-event="new">创建新用户（默认密码：用户账号后6位）</button>
     <button class="layui-btn layui-btn-sm layui-btn-primary" onclick="new100()">批量生成账号</button>
     <button id="registBtn" class="layui-btn layui-btn-sm layui-btn-danger" lay-event="regist">
-        <% if (regist == 1) { %>关闭<% } else { %>开启<% } %>注册通道 
+        <% if (regist == 1) { %>关闭<% } else { %>开启<% } %>注册通道
     </button>
 </div>
 </script>
@@ -32,5 +32,5 @@
 	{{#  } }}
 </script>
 </body>
-<script type="text/javascript" src="<%= process.env.staticurl %>/js/admin/user.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/js/admin/user.js"></script>
 </html>

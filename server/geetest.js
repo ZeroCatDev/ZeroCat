@@ -5,9 +5,9 @@ var querystring = require("querystring");
 const crypto = require("crypto");
 var axios = require("axios");
 
-const CAPTCHA_ID = process.env.GEE_CAPTCHA_ID;
-const CAPTCHA_KEY = process.env.GEE_CAPTCHA_KEY;
-const API_SERVER = process.env.GEE_API_SERVER;
+const CAPTCHA_ID = global.config.captcha.GEE_CAPTCHA_ID;
+const CAPTCHA_KEY = global.config.captcha.GEE_CAPTCHA_KEY;
+const API_SERVER = global.config.captcha.GEE_API_SERVER;
 const API_URL = API_SERVER + "/validate" + "?captcha_id=" + CAPTCHA_ID;
 
 app.use((req, res, next) => {

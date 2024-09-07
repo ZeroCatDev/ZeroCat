@@ -5,9 +5,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
   <title>
-    <%= process.env.SiteName %> - <%= pageTitle %>
+    <%= global.config.site.name %> - <%= pageTitle %>
   </title>
-  <link rel="shortcut icon" href="<%= process.env.staticurl %>/img/siteicon.png">
+  <link rel="shortcut icon" href="<%= global.config.urls.static %>/img/siteicon.png">
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
   <meta charset="UTF-8">
 
@@ -28,29 +28,29 @@
   <meta property="og:title" content="ZeroCat社区 - 新一代开源编程社区">
   <meta property="og:type" content="website">
   <meta property="og:url" content=" https://zerocat.wuyuan.dev">
-  <meta property="og:image" content="<%= process.env.staticurl %>/img/toutu.png">
+  <meta property="og:image" content="<%= global.config.urls.static %>/img/toutu.png">
   <meta name="referrer" content="origin-when-cross-origin" />
-  <link rel="preconnect" href="<%= process.env.staticurl %>" />
-  <link rel="preconnect" href="<%= process.env.staticurl %>" crossorigin />
-  <link rel="dns-prefetch" href="<%= process.env.staticurl %>" />
-  <link rel="dns-prefetch" href="<%= process.env.staticurl %>" crossorigin />
-  <script src="<%= process.env.staticurl %>/mdui-v1.0.2/js/mdui.min.js"></script>
+  <link rel="preconnect" href="<%= global.config.urls.static %>" />
+  <link rel="preconnect" href="<%= global.config.urls.static %>" crossorigin />
+  <link rel="dns-prefetch" href="<%= global.config.urls.static %>" />
+  <link rel="dns-prefetch" href="<%= global.config.urls.static %>" crossorigin />
+  <script src="<%= global.config.urls.static %>/mdui-v1.0.2/js/mdui.min.js"></script>
   <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1">
 
-  <link rel="stylesheet" href="<%= process.env.staticurl %>/mdui-v1.0.2/css/mdui.min.css" />
-  <link rel="stylesheet" href="<%= process.env.staticurl %>/mdui2/mdui.css" id="mdui_css">
-  <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
-  <link rel="stylesheet" href="<%= process.env.staticurl %>/css/projectspage.css">
-  <link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css">
+  <link rel="stylesheet" href="<%= global.config.urls.static %>/mdui-v1.0.2/css/mdui.min.css" />
+  <link rel="stylesheet" href="<%= global.config.urls.static %>/mdui2/mdui.css" id="mdui_css">
+  <link rel="stylesheet" href="<%= global.config.urls.static %>/layui/css/layui.css">
+  <link rel="stylesheet" href="<%= global.config.urls.static %>/css/projectspage.css">
+  <link rel="stylesheet" href="<%= global.config.urls.static %>/css/main.css">
 
 
 
   <meta name="view-transition" content="same-origin">
   <link id="layui_theme_css" rel="stylesheet">
-  <script type="text/javascript" src="<%= process.env.staticurl %>/page/main.js"></script>
+  <script type="text/javascript" src="<%= global.config.urls.static %>/page/main.js"></script>
 
-  <script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.3.7.1.js"></script>
-  <%- process.env.html %>
+  <script type="text/javascript" src="<%= global.config.urls.static %>/js/jquery.3.7.1.js"></script>
+  <%- global.config.headhtml %>
 </head>
 <style>
   :not(:defined) {
@@ -206,7 +206,7 @@
     </mdui-top-app-bar>
 
 
-    <link href="<%= process.env.staticurl %>/font1.css" rel="stylesheet">
+    <link href="<%= global.config.urls.static %>/font1.css" rel="stylesheet">
 
     <script>// 控制台安全提示
       //window.console.log('%c%s', 'color: red; background: yellow; font-size: 72px;', '警告！');

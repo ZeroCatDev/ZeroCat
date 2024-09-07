@@ -49,7 +49,7 @@
 
 		init({
 			el: "#waline",
-			serverURL: "<%= process.env.WalineServerURL %>",
+			serverURL: "<%= global.config.waline.url %>",
 			path: "user-" + getQueryString("id"),
 			copyright: false,
 			reaction: true,
@@ -65,6 +65,6 @@
 		});
 	</script>
 	<%- include('./html-footer.ejs', {page: 'user' }); %>
-		<script type="text/javascript" src="<%= process.env.staticurl %>/page/user/page.js"></script>
+		<script type="text/javascript" src="<%= global.config.urls.static %>/page/user/page.js"></script>
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.11/purify.min.js"></script>
-		<script src="<%= process.env.staticurl %>/js/marked.js"></script>
+		<script src="<%= global.config.urls.static %>/js/marked.js"></script>

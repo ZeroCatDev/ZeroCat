@@ -16,8 +16,12 @@ const { S3Client, PutObjectCommand } =require('@aws-sdk/client-s3');
 
 // Create an S3 client
 const s3 = new S3Client({
-  endpoint: process.env.S3endpoint,
-  region: process.env.S3region
+  endpoint: global.config.s3.endpoint,
+  region: global.config.s3.region,
+  credentials: {
+    accessKeyId: global.config.s3.accessKeyId,
+    secretAccessKey: global.config.s3.secretAccessKey,
+  }
 });
 
 
@@ -25,12 +29,17 @@ exports.S3update = function ow(name, file,email) {
   console.log(name);
 try {
   s3.send(new PutObjectCommand({
-    Bucket: process.env.S3bucket,
+    Bucket: global.config.s3.bucket,
     Key: name,
     Body: fs.readFileSync(file)
-  }));
+  })).catch((err) => {
+    console.log(err);
+  }).then((data) => {
+    console.log(data);
+    console.log(`用户 ${email} 成功上传了文件 ${global.config.s3.bucket}/${name}`);
 
-  console.log(`用户 ${email} 成功上传了文件 ${process.env.S3bucket}/${name}`);
+  })
+
 } catch (err) {
   console.log("S3 update Error: ", err);
 }
@@ -92,7 +101,7 @@ exports.jwt = function (data) {
 exports.GenerateJwt = function (json) {
   token = jwt.sign(
     json,
-    process.env.jwttoken
+    global.config.security.jwttoken
   );
   return token;
 };

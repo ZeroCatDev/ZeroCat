@@ -5,7 +5,7 @@
     $(function () {
       if (Cookies.get('token')) {
         if (getQueryString('redirect') == 'editor') {
-          window.location.href = "<%= process.env.editorurl %>/editor.html?token=" + Cookies.get('token');
+          window.location.href = "<%= global.config.urls.editor %>/editor.html?token=" + Cookies.get('token');
 
 
         } if (getQueryString('redirect') == 'new') {
@@ -42,7 +42,7 @@
       <div>
         <div class='login-page'>
           <div class="mdui-typo-display-2">
-            <%= process.env.SiteName %> 登录
+            <%= global.config.site.name %> 登录
           </div>
 
           <mdui-text-field variant="filled" label="邮箱" id='email' type="email" autocomplete="on" name="email"
@@ -52,7 +52,7 @@
         </div>
         <div class='reg-page' style="display: none;">
           <div class="mdui-typo-display-2">
-            <%= process.env.SiteName %> 注册
+            <%= global.config.site.name %> 注册
           </div>
 
           <mdui-text-field variant="filled" label="邮箱" id='reg_email' type="email"
@@ -62,7 +62,7 @@
         </div>
         <div class='getPW-page' style="display: none;">
           <div class="mdui-typo-display-2">
-            <%= process.env.SiteName %> 找回密码
+            <%= global.config.site.name %> 找回密码
           </div>
 
           <mdui-text-field variant="filled" label="邮箱" id='getPW_email' type="email"
@@ -103,7 +103,7 @@
   <div class="mdui-dialog" id="privacy" style='border-radius: 15px;'>
     <div class="mdui-dialog-title">您正在使用由厚浪(孙悟元)提供的服务</div>
     <div class="mdui-dialog-content">
-      我们可能会收集您的个人信息,具体参见<a href="<%= process.env.SitePrivacyPolicy %>" target="_blank"
+      我们可能会收集您的个人信息,具体参见<a href="<%= global.config.site.privacy %>" target="_blank"
         class="mdui-text-color-blue">隐私策略</a><br />
       <label class="mdui-checkbox">
         <input type="checkbox" id="privacy-chick" />
@@ -119,7 +119,7 @@
         我理解并同意我无法自助删除我的个人数据，在需要时我会主动联系管理员删除
       </label>
       <br /><br />
-      在<%= process.env.SiteName %>上,你需要遵守<a href="https://scratch.mit.edu/community_guidelines" target="_blank"
+      在<%= global.config.site.name %>上,你需要遵守<a href="https://scratch.mit.edu/community_guidelines" target="_blank"
           class="mdui-text-color-blue">社区行为准则(第三方站点)</a><br />
         <label class="mdui-checkbox">
           <input type="checkbox" id="zhunze-chick" />
@@ -127,13 +127,13 @@
           我已阅读并同意将会遵守社区行为准则
         </label>
         <br /><br />
-        你需要同意<a href="<%= process.env.SiteTermsofService %>" target="_blank" class="mdui-text-color-blue">用户协议</a><br />
+        你需要同意<a href="<%= global.config.site.tos %>" target="_blank" class="mdui-text-color-blue">用户协议</a><br />
         <label class="mdui-checkbox">
           <input type="checkbox" id="xiugai-chick" />
           <i class="mdui-checkbox-icon"></i>
           我已阅读并同意用户协议
         </label>
-        <br /><br />对于技术手段绕过此页面的行为(视为对<%= process.env.SiteName %>
+        <br /><br />对于技术手段绕过此页面的行为(视为对<%= global.config.site.name %>
           的基础设施进行攻击)涉嫌违法(非法入侵计算机系统),我们将保留追究法律责任的权利,且违规获得的账号不受保护,如果您同意以上内容,请点击“复选框”以完成注册流程.
     </div>
 
@@ -149,9 +149,9 @@
 
 
   <%- include('./html-footer.ejs', {page: 'login' }); %>
-    <script type="text/javascript" src="<%= process.env.staticurl %>/js/gter.js"></script>
-    <script type="text/javascript" src="<%= process.env.staticurl %>/js/login.js"></script>
+    <script type="text/javascript" src="<%= global.config.urls.static %>/js/gter.js"></script>
+    <script type="text/javascript" src="<%= global.config.urls.static %>/js/login.js"></script>
 
-    <script>captchaid = '<%= process.env.GEE_CAPTCHA_ID %>'</script>
+    <script>captchaid = '<%= global.config.captcha.GEE_CAPTCHA_ID %>'</script>
     <script type="text/javascript" src="https://static.geetest.com/v4/gt4.js"></script>
-    <script type="text/javascript" src="<%= process.env.staticurl %>/page/geetest.js"></script>
+    <script type="text/javascript" src="<%= global.config.urls.static %>/page/geetest.js"></script>

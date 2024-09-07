@@ -1,15 +1,16 @@
 {
-  "name": "ZeroCat",
+  "name": "zerocat",
   "private": true,
   "type": "commonjs",
   "scripts": {
     "build": "npm i -g @vercel/ncc && ncc build app.js && mkdir dist/api && cp dist/index.js dist/api/index.js",
     "test": "echo \"No test specified\" && exit 1",
-    "start": "node app",
+    "start": "node .bin/www",
     "prisma": "prisma db pull && prisma generate"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.556.0",
+    "@inquirer/prompts": "^5.5.0",
     "@opentelemetry/api": "^1.8.0",
     "@opentelemetry/auto-instrumentations-node": "^0.44.0",
     "@opentelemetry/exporter-trace-otlp-proto": "^0.50.0",

@@ -4,24 +4,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Python编程 - <%= process.env.SiteName %>
+  <title>Python编程 - <%= global.config.site.name %>
   </title>
-  <link rel="shortcut icon" href='<%= process.env.staticurl %>/img/siteicon.png'>
-  <link rel="stylesheet" href='<%= process.env.staticurl %>/pythonstatic/css/style.css' />
-  <link type="text/css" rel="stylesheet" href="<%= process.env.staticurl %>/pythonstatic/showWorks.css" />
-  <link rel="stylesheet" href="<%= process.env.staticurl %>/mdui-v1.0.2/css/mdui.min.css" />
+  <link rel="shortcut icon" href='<%= global.config.urls.static %>/img/siteicon.png'>
+  <link rel="stylesheet" href='<%= global.config.urls.static %>/pythonstatic/css/style.css' />
+  <link type="text/css" rel="stylesheet" href="<%= global.config.urls.static %>/pythonstatic/showWorks.css" />
+  <link rel="stylesheet" href="<%= global.config.urls.static %>/mdui-v1.0.2/css/mdui.min.css" />
   <link id="layui_theme_css" rel="stylesheet">
-  <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
-  <link rel="stylesheet" href="<%= process.env.staticurl %>/css/projectspage.css">
-  <link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css">
+  <link rel="stylesheet" href="<%= global.config.urls.static %>/layui/css/layui.css">
+  <link rel="stylesheet" href="<%= global.config.urls.static %>/css/projectspage.css">
+  <link rel="stylesheet" href="<%= global.config.urls.static %>/css/main.css">
 
 
-  <script src="<%= process.env.staticurl %>/js/js-cookie.js"></script>
+  <script src="<%= global.config.urls.static %>/js/js-cookie.js"></script>
 
 
-  <script src="<%= process.env.staticurl %>/mdui-v1.0.2/js/mdui.min.js"></script>
+  <script src="<%= global.config.urls.static %>/mdui-v1.0.2/js/mdui.min.js"></script>
 
-  <script src="<%= process.env.staticurl %>/js/jquery.3.7.1.js"></script>
+  <script src="<%= global.config.urls.static %>/js/jquery.3.7.1.js"></script>
   <script>
 
 
@@ -38,7 +38,7 @@
   </script>
 
   <link rel="stylesheet" data-name="vs/editor/editor.main"
-    href="<%= process.env.staticurl %>/pythonstatic/vs/editor/editor.main.css" />
+    href="<%= global.config.urls.static %>/pythonstatic/vs/editor/editor.main.css" />
 </head>
 
 <body class="mdui-theme-light mdui-theme-accent-blue">
@@ -57,7 +57,7 @@
     <div class="mdui-toolbar">
       <a class="mdui-btn mdui-btn-icon" id="toggle" href="/"><i class="mdui-icon material-icons">home</i></a>
       <a href="/"><span class="mdui-typo-title">
-          <%= process.env.SiteName %> Python编辑器
+          <%= global.config.site.name %> Python编辑器
         </span></a>
       <div class="mdui-toolbar-spacer"></div>
       <a href="javascript:;" onclick="javascript:location.reload();" class="mdui-btn mdui-btn-icon mdui-ripple"><i
@@ -150,7 +150,7 @@
             <div class="">
               <div class="" style="padding: 0;">
                 <div id="canvas_box"
-                  style="height:calc(50vh);background:url(/*<%= process.env.staticurl %>/pythonstatic/img/welcome_python_editor.png*/) no-repeat center;background-size: contain;background-size:auto 100%;">
+                  style="height:calc(50vh);background:url(/*<%= global.config.urls.static %>/pythonstatic/img/welcome_python_editor.png*/) no-repeat center;background-size: contain;background-size:auto 100%;">
                   <div id="pythoncanvas"></div>
                 </div>
               </div>
@@ -220,37 +220,37 @@
 
 
 
-  <script>self.require = { paths: { 'vs': '<%= process.env.staticurl %>/pythonstatic/vs' },'vs/nls': { availableLanguages: { '*': 'zh-cn' } } };</script>
+  <script>self.require = { paths: { 'vs': '<%= global.config.urls.static %>/pythonstatic/vs' },'vs/nls': { availableLanguages: { '*': 'zh-cn' } } };</script>
 
-  <script src="<%= process.env.staticurl %>/pythonstatic/vs/loader.js"></script>
-  <script src="<%= process.env.staticurl %>/pythonstatic/vs/editor/editor.main.js"></script>
+  <script src="<%= global.config.urls.static %>/pythonstatic/vs/loader.js"></script>
+  <script src="<%= global.config.urls.static %>/pythonstatic/vs/editor/editor.main.js"></script>
 
 
 
-  <script type="text/javascript" src="<%= process.env.staticurl %>/page/main.js"></script>
+  <script type="text/javascript" src="<%= global.config.urls.static %>/page/main.js"></script>
 
-  <script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.3.7.1.js"></script>
-  <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/js/file-saver.js"></script>
-  <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/skulpt.min.js"></script>
-  <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/skulpt-stdlib.js"></script>
-  <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/mode/python.js"></script>
-  <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/js/show-hint.js"></script>
-  <script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
-  <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/public.js"></script>
+  <script type="text/javascript" src="<%= global.config.urls.static %>/js/jquery.3.7.1.js"></script>
+  <script type="text/javascript" src="<%= global.config.urls.static %>/pythonstatic/js/file-saver.js"></script>
+  <script type="text/javascript" src="<%= global.config.urls.static %>/pythonstatic/skulpt.min.js"></script>
+  <script type="text/javascript" src="<%= global.config.urls.static %>/pythonstatic/skulpt-stdlib.js"></script>
+  <script type="text/javascript" src="<%= global.config.urls.static %>/pythonstatic/mode/python.js"></script>
+  <script type="text/javascript" src="<%= global.config.urls.static %>/pythonstatic/js/show-hint.js"></script>
+  <script type="text/javascript" src="<%= global.config.urls.static %>/layui/layui.all.js"></script>
+  <script type="text/javascript" src="<%= global.config.urls.static %>/pythonstatic/public.js"></script>
 
-  <script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/python_edit.js"></script>
+  <script type="text/javascript" src="<%= global.config.urls.static %>/pythonstatic/python_edit.js"></script>
 </body>
 
 </html>
-<script>S3staticurl = '<%= process.env.S3staticurl %>'
-  staticfile = '<%= process.env.staticurl %>'
-  window.staticfile = '<%= process.env.staticurl %>'</script>
+<script>S3staticurl = '<%= global.config.s3.staticurl %>'
+  staticfile = '<%= global.config.urls.static %>'
+  window.staticfile = '<%= global.config.urls.static %>'</script>
 <script>if (localStorage.darkTheme) {
     document.body.classList.add("mdui-theme-layout-dark");
     document.body.classList.add("mdui-theme-dark");
     document.documentElement.classList.add("mdui-theme-dark");
     document.body.setAttribute("dark", "");
-    $("#layui_theme_css").attr("href", "<%= process.env.staticurl %>/css/layui-theme-dark.css");
+    $("#layui_theme_css").attr("href", "<%= global.config.urls.static %>/css/layui-theme-dark.css");
   }
   document.getElementById("switch-theme").addEventListener("click", () => {
     document.body.classList.toggle("mdui-theme-layout-dark");
@@ -259,18 +259,18 @@
     document.body.toggleAttribute("dark");
     if (document.body.hasAttribute("dark")) {
       localStorage.darkTheme = true;
-      $("#layui_theme_css").attr("href", "<%= process.env.staticurl %>/css/layui-theme-dark.css");
+      $("#layui_theme_css").attr("href", "<%= global.config.urls.static %>/css/layui-theme-dark.css");
     } else {
       delete localStorage.darkTheme;
       $("#layui_theme_css").removeAttr("href");
     }
   });
   mdui.setColorScheme('#2087fd');</script><script>
-staticurl='<%= process.env.staticurl %>'
-  S3staticurl = "<%= process.env.S3staticurl %>"
+staticurl='<%= global.config.urls.static %>'
+  S3staticurl = "<%= global.config.s3.staticurl %>"
 </script>
 
-<script src="<%= process.env.staticurl %>/js/jwt-decode.js"></script>
+<script src="<%= global.config.urls.static %>/js/jwt-decode.js"></script>
 <script>
   $(function () {
     if (!Cookies.get('token')) {
@@ -283,4 +283,4 @@ staticurl='<%= process.env.staticurl %>'
 </script>
 
 
-<script type="text/javascript" src="<%= process.env.staticurl %>/page/main.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/page/main.js"></script>

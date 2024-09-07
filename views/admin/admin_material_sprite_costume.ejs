@@ -1,7 +1,7 @@
 
-<script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/layui/jquery.min.js"></script>
-  <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">	
+<script type="text/javascript" src="<%= global.config.urls.static %>/layui/layui.all.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/layui/jquery.min.js"></script>
+  <link rel="stylesheet" href="<%= global.config.urls.static %>/layui/css/layui.css">
 <!-- 内容主体区域 -->
 <div style="margin:12px 12px 8px 12px;">
 	<table class="layui-hide" id="TableOne" lay-filter="TableOne"></table>
@@ -11,7 +11,7 @@
 	.layui-table-cell{
 		height: auto!important;
 	}
-	.costumeImage{ 
+	.costumeImage{
 		height: 68px !important;
 		white-space: normal;
 	}
@@ -34,5 +34,5 @@
 </body>
 
 <script>_id='<%= _id%>';</script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/js/admin/material_sprite_costume.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/js/admin/material_sprite_costume.js"></script>
 </html>

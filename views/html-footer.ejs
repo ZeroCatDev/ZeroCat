@@ -3,10 +3,10 @@
 </body>
 
 
-<script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
-<script src="<%= process.env.staticurl %>/mdui2/mdui.global.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/js/main.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/page/main.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/layui/layui.all.js"></script>
+<script src="<%= global.config.urls.static %>/mdui2/mdui.global.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/js/main.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/page/main.js"></script>
 
 
 <script>
@@ -70,7 +70,7 @@
     document.body.classList.add("mdui-theme-dark");
     document.documentElement.classList.add("mdui-theme-dark");
     document.body.setAttribute("dark", "");
-    $("#layui_theme_css").attr("href", "<%= process.env.staticurl %>/css/layui-theme-dark.css");
+    $("#layui_theme_css").attr("href", "<%= global.config.urls.static %>/css/layui-theme-dark.css");
   }
   document.getElementById("switch-theme").addEventListener("click", () => {
     document.body.classList.toggle("mdui-theme-layout-dark");
@@ -79,7 +79,7 @@
     document.body.toggleAttribute("dark");
     if (document.body.hasAttribute("dark")) {
       localStorage.darkTheme = true;
-      $("#layui_theme_css").attr("href", "<%= process.env.staticurl %>/css/layui-theme-dark.css");
+      $("#layui_theme_css").attr("href", "<%= global.config.urls.static %>/css/layui-theme-dark.css");
     } else {
       delete localStorage.darkTheme;
       $("#layui_theme_css").removeAttr("href");
@@ -110,12 +110,12 @@
 
 
 <script>
-staticurl='<%= process.env.staticurl %>'
-  S3staticurl = "<%= process.env.S3staticurl %>"
-  editorurl='<%= process.env.editorurl %>'
+staticurl='<%= global.config.urls.static %>'
+  S3staticurl = "<%= global.config.s3.staticurl %>"
+  editorurl='<%= global.config.urls.editor %>'
 </script>
-<script src="<%= process.env.staticurl %>/js/js-cookie.js"></script>
-<script src="<%= process.env.staticurl %>/js/jwt-decode.js"></script>
+<script src="<%= global.config.urls.static %>/js/js-cookie.js"></script>
+<script src="<%= global.config.urls.static %>/js/jwt-decode.js"></script>
 
 
 </html>

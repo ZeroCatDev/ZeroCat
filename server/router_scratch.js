@@ -623,7 +623,7 @@ router.get("/getExtensionLibrary", (req, res, next) => {
       extensionURL: "/static/extensions/coco-math-extension.js",
       iconURL: "/static/extensions/cocoExt.jpg",
       insetIconURL: "/static/extensions/cocoLogo.png",
-      description: process.env.SiteName + "自定义扩展",
+      description: global.config.site.name + "自定义扩展",
       featured: true,
     },
   ];
@@ -912,7 +912,7 @@ router.post("/getSession", (req, res) => {
       username: res.locals["username"],
 
       display_name: res.locals["display_name"],
-      avatar: `${process.env.S3staticurl}/user/${res.locals["avatar"]}`,
+      avatar: `${global.config.s3.staticurl}/user/${res.locals["avatar"]}`,
     };
   }
 

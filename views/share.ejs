@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <title>
-        <%= process.env.SiteName %>分享页面
+        <%= global.config.site.name %>分享页面
     </title>
 </head>
 
@@ -121,15 +121,15 @@ h1 {
 <script>document.body.addEventListener("mousemove", evt => {
     const mouseX = evt.clientX;
     const mouseY = evt.clientY;
-  
+
     gsap.set(".cursor", {
       x: mouseX,
       y: mouseY });
-  
-  
+
+
     gsap.to(".shape", {
       x: mouseX,
       y: mouseY,
       stagger: -0.1 });
-  
+
   });</script>

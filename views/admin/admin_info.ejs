@@ -1,8 +1,8 @@
 
 
-<script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/layui/jquery.min.js"></script>
-  <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">	
+<script type="text/javascript" src="<%= global.config.urls.static %>/layui/layui.all.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/layui/jquery.min.js"></script>
+  <link rel="stylesheet" href="<%= global.config.urls.static %>/layui/css/layui.css">
 <style>
 	.count_show{
 		height:100px;
@@ -35,7 +35,7 @@
 					</div>
 				</div>
 
-				
+
 				<div class="layui-col-sm2 layui-col-md2">
 					<div class="layui-card">
 						<div class="layui-card-header">Python作品数</div>
@@ -43,7 +43,7 @@
 							<p class="layuiadmin-big-font"><%= python_count %></p>
 						</div>
 					</div>
-				</div>	
+				</div>
 
 				<div class="layui-col-sm2 layui-col-md2">
 					<div class="layui-card">
@@ -53,8 +53,8 @@
 						</div>
 					</div>
 				</div>
-	
-		
+
+
 				<div class="layui-col-sm2 layui-col-md2">
 					<div class="layui-card">
 						<div class="layui-card-header">角色素材数</div>
@@ -64,7 +64,7 @@
 					</div>
 				</div>
 
-				
+
 			</div>
 		</div>
 		<!--<div class="layui-row layui-col-space15" style="margin-top:10px">

@@ -4,9 +4,9 @@
   <title>系统管理平台</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <link rel="shortcut icon" href="<%= process.env.staticurl %>/img/siteicon.png">
-  <link rel="stylesheet" href="<%= process.env.staticurl %>/mdui-v1.0.2/css/mdui.min.css"/>
-  <script src="<%= process.env.staticurl %>/mdui-v1.0.2/js/mdui.min.js"></script>
+  <link rel="shortcut icon" href="<%= global.config.urls.static %>/img/siteicon.png">
+  <link rel="stylesheet" href="<%= global.config.urls.static %>/mdui-v1.0.2/css/mdui.min.css"/>
+  <script src="<%= global.config.urls.static %>/mdui-v1.0.2/js/mdui.min.js"></script>
 
   <script> function automsg(msg) {
       automsg({
@@ -17,15 +17,15 @@
   };</script>
 
 
-  <link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
-  <link id="layui_theme_css" rel="stylesheet" href="<%= process.env.staticurl %>/css/layui-theme-dark.css">
+  <link rel="stylesheet" href="<%= global.config.urls.static %>/layui/css/layui.css">
+  <link id="layui_theme_css" rel="stylesheet" href="<%= global.config.urls.static %>/css/layui-theme-dark.css">
 </head>
 <body class="mdui-theme-light layui-layout-body">
 <div class="layui-layout layui-layout-admin">
   <!-- 头部区域 -->
   <div class="layui-header" style="width: 100%;">
     <div class="layui-logo">
-      <a href="/"><img src="<%= process.env.staticurl %>/img/logo_w.png" style="width: 120px;margin:0 20px"></a>
+      <a href="/"><img src="<%= global.config.urls.static %>/img/logo_w.png" style="width: 120px;margin:0 20px"></a>
     </div>
 
 
@@ -91,9 +91,9 @@
 </div>
 </body>
 
-<script src="<%= process.env.staticurl %>/layui/jquery.min.js"></script>
-<script src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
-<script src="<%= process.env.staticurl %>/js/main.js"></script>
+<script src="<%= global.config.urls.static %>/layui/jquery.min.js"></script>
+<script src="<%= global.config.urls.static %>/layui/layui.all.js"></script>
+<script src="<%= global.config.urls.static %>/js/main.js"></script>
 <script>
     $(document).ready(function () {
       $("a.tar").click(function (e) {

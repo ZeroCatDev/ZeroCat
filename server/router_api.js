@@ -81,7 +81,7 @@ router.get("/usertx", function (req, res) {
       return;
     }
 
-    res.redirect(302, process.env.S3staticurl + "/user/" + USER[0].images);
+    res.redirect(302, global.config.s3.staticurl + "/user/" + USER[0].images);
   });
 });
 

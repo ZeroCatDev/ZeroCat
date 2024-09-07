@@ -3,19 +3,19 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Scratch编程 - <%= process.env.SiteName %></title>
-    <link rel="shortcut icon" href="<%= process.env.staticurl %>/img/siteicon.png">
+    <title>Scratch编程 - <%= global.config.site.name %></title>
+    <link rel="shortcut icon" href="<%= global.config.urls.static %>/img/siteicon.png">
 </head>
 
 <body>
- 
+
 
   <script type="text/javascript">
-    var _scratch_logo= '<%= process.env.staticurl %>/img/scratch-logo.png';
+    var _scratch_logo= '<%= global.config.urls.static %>/img/scratch-logo.png';
   </script>
 
 </body>
-<script type="text/javascript" src="<%= process.env.staticurl %>/js/scratch.min.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/js/scratch.min.js"></script>
 </html>
-<script>S3staticurl='<%= process.env.S3staticurl %>'
-this.assetHost = '<%= process.env.S3staticurl %>/material/asset'</script>
+<script>S3staticurl='<%= global.config.s3.staticurl %>'
+this.assetHost = '<%= global.config.s3.staticurl %>/material/asset'</script>

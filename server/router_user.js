@@ -47,13 +47,13 @@ router.get("/logout", function (req, res) {
 
 router.get("/tuxiaochao", function (req, res) {
   if (!res.locals.login) {
-    res.redirect("https://support.qq.com/product/" + process.env.txcid);
+    res.redirect("https://support.qq.com/product/" + global.config.feedback.txcid);
   }
-  if (!process.env.txcid) {
+  if (!global.config.feedback.txcid) {
     res.redirect("https://support.qq.com/product/597800");
   }
-  if (!process.env.txckey) {
-    res.redirect("https://support.qq.com/product/" + process.env.txcid);
+  if (!global.config.feedback.txckey) {
+    res.redirect("https://support.qq.com/product/" + global.config.feedback.txcid);
   }
 
   SQL = `SELECT images FROM ow_users WHERE id = ${res.locals["userid"]};`;
@@ -68,18 +68,18 @@ router.get("/tuxiaochao", function (req, res) {
     var txcinfo =
       uid +
       res.locals["display_name"] +
-      process.env.S3staticurl+'/user/'+USER[0].images+
-      process.env.txckey;
+      global.config.s3.staticurl+'/user/'+USER[0].images+
+      global.config.feedback.txckey;
     var cryptostr = cryptojs.MD5(txcinfo).toString();
 
     res.redirect(
       "https://support.qq.com/product/" +
-        process.env.txcid +
+        global.config.feedback.txcid +
         "?openid=" +
         res.locals["userid"] +
         "&nickname=" +
         res.locals["display_name"] +
-        "&avatar="+process.env.S3staticurl+'/user/'+USER[0].images+
+        "&avatar="+global.config.s3.staticurl+'/user/'+USER[0].images+
         "&user_signature=" +
         cryptostr
     );

@@ -14,7 +14,7 @@ app.use((req, res, next) => {
 
 request.post(
     {
-      url: process.env.reverify,form: {secret: process.env.resecret,response: recaptcha},
+      url: global.config.captcha.reverify,form: {secret: global.config.captcha.resecret,response: recaptcha},
     },
     function (error, httpResponse, body) {
       if (error) {

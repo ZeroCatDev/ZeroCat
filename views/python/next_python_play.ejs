@@ -6,23 +6,23 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 	<title>
-		<%= process.env.SiteName %>
+		<%= global.config.site.name %>
 	</title>
-	<link rel="shortcut icon" href="<%= process.env.staticurl %>/img/siteicon.png">
+	<link rel="shortcut icon" href="<%= global.config.urls.static %>/img/siteicon.png">
 	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
 	<meta charset="UTF-8">
 
 
-	<link rel="stylesheet" href="<%= process.env.staticurl %>/mdui2/mdui.css" id="mdui_css">
-	<link rel="stylesheet" href="<%= process.env.staticurl %>/layui/css/layui.css">
-	<link rel="stylesheet" href="<%= process.env.staticurl %>/css/main.css">
+	<link rel="stylesheet" href="<%= global.config.urls.static %>/mdui2/mdui.css" id="mdui_css">
+	<link rel="stylesheet" href="<%= global.config.urls.static %>/layui/css/layui.css">
+	<link rel="stylesheet" href="<%= global.config.urls.static %>/css/main.css">
 
 
 
 	<link id="layui_theme_css" rel="stylesheet">
 
-	<script type="text/javascript" src="<%= process.env.staticurl %>/js/jquery.3.7.1.js"></script>
-	<%- process.env.html %>
+	<script type="text/javascript" src="<%= global.config.urls.static %>/js/jquery.3.7.1.js"></script>
+	<%- global.config.headhtml %>
 </head>
 <style>
 	:not(:defined) {
@@ -67,13 +67,13 @@ margin: 10px;">
 
 
 </body>
-<link href="<%= process.env.staticurl %>/font1.css" rel="stylesheet">
+<link href="<%= global.config.urls.static %>/font1.css" rel="stylesheet">
 
 
-<script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
-<script src="<%= process.env.staticurl %>/mdui2/mdui.global.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/js/main.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/page/main.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/layui/layui.all.js"></script>
+<script src="<%= global.config.urls.static %>/mdui2/mdui.global.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/js/main.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/page/main.js"></script>
 
 
 <script>
@@ -84,20 +84,20 @@ margin: 10px;">
 
 
 <script>
-	staticurl = '<%= process.env.staticurl %>'
-	S3staticurl = "<%= process.env.S3staticurl %>"
-	editorurl = '<%= process.env.editorurl %>'
+	staticurl = '<%= global.config.urls.static %>'
+	S3staticurl = "<%= global.config.s3.staticurl %>"
+	editorurl = '<%= global.config.urls.editor %>'
 </script>
 
 </html>
-<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/CodeMirror.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/js/file-saver.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/skulpt.min.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/skulpt-stdlib.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/mode/python.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/js/show-hint.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/layui/layui.all.js"></script>
-<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/public.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/pythonstatic/CodeMirror.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/pythonstatic/js/file-saver.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/pythonstatic/skulpt.min.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/pythonstatic/skulpt-stdlib.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/pythonstatic/mode/python.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/pythonstatic/js/show-hint.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/layui/layui.all.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/pythonstatic/public.js"></script>
 
 
-<script type="text/javascript" src="<%= process.env.staticurl %>/pythonstatic/next_python_play.js"></script>
+<script type="text/javascript" src="<%= global.config.urls.static %>/pythonstatic/next_python_play.js"></script>
