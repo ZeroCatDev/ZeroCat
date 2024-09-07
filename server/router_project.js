@@ -4,6 +4,8 @@ const { encode, decode } = require("html-entities");
 
 var DB = require("./lib/database.js"); // 数据库
 
+const crypto = require("crypto");
+
 //功能函数集
 var I = require("./lib/global.js");
 router.all("*", function (req, res, next) {
@@ -18,10 +20,9 @@ router.post("/", function (req, res) {
     return;
   }
   try {
-
     const allowable = [
       "type",
-      "license",
+      "licence",
       "state",
       "title",
       "description",
@@ -50,7 +51,11 @@ router.post("/", function (req, res) {
     } else if (outputJson.source && outputJson.devsource == undefined) {
       // 如果指定了source没传devsource则都为source
       outputJson.devsource = outputJson.source;
-    } else if (outputJson.source == undefined && outputJson.devsource == undefined && outputJson.type!= undefined) {
+    } else if (
+      outputJson.source == undefined &&
+      outputJson.devsource == undefined &&
+      outputJson.type != undefined
+    ) {
       // 如果指定了类型没传源码则默认为该类型的源码
       console.log(outputJson.type);
       console.log(default_project[outputJson.type]);
@@ -70,20 +75,23 @@ router.post("/", function (req, res) {
       })
       .catch((err) => {
         console.log(err);
-        res
-          .status(200)
-          .send({
-            status: "0",
-            msg: "保存失败",
-            message: "保存失败",
-            error: err,
-          });
+        res.status(200).send({
+          status: "0",
+          msg: "保存失败",
+          message: "保存失败",
+          error: err,
+        });
         return;
       })
       .then(async (result) => {
         res
           .status(200)
-          .send({ status: "1", msg: "保存成功", message: "保存成功", id: result.id });
+          .send({
+            status: "1",
+            msg: "保存成功",
+            message: "保存成功",
+            id: result.id,
+          });
       });
   } catch (err) {
     console.log(err);
@@ -99,42 +107,48 @@ router.post("/:id/fork", function (req, res) {
     return;
   }
   try {
-    I.prisma.ow_projects.findFirst({
-      where: {
-        id: Number(req.params.id),
-      },
-    }).then((result) => {
-      if (result.state == 'public') {
-        I.prisma.ow_projects
-          .create({
-            data: {
-              authorid: res.locals.userid,
-              title: result.title + '改编',
-              description: result.description,
-              license: result.license,
-              state: 'private',
-              type: result.type,
-              source: result.source,
-              devsource: result.source,
-              tags: result.tags,
-            },
-          }).catch((err) => {
-            console.log(err);
-            res.status(200).send({ status: "0", msg: "改编失败", error: err });
-          }).then((result) => {
-            res.status(200).send({ status: "1", msg: "改编成功", id: result.id });
-          })
-      } else {
-        res.status(200).send({ status: "0", msg: "改编失败" });
-      }
-    })
-  }
-  catch (err) {
+    I.prisma.ow_projects
+      .findFirst({
+        where: {
+          id: Number(req.params.id),
+        },
+      })
+      .then((result) => {
+        if (result.state == "public") {
+          I.prisma.ow_projects
+            .create({
+              data: {
+                authorid: res.locals.userid,
+                title: result.title + "改编",
+                description: result.description,
+                licence: result.licence,
+                state: "private",
+                type: result.type,
+                source: result.source,
+                devsource: result.source,
+                tags: result.tags,
+              },
+            })
+            .catch((err) => {
+              console.log(err);
+              res
+                .status(200)
+                .send({ status: "0", msg: "改编失败", error: err });
+            })
+            .then((result) => {
+              res
+                .status(200)
+                .send({ status: "1", msg: "改编成功", id: result.id });
+            });
+        } else {
+          res.status(200).send({ status: "0", msg: "改编失败" });
+        }
+      });
+  } catch (err) {
     console.log(err);
     res.status(200).send({ status: "0", msg: "改编失败", error: err });
     return;
   }
-
 });
 // 保存
 router.put("/:id/source/dev", function (req, res) {
@@ -146,7 +160,10 @@ router.put("/:id/source/dev", function (req, res) {
   try {
     I.prisma.ow_projects
       .update({
-        where: { id: Number(req.params.id), authorid: Number(res.locals.userid) },
+        where: {
+          id: Number(req.params.id),
+          authorid: Number(res.locals.userid),
+        },
         data: {
           devsource: JSON.stringify(req.body),
         },
@@ -171,7 +188,9 @@ router.put("/:id/source/dev", function (req, res) {
             })
             .catch((err) => {
               console.log(err);
-              res.status(200).send({ status: "0", msg: "保存失败", error: err });
+              res
+                .status(200)
+                .send({ status: "0", msg: "保存失败", error: err });
               return;
             })
             .then(async (result) => {
@@ -187,7 +206,6 @@ router.put("/:id/source/dev", function (req, res) {
     res.status(200).send({ status: "0", msg: "保存失败", error: error });
     return;
   }
-
 });
 
 // 保存
@@ -199,7 +217,7 @@ router.put("/:id", function (req, res) {
 
   const allowable = [
     "type",
-    "license",
+    "licence",
     "state",
     "title",
     "description",
@@ -230,14 +248,12 @@ router.put("/:id", function (req, res) {
     })
     .catch((err) => {
       console.log(err);
-      res
-        .status(200)
-        .send({
-          status: "0",
-          msg: "保存失败",
-          message: "保存失败",
-          error: err,
-        });
+      res.status(200).send({
+        status: "0",
+        msg: "保存失败",
+        message: "保存失败",
+        error: err,
+      });
       return;
     })
     .then(async (result) => {
@@ -246,34 +262,59 @@ router.put("/:id", function (req, res) {
         .send({ status: "1", msg: "保存成功", message: "保存成功" });
     });
 });
-
-// 保存
+// 推送
 router.post("/:id/push", async function (req, res) {
   if (!res.locals.userid) {
     res.status(200).send({ status: "0", msg: "请先登录" });
     return;
   }
 
-  var project = await I.prisma.ow_projects
-    .findFirst({
-      where: { id: Number(req.params.id), authorid: Number(res.locals.userid) },
-    })
-    .catch((err) => {
-      console.log(err);
-      res
-        .status(200)
-        .send({
+  try {
+    const project = await I.prisma.ow_projects
+      .findFirst({
+        where: {
+          id: Number(req.params.id),
+          authorid: Number(res.locals.userid),
+        },
+      })
+      .catch((err) => {
+        console.log(err);
+        res.status(200).send({
           status: "0",
           msg: "保存失败",
           message: "保存失败",
           error: err,
         });
-      return;
-    });
-  // 如果没开开发环境那么判断是否要求严格模式
-  if (project.devenv == 0) {
-    if (req.body.force == "true") {
-      I.prisma.ow_projects
+        return;
+      });
+
+    if (project.devenv == 0) {
+      if (req.body.force == "true") {
+        await I.prisma.ow_projects
+          .update({
+            where: {
+              id: Number(req.params.id),
+              authorid: Number(res.locals.userid),
+            },
+            data: {
+              source: project.devsource,
+            },
+          })
+          .catch((err) => {
+            console.log(err);
+            res.status(200).send({
+              status: "0",
+              msg: "保存失败",
+              message: "保存失败",
+              error: err,
+            });
+          });
+      } else {
+        res.status(200).send({ status: "0", msg: "未开启开发环境，无法推送" });
+        return;
+      }
+    } else {
+      await I.prisma.ow_projects
         .update({
           where: {
             id: Number(req.params.id),
@@ -285,75 +326,52 @@ router.post("/:id/push", async function (req, res) {
         })
         .catch((err) => {
           console.log(err);
-          res
-            .status(200)
-            .send({
-              status: "0",
-              msg: "保存失败",
-              message: "保存失败",
-              error: err,
-            });
-          return;
-        });
-    } else {
-      res.status(200).send({ status: "0", msg: "未开启开发环境，无法推送" });
-      return;
-    }
-    // 其他情况下将代码从开发环境复制到生产环境，devsource -> source
-  } else {
-    I.prisma.ow_projects
-      .update({
-        where: {
-          id: Number(req.params.id),
-          authorid: Number(res.locals.userid),
-        },
-        data: {
-          source: project.devsource,
-        },
-      })
-      .catch((err) => {
-        console.log(err);
-        res
-          .status(200)
-          .send({
+          res.status(200).send({
             status: "0",
             msg: "保存失败",
             message: "保存失败",
             error: err,
           });
-      })
-      .then(async (result) => {
-        res
-          .status(200)
-          .send({ status: "1", msg: "推送成功", message: "推送成功" });
-        if (project.history == 1) {
-          //console.log(project.devsource)
-          //console.log(result.source)
-          if (project.source != result.source) {
-            // 创建一个历史记录
-            console.log("创建历史记录");
-            I.prisma.ow_projects_history
-              .create({
-                data: {
-                  projectid: Number(req.params.id),
-                  source: result.source,
-                  authorid: Number(res.locals.userid),
-                  type: project.type,
-                  title: project.title,
-                  description: project.description,
-                  state: project.state,
-                  license: project.license,
-                  tags: project.tags,
-                },
-              })
-              .catch((err) => {
-                console.log(err);
-              });
-          } else {
-            console.log("未创建历史记录");
-          }
-        }
-      });
+        });
+
+
+      if (project.history == 1) {
+
+        const hashed = crypto.createHash("sha256").update(project.source).digest('hex');
+        console.log(hashed);
+        // 创建一个历史记录
+        await I.prisma.ow_projects_history
+          .create({
+            data: {
+              projectid: Number(req.params.id),
+              sha256: hashed,
+              source: project.source,
+              authorid: Number(res.locals.userid),
+              type: project.type,
+              title: project.title,
+              description: project.description,
+              state: project.state,
+              licence: project.licence,
+              tags: project.tags,
+            },
+          })
+          .catch((err) => {
+            console.log(err);
+          });
+      }
+
+      res
+        .status(200)
+        .send({ status: "1", msg: "推送成功", message: "推送成功" });
+    }
+  } catch (err) {
+    console.log(err);
+    res.status(200).send({
+      status: "0",
+      msg: "保存失败",
+      message: "保存失败",
+      error: err,
+    });
   }
 });
 

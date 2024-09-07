@@ -110,7 +110,7 @@ app.all("*", function (req, res, next) {
     req.cookies.token ||
     req.body.token ||
     req.headers["token"] ||
-    req.headers["authorization"] ||
+    req.headers["authorization"].replace("Bearer ", "") ||
     req.query.token; // 获取JWT令牌
 
   if (token) {
