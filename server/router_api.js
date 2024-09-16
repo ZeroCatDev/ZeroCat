@@ -199,7 +199,7 @@ router.get("/work/info", function (req, res) {
 router.get("/projectinfo", function (req, res) {
   SQL =
   `SELECT ow_projects.id,ow_projects.authorid,ow_projects.time,ow_projects.view_count,ow_projects.like_count,ow_projects.type,` +
-  ` ow_projects.favo_count,ow_projects.title,ow_projects.state,ow_projects.description,ow_projects.license,ow_projects.tags,` +
+  ` ow_projects.favo_count,ow_projects.title,ow_projects.state,ow_projects.description,ow_projects.licence,ow_projects.tags,` +
   ` '' AS likeid, '' AS favoid,` +
   ` ow_users.display_name AS author_display_name,` +
   ` ow_users.images AS author_images,` +

@@ -110,8 +110,8 @@ app.all("*", function (req, res, next) {
     req.cookies.token ||
     req.body.token ||
     req.headers["token"] ||
-    req.headers["authorization"].replace("Bearer ", "") ||
-    req.query.token; // 获取JWT令牌
+    req.query.token|| // 获取JWT令牌
+    (req.headers["authorization"] || "").replace("Bearer ", "") ;
 
   if (token) {
     jwt.verify(token, global.config.security.jwttoken, (err, decodedToken) => {

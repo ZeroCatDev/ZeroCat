@@ -212,7 +212,7 @@ model python1 {
 model ow_projects {
   id          Int      @id @default(autoincrement()) @db.UnsignedInt
   type        String?  @default("text") @db.VarChar(32)
-  license     String?  @db.VarChar(32)
+  licence     String?  @db.VarChar(32)
   authorid    Int      @db.UnsignedInt
   state       String?  @default("private") @db.VarChar(32)
   view_count  Int?     @default(0) @db.UnsignedInt
@@ -261,23 +261,25 @@ model ow_users {
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model ow_projects_history {
-  id          Int      @default(autoincrement()) @db.UnsignedInt
+  id          Int      @id @default(autoincrement()) @db.UnsignedInt
   authorid    Int      @db.UnsignedInt
   projectid   Int      @db.UnsignedInt
   type        String?  @default("text") @db.VarChar(32)
   time        DateTime @default(now()) @db.Timestamp(0)
   title       String?  @default("ZeroCat新项目") @db.VarChar(50)
   description String?  @default("commit") @db.VarChar(1000)
-  source      String?  @db.MediumText
+  source      String?  @db.VarChar(64)
   state       String?  @default("private") @db.VarChar(32)
   licence     String?  @db.VarChar(45)
   tags        String?  @db.VarChar(100)
-  sha256      String   @default("sha256值") @db.VarChar(64)
-
-  @@id([id, sha256])
 }
 
 model ow_config {
   name   String @id @db.VarChar(45)
   config Json?
+}
+
+model ow_projects_file {
+  sha256 String  @id @db.VarChar(64)
+  source String? @db.MediumText
 }
