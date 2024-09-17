@@ -7,6 +7,7 @@ var fs = require("fs");
 var I = require("./lib/global.js");
 //数据库
 var DB = require("./lib/database.js");
+const { error } = require("console");
 
 //首页
 router.get("/", function (req, res) {
@@ -209,8 +210,8 @@ router.get("/projectinfo", function (req, res) {
   ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state='public' or ow_projects.authorid=${res.locals.userid}) LIMIT 1`;
   DB.query(SQL, function (err, SCRATCH) {
     if (err || SCRATCH.length == 0) {
-      res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
-      res.send({code:404,status:"404",msg:"项目不存在或未发布"})
+      res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" ,error:err};
+      res.send({code:404,status:"404",msg:"项目不存在或未发布",error:err})
       return;
     }
 
