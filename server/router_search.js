@@ -16,7 +16,7 @@ router.get("/", async function (req, res) {
     userid: req.query.search_userid,
     type: req.query.search_type,
     title: req.query.search_title,
-    src: req.query.search_src,
+    source: req.query.search_source,
     description: req.query.search_description,
     orderby: req.query.search_orderby,
     tags: req.query.search_tag,
