@@ -217,7 +217,7 @@ router.get("/projectinfo2", function (req, res) {
         parent: null,
         root: null,
       },
-      project_token: "",
+      project_token: res.locals.usertoken||'',
     };
     ////console.log(SCRATCH[0]);
     res.json(jsontw);
@@ -456,8 +456,7 @@ router.post("/thumbnail/:projectid", function (req, res) {
       } else {
         I.S3update(
           "scratch_slt/" + req.params.projectid,
-          strFileName,
-          res.locals.email
+          strFileName
         );
 
         ////console.log('保存缩略图成功：'+strFileName);
@@ -540,8 +539,7 @@ router.post("/assets/:filename", function (req, res) {
           } else {
             I.S3update(
               "material/asset/" + req.params.filename,
-              strFileName,
-              res.locals.email
+              strFileName
             );
 
             console.log("素材保存成功：" + strFileName);

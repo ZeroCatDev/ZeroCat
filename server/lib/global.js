@@ -13,19 +13,18 @@ exports.prisma =prisma;
 
 
 const { S3Client, PutObjectCommand } =require('@aws-sdk/client-s3');
-
 // Create an S3 client
 const s3 = new S3Client({
   endpoint: global.config.s3.endpoint,
   region: global.config.s3.region,
   credentials: {
-    accessKeyId: global.config.s3.accessKeyId,
-    secretAccessKey: global.config.s3.secretAccessKey,
+    accessKeyId: global.config.s3.AWS_ACCESS_KEY_ID,
+    secretAccessKey: global.config.s3.AWS_SECRET_ACCESS_KEY,
   }
 });
 
 
-exports.S3update = function ow(name, file,email) {
+exports.S3update = function ow(name, file) {
   console.log(name);
 try {
   s3.send(new PutObjectCommand({
@@ -36,7 +35,7 @@ try {
     console.log(err);
   }).then((data) => {
     console.log(data);
-    console.log(`用户 ${email} 成功上传了文件 ${global.config.s3.bucket}/${name}`);
+    console.log(`用户 ${res.locals.email} 成功上传了文件 ${global.config.s3.bucket}/${name}`);
 
   })
 

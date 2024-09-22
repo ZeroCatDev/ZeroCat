@@ -219,3 +219,109 @@ model scratch {
   description String?   @default("OurWorld上的Scratch项目") @db.VarChar(1000)
   src         String?   @db.MediumText
 }
+
+model ow_projects_file {
+  sha256      String    @id @db.VarChar(64)
+  source      String?   @db.Text
+  create_time DateTime? @default(now()) @db.DateTime(0)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model scratch_favo {
+  id        Int       @default(autoincrement()) @db.UnsignedInt
+  userid    Int       @db.UnsignedInt
+  projectid Int       @db.UnsignedInt
+  time      DateTime? @default(now()) @db.Timestamp(0)
+
+  @@id([id, userid, projectid])
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model scratch_like {
+  id        Int       @default(autoincrement()) @db.UnsignedInt
+  userid    Int       @db.UnsignedInt
+  projectid Int       @db.UnsignedInt
+  time      DateTime? @default(now()) @db.Timestamp(0)
+
+  @@id([id, userid, projectid])
+}
+
+model sys_ini {
+  id       Int     @id @default(autoincrement()) @db.UnsignedInt
+  iniKey   String? @db.Char(16)
+  iniValue String? @db.Char(64)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model user {
+  id           String    @unique(map: "id_UNIQUE") @db.VarChar(32)
+  username     String    @unique(map: "user_UNIQUE") @db.Char(100)
+  pwd          String    @db.Char(100)
+  display_name String    @default("OurWorld创作者") @db.Char(20)
+  state        Int       @default(0) @db.TinyInt
+  loginTime    DateTime? @db.Timestamp(0)
+  regTime      DateTime? @default(now()) @db.Timestamp(0)
+  sex          Int?      @default(0) @db.TinyInt
+  birthday     DateTime? @default(dbgenerated("'2000-04-01 00:00:00'")) @db.Timestamp(0)
+  motto        String?   @default("OurWorld创作者") @db.VarChar(1000)
+  images       String?   @default("头像") @db.VarChar(255)
+
+  @@id([id, username])
+}
+
+model wl_comment {
+  id         Int       @id @default(autoincrement()) @db.UnsignedInt
+  user_id    Int?
+  comment    String?   @db.Text
+  insertedAt DateTime? @default(now()) @db.Timestamp(0)
+  ip         String?   @default("") @db.VarChar(100)
+  link       String?   @db.VarChar(255)
+  mail       String?   @db.VarChar(255)
+  nick       String?   @db.VarChar(255)
+  pid        Int?
+  rid        Int?
+  sticky     Boolean?
+  status     String    @default("") @db.VarChar(50)
+  like       Int?
+  ua         String?   @db.Text
+  url        String?   @db.VarChar(255)
+  createdAt  DateTime? @default(now()) @db.Timestamp(0)
+  updatedAt  DateTime? @default(now()) @db.Timestamp(0)
+}
+
+model wl_counter {
+  id        Int       @id @default(autoincrement()) @db.UnsignedInt
+  time      Int?
+  reaction0 Int?
+  reaction1 Int?
+  reaction2 Int?
+  reaction3 Int?
+  reaction4 Int?
+  reaction5 Int?
+  reaction6 Int?
+  reaction7 Int?
+  reaction8 Int?
+  url       String    @default("") @db.VarChar(255)
+  createdAt DateTime? @default(now()) @db.Timestamp(0)
+  updatedAt DateTime? @default(now()) @db.Timestamp(0)
+}
+
+model wl_users {
+  id           Int       @id @default(autoincrement()) @db.UnsignedInt
+  display_name String    @default("") @db.VarChar(255)
+  email        String    @default("") @db.VarChar(255)
+  password     String    @default("") @db.VarChar(255)
+  type         String    @default("") @db.VarChar(50)
+  label        String?   @db.VarChar(255)
+  url          String?   @db.VarChar(255)
+  avatar       String?   @db.VarChar(255)
+  github       String?   @db.VarChar(255)
+  twitter      String?   @db.VarChar(255)
+  facebook     String?   @db.VarChar(255)
+  google       String?   @db.VarChar(255)
+  weibo        String?   @db.VarChar(255)
+  qq           String?   @db.VarChar(255)
+  fa           String?   @map("2fa") @db.VarChar(32)
+  createdAt    DateTime? @default(now()) @db.Timestamp(0)
+  updatedAt    DateTime? @default(now()) @db.Timestamp(0)
+}

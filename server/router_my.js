@@ -320,7 +320,7 @@ router.post("/set/avatar", geetest,function (req, res) {
     chunks.on("end", () => {
       const hashValue = hash.digest("hex");
       // 上传到七牛云
-      I.S3update(`user/${hashValue}`, newpath, res.locals.email);
+      I.S3update(`user/${hashValue}`, newpath);
       var UPDATE = `UPDATE ow_users SET ? WHERE id=${res.locals.userid} LIMIT 1`;
       var SET = {
         images: hashValue,

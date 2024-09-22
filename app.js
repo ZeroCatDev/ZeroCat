@@ -126,34 +126,29 @@ app.all("*", function (req, res, next) {
           display_name: "",
           avatar: "",
           is_admin: 0,
+          usertoken: "",
         };
         console.log("JWT验证失败: " + err.message);
       } else {
         // 如果验证成功，将用户信息存储在res.locals和session中
         let userInfo = decodedToken;
-        res.locals.userid = userInfo.userid;
-        res.locals.email = userInfo.email;
-        res.locals.username = userInfo.username;
-
-        res.locals.display_name = userInfo.display_name;
-        res.locals.avatar = userInfo.avatar;
-
-        res.locals["is_admin"] = 0;
-        if (userInfo.email == global.config.security.adminuser) {
-          res.locals["is_admin"] = 1;
-        }
+        res.locals = {
+          login: true,
+          userid: userInfo.userid,
+          email: userInfo.email,
+          username: userInfo.username,
+          display_name:  userInfo.display_name,
+          avatar: userInfo.avatar,
+          is_admin: 0,
+          usertoken: token,
+        };
+        //res.locals["is_admin"] = 0;
+        //if (userInfo.email == global.config.security.adminuser) {
+        //  res.locals["is_admin"] = 1;
+        //}
         //console.log("JWT验证成功: " + userInfo.email);
         //console.log( "调试用户信息(session)：" + res.locals.userid + "," + res.locals.email + "," + res.locals.username + "," + res.locals.display_name + "," + res.locals.is_admin );
 
-        res.locals = {
-          login: true,
-          userid: res.locals.userid,
-          email: res.locals.email,
-          username: res.locals.username,
-          display_name: res.locals.display_name,
-          avatar: res.locals.avatar,
-          is_admin: res.locals["is_admin"],
-        };
 
         //console.log( "调试用户信息(locals )：" + res.locals.userid + "," + res.locals.email + "," + res.locals.username + "," + res.locals.display_name + "," + res.locals.is_admin );
       }
@@ -170,6 +165,7 @@ app.all("*", function (req, res, next) {
       display_name: "未登录",
       avatar: "",
       is_admin: 0,
+      usertoken: "",
     };
     //console.log("未找到JWT Token");
     next();
