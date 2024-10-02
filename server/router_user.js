@@ -37,7 +37,6 @@ router.get("/login", function (req, res) {
 router.get("/repw", function (req, res) {
   res.render("repw.ejs");
 });
-const geetest = require('./geetest.js');
 
 router.get("/logout", function (req, res) {
   logout(req, res);

@@ -7,7 +7,7 @@ var crypto = require("crypto");
 var I = require("./lib/global.js");
 //数据库
 var DB = require("./lib/database.js");
-const geetest = require('./geetest.js');
+const geetest = require('./lib/captcha/geetest.js');
 
 router.all("*", function (req, res, next) {
   //限定访问该模块的权限：必须已登录

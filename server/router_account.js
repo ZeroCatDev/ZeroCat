@@ -37,7 +37,7 @@ router.get("/login", function (req, res) {
 router.get("/repw", function (req, res) {
   res.render("repw.ejs");
 });
-const geetest = require('./geetest.js');
+const geetest = require('./lib/captcha/geetest.js');
 
 //登录
 router.post("/login",geetest ,function (req, res) {

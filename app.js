@@ -57,6 +57,7 @@ var corsOptions = {
     if (!origin || corslist.indexOf(new URL(origin).hostname) !== -1) {
       callback(null, true);
     } else {
+      console.log(origin);
       callback(new Error("Not allowed by CORS"));
     }
   },
@@ -203,6 +204,10 @@ app.use("/scratch", router_scratch);
 //api路由
 var apiserver = require("./server/router_api.js");
 app.use("/api", apiserver);
+//api路由
+
+var router_projectlist = require("./server/router_projectlist.js");
+app.use("/projectlist", router_projectlist);
 
 //项目处理路由
 var router_project = require("./server/router_project.js");

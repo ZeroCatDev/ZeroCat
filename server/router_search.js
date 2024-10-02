@@ -1,149 +1,108 @@
-//搜索
-var express = require("express");
-var router = express.Router();
-var fs = require("fs");
+const express = require("express");
+const router = express.Router();
+const I = require("./lib/global.js"); // 功能函数集
+const DB = require("./lib/database.js"); // 数据库
 
-//功能函数集
-var I = require("./lib/global.js");
-//数据库
-var DB = require("./lib/database.js");
-const { join } = require("path");
+// 搜索：Scratch项目列表：数据（只搜索标题）
+router.get("/", async (req, res) => {
+  const {
+    search_userid: userid,
+    search_type: type,
+    search_title: title,
+    search_source: source,
+    search_description: description,
+    search_orderby: orderbyQuery = "time_down",
+    search_tag: tags,
+    curr = 1,
+    limit = 10,
+    search_state: stateQuery = "",
+  } = req.query;
 
-//搜索：Scratch项目列表：数据//只搜索标题
-router.get("/", async function (req, res) {
-  //console.log(req.query.search_state);
-  var search = {
-    userid: req.query.search_userid,
-    type: req.query.search_type,
-    title: req.query.search_title,
-    source: req.query.search_source,
-    description: req.query.search_description,
-    orderby: req.query.search_orderby,
-    tags: req.query.search_tag,
-    curr: Number(req.query.curr),
-    limit: Number(req.query.limit),
-    state: req.query.search_state,
+  const isCurrentUser = userid && res.locals.userid && userid === res.locals.userid;
+  let state = stateQuery === "" ? (isCurrentUser ? ['private', 'public'] : ['public'])
+            : (stateQuery === 'private' ? (isCurrentUser ? ['private'] : ['public']) : [stateQuery]);
+
+  // 处理排序
+  const [orderbyField, orderDirection] = orderbyQuery.split("_");
+  const orderbyMap = { view: "view_count", time: "time", id: "id" };
+  const orderDirectionMap = { up: "desc", down: "asc" };
+  const orderBy = orderbyMap[orderbyField] || "time";
+  const order = orderDirectionMap[orderDirection] || "desc";
+
+  // 搜索条件
+  const searchinfo = {
+    title: { contains: title },
+    source: source ? { contains: source } : undefined,
+    description: { contains: description },
+    type: { contains: type },
+    state: { in: state },
+    tags: { contains: tags },
+    authorid: userid ? { equals: Number(userid) } : undefined,
   };
 
-  //console.log(search.state);
-  if (search.state == "") {
-    if (
-      search.userid &&
-      res.locals.userid &&
-      search.userid == res.locals.userid
-    ) {
-      search.state = ['private', 'public'];
-    } else {
-      search.state = ['public'];
-    }
-  } else if (search.state == 'private') {
-    if (
-      search.userid &&
-      res.locals.userid &&
-      search.userid == res.locals.userid
-    ) {
-      search.state = ['private'];
-    } else {
-      search.state = ['public'];
-    }
-  } else {
-    search.state = [req.query.search_state];
+  try {
+    // 查询项目结果
+    const projectresult = await I.prisma.ow_projects.findMany({
+      where: searchinfo,
+      orderBy: { [orderBy]: order },
+      select: {
+        id: true,
+        type: true,
+        title: true,
+        state: true,
+        authorid: true,
+        description: true,
+        view_count: true,
+        time: true,
+        tags: true,
+      },
+      skip: (Number(curr) - 1) * Number(limit),
+      take: Number(limit),
+    });
+
+    // 统计项目总数
+    const projectcount = await I.prisma.ow_projects.count({ where: searchinfo });
+
+    // 获取作者信息
+    const authorIds = [...new Set(projectresult.map((item) => item.authorid))];
+    const userresult = await I.prisma.ow_users.findMany({
+      where: { id: { in: authorIds } },
+      select: {
+        id: true,
+        username: true,
+        display_name: true,
+        motto: true,
+        images: true,
+      },
+    });
+
+    res.status(200).send({
+      projects: projectresult,
+      users: userresult,
+      totalCount: [{ totalCount: projectcount }],
+    });
+  } catch (error) {
+    console.error("Error fetching data: ", error);
+    res.status(500).send({ error: "Internal Server Error" });
   }
-
-  //console.log(search.state);
-  orderby = search.orderby.split("_")[0];
-
-  ordersc = search.orderby.split("_")[1];
-
-  orderbylist = {
-    view: "view_count",
-    time: "time",
-    id: "id",
-  };
-  var orderby = orderbylist[orderby];
-  ordersclist = { up: "desc", down: "asc" };
-  ordersc = ordersclist[ordersc];
-  //  console.log(ordersc);
-  searchinfo ={
-    title: { contains: search.title },
-    source: search.source != "" ? { contains: search.source } : {},
-    description: { contains: search.description },
-    type: { contains: search.type },
-    state: { in: search.state },
-    tags: { contains: search.tags },
-    authorid: search.userid != "" ? { equals: Number(search.userid) } : {},
-  }
-  console.log(searchinfo);
-  var projectresult = await I.prisma.ow_projects.findMany({
-    orderBy: [
-      orderby === "view_count"
-        ? { view_count: ordersc }
-        : orderby === "time"
-        ? { time: ordersc }
-        : orderby === "id"
-        ? { id: ordersc }
-        : {},
-    ],
-    where: searchinfo,
-    select: {
-      id: true,
-      type: true,
-      title: true,
-      state: true,
-      authorid: true,
-      description: true,
-      view_count: true,
-      time: true,
-      tags: true,
-    },
-    skip: (search.curr - 1) * search.limit,
-    take: search.limit,
-  });
-  var projectcount = await I.prisma.ow_projects.count({
-    where: searchinfo,
-  });
-  //console.log(projectcount);
-  const authorIds = new Set(projectresult.map((item) => item.authorid));
-
-  //console.log(authorIds); // 输出: Set(2) { '0', '1' }
-  const authorIdTuple = [...authorIds];
-  //console.log(authorIdTuple); // 输出: [0, 1]
-  var userresult = await I.prisma.ow_users.findMany({
-    where: { id: { in: authorIdTuple } },
-    select: {
-      id: true,
-      username: true,
-      display_name: true,
-      motto: true,
-      images: true,
-    },
-  });
-  //console.log(userresult); // 输出: [0, 1]
-
-  //var SQL = `SELECT id, title FROM ${tabelName} WHERE state='public' AND (${searchinfo} LIKE ?) LIMIT 12`;
-  //var SQL = `SELECT s.id, s.title, s.state, s.authorid, s.description, s.view_count, u.display_name, u.motto,u.images FROM ( SELECT id, title, state, authorid, description, view_count,time FROM ${search.type} WHERE state='public' AND (title LIKE ? ) AND (src like ? ) AND (description like ? ) ${andid} ) s JOIN ow_users u ON s.authorid = u.id ORDER BY ${orderby} ${ordersc} LIMIT ${(search.curr - 1) * search.limit}, ${ search.limit }`; var QUERY = [ `%${search.title}%`, `%${search.src}%`, `%${search.description}%`, ];
-
-  res.status(200).send({
-    data: projectresult,
-    user: userresult,
-    totalCount: [{ totalCount: projectcount }],
-  });
 });
 
-//搜索：Scratch项目列表：数据//只搜索标题
-router.post("/user", function (req, res) {
-  if (!req.body.txt) {
-    res.status(200).send([]);
-    return;
+// 搜索：Scratch项目列表：数据（只搜索标题）
+router.post("/user", (req, res) => {
+  const searchTxt = req.body.txt;
+  if (!searchTxt) {
+    return res.status(200).send([]);
   }
-  var SQL = `SELECT id, display_name, motto,images FROM ow_users WHERE display_name LIKE ?`;
-  var WHERE = [`%${req.body.txt}%`];
-  DB.qww(SQL, WHERE, function (err, data) {
+
+  const SQL = `SELECT id, display_name, motto, images FROM ow_users WHERE display_name LIKE ?`;
+  const WHERE = [`%${searchTxt}%`];
+
+  DB.qww(SQL, WHERE, (err, data) => {
     if (err) {
-      res.status(200).send([]);
-    } else {
-      res.status(200).send(data);
+      return res.status(500).send([]); // 如果有数据库错误，返回500状态码
     }
+    res.status(200).send(data);
   });
 });
+
 module.exports = router;
