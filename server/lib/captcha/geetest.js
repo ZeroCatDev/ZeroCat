@@ -15,8 +15,15 @@ app.use(async (req, res, next) => {
 
     // 处理验证码信息
     try {
+        console.log(req.body.captcha);
         if (req.body.captcha) {
-            geetest = JSON.parse(req.body.captcha);
+            // 如果是字符串则转为json
+            if (typeof req.body.captcha === "string") {
+                geetest = JSON.parse(req.body.captcha);
+            }else {
+                geetest = req.body.captcha;
+
+            }
         } else {
             const queryCaptcha = querystring.parse(req.url.split("?")[1]).captcha;
             geetest = queryCaptcha ? JSON.parse(queryCaptcha) : querystring.parse(req.url.split("?")[1]) || req.body;
