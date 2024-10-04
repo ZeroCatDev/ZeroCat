@@ -213,6 +213,9 @@ app.use("/projectlist", router_projectlist);
 var router_project = require("./server/router_project.js");
 app.use("/project", router_project);
 
+//项目处理路由
+var router_comment = require("./server/router_comment.js");
+app.use("/comment", router_comment);
 app.get("/about", function (req, res, next) {
   res.render("about.ejs");
 });

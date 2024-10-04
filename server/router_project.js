@@ -8,6 +8,7 @@ const default_project = require("./lib/default_project.js");
 // 中间件，确保所有请求均经过该处理
 router.all("*", (req, res, next) => next());
 
+
 // 创建新作品
 router.post("/", async (req, res) => {
   if (!res.locals.login) {
