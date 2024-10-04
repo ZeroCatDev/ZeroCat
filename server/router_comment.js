@@ -34,7 +34,7 @@ router.get("/api/comment", async (req, res) => {
       };
     }
 
-    var comment = await I.prisma.ow_Comment.findMany({
+    var comment = await I.prisma.ow_comment.findMany({
       where: {
         url: req.query.path,
         pid: null,
@@ -48,7 +48,7 @@ router.get("/api/comment", async (req, res) => {
     const ids = comment.map((item) => item.id);
     console.log(ids);
 
-    var childrencomment = await I.prisma.ow_Comment.findMany({
+    var childrencomment = await I.prisma.ow_comment.findMany({
       where: {
         url: req.query.path,
         rid: { in: ids },
@@ -66,7 +66,7 @@ router.get("/api/comment", async (req, res) => {
     });
 
     console.log(result1);
-    const count = await I.prisma.ow_Comment.count({
+    const count = await I.prisma.ow_comment.count({
       where: {
         url: req.query.path,
         pid: null,
@@ -101,7 +101,7 @@ router.post("/api/comment", async (req, res) => {
   }
 
   try {
-    var comment = await I.prisma.ow_Comment.create({
+    var comment = await I.prisma.ow_comment.create({
       data: {
         url: req.body.url,
         comment: req.body.comment,
@@ -132,13 +132,13 @@ router.delete("/api/comment/:id", async (req, res) => {
   //if (!res.locals.login) {return res.status(404).send({ status: "0", msg: "请先登录" });}
 
   try {
-    var comment = await I.prisma.ow_Comment.findFirst({
+    var comment = await I.prisma.ow_comment.findFirst({
       where: {
         id: Number(req.params.id),
       },
     });
     if (comment.user_id == res.locals.user_id || true) {
-      var comment = await I.prisma.ow_Comment.delete({
+      var comment = await I.prisma.ow_comment.delete({
         where: {
           id: Number(req.params.id),
         },
