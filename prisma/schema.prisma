@@ -158,21 +158,21 @@ model ow_config {
 model ow_comment {
   id         Int       @id @default(autoincrement()) @db.UnsignedInt
   user_id    Int?
-  comment    String?   @db.Text
+  type       String?   @default("comment") @db.VarChar(64)
+  text       String?   @db.Text
   insertedAt DateTime? @default(now()) @db.Timestamp(0)
-  ip         String?   @default("") @db.VarChar(100)
-  link       String?   @db.VarChar(255)
-  mail       String?   @db.VarChar(255)
-  nick       String?   @db.VarChar(255)
+  user_ip    String?   @default("") @db.VarChar(100)
+  link       String?   @db.VarChar(128)
   pid        Int?
   rid        Int?
-  sticky     Boolean?
   status     String    @default("") @db.VarChar(50)
-  like       Int?
-  ua         String?   @db.Text
+  user_ua    String?   @db.Text
   url        String?   @db.VarChar(255)
+  page_type  String?   @db.VarChar(32)
+  page_id    Int?
   createdAt  DateTime? @default(now()) @db.Timestamp(0)
   updatedAt  DateTime? @default(now()) @db.Timestamp(0)
+  page_key   String?   @db.VarChar(128)
 }
 
 model ow_counter {

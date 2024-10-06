@@ -98,10 +98,31 @@ async function getProjectlist(listid, userid) {
 }
 
 // 获取用户的所有项目列表
-async function getUserProjectlist(userid) {
+async function getUserProjectlist(userid,state) {
   try {
     return await prisma.ow_projects_lists.findMany({
-      where: { authorid: Number(userid) },
+      where: { authorid: Number(userid) ,state:{in:state}},
+      select: {
+        id: true,
+        authorid: true,
+        title: true,
+        description: true,
+        state: true,
+        list: true,
+        createTime: true,
+        updateTime: true,
+      },
+    });
+  } catch (error) {
+    handleError(error);
+  }
+}
+
+// 获取用户的公开项目列表
+async function getUserPublicProjectlist(userid) {
+  try {
+    return await prisma.ow_projects_lists.findMany({
+      where: { authorid: Number(userid), state: "public" },
       select: {
         id: true,
         authorid: true,
@@ -137,26 +158,6 @@ async function checkProjectlistWithUser(info) {
   }
 }
 
-// 获取用户的公开项目列表
-async function getUserPublicProjectlist(userid) {
-  try {
-    return await prisma.ow_projects_lists.findMany({
-      where: { authorid: Number(userid), state: "public" },
-      select: {
-        id: true,
-        authorid: true,
-        title: true,
-        description: true,
-        state: true,
-        list: true,
-        createTime: true,
-        updateTime: true,
-      },
-    });
-  } catch (error) {
-    handleError(error);
-  }
-}
 
 // 更新项目列表
 async function updateProjectlist(listid, info) {

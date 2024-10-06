@@ -78,15 +78,19 @@ router.get("/user/:id/:state?", async (req, res) => {
     let info;
 
     if (state === "private" && res.locals.userid == id) {
-      info = await getUserProjectlist(id);
+      console.log("1");
+      info = await getUserProjectlist(id,["private"]);
     } else if (state === "public") {
-      info = await getUserPublicProjectlist(id);
+      console.log("2");
+      info = await getUserProjectlist(id,["public"]);
     } else if (!state || ["all", "undefined", "null", ""].includes(state)) {
+      console.log("3");
       info = res.locals.userid == id
-        ? await getUserProjectlist(id)
-        : await getUserPublicProjectlist(id);
+        ? await getUserProjectlist(id,["private", "public"])
+        : await getUserProjectlist(id,["public"]);
     } else {
-      info = await getUserPublicProjectlist(id);
+      console.log("4");
+      info = await getUserProjectlist(id,"public");
     }
 
     res.status(200).send({ status: "1", message: "获取成功", data: info });
