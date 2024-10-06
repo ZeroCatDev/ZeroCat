@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const I = require("./lib/global.js");
-const {getUsersByList} = require("./lib/method/users.js");
+const { getUsersByList } = require("./lib/method/users.js");
 // 中间件，确保所有请求均经过该处理
 router.all("*", (req, res, next) => next());
 
@@ -33,10 +33,17 @@ const transformComment = (comments) => {
     return comment;
     const time = new Date(comment.insertedAt).getTime();
     const objectId = comment.id;
-    const browser = (comment.ua ? comment.ua.match(/(Edge|Chrome|Firefox|Safari|Opera)/) : null || ["未知"])[0];
-    const os = (comment.ua ? comment.ua.match(/(Windows|Mac|Linux)/) : null || ["未知"])[0];
+    const browser = (
+      comment.ua
+        ? comment.ua.match(/(Edge|Chrome|Firefox|Safari|Opera)/)
+        : null || ["未知"]
+    )[0];
+    const os = (
+      comment.ua ? comment.ua.match(/(Windows|Mac|Linux)/) : null || ["未知"]
+    )[0];
     const type = comment.id == 1 ? "administrator" : "guest";
-    const avatar = "https://owcdn.190823.xyz/user/fcd939e653195bb6d057e8c2519f5cc7";
+    const avatar =
+      "https://owcdn.190823.xyz/user/fcd939e653195bb6d057e8c2519f5cc7";
     const orig = comment.comment;
     const ip = comment.ip;
     const addr = "";
@@ -63,7 +70,7 @@ router.get("/api/comment", async (req, res) => {
     const sort = getSortCondition(req);
 
     const comments = await I.prisma.ow_comment.findMany({
-      where: { page_key: path, pid: null, rid: null,type: "comment" },
+      where: { page_key: path, pid: null, rid: null, type: "comment" },
       orderBy: sort,
       take: Number(pageSize) || 10,
       skip: (page - 1) * pageSize,
@@ -71,31 +78,33 @@ router.get("/api/comment", async (req, res) => {
 
     const transformedComments = transformComment(comments);
 
-
-
     const ids = transformedComments.map((comment) => comment.id);
 
     const childrenComments = await I.prisma.ow_comment.findMany({
-      where: { page_key: path, rid: { in: ids } ,type: "comment" },
+      where: { page_key: path, rid: { in: ids }, type: "comment" },
     });
 
     const transformedChildrenComments = transformComment(childrenComments);
     // 获取评论的用户id
 
     var user_ids = transformedComments.map((comment) => comment.user_id);
-    user_ids = user_ids.concat(transformedChildrenComments.map((comment) => comment.user_id));
+    user_ids = user_ids.concat(
+      transformedChildrenComments.map((comment) => comment.user_id)
+    );
     //去重
     user_ids = Array.from(new Set(user_ids));
 
-    console.log(user_ids)
+    console.log(user_ids);
     const users = await getUsersByList(user_ids);
     const result = transformedComments.map((comment) => {
-      const children = transformedChildrenComments.filter((child) => child.rid == comment.id);
+      const children = transformedChildrenComments.filter(
+        (child) => child.rid == comment.id
+      );
       return { ...comment, children };
     });
 
     const count = await I.prisma.ow_comment.count({
-      where: { page_key: path, pid: null, rid: null,type: "comment" },
+      where: { page_key: path, pid: null, rid: null, type: "comment" },
     });
 
     res.status(200).send({
@@ -122,16 +131,16 @@ router.post("/api/comment", async (req, res) => {
   try {
     const { url, comment, pid, rid } = req.body;
     const { userid, display_name } = res.locals;
-    const user_ua = req.headers['user-agent'] || "";
+    const user_ua = req.headers["user-agent"] || "";
 
     const newComment = await I.prisma.ow_comment.create({
       data: {
         user_id: userid,
         type: "comment",
         user_ip: req.ip,
-        page_type:url.split("-")[0],
-        page_id:Number(url.split("-")[1])||null,
-        text:comment,
+        page_type: url.split("-")[0],
+        page_id: Number(url.split("-")[1]) || null,
+        text: comment,
         link: `/user/${userid}`,
         user_ua,
         pid: pid || null,

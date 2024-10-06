@@ -1,33 +1,48 @@
 <%- include('../html-head.ejs', {pageTitle: 'Python'}); %>
-			<div class="mdui-row">
-				<h1>Python</h1><!--<div class="mdui-typo-title">最新项目</div>-->
-				<br />
+<div class="mdui-row">
+  <h1>Python</h1>
+  <!--<div class="mdui-typo-title">最新项目</div>-->
+  <br />
 
+  <mdui-text-field
+    variant="filled"
+    label="搜索"
+    placeholder="键入以搜索"
+    id="python_search_txt"
+    clearable
+  >
+    <mdui-button-icon slot="icon" icon="search"></mdui-button-icon>
+  </mdui-text-field>
 
+  <div style="padding-top: 10px">
+    <mdui-button icon="search" onclick="Python_Search()">搜索</mdui-button>
+    <mdui-checkbox id="python_src">内容搜索</mdui-checkbox>
+  </div>
 
-				<mdui-text-field variant="filled" label="搜索" placeholder='键入以搜索' id='python_search_txt' clearable>
-					<mdui-button-icon slot="icon" icon="search"></mdui-button-icon>
-				</mdui-text-field>
-
-				<div style="padding-top: 10px;">
-					<mdui-button icon="search" onclick="Python_Search()">搜索</mdui-button> <mdui-checkbox
-						id="python_src">内容搜索</mdui-checkbox>
-				</div>
-
-				<div id="python_box">
-					<mdui-tabs value="new" id="python_type">
-						<mdui-tab value="new" icon="fiber_new"
-							onclick="Python('new');python_type='new'">最新</mdui-tab>
-						<mdui-tab value="hot" icon="whatshot"
-							onclick="Python('hot');python_type='hot'">最热</mdui-tab>
-					</mdui-tabs>
-					<div class="mdui-row" id="python_projects"></div>
-					<div style="display:flex; justify-content:center;">
-						<div id="python_change_page"></div>
-					</div>
-				</div>
-			</div>
+  <div id="python_box">
+    <mdui-tabs value="new" id="python_type">
+      <mdui-tab
+        value="new"
+        icon="fiber_new"
+        onclick="Python('new');python_type='new'"
+        >最新</mdui-tab
+      >
+      <mdui-tab
+        value="hot"
+        icon="whatshot"
+        onclick="Python('hot');python_type='hot'"
+        >最热</mdui-tab
+      >
+    </mdui-tabs>
+    <div class="mdui-row" id="python_projects"></div>
+    <div style="display: flex; justify-content: center">
+      <div id="python_change_page"></div>
+    </div>
+  </div>
+</div>
 <%- include('../html-footer.ejs', {page: 'python'}); %>
 
-<script type="text/javascript" src="<%= global.config.urls.static %>/page/python/projects.js"></script>
-
+<script
+  type="text/javascript"
+  src="<%= global.config.urls.static %>/page/python/projects.js"
+></script>

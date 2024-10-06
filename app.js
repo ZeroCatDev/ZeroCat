@@ -95,7 +95,6 @@ app.set("view engine", "ejs");
 //数据库
 var DB = require("./server/lib/database.js");
 
-
 //全局变量
 global.dirname = __dirname;
 
@@ -111,8 +110,8 @@ app.all("*", function (req, res, next) {
     req.cookies.token ||
     req.body.token ||
     req.headers["token"] ||
-    req.query.token|| // 获取JWT令牌
-    (req.headers["authorization"] || "").replace("Bearer ", "") ;
+    req.query.token || // 获取JWT令牌
+    (req.headers["authorization"] || "").replace("Bearer ", "");
 
   if (token) {
     jwt.verify(token, global.config.security.jwttoken, (err, decodedToken) => {
@@ -138,7 +137,7 @@ app.all("*", function (req, res, next) {
           userid: userInfo.userid,
           email: userInfo.email,
           username: userInfo.username,
-          display_name:  userInfo.display_name,
+          display_name: userInfo.display_name,
           avatar: userInfo.avatar,
           is_admin: 0,
           usertoken: token,
@@ -149,7 +148,6 @@ app.all("*", function (req, res, next) {
         //}
         //console.log("JWT验证成功: " + userInfo.email);
         //console.log( "调试用户信息(session)：" + res.locals.userid + "," + res.locals.email + "," + res.locals.username + "," + res.locals.display_name + "," + res.locals.is_admin );
-
 
         //console.log( "调试用户信息(locals )：" + res.locals.userid + "," + res.locals.email + "," + res.locals.username + "," + res.locals.display_name + "," + res.locals.is_admin );
       }

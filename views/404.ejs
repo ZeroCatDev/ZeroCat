@@ -1,9 +1,11 @@
 <%- include('./html-head.ejs', {pageTitle: '首页'}); %>
-<mdui-icon name='error'></mdui-icon><h1>404 此页面未找到</h1>
+<mdui-icon name="error"></mdui-icon>
+<h1>404 此页面未找到</h1>
 <h6>页面不存在或已被删除，无需紧张，这与您的设备及浏览器无关</h6>
 <h6>如果由他人向您分享了此链接，请联系与您分享此链接的人</h6>
-<h6>如果您认为此问题与ZeroCat本身有关，请在左上角菜单中选择反馈</h6><br/>
+<h6>如果您认为此问题与ZeroCat本身有关，请在左上角菜单中选择反馈</h6>
+<br />
 <mdui-button href="/">首页</mdui-button>
 <mdui-button onclick="window.history.go(-1);">返回上一页</mdui-button>
-   
-    <%- include('html-footer.ejs', {page: 'home'}); %>
+
+<%- include('html-footer.ejs', {page: 'home'}); %>

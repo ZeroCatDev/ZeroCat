@@ -1,82 +1,100 @@
 <%- include('./html-head.ejs', {pageTitle: 'Scratch' }); %>
 
-    <div class="mdui-row">
-        <h1>搜索</h1><!--<div class="mdui-typo-title">最新项目</div>-->
-        <br />
-        <mdui-text-field variant="outlined" label="作品名 包含" id='search_title' clearable>
-            <mdui-button-icon slot="icon" icon="search"></mdui-button-icon>
-        </mdui-text-field>
-        <mdui-text-field variant="outlined" label="作品内容 包含" id='search_src' clearable>
-            <mdui-button-icon slot="icon" icon="search"></mdui-button-icon>
-        </mdui-text-field>
-        <mdui-text-field variant="outlined" label="作品简介 包含" id='search_description' clearable>
-            <mdui-button-icon slot="icon" icon="search"></mdui-button-icon>
-        </mdui-text-field>
-        <mdui-select value="view_up" id="search_orderby" class="search_orderby">
-            <mdui-menu-item value="id_up">序号升序</mdui-menu-item>
-            <mdui-menu-item value="id_down">序号降序</mdui-menu-item>
-            <mdui-menu-item value="time_up">时间升序</mdui-menu-item>
-            <mdui-menu-item value="time_down">时间降序</mdui-menu-item>
-            <mdui-menu-item value="view_up">观看量升序</mdui-menu-item>
-            <mdui-menu-item value="view_down">观看量降序</mdui-menu-item>
+<div class="mdui-row">
+  <h1>搜索</h1>
+  <!--<div class="mdui-typo-title">最新项目</div>-->
+  <br />
+  <mdui-text-field
+    variant="outlined"
+    label="作品名 包含"
+    id="search_title"
+    clearable
+  >
+    <mdui-button-icon slot="icon" icon="search"></mdui-button-icon>
+  </mdui-text-field>
+  <mdui-text-field
+    variant="outlined"
+    label="作品内容 包含"
+    id="search_src"
+    clearable
+  >
+    <mdui-button-icon slot="icon" icon="search"></mdui-button-icon>
+  </mdui-text-field>
+  <mdui-text-field
+    variant="outlined"
+    label="作品简介 包含"
+    id="search_description"
+    clearable
+  >
+    <mdui-button-icon slot="icon" icon="search"></mdui-button-icon>
+  </mdui-text-field>
+  <mdui-select value="view_up" id="search_orderby" class="search_orderby">
+    <mdui-menu-item value="id_up">序号升序</mdui-menu-item>
+    <mdui-menu-item value="id_down">序号降序</mdui-menu-item>
+    <mdui-menu-item value="time_up">时间升序</mdui-menu-item>
+    <mdui-menu-item value="time_down">时间降序</mdui-menu-item>
+    <mdui-menu-item value="view_up">观看量升序</mdui-menu-item>
+    <mdui-menu-item value="view_down">观看量降序</mdui-menu-item>
+  </mdui-select>
 
-        </mdui-select>
+  <mdui-select value="scratch" id="search_type" class="search_type">
+    <mdui-menu-item value="all">所有</mdui-menu-item>
+    <mdui-menu-item value="scratch">scratch</mdui-menu-item>
+    <mdui-menu-item value="python">python</mdui-menu-item>
+  </mdui-select>
 
-        <mdui-select value="scratch" id="search_type" class="search_type">
-            <mdui-menu-item value="all">所有</mdui-menu-item>
-            <mdui-menu-item value="scratch">scratch</mdui-menu-item>
-            <mdui-menu-item value="python">python</mdui-menu-item>
+  <mdui-dialog close-on-overlay-click class="choose_user">
+    <mdui-top-app-bar slot="header">
+      <mdui-button-icon
+        icon="close"
+        class="choose_user_cancel"
+      ></mdui-button-icon>
+      <mdui-top-app-bar-title>选择用户</mdui-top-app-bar-title>
+    </mdui-top-app-bar>
 
-        </mdui-select>
-
-        <mdui-dialog close-on-overlay-click class="choose_user">
-            <mdui-top-app-bar slot="header">
-                <mdui-button-icon icon="close" class="choose_user_cancel"></mdui-button-icon>
-                <mdui-top-app-bar-title>选择用户</mdui-top-app-bar-title>
-            </mdui-top-app-bar>
-
-            <div><mdui-text-field variant="outlined" label="用户名" id='choose_user_search' clearable>
-                    <mdui-button-icon slot="icon" icon="search"></mdui-button-icon>
-                </mdui-text-field>
-                <mdui-button icon="search" onclick="choose_search()">搜索</mdui-button>
-                <mdui-button icon="search" onclick="cancel_choose_search()">取消选中</mdui-button>
-
-            </div>
-            <div class="choose_user_box" id="choose_user_box"></div>
-
-
-        </mdui-dialog><mdui-list id="open_choose_user" onclick="document.querySelector('.choose_user').open = true;">
-            <mdui-list-item rounded>选择用户  <mdui-avatar slot="icon" >
-            </mdui-avatar> <span slot="description">点击选择在用户中搜索</span>
-            </mdui-list-item>
-            </mdui-list>
-
-
-        <script>
-
-
-        </script>
-<div id="search_explain"></div>
-        <div style="padding-top: 10px;">
-
-            <mdui-button icon="search" onclick="Scratch_Search()">搜索</mdui-button>
-            <mdui-button variant="text" onclick="update_explain()">解释</mdui-button>
-
-        </div>
-
-
-
-        <div id="scratch_box">
-
-
-            <div class="mdui-row" id="scratch_projects"></div>
-            <div style="display:flex; justify-content:center;">
-                <div id="search_change_page"></div>
-            </div>
-        </div>
-
+    <div>
+      <mdui-text-field
+        variant="outlined"
+        label="用户名"
+        id="choose_user_search"
+        clearable
+      >
+        <mdui-button-icon slot="icon" icon="search"></mdui-button-icon>
+      </mdui-text-field>
+      <mdui-button icon="search" onclick="choose_search()">搜索</mdui-button>
+      <mdui-button icon="search" onclick="cancel_choose_search()"
+        >取消选中</mdui-button
+      >
     </div>
+    <div class="choose_user_box" id="choose_user_box"></div> </mdui-dialog
+  ><mdui-list
+    id="open_choose_user"
+    onclick="document.querySelector('.choose_user').open = true;"
+  >
+    <mdui-list-item rounded
+      >选择用户 <mdui-avatar slot="icon"> </mdui-avatar>
+      <span slot="description">点击选择在用户中搜索</span>
+    </mdui-list-item>
+  </mdui-list>
 
-    <%- include('./html-footer.ejs', {page: 'scratch' }); %>
+  <script></script>
+  <div id="search_explain"></div>
+  <div style="padding-top: 10px">
+    <mdui-button icon="search" onclick="Scratch_Search()">搜索</mdui-button>
+    <mdui-button variant="text" onclick="update_explain()">解释</mdui-button>
+  </div>
 
-	<script type="text/javascript" src="<%= global.config.urls.static %>/page/search/search.js"></script>
+  <div id="scratch_box">
+    <div class="mdui-row" id="scratch_projects"></div>
+    <div style="display: flex; justify-content: center">
+      <div id="search_change_page"></div>
+    </div>
+  </div>
+</div>
+
+<%- include('./html-footer.ejs', {page: 'scratch' }); %>
+
+<script
+  type="text/javascript"
+  src="<%= global.config.urls.static %>/page/search/search.js"
+></script>

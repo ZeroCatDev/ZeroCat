@@ -1,159 +1,282 @@
 <%- include('../html-head.ejs', {pageTitle: 'Scratch' }); %>
-	<link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css" />
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/@waline/client@v3/dist/waline.css"
+/>
 
-	<link rel="stylesheet" type="text/css" href="<%= global.config.urls.static %>/css/scratch_play.css">
-	<div class="mdui-row">
-		<div class="mdui-col-xs-12 mdui-col-md-8">
-			<mdui-card style="width: 100%; height: 100%;aspect-ratio: 4 / 3;" variant="outlined">
+<link
+  rel="stylesheet"
+  type="text/css"
+  href="<%= global.config.urls.static %>/css/scratch_play.css"
+/>
+<div class="mdui-row">
+  <div class="mdui-col-xs-12 mdui-col-md-8">
+    <mdui-card
+      style="width: 100%; height: 100%; aspect-ratio: 4 / 3"
+      variant="outlined"
+    >
+      <iframe
+        src=""
+        scrolling="no"
+        frameborder="0"
+        style="width: 100%; height: 100%"
+        id="project_iframe"
+        class="project_iframe"
+      ></iframe>
+    </mdui-card>
 
-				<iframe src="" scrolling="no" frameborder="0" style="width: 100%; height: 100%;"
-					id="project_iframe" class="project_iframe"></iframe>
-			</mdui-card>
+    <br />
+    <mdui-dialog close-on-overlay-click id="old-project-view">
+      <mdui-card style="width: 100%" variant="outlined">
+        <div id="container_play" style="display: none">
+          <div id="wrapper">
+            <canvas id="stage"></canvas>
+            <div id="monitors"></div>
+            <div id="asking-box">
+              <label id="question" for="answer">问题</label>
+              <input type="text" id="answer" />
+            </div>
+          </div>
+        </div>
+        <div class="loading-progress-box" style="display: none">
+          <mdui-linear-progress
+            value="0"
+            id="loading-progress-linear"
+          ></mdui-linear-progress>
+          <mdui-button id="loading-progress" variant="tonal"></mdui-button>
+        </div>
+        <div id="container_main">
+          <div
+            id="project_slt"
+            style="
+              background-image: url(<%= global.config.s3.staticurl %>/scratch_slt/1);
+            "
+          >
+            <mdui-button
+              onclick="loadProject()"
+              disabled
+              class="remove-disabled"
+              variant="filled"
+              icon="play_arrow"
+              class="ow-center"
+              >运行</mdui-button
+            >
+          </div>
+        </div>
+      </mdui-card>
 
+      <mdui-button
+        onclick="greenFlag()"
+        variant="filled"
+        icon="play_arrow"
+        id="greenFlag-button"
+        disabled
+        class="remove-disabled greenFlag-button"
+        >运行</mdui-button
+      >
 
+      <mdui-button
+        id="stopAll"
+        onclick="stopAll()"
+        variant="tonal"
+        icon="clear"
+        id="stopAll-button"
+        disabled
+        class="remove-disabled stopAll-button"
+        >停止</mdui-button
+      >
+      <mdui-button
+        variant="text"
+        target="_blank"
+        id="editlink-old"
+        disabled
+        class="remove-disabled editlink-old"
+        >打开旧版创作页</mdui-button
+      ></mdui-dialog
+    >
+  </div>
+  <div class="mdui-col-xs-12 mdui-col-md-4">
+    <div style="font-size: 24px; line-height: 36px" class="projecttitle">
+      加载中
+    </div>
+    <div
+      style="font-size: 14px; line-height: 24px; opacity: 0.54"
+      class="projectdescription"
+    >
+      加载中
+    </div>
+    <mdui-list>
+      <mdui-list-item
+        id="authorinfo"
+        rounded
+        active
+        headline="加载中"
+        description="加载中"
+        headline-line="1"
+        description-line="1"
+        href=""
+        disabled
+        class="remove-disabled authorinfo"
+        ><mdui-avatar class="authoravatar" slot="icon" src=""></mdui-avatar>
+      </mdui-list-item>
+    </mdui-list>
 
-			<br />
-			<mdui-dialog close-on-overlay-click id="old-project-view"> <mdui-card style="width: 100%;"
-					variant="outlined">
+    <mdui-chip
+      icon="play_circle"
+      id="projectview"
+      disabled
+      class="remove-disabled projectview"
+      elevated
+      >加载中</mdui-chip
+    >
+    <mdui-chip
+      icon="access_time"
+      id="projecttime"
+      disabled
+      class="remove-disabled projecttime"
+      elevated
+      >加载中</mdui-chip
+    >
+    <mdui-chip
+      icon="code"
+      id="projectstate"
+      disabled
+      class="remove-disabled projectstate"
+      elevated
+      >加载中</mdui-chip
+    >
+    <mdui-chip icon="code" disabled class="remove-disabled" elevated
+      >Scratch</mdui-chip
+    ><br />
+    <mdui-button
+      variant="filled"
+      class="copylink remove-disabled"
+      icon="content_copy"
+      disabled
+      >复制链接</mdui-button
+    >
+    <mdui-button
+      variant="filled"
+      icon="analytics"
+      id="open-analysis-dialog"
+      onclick="projectanalysis(projectjson)"
+      disabled
+      class="remove-disabled open-analysis-dialog"
+      >分析</mdui-button
+    >
+    <mdui-button
+      variant="text"
+      target="_blank"
+      id="editlink"
+      disabled
+      class="remove-disabled editlink"
+      >打开创作页</mdui-button
+    >
 
+    <mdui-button
+      id="open-old-project-view"
+      class="open-old-project-view"
+      variant="text"
+      >旧版播放器</mdui-button
+    >
 
-					<div id="container_play" style="display: none;">
+    <div class="social-share"></div>
 
-						<div id="wrapper"> <canvas id="stage"></canvas>
-							<div id="monitors"></div>
-							<div id="asking-box">
-								<label id="question" for="answer">问题</label> <input type="text" id="answer">
-							</div>
-						</div>
+    <mdui-dialog close-on-overlay-click close-on-esc class="analysis-dialog">
+      <span slot="headline"> 作品分析 </span>
+      <span slot="description">由 ZeroCat 统计</span>
+      <div id="main1" style="width: 450px; height: 400px">
+        请加载旧版播放器后再使用分析
+      </div>
 
-					</div>
-					<div class=" loading-progress-box" style="display: none;">
-						<mdui-linear-progress value="0" id="loading-progress-linear"></mdui-linear-progress>
-						<mdui-button id="loading-progress" variant="tonal"></mdui-button>
-					</div>
-					<div id="container_main">
-						<div id="project_slt"
-							style="background-image: url(<%= global.config.s3.staticurl %>/scratch_slt/1);">
-							<mdui-button onclick="loadProject()" disabled class="remove-disabled" variant="filled"
-								icon="play_arrow" class="ow-center">运行</mdui-button>
+      <div id="r"></div>
+    </mdui-dialog>
+    <script>
+      const oldprojectdialog = document.querySelector("#old-project-view");
+      const openoldprojectdialogButton = document.querySelector(
+        "#open-old-project-view"
+      );
 
-						</div>
-					</div>
-				</mdui-card>
+      openoldprojectdialogButton.addEventListener(
+        "click",
+        () => (oldprojectdialog.open = true)
+      );
+    </script>
+    <script>
+      const analysisdialog = document.querySelector(".analysis-dialog");
+      const openanalysisButton = document.querySelector(
+        "#open-analysis-dialog"
+      );
 
-				<mdui-button onclick="greenFlag()" variant="filled" icon="play_arrow" id="greenFlag-button" disabled
-					class="remove-disabled greenFlag-button">运行</mdui-button>
+      openanalysisButton.addEventListener(
+        "click",
+        () => (analysisdialog.open = true)
+      );
+    </script>
+  </div>
+  <div class="mdui-col-xs-12">
+    <div id="waline"></div>
+    <script type="module">
+      function getQueryString(name) {
+        const queryString = window.location.search.slice(1);
+        const reg = new RegExp("(^|&)" + name + "=([^&]*)(&|$)", "i");
+        const r = queryString.match(reg);
+        return r ? decodeURIComponent(r[2]) : null;
+      }
+      import { init } from "https://unpkg.com/@waline/client@v3/dist/waline.js";
+      init({
+        el: "#waline",
+        serverURL: "<%= global.config.waline.url %>",
+        path: "project-" + getQueryString("id"),
+        copyright: false,
+        reaction: true,
+        pageview: true,
+        locale: {
+          reactionTitle: "这个作品怎么样？",
+        },
+        emoji: [
+          "//unpkg.com/@waline/emojis@1.1.0/weibo",
+          "//unpkg.com/@waline/emojis@1.1.0/bilibili",
+        ],
+        dark: "body[dark]",
+      });
+    </script>
+  </div>
+</div>
 
-				<mdui-button id="stopAll" onclick="stopAll()" variant="tonal" icon="clear" id="stopAll-button" disabled
-					class="remove-disabled stopAll-button">停止</mdui-button>	<mdui-button variant="text" target="_blank" id="editlink-old" disabled
-					class="remove-disabled editlink-old">打开旧版创作页</mdui-button></mdui-dialog>
+<%- include('../html-footer.ejs', {page: 'scratch' }); %>
 
+<script
+  type="text/javascript"
+  src="<%= global.config.urls.static %>/js/social-share.js"
+></script>
+<link
+  rel="stylesheet"
+  href="<%= global.config.urls.static %>/css/social-share.css"
+/>
+<script
+  type="text/javascript"
+  src="<%= global.config.urls.static %>/js/scratch.vm.min.js"
+></script>
+<script
+  type="text/javascript"
+  src="<%= global.config.urls.static %>/js/clipboard.min.js"
+></script>
+<script></script>
+<script
+  type="text/javascript"
+  src="<%= global.config.urls.static %>/js/scratch_play.js"
+></script>
 
+<script
+  type="text/javascript"
+  src="<%= global.config.urls.static %>/js/scratch-analysis-core.js"
+></script>
 
+<script>
+  S3staticurl = "<%= global.config.s3.staticurl %>";
+  editorurl = "<%= global.config.urls.editor %>";
+</script>
+<script src="<%= global.config.urls.static %>/js/echarts.js"></script>
 
-		</div>
-		<div class="mdui-col-xs-12 mdui-col-md-4">
-			<div style="font-size: 24px;line-height: 36px" class="projecttitle">
-				加载中
-			</div>
-			<div style="font-size: 14px;line-height: 24px;opacity: .54;" class="projectdescription">
-				加载中
-			</div>
-			<mdui-list>
-				<mdui-list-item id="authorinfo" rounded active headline="加载中" description="加载中" headline-line="1"
-					description-line="1" href="" disabled class="remove-disabled authorinfo"><mdui-avatar class="authoravatar"
-						slot="icon" src=""></mdui-avatar>
-				</mdui-list-item>
-			</mdui-list>
-
-			<mdui-chip icon="play_circle" id="projectview" disabled class="remove-disabled projectview" elevated>加载中</mdui-chip>
-			<mdui-chip icon="access_time" id="projecttime" disabled class="remove-disabled projecttime" elevated>加载中</mdui-chip>
-			<mdui-chip icon="code" id="projectstate" disabled class="remove-disabled projectstate" elevated>加载中</mdui-chip>
-			<mdui-chip icon="code" disabled class="remove-disabled" elevated>Scratch</mdui-chip><br />
-			<mdui-button variant="filled" class="copylink remove-disabled" icon="content_copy"
-				disabled>复制链接</mdui-button>
-			<mdui-button variant="filled" icon="analytics" id="open-analysis-dialog"
-				onclick='projectanalysis(projectjson)' disabled class="remove-disabled open-analysis-dialog">分析</mdui-button>
-				<mdui-button variant="text" target="_blank" id="editlink" disabled
-				class="remove-disabled editlink">打开创作页</mdui-button>
-
-				<mdui-button id="open-old-project-view" class="open-old-project-view" variant="text">旧版播放器</mdui-button>
-
-			<div class="social-share"></div>
-
-
-			<mdui-dialog close-on-overlay-click close-on-esc class="analysis-dialog">
-				<span slot="headline">
-					作品分析
-				</span>
-				<span slot="description">由 ZeroCat 统计</span>
-				<div id="main1" style="width: 450px; height: 400px">请加载旧版播放器后再使用分析</div>
-
-				<div id="r"></div>
-			</mdui-dialog>
-			<script>
-				const oldprojectdialog = document.querySelector("#old-project-view");
-				const openoldprojectdialogButton = document.querySelector("#open-old-project-view");
-
-				openoldprojectdialogButton.addEventListener("click", () => oldprojectdialog.open = true);
-			</script>
-			<script>
-				const analysisdialog = document.querySelector(".analysis-dialog");
-				const openanalysisButton = document.querySelector("#open-analysis-dialog");
-
-				openanalysisButton.addEventListener("click", () => analysisdialog.open = true);
-			</script>
-
-
-		</div><div class="mdui-col-xs-12">	<div id="waline"></div>
-		<script type="module">
-			function getQueryString(name) {
-			const queryString = window.location.search.slice(1);
-			const reg = new RegExp("(^|&)" + name + "=([^&]*)(&|$)", "i");
-			const r = queryString.match(reg);
-			return r ? decodeURIComponent(r[2]) : null;
-		}
-			import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
-			init({
-				el: '#waline',
-				serverURL: '<%= global.config.waline.url %>',
-				path: 'project-'+getQueryString("id"),
-				copyright: false,
-				reaction: true,
-				pageview: true,
-				locale: {
-					reactionTitle: "这个作品怎么样？"
-				},
-				emoji: [
-					'//unpkg.com/@waline/emojis@1.1.0/weibo',
-					'//unpkg.com/@waline/emojis@1.1.0/bilibili',
-				],
-				dark: 'body[dark]',
-			});
-		</script></div>
-	</div>
-
-
-
-	<%- include('../html-footer.ejs', {page: 'scratch' }); %>
-
-		<script type="text/javascript" src="<%= global.config.urls.static %>/js/social-share.js"></script>
-		<link rel="stylesheet" href="<%= global.config.urls.static %>/css/social-share.css" />
-		<script type="text/javascript" src="<%= global.config.urls.static %>/js/scratch.vm.min.js"></script>
-		<script type="text/javascript" src="<%= global.config.urls.static %>/js/clipboard.min.js"></script>
-		<script>
-
-		</script>
-		<script type="text/javascript" src="<%= global.config.urls.static %>/js/scratch_play.js"></script>
-
-		<script type="text/javascript" src="<%= global.config.urls.static %>/js/scratch-analysis-core.js"></script>
-
-
-
-		<script>
-			S3staticurl = '<%= global.config.s3.staticurl %>'
-			editorurl='<%= global.config.urls.editor %>'
-		</script>
-		<script src="<%= global.config.urls.static %>/js/echarts.js"></script>
-
-		<script src="<%= global.config.urls.static %>/page/scratch/playpage.js"></script>
+<script src="<%= global.config.urls.static %>/page/scratch/playpage.js"></script>

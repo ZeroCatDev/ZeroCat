@@ -1,66 +1,79 @@
+<%- include('./html-head.ejs', {pageTitle: '找回密码'}); %> <% if (login) { %>
+<!--<script>window.location.href = '/';</script>-->
+<% } %>
 
-<%- include('./html-head.ejs', {pageTitle: '找回密码'}); %>
+<div class="layui-row">
+  <style>
+    .title:after {
+      content: "";
+      display: block;
+      height: 4px;
+      width: 40px;
+      background-color: #448aff;
+      margin-top: 20px;
+    }
+  </style>
 
-<% if (login) { %>
-  <!--<script>window.location.href = '/';</script>-->
-  <% } %>
+  <div class="layui-col-md6" style="padding: 30px 0 0 30px">
+    <div id="login-page">
+      <div class="mdui-typo-display-2">重设密码</div>
 
-          <div class="layui-row">
+      <div class="reply-form" style="height: max-content">
+        <mdui-text-field
+          variant="filled"
+          label="密码"
+          id="password"
+          type="password"
+          toggle-password
+          style="margin-bottom: 10px"
+        ></mdui-text-field>
+        <br />
 
-            <style>
-              .title:after {
-                content: "";
-                display: block;
-                height: 4px;
-                width: 40px;
-                background-color: #448aff;
-                margin-top: 20px;
-              }
-            </style>
+        <div id="captcha-div"></div>
+        <mdui-button slot="action" variant="text" onclick="reloudcaptcha()"
+          >刷新</mdui-button
+        >
 
-            <div class="layui-col-md6" style="padding: 30px 0 0 30px;">
-              <div id='login-page'>
-                <div class="mdui-typo-display-2">
-                  重设密码
-                </div>
+        <br />
 
-                <div class="reply-form" style="height: max-content;">
+        <mdui-button slot="action" onclick="torepw()">重设密码</mdui-button>
 
+        1
 
-                  <mdui-text-field variant="filled" label="密码" id='password' type="password" toggle-password
-                  style="margin-bottom: 10px;"></mdui-text-field>
-                  <br/>
+        <div></div>
+      </div>
+    </div>
+  </div>
+</div>
 
-                  <div id="captcha-div"></div>    <mdui-button slot="action" variant="text" onclick="reloudcaptcha()">刷新</mdui-button>
+<%- include('./html-footer.ejs', {page: 'login'}); %>
 
-<br/>
+<script
+  type="text/javascript"
+  src="<%= global.config.urls.static %>/js/jquery.3.7.1.js"
+></script>
+<script
+  type="text/javascript"
+  src="<%= global.config.urls.static %>/layui/layui.all.js"
+></script>
+<script
+  type="text/javascript"
+  src="<%= global.config.urls.static %>/js/gter.js"
+></script>
 
-<mdui-button slot="action" onclick="torepw()">重设密码</mdui-button>
+<script
+  type="text/javascript"
+  src="<%= global.config.urls.static %>/js/login.js"
+></script>
 
-1
-
-                  <div>
-                  </div>
-                </div>
-              </div>
-
-
-            </div>
-
-
-
-          </div>
-
-          <%- include('./html-footer.ejs', {page: 'login'}); %>
-
-    <script type="text/javascript" src="<%= global.config.urls.static %>/js/jquery.3.7.1.js"></script>
-    <script type="text/javascript" src="<%= global.config.urls.static %>/layui/layui.all.js"></script>
-    <script type="text/javascript" src="<%= global.config.urls.static %>/js/gter.js"></script>
-
-        <script type="text/javascript" src="<%= global.config.urls.static %>/js/login.js"></script>
-
-
-
-        <script>captchaid = '<%= global.config.captcha.GEE_CAPTCHA_ID %>'</script>
-        <script type="text/javascript" src="https://static.geetest.com/v4/gt4.js"></script>
-        <script type="text/javascript" src="<%= global.config.urls.static %>/page/geetest.js"></script>
+<script>
+  captchaid = "<%= global.config.captcha.GEE_CAPTCHA_ID %>";
+</script>
+<script
+  type="text/javascript"
+  src="https://static.geetest.com/v4/gt4.js"
+></script>
+<script
+  type="text/javascript"
+  src="<%= global.config.urls.static %>/page/geetest.js"
+></script>

@@ -1,11 +1,13 @@
 {
-"apps" : [{
-    "name" : "ZeroCat",
-    "script": "app.js",
-    "error_file":"./logs/err.log",
-    "out_file":"./logs/out.log",
-    "log_date_format":"YYYY-MM-DD HH:mm Z",
+  "apps": [
+    {
+      "name": "ZeroCat",
+      "script": "app.js",
+      "error_file": "./logs/err.log",
+      "out_file": "./logs/out.log",
+      "log_date_format": "YYYY-MM-DD HH:mm Z",
 
-    "autorestart": true
-}]
+      "autorestart": true
+    }
+  ]
 }

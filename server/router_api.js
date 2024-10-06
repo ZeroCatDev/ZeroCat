@@ -71,7 +71,6 @@ router.post("/getProjectsInfo", function (req, res) {
   ]);
 });
 
-
 router.get("/usertx", function (req, res) {
   SQL = `SELECT images FROM ow_users WHERE id = ${req.query.id};`;
 
@@ -98,34 +97,36 @@ router.get("/getuserinfo", async function (req, res) {
       images: true,
       regTime: true,
       sex: true,
-      username: true
+      username: true,
     },
   });
 
-  scratchcount =await  I.prisma.ow_projects.count({
+  scratchcount = await I.prisma.ow_projects.count({
     where: {
-      type: 'scratch',
-      state: 'public',
+      type: "scratch",
+      state: "public",
     },
   });
-  pythoncount =await  I.prisma.ow_projects.count({
+  pythoncount = await I.prisma.ow_projects.count({
     where: {
-      type: 'python',
-      state: 'public',
+      type: "python",
+      state: "public",
     },
   });
   if (!user[0]) {
-    console.log('用户不存在')
+    console.log("用户不存在");
     res.locals.tip = { opt: "flash", msg: "用户不存在" };
     res.render("404.ejs");
   }
-  res.send({ status: "ok", info: {user:user[0],count:{pythoncount,scratchcount}} });
+  res.send({
+    status: "ok",
+    info: { user: user[0], count: { pythoncount, scratchcount } },
+  });
 });
 router.get("/info", async (req, res) => {
   const userCount = await I.prisma.ow_users.count();
   const scratchCount = await I.prisma.ow_projects.count();
   const pythonCount = await I.prisma.ow_projects.count();
-
 
   res.send({
     user: userCount,
@@ -134,7 +135,6 @@ router.get("/info", async (req, res) => {
     project: scratchCount + pythonCount,
   });
 });
-
 
 //作品
 router.get("/myprojectcount", function (req, res) {
@@ -164,9 +164,6 @@ router.get("/myprojectcount", function (req, res) {
     res.send(data[0]);
   });
 });
-
-
-
 
 //作品
 router.get("/work/info", function (req, res) {
@@ -199,19 +196,24 @@ router.get("/work/info", function (req, res) {
 
 router.get("/projectinfo", function (req, res) {
   SQL =
-  `SELECT ow_projects.id,ow_projects.authorid,ow_projects.time,ow_projects.view_count,ow_projects.like_count,ow_projects.type,` +
-  ` ow_projects.favo_count,ow_projects.title,ow_projects.state,ow_projects.description,ow_projects.licence,ow_projects.tags,` +
-  ` '' AS likeid, '' AS favoid,` +
-  ` ow_users.display_name AS author_display_name,` +
-  ` ow_users.images AS author_images,` +
-  ` ow_users.motto AS author_motto` +
-  ` FROM ow_projects ` +
-  ` LEFT JOIN ow_users ON (ow_users.id=ow_projects.authorid) ` +
-  ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state='public' or ow_projects.authorid=${res.locals.userid}) LIMIT 1`;
+    `SELECT ow_projects.id,ow_projects.authorid,ow_projects.time,ow_projects.view_count,ow_projects.like_count,ow_projects.type,` +
+    ` ow_projects.favo_count,ow_projects.title,ow_projects.state,ow_projects.description,ow_projects.licence,ow_projects.tags,` +
+    ` '' AS likeid, '' AS favoid,` +
+    ` ow_users.display_name AS author_display_name,` +
+    ` ow_users.images AS author_images,` +
+    ` ow_users.motto AS author_motto` +
+    ` FROM ow_projects ` +
+    ` LEFT JOIN ow_users ON (ow_users.id=ow_projects.authorid) ` +
+    ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state='public' or ow_projects.authorid=${res.locals.userid}) LIMIT 1`;
   DB.query(SQL, function (err, SCRATCH) {
     if (err || SCRATCH.length == 0) {
-      res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" ,error:err};
-      res.send({code:404,status:"404",msg:"项目不存在或未发布",error:err})
+      res.locals.tip = { opt: "flash", msg: "项目不存在或未发布", error: err };
+      res.send({
+        code: 404,
+        status: "404",
+        msg: "项目不存在或未发布",
+        error: err,
+      });
       return;
     }
 
@@ -219,9 +221,8 @@ router.get("/projectinfo", function (req, res) {
       SCRATCH[0].authorid == res.locals.userid ? true : false;
 
     ////console.log(SCRATCH[0]);
-    res.json(SCRATCH[0])
+    res.json(SCRATCH[0]);
   });
 });
-
 
 module.exports = router;

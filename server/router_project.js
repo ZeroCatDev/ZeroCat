@@ -8,7 +8,6 @@ const default_project = require("./lib/default_project.js");
 // 中间件，确保所有请求均经过该处理
 router.all("*", (req, res, next) => next());
 
-
 // 创建新作品
 router.post("/", async (req, res) => {
   if (!res.locals.login) {
@@ -16,7 +15,10 @@ router.post("/", async (req, res) => {
   }
 
   try {
-    const outputJson = { ...extractProjectData(req.body), type: req.body.type || "scratch" };
+    const outputJson = {
+      ...extractProjectData(req.body),
+      type: req.body.type || "scratch",
+    };
     outputJson.source = default_project[outputJson.type];
     outputJson.devsource = outputJson.source;
     outputJson.authorid = res.locals.userid;
@@ -35,7 +37,9 @@ router.post("/:id/fork", async (req, res) => {
   }
 
   try {
-    const original = await I.prisma.ow_projects.findFirst({ where: { id: Number(req.params.id) } });
+    const original = await I.prisma.ow_projects.findFirst({
+      where: { id: Number(req.params.id) },
+    });
 
     if (original?.state === "public") {
       const result = await I.prisma.ow_projects.create({
@@ -72,10 +76,16 @@ router.put("/:id/source", async (req, res) => {
     const userId = Number(res.locals.userid);
 
     const updateData = { devsource: sha256 };
-    const result = await I.prisma.ow_projects.update({ where: { id: projectId, authorid: userId }, data: updateData });
+    const result = await I.prisma.ow_projects.update({
+      where: { id: projectId, authorid: userId },
+      data: updateData,
+    });
 
     if (result.devenv === 0) {
-      await I.prisma.ow_projects.update({ where: { id: projectId, authorid: userId }, data: { source: sha256 } });
+      await I.prisma.ow_projects.update({
+        where: { id: projectId, authorid: userId },
+        data: { source: sha256 },
+      });
     }
 
     res.status(200).send({ status: "1", msg: "保存成功" });
@@ -114,7 +124,9 @@ router.post("/:id/push", async (req, res) => {
     });
 
     if (project.devenv === 0 && req.body.force !== "true") {
-      return res.status(403).send({ status: "0", msg: "未开启开发环境，无法推送" });
+      return res
+        .status(403)
+        .send({ status: "0", msg: "未开启开发环境，无法推送" });
     }
 
     await I.prisma.ow_projects.update({
@@ -153,7 +165,10 @@ router.get("/:id", async (req, res) => {
       select: projectSelectionFields(),
     });
 
-    if (!project || (project.state === "private" && project.authorid !== res.locals.userid)) {
+    if (
+      !project ||
+      (project.state === "private" && project.authorid !== res.locals.userid)
+    ) {
       return res.status(404).send({ status: "0", msg: "作品不存在或无权打开" });
     }
 
@@ -171,13 +186,18 @@ router.get("/:id", async (req, res) => {
 // 获取源代码
 router.get("/:id/source/:env?", async (req, res) => {
   try {
-    const project = await I.prisma.ow_projects.findFirst({ where: { id: Number(req.params.id) } });
+    const project = await I.prisma.ow_projects.findFirst({
+      where: { id: Number(req.params.id) },
+    });
 
     if (!project) {
       return res.status(404).send({ status: "0", msg: "作品不存在或无权打开" });
     }
 
-    const source = project.authorid === res.locals.userid ? project.devsource : project.source;
+    const source =
+      project.authorid === res.locals.userid
+        ? project.devsource
+        : project.source;
     const projectFile = await getProjectFile(source);
 
     if (projectFile?.source) {
@@ -204,20 +224,36 @@ router.delete("/:id", async (req, res) => {
 
 // 工具函数：提取项目数据
 function extractProjectData(body) {
-  const fields = ["type", "licence", "state", "title", "description", "history", "tags"];
-  return fields.reduce((acc, field) => (body[field] ? { ...acc, [field]: body[field] } : acc), {});
+  const fields = [
+    "type",
+    "licence",
+    "state",
+    "title",
+    "description",
+    "history",
+    "tags",
+  ];
+  return fields.reduce(
+    (acc, field) => (body[field] ? { ...acc, [field]: body[field] } : acc),
+    {}
+  );
 }
 
 // 工具函数：设置项目文件
 function setProjectFile(source) {
   const sha256 = crypto.createHash("sha256").update(source).digest("hex");
-  I.prisma.ow_projects_file.create({ data: { sha256, source } }).catch(console.error);
+  I.prisma.ow_projects_file
+    .create({ data: { sha256, source } })
+    .catch(console.error);
   return sha256;
 }
 
 // 工具函数：获取项目文件
 async function getProjectFile(sha256) {
-  return I.prisma.ow_projects_file.findFirst({ where: { sha256 }, select: { source: true } });
+  return I.prisma.ow_projects_file.findFirst({
+    where: { sha256 },
+    select: { source: true },
+  });
 }
 
 // 工具函数：处理错误响应

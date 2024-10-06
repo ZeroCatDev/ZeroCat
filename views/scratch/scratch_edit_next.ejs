@@ -1,357 +1,377 @@
 <!DOCTYPE html>
 <html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="google" value="notranslate" />
+    <meta
+      name="description"
+      content="ZeroCat is a Scratch mod with a compiler to run projects faster, dark mode for your eyes, a bunch of addons to improve the editor, and more."
+    />
+    <title>ZeroCat - Run Scratch projects faster</title>
+    <link rel="apple-touch-icon" href="images/apple-touch-icon.png" />
 
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="google" value="notranslate" />
-  <meta name="description"
-    content="ZeroCat is a Scratch mod with a compiler to run projects faster, dark mode for your eyes, a bunch of addons to improve the editor, and more." />
-  <title>
-    ZeroCat - Run Scratch projects faster
-  </title>
-  <link rel="apple-touch-icon" href="images/apple-touch-icon.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
 
-  <link rel="manifest" href="manifest.webmanifest" />
+    <script src="http://localhost:5974/js/main.js"></script>
+    <script src="http://localhost:5974/js/jquery.3.7.1.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/mdui@2/mdui.css" />
+    <script src="https://unpkg.com/mdui@2/mdui.global.js"></script>
 
-  <script src="http://localhost:5974/js/main.js"></script>
-  <script src="http://localhost:5974/js/jquery.3.7.1.js"></script>
-  <link rel="stylesheet" href="https://unpkg.com/mdui@2/mdui.css" />
-  <script src="https://unpkg.com/mdui@2/mdui.global.js"></script>
-
-  <style>
-    .splash-screen {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      top: 0;
-      left: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-    }
-
-    .splash-screen[hidden] {
-      display: none;
-    }
-
-    .splash-screen[data-theme="dark"] {
-      background-color: #333;
-      color: white;
-    }
-
-    .splash-screen>* {
-      max-width: 80%;
-    }
-
-    .splash-spinner:after {
-      content: " ";
-      display: block;
-      width: 64px;
-      height: 64px;
-      border-radius: 50%;
-      border: 6px solid;
-      border-color: currentColor transparent currentColor transparent;
-      animation: splash-spinner 1.2s linear infinite;
-    }
-
-    @keyframes splash-spinner {
-      0% {
-        transform: rotate(0deg);
+    <style>
+      .splash-screen {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        top: 0;
+        left: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
       }
 
-      100% {
-        transform: rotate(360deg);
+      .splash-screen[hidden] {
+        display: none;
       }
-    }
 
-    .splash-error-title {
-      font-weight: bold;
-    }
+      .splash-screen[data-theme="dark"] {
+        background-color: #333;
+        color: white;
+      }
 
-    .splash-error-title a {
-      color: inherit;
-    }
+      .splash-screen > * {
+        max-width: 80%;
+      }
 
-    .splash-errors {
-      font-family: monospace;
-    }
+      .splash-spinner:after {
+        content: " ";
+        display: block;
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        border: 6px solid;
+        border-color: currentColor transparent currentColor transparent;
+        animation: splash-spinner 1.2s linear infinite;
+      }
 
-    .splash-error-list {
-      white-space: pre-wrap;
-    }
+      @keyframes splash-spinner {
+        0% {
+          transform: rotate(0deg);
+        }
 
-    .splash-reset {
-      color: inherit;
-      background: none;
-      padding: 0;
-      margin: 0;
-      border: none;
-      text-decoration: underline;
-      cursor: pointer;
-    }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
 
-    .splash-reset:disabled {
-      opacity: 0.8;
-    }
+      .splash-error-title {
+        font-weight: bold;
+      }
 
-    .splash-pride-month {
-      max-width: 350px;
-    }
-  </style>
-</head>
+      .splash-error-title a {
+        color: inherit;
+      }
 
-<body>
-  <noscript>
-    <div class="splash-screen">
-      <div>
-        <h1>
-          ZeroCat
-          需要使用杨博士自主研发遥遥领先的JvavScript
-        </h1>
-        <p>兄弟你咋想的？</p>
+      .splash-errors {
+        font-family: monospace;
+      }
+
+      .splash-error-list {
+        white-space: pre-wrap;
+      }
+
+      .splash-reset {
+        color: inherit;
+        background: none;
+        padding: 0;
+        margin: 0;
+        border: none;
+        text-decoration: underline;
+        cursor: pointer;
+      }
+
+      .splash-reset:disabled {
+        opacity: 0.8;
+      }
+
+      .splash-pride-month {
+        max-width: 350px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript>
+      <div class="splash-screen">
+        <div>
+          <h1>ZeroCat 需要使用杨博士自主研发遥遥领先的JvavScript</h1>
+          <p>兄弟你咋想的？</p>
+        </div>
       </div>
+    </noscript>
+
+    <div class="splash-screen spash-waiting-for-js" hidden>
+      <div class="splash-spinner"></div>
+
+      <div class="splash-pride-month" lang="en">
+        <b>正在加载作品</b>
+        数据文件从ZeroCat服务器加载，卡住请刷新
+      </div>
+
+      <div class="splash-error-title" hidden>
+        出问题了~
+        <a
+          href="https://qm.qq.com/q/wn3TkPoZ5C"
+          target="_blank"
+          rel="noreferrer"
+          >Please report</a
+        >
+        with the information below.
+      </div>
+      <div class="splash-errors" hidden></div>
+      <button class="splash-reset" hidden>
+        Click here to reset caches (can fix some errors)
+      </button>
     </div>
-  </noscript>
 
-  <div class="splash-screen spash-waiting-for-js" hidden>
-    <div class="splash-spinner"></div>
+    <script>
+      (function () {
+        "use strict";
 
-    <div class="splash-pride-month" lang="en">
-      <b>正在加载作品</b>
-      数据文件从ZeroCat服务器加载，卡住请刷新
-    </div>
+        var theme = "";
+        var accent = "#ff4c4c";
 
-    <div class="splash-error-title" hidden>
-      出问题了~
-      <a href="https://qm.qq.com/q/wn3TkPoZ5C" target="_blank" rel="noreferrer">Please report</a>
-      with the information below.
-    </div>
-    <div class="splash-errors" hidden></div>
-    <button class="splash-reset" hidden>
-      Click here to reset caches (can fix some errors)
-    </button>
-  </div>
-
-  <script>
-    (function () {
-      'use strict';
-
-      var theme = '';
-      var accent = '#ff4c4c';
-
-      try {
-        var themeSetting = localStorage.getItem('zc:theme');
-      } catch (e) {
-        // ignore
-      }
-      if (themeSetting === 'light') {
-        theme = 'light';
-      } else if (themeSetting === 'dark') {
-        theme = 'dark';
-      } else if (themeSetting) {
         try {
-          var parsed = JSON.parse(themeSetting);
-          if (parsed.accent === 'purple') {
-            accent = '#855cd6';
-          } else if (parsed.accent === 'blue') {
-            accent = '#4c97ff';
-          }
-          if (parsed.gui === 'dark' || parsed.gui === 'light') {
-            theme = parsed.gui;
-          }
+          var themeSetting = localStorage.getItem("zc:theme");
         } catch (e) {
           // ignore
         }
-      }
-
-      if (!theme) {
-        theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      }
-      var htmlElement = document.getElementsByTagName("html")[0];
-
-      htmlElement.classList.add('mdui-theme-' + theme);
-      mdui.setColorScheme("#2087fd")
-
-      var splash = document.querySelector('.spash-waiting-for-js');
-      splash.setAttribute('data-theme', theme);
-      if (theme !== 'dark') {
-
-        splash.style.backgroundColor = accent;
-        splash.style.color = 'white';
-
-      }
-      splash.hidden = false;
-
-      var splashErrorTitle = document.querySelector('.splash-error-title');
-      var splashError = document.querySelector('.splash-errors');
-      var splashReset = document.querySelector('.splash-reset');
-      var splashPrideMonth = document.querySelector('.splash-pride-month');
-
-      var totalErrors = 0;
-      window.onerror = function (event, source, line, col, err) {
-        if (++totalErrors > 5) return; // dont bother logging more
-        splashErrorTitle.hidden = splashError.hidden = splashReset.hidden = false;
-        splashPrideMonth.hidden = true;
-        var el = document.createElement('div');
-        el.textContent = 'Error (splash) in ' + source + ' (' + line + ':' + col + '): ' + err;
-        splashError.appendChild(el);
-      };
-
-      splashReset.onclick = function () {
-        splashReset.disabled = true;
-        function hardRefresh() {
-          var search = location.search.replace(/[?&]nocache=\d+/, '');
-          location.replace(location.pathname + search + (search ? '&' : '?') + 'nocache=' + Math.floor(Math.random() * 100000));
+        if (themeSetting === "light") {
+          theme = "light";
+        } else if (themeSetting === "dark") {
+          theme = "dark";
+        } else if (themeSetting) {
+          try {
+            var parsed = JSON.parse(themeSetting);
+            if (parsed.accent === "purple") {
+              accent = "#855cd6";
+            } else if (parsed.accent === "blue") {
+              accent = "#4c97ff";
+            }
+            if (parsed.gui === "dark" || parsed.gui === "light") {
+              theme = parsed.gui;
+            }
+          } catch (e) {
+            // ignore
+          }
         }
-        if ('serviceWorker' in navigator) {
-          setTimeout(hardRefresh, 5000);
-          navigator.serviceWorker.getRegistration("")
-            .then(function (registration) {
-              if (registration) {
-                return registration.unregister();
-              }
-            })
-            .then(hardRefresh)
-            .catch(hardRefresh);
-        } else {
-          hardRefresh();
+
+        if (!theme) {
+          theme = window.matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light";
         }
-      };
+        var htmlElement = document.getElementsByTagName("html")[0];
 
-      window.SplashEnd = () => {
-        splash.hidden = true;
-        window.onerror = null;
-      };
-    })();
-  </script>
+        htmlElement.classList.add("mdui-theme-" + theme);
+        mdui.setColorScheme("#2087fd");
 
-  <mdui-dialog headline="作品" description="加载中" close-on-overlay-click id="zerocat-tab">
-    <mdui-button id="savestatic" onclick="uploadAssets()">保存媒体库</mdui-button>
-    <mdui-button onclick="logText.innerText = ''">清空log</mdui-button>
-    <mdui-button onclick="projectjson='null';pushproject()">强制保存作品</mdui-button>
+        var splash = document.querySelector(".spash-waiting-for-js");
+        splash.setAttribute("data-theme", theme);
+        if (theme !== "dark") {
+          splash.style.backgroundColor = accent;
+          splash.style.color = "white";
+        }
+        splash.hidden = false;
 
+        var splashErrorTitle = document.querySelector(".splash-error-title");
+        var splashError = document.querySelector(".splash-errors");
+        var splashReset = document.querySelector(".splash-reset");
+        var splashPrideMonth = document.querySelector(".splash-pride-month");
 
-    <div id="log-text"></div>
-  </mdui-dialog>
-  <mdui-dialog headline="设置" description="设置账户凭据" close-on-overlay-click id="setinfo-tab">
-    <mdui-button onclick="window.open(window.apihost+'/user/login?redirect=editor')
-    ">ZeroCat授权</mdui-button>
-    <mdui-text-field label="token" id="token-text"></mdui-text-field>
+        var totalErrors = 0;
+        window.onerror = function (event, source, line, col, err) {
+          if (++totalErrors > 5) return; // dont bother logging more
+          splashErrorTitle.hidden =
+            splashError.hidden =
+            splashReset.hidden =
+              false;
+          splashPrideMonth.hidden = true;
+          var el = document.createElement("div");
+          el.textContent =
+            "Error (splash) in " +
+            source +
+            " (" +
+            line +
+            ":" +
+            col +
+            "): " +
+            err;
+          splashError.appendChild(el);
+        };
 
-    <mdui-button onclick="localStorage.removeItem('token');
+        splashReset.onclick = function () {
+          splashReset.disabled = true;
+          function hardRefresh() {
+            var search = location.search.replace(/[?&]nocache=\d+/, "");
+            location.replace(
+              location.pathname +
+                search +
+                (search ? "&" : "?") +
+                "nocache=" +
+                Math.floor(Math.random() * 100000)
+            );
+          }
+          if ("serviceWorker" in navigator) {
+            setTimeout(hardRefresh, 5000);
+            navigator.serviceWorker
+              .getRegistration("")
+              .then(function (registration) {
+                if (registration) {
+                  return registration.unregister();
+                }
+              })
+              .then(hardRefresh)
+              .catch(hardRefresh);
+          } else {
+            hardRefresh();
+          }
+        };
+
+        window.SplashEnd = () => {
+          splash.hidden = true;
+          window.onerror = null;
+        };
+      })();
+    </script>
+
+    <mdui-dialog
+      headline="作品"
+      description="加载中"
+      close-on-overlay-click
+      id="zerocat-tab"
+    >
+      <mdui-button id="savestatic" onclick="uploadAssets()"
+        >保存媒体库</mdui-button
+      >
+      <mdui-button onclick="logText.innerText = ''">清空log</mdui-button>
+      <mdui-button onclick="projectjson='null';pushproject()"
+        >强制保存作品</mdui-button
+      >
+
+      <div id="log-text"></div>
+    </mdui-dialog>
+    <mdui-dialog
+      headline="设置"
+      description="设置账户凭据"
+      close-on-overlay-click
+      id="setinfo-tab"
+    >
+      <mdui-button
+        onclick="window.open(window.apihost+'/user/login?redirect=editor')
+    "
+        >ZeroCat授权</mdui-button
+      >
+      <mdui-text-field label="token" id="token-text"></mdui-text-field>
+
+      <mdui-button
+        onclick="localStorage.removeItem('token');
       localStorage.setItem('token', document.querySelector('#token-text').value);loaduserinfo()
-      ">保存</mdui-button>
+      "
+        >保存</mdui-button
+      >
+    </mdui-dialog>
+    <script
+      src="https://zerocat-static.houlangs.com/staticfile/js/jwt-decode.js"
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    ></script>
+    <script>
+      window.apiHost = "http://localhost:3000";
+      window.assetHost = "https://s4-1.wuyuan.1r.ink/material/asset";
 
+      // 论如何跳过天才群星闪耀时任务
+      window.apihost = "http://localhost:3000";
+      window.assethost = "https://s4-1.wuyuan.1r.ink/material/asset";
 
+      var _pid = {};
+      var logText = {};
+      var zctab = {};
+      var openzctabButton = {};
+      var setinfotab = {};
 
-  </mdui-dialog>
-  <script src="https://zerocat-static.houlangs.com/staticfile/js/jwt-decode.js" crossorigin="anonymous"
-    referrerpolicy="no-referrer"></script>
-  <script>
-    window.apiHost = "http://localhost:3000";
-    window.assetHost = "https://s4-1.wuyuan.1r.ink/material/asset";
+      var opensetinfotabButton = {};
 
-    // 论如何跳过天才群星闪耀时任务
-    window.apihost = "http://localhost:3000";
-    window.assethost = "https://s4-1.wuyuan.1r.ink/material/asset";
+      var pushbutton = {};
+      var projectjson = "null";
+      var projectinfo = {};
+      window.projectinfo = projectinfo;
 
-    var _pid = {};
-    var logText = {};
-    var zctab = {};
-    var openzctabButton = {};
-    var setinfotab = {};
+      function getQueryString(name) {
+        const url_string = window.location.href;
+        const url = new URL(url_string);
+        return url.searchParams.get(name);
+      }
 
-    var opensetinfotabButton = {};
-
-    var pushbutton = {};
-    var projectjson = 'null';
-    var projectinfo = {};
-    window.projectinfo = projectinfo;
-
-    function getQueryString(name) {
-      const url_string = window.location.href;
-      const url = new URL(url_string);
-      return url.searchParams.get(name);
-    }
-
-    window.onload = function () {
-      if (getQueryString('msg')) {
-        if (getQueryString('msg') == '404') {
-          debugger
-          alert("作品不存在");
+      window.onload = function () {
+        if (getQueryString("msg")) {
+          if (getQueryString("msg") == "404") {
+            debugger;
+            alert("作品不存在");
+          }
+          if (getQueryString("msg") == "401") {
+            alert("请先登录");
+          }
         }
-        if (getQueryString('msg') == '401') {
-          alert("请先登录");
+        if (getQueryString("token")) {
+          localStorage.removeItem("token");
+          localStorage.setItem("token", getQueryString("token"));
         }
+        _pid = 0;
+        load();
 
+        zctab = document.querySelector("#zerocat-tab");
+        openzctabButton = document.querySelector("#open-zerocat-tab");
+        openzctabButton.addEventListener("click", () => (zctab.open = true));
+
+        setinfotab = document.querySelector("#setinfo-tab");
+        opensetinfotabButton = document.querySelector("#open-setinfo-tab");
+        opensetinfotabButton.addEventListener(
+          "click",
+          () => (setinfotab.open = true)
+        );
+        logText = document.querySelector("#log-text");
+        pushbutton = document.querySelector("#push-button");
+      };
+      function zctabopen() {
+        zctab.open = true;
       }
-      if (getQueryString('token')) {
-        localStorage.removeItem('token');
-        localStorage.setItem('token', getQueryString('token'));
-
+      window.zctabopen = zctabopen;
+      function setinfotabopen() {
+        setinfotab.open = true;
       }
-      _pid = 0;
-      load();
-
-      zctab = document.querySelector("#zerocat-tab");
-      openzctabButton = document.querySelector("#open-zerocat-tab");
-      openzctabButton.addEventListener(
-        "click",
-        () => (zctab.open = true)
-      );
-
-      setinfotab = document.querySelector("#setinfo-tab");
-      opensetinfotabButton = document.querySelector("#open-setinfo-tab");
-      opensetinfotabButton.addEventListener(
-        "click",
-        () => (setinfotab.open = true)
-      );
-      logText = document.querySelector("#log-text");
-      pushbutton = document.querySelector("#push-button");
-    };
-    function zctabopen() {
-      zctab.open = true;
-    }
-    window.zctabopen = zctabopen;
-    function setinfotabopen() {
-      setinfotab.open = true;
-    }
-    window.setinfotabopen = setinfotabopen;
-    function loaduserinfo() {
-      if (localStorage.getItem("token")) {
-        const decoded = jwtDecode(localStorage.getItem("token"));
-        console.log(decoded);
-        localStorage.setItem("zc:id", decoded.userid);
-        localStorage.setItem("zc:username", decoded.display_name);
-      } else {
-        console.log("无令牌");
+      window.setinfotabopen = setinfotabopen;
+      function loaduserinfo() {
+        if (localStorage.getItem("token")) {
+          const decoded = jwtDecode(localStorage.getItem("token"));
+          console.log(decoded);
+          localStorage.setItem("zc:id", decoded.userid);
+          localStorage.setItem("zc:username", decoded.display_name);
+        } else {
+          console.log("无令牌");
+        }
       }
-    }
-    function load() {
+      function load() {
+        loaduserinfo();
 
-
-      loaduserinfo()
-
-      console.log("加载");
-      if (window.location.hash) {
-        _pid = Number(location.hash.match(/\d+/i)[0]);
-      }
-      console.log("作品ID为" + _pid);
-      if (_pid !== 0) {
-        console.log("加载作品信息");
-        getprojectinfo();
-      } else {
-        console.log("作品ID为0");
-        setSaveButton();
-      }
-    }
-    window.scratchConfig = {
-      handleProjectLoaded: () => {
+        console.log("加载");
+        if (window.location.hash) {
+          _pid = Number(location.hash.match(/\d+/i)[0]);
+        }
         console.log("作品ID为" + _pid);
         if (_pid !== 0) {
           console.log("加载作品信息");
@@ -360,206 +380,229 @@
           console.log("作品ID为0");
           setSaveButton();
         }
-      },
-      handleDefaultProjectLoaded: () => {
-        setSaveButton();
-        console.log("默认作品");
-      },
-    };
+      }
+      window.scratchConfig = {
+        handleProjectLoaded: () => {
+          console.log("作品ID为" + _pid);
+          if (_pid !== 0) {
+            console.log("加载作品信息");
+            getprojectinfo();
+          } else {
+            console.log("作品ID为0");
+            setSaveButton();
+          }
+        },
+        handleDefaultProjectLoaded: () => {
+          setSaveButton();
+          console.log("默认作品");
+        },
+      };
 
-    function getTime() {
-      var now = new Date();
-      var hours = now.getHours();
-      var minutes = now.getMinutes();
-      var seconds = now.getSeconds();
-      return hours + ":" + minutes + ":" + seconds;
-    }
-    function uploadAssets() {
-      $.each(vm.assets, function (index, asset) {
-        var data = asset.data;
-        if (asset.clean == false) {
-          console.log(asset.clean);
-          var formData = new FormData();
-          $.ajax({
-            url:
-              window.apiHost +
-              "/scratch/assets/" +
-              asset.assetId +
-              "." +
-              asset.dataFormat +
-              "?token=" +
-              localStorage.getItem("token"),
-            type: "POST",
-            data: new Blob([data], {
-              type: asset.assetType.contentType,
-            }),
-            processData: false,
-            contentType: false,
-            success: function (response) {
-              logText.innerText += `[${getTime()}]文件上传成功${asset.assetId
+      function getTime() {
+        var now = new Date();
+        var hours = now.getHours();
+        var minutes = now.getMinutes();
+        var seconds = now.getSeconds();
+        return hours + ":" + minutes + ":" + seconds;
+      }
+      function uploadAssets() {
+        $.each(vm.assets, function (index, asset) {
+          var data = asset.data;
+          if (asset.clean == false) {
+            console.log(asset.clean);
+            var formData = new FormData();
+            $.ajax({
+              url:
+                window.apiHost +
+                "/scratch/assets/" +
+                asset.assetId +
+                "." +
+                asset.dataFormat +
+                "?token=" +
+                localStorage.getItem("token"),
+              type: "POST",
+              data: new Blob([data], {
+                type: asset.assetType.contentType,
+              }),
+              processData: false,
+              contentType: false,
+              success: function (response) {
+                logText.innerText += `[${getTime()}]文件上传成功${
+                  asset.assetId
                 }.${asset.dataFormat}\n`;
-              console.log(
-                "文件上传成功:",
-                asset.assetId + "." + asset.dataFormat
-              );
-              asset.clean = true;
-            },
-            error: function (xhr, status, error) {
-              logText.innerText += `[${getTime()}]文件上传失败${asset.assetId
+                console.log(
+                  "文件上传成功:",
+                  asset.assetId + "." + asset.dataFormat
+                );
+                asset.clean = true;
+              },
+              error: function (xhr, status, error) {
+                logText.innerText += `[${getTime()}]文件上传失败${
+                  asset.assetId
                 }.${asset.dataFormat}\nerror:${error}\n`;
 
-              console.error(
-                "文件上传失败:",
-                asset.assetId + "." + asset.dataFormat,
-                error
-              );
-            },
-          });
-        } else {
-          logText.innerText += `[${getTime()}]文件未修改${asset.assetId
-            }.${asset.dataFormat}\n`;
+                console.error(
+                  "文件上传失败:",
+                  asset.assetId + "." + asset.dataFormat,
+                  error
+                );
+              },
+            });
+          } else {
+            logText.innerText += `[${getTime()}]文件未修改${asset.assetId}.${
+              asset.dataFormat
+            }\n`;
 
-          console.log(
-            "文件未修改:",
-            asset.assetId + "." + asset.dataFormat
-          );
-        }
-      });
-    }
-    function uploadProject() {
-      console.log(window.apiHost + "/scratch/projects/" + (_pid === 0 ? '' : projectinfo.id) + "?token=" + localStorage.getItem("token"));
-
-      $.ajax({
-        url: window.apiHost + "/scratch/projects/" + (_pid === 0 ? '' : projectinfo.id) + "?token=" + localStorage.getItem("token"),
-        type: _pid === 0 ? 'post' : 'put',
-        data: vm.toJSON(),
-        contentType: "application/json",
-        success: function (result) {
-          if (_pid === 0) {
-            console.log("作品创建成功");
-
-            location.href = "/editor.html#" + result.id;
+            console.log("文件未修改:", asset.assetId + "." + asset.dataFormat);
           }
-          console.log("作品保存成功");
-          console.log(result);
-        },
-        error: function (err) {
-          console.log(err);
-        },
-      });
-    }
-
-    function getprojectinfo() {
-      if (_pid !== 0 && Number.isInteger(_pid)) {
-        $.ajax({
-          url: window.apiHost + "/scratch/projectinfo?id=" + _pid,
-          type: "GET",
-          data: { token: localStorage.getItem("token") },
-          success: function (result) {
-            if (result.status == '404') {
-              location.href = "/editor.html?msg=404"
-              return;
-            }
-            window.projectinfo = result;
-            zctab.headline = result.title;
-            zctab.description = `用户ID：${result.authorid
-              }，作品ID：${result.id} ，${result.authorid == localStorage.getItem("zc:id")
-                ? "是你的作品"
-                : "不是你的作品"
-              }`;
-
-            console.log("成功获取作品信息");
-            console.log(result);
-
-            if (result.authorid === localStorage.getItem("zc:id")) {
-              console.log("作品作者为当前用户");
-              setSaveButton();
-            }
-            if (result.authorid != localStorage.getItem("zc:id")) {
-              console.log("作品作者不是当前用户");
-              setForkButton();
-            }
-          },
-          error: function (err) {
-            alert(err);
-          },
         });
       }
-    }
-    function setSaveButton() {
-      document.getElementById("push-button").innerText = "保存";
-      document.getElementById("push-button").onclick = function () {
-        pushproject();
-      };
-      console.log("设置保存按钮");
-    }
-    function setForkButton() {
-      document.getElementById("push-button").innerText = "改编";
-      document.getElementById("push-button").onclick = function () {
-        forkproject();
-      };
-      console.log("设置改编按钮");
-    }
+      function uploadProject() {
+        console.log(
+          window.apiHost +
+            "/scratch/projects/" +
+            (_pid === 0 ? "" : projectinfo.id) +
+            "?token=" +
+            localStorage.getItem("token")
+        );
 
-    function pushproject() {
-      uploadAssets();
-      if (projectjson == 'null' || projectjson != vm.toJSON()) {
-        projectjson = vm.toJSON();
-        if (
-          window.projectinfo.authorid ==
-          localStorage.getItem("zc:id") || _pid == 0
-        ) {
-          uploadProject();
-          console.log("保存完成");
-
-          logText.innerText += `[${getTime()}]保存完成\n`;
-
-          return "保存完成";
-        }
-      }
-      if ((projectjson = vm.toJSON())) {
-        console.log("作品未修改");
-        logText.innerText += `[${getTime()}]作品未修改\n`;
-        return "作品未修改";
-      }
-    }
-    function forkproject() {
-      getprojectinfo();
-      if (window.projectinfo.authorid == localStorage.getItem("zc:id")) {
-        console.log("作品作者是当前用户");
-        return "作品作者是当前用户";
-      }
-      if (!localStorage.getItem("zc:id")) {
-        console.log("你登录了吗");
-        return "你登录了吗";
-      }
-      if (window.projectinfo.authorid != localStorage.getItem("zc:id")) {
-        console.log("处理改编");
         $.ajax({
           url:
             window.apiHost +
-            "/scratch/projects?token=" +
+            "/scratch/projects/" +
+            (_pid === 0 ? "" : projectinfo.id) +
+            "?token=" +
             localStorage.getItem("token"),
-          type: "POST",
-          data: { work: vm.toJSON() },
+          type: _pid === 0 ? "post" : "put",
+          data: vm.toJSON(),
+          contentType: "application/json",
           success: function (result) {
-            console.log("上传作品成功");
+            if (_pid === 0) {
+              console.log("作品创建成功");
+
+              location.href = "/editor.html#" + result.id;
+            }
+            console.log("作品保存成功");
             console.log(result);
-            location.href = "/editor.html#" + result.id;
           },
           error: function (err) {
             console.log(err);
           },
         });
       }
-    }
-  </script>
-  <div id="app"></div>
-  <script src="http://localhost:5500/build/js/vendors~addon-settings~credits~editor~embed~fullscreen~player.js"></script>
-  <script src="http://localhost:5500/build/js/vendors~editor~embed~fullscreen~player.js"></script>
-  <script src="http://localhost:5500/build/js/addon-settings~addons~editor~fullscreen~player.js"></script>
-  <script src="http://localhost:5500/build/js/addon-settings~editor~embed~fullscreen~player.js"></script>
-  <script src="http://localhost:5500/build/js/editor.js"></script>
-</body>
 
+      function getprojectinfo() {
+        if (_pid !== 0 && Number.isInteger(_pid)) {
+          $.ajax({
+            url: window.apiHost + "/scratch/projectinfo?id=" + _pid,
+            type: "GET",
+            data: { token: localStorage.getItem("token") },
+            success: function (result) {
+              if (result.status == "404") {
+                location.href = "/editor.html?msg=404";
+                return;
+              }
+              window.projectinfo = result;
+              zctab.headline = result.title;
+              zctab.description = `用户ID：${result.authorid}，作品ID：${
+                result.id
+              } ，${
+                result.authorid == localStorage.getItem("zc:id")
+                  ? "是你的作品"
+                  : "不是你的作品"
+              }`;
+
+              console.log("成功获取作品信息");
+              console.log(result);
+
+              if (result.authorid === localStorage.getItem("zc:id")) {
+                console.log("作品作者为当前用户");
+                setSaveButton();
+              }
+              if (result.authorid != localStorage.getItem("zc:id")) {
+                console.log("作品作者不是当前用户");
+                setForkButton();
+              }
+            },
+            error: function (err) {
+              alert(err);
+            },
+          });
+        }
+      }
+      function setSaveButton() {
+        document.getElementById("push-button").innerText = "保存";
+        document.getElementById("push-button").onclick = function () {
+          pushproject();
+        };
+        console.log("设置保存按钮");
+      }
+      function setForkButton() {
+        document.getElementById("push-button").innerText = "改编";
+        document.getElementById("push-button").onclick = function () {
+          forkproject();
+        };
+        console.log("设置改编按钮");
+      }
+
+      function pushproject() {
+        uploadAssets();
+        if (projectjson == "null" || projectjson != vm.toJSON()) {
+          projectjson = vm.toJSON();
+          if (
+            window.projectinfo.authorid == localStorage.getItem("zc:id") ||
+            _pid == 0
+          ) {
+            uploadProject();
+            console.log("保存完成");
+
+            logText.innerText += `[${getTime()}]保存完成\n`;
+
+            return "保存完成";
+          }
+        }
+        if ((projectjson = vm.toJSON())) {
+          console.log("作品未修改");
+          logText.innerText += `[${getTime()}]作品未修改\n`;
+          return "作品未修改";
+        }
+      }
+      function forkproject() {
+        getprojectinfo();
+        if (window.projectinfo.authorid == localStorage.getItem("zc:id")) {
+          console.log("作品作者是当前用户");
+          return "作品作者是当前用户";
+        }
+        if (!localStorage.getItem("zc:id")) {
+          console.log("你登录了吗");
+          return "你登录了吗";
+        }
+        if (window.projectinfo.authorid != localStorage.getItem("zc:id")) {
+          console.log("处理改编");
+          $.ajax({
+            url:
+              window.apiHost +
+              "/scratch/projects?token=" +
+              localStorage.getItem("token"),
+            type: "POST",
+            data: { work: vm.toJSON() },
+            success: function (result) {
+              console.log("上传作品成功");
+              console.log(result);
+              location.href = "/editor.html#" + result.id;
+            },
+            error: function (err) {
+              console.log(err);
+            },
+          });
+        }
+      }
+    </script>
+    <div id="app"></div>
+    <script src="http://localhost:5500/build/js/vendors~addon-settings~credits~editor~embed~fullscreen~player.js"></script>
+    <script src="http://localhost:5500/build/js/vendors~editor~embed~fullscreen~player.js"></script>
+    <script src="http://localhost:5500/build/js/addon-settings~addons~editor~fullscreen~player.js"></script>
+    <script src="http://localhost:5500/build/js/addon-settings~editor~embed~fullscreen~player.js"></script>
+    <script src="http://localhost:5500/build/js/editor.js"></script>
+  </body>
 </html>

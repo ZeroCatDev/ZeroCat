@@ -1,10 +1,10 @@
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken"); // 确保安装了 jsonwebtoken 库
-const { PasswordHash } = require('phpass');
+const { PasswordHash } = require("phpass");
 const pwdHash = new PasswordHash();
 const fs = require("fs");
-const { PrismaClient } = require('@prisma/client');
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { PrismaClient } = require("@prisma/client");
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 
 // prisma client
 const prisma = new PrismaClient();
@@ -32,8 +32,9 @@ exports.S3update = async function (name, file) {
 
     const data = await s3.send(command);
     console.log(data);
-    console.log(`用户 ${res.locals.email} 成功上传了文件 ${global.config.s3.bucket}/${name}`);
-
+    console.log(
+      `用户 ${res.locals.email} 成功上传了文件 ${global.config.s3.bucket}/${name}`
+    );
   } catch (err) {
     console.error("S3 update Error:", err);
   }
@@ -50,7 +51,8 @@ exports.checkhash = (pwd, storeHash) => pwdHash.checkPassword(pwd, storeHash);
 exports.userpwTest = (pw) => /^(?:\d+|[a-zA-Z]+|[!@#$%^&*]+){6,16}$/.test(pw);
 
 // 校验邮箱格式
-exports.emailTest = (email) => /^([a-zA-Z]|[0-9])(\w|\-)+@[a-zA-Z0-9]+\.[a-zA-Z]{2,4}$/.test(email);
+exports.emailTest = (email) =>
+  /^([a-zA-Z]|[0-9])(\w|\-)+@[a-zA-Z0-9]+\.[a-zA-Z]{2,4}$/.test(email);
 
 // 校验手机号格式
 exports.phoneTest = (phone) => /^1[3456789]\d{9}$/.test(phone);
@@ -62,7 +64,9 @@ exports.msg_fail = { status: "fail", msg: "请再试一次19" };
 exports.randomPassword = (len = 12) => {
   const chars = "ABCDEFGHJKMNPQRSTWXYZabcdefhijkmnprstwxyz2345678"; // 默认去掉混淆字符
   const maxPos = chars.length;
-  let password = Array.from({ length: len - 4 }, () => chars.charAt(Math.floor(Math.random() * maxPos))).join('');
+  let password = Array.from({ length: len - 4 }, () =>
+    chars.charAt(Math.floor(Math.random() * maxPos))
+  ).join("");
   return `${password}@Aa1`;
 };
 
@@ -77,12 +81,12 @@ exports.GenerateJwt = (json) => jwt.sign(json, global.config.security.jwttoken);
 
 // 判断是否为 JSON 字符串
 exports.isJSON = (str) => {
-  if (typeof str !== 'string') return false;
+  if (typeof str !== "string") return false;
   try {
     const obj = JSON.parse(str);
-    return obj && typeof obj === 'object';
+    return obj && typeof obj === "object";
   } catch (e) {
-    console.error('error:', str, e);
+    console.error("error:", str, e);
     return false;
   }
 };

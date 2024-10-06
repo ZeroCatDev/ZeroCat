@@ -12,12 +12,10 @@ router.all("*", function (req, res, next) {
   next();
 });
 
-
-
 const request = require("request");
 var nodemailer = require("nodemailer");
 router.get("/", function (req, res) {
-      res.render("user.ejs");
+  res.render("user.ejs");
 });
 //登录、注册、找回密码三合一界面
 router.get("/login", function (req, res) {
@@ -37,102 +35,97 @@ router.get("/login", function (req, res) {
 router.get("/repw", function (req, res) {
   res.render("repw.ejs");
 });
-const geetest = require('./lib/captcha/geetest.js');
+const geetest = require("./lib/captcha/geetest.js");
 
 //登录
-router.post("/login",geetest ,function (req, res) {
-      if (
-        !req.body.pw ||
-        !I.userpwTest(req.body.pw) ||
-        !req.body.un ||
-        !I.emailTest(req.body.un)
-      ) {
-        res.status(200).send({ message: "账户或密码错误" });
-        return;
+router.post("/login", geetest, function (req, res) {
+  if (
+    !req.body.pw ||
+    !I.userpwTest(req.body.pw) ||
+    !req.body.un ||
+    !I.emailTest(req.body.un)
+  ) {
+    res.status(200).send({ message: "账户或密码错误" });
+    return;
+  }
+
+  var SQL = `SELECT * FROM ow_users WHERE email=? LIMIT 1`;
+  var WHERE = [`${req.body["un"]}`];
+  DB.qww(SQL, WHERE, function (err, USER) {
+    if (err || USER.length == 0) {
+      res.status(200).send({ message: "账户或密码错误" });
+      return;
+    }
+
+    var User = USER[0];
+    pw = I.hash(req.body.pw);
+    if (I.checkhash(req.body.pw, User["password"]) == false) {
+      res.status(200).send({ message: "账户或密码错误" });
+    } else if (User["state"] == 2) {
+      res.status(200).send({ message: "您已经被封号，请联系管理员" });
+    } else {
+      res.locals["userid"] = User["id"];
+      res.locals["username"] = User["username"];
+      res.locals["email"] = User["email"];
+      res.locals["display_name"] = User["display_name"];
+      //console.log('已登录：**********************************');
+
+      //判断系统管理员权限
+      // if (req.session['email']=='sunwuyuan'){
+      //     req.session['is_admin'] = 1;
+      // } else {
+      //     req.session['is_admin'] = 0;
+      // }
+      //判断系统管理员权限：此处写死，无需从数据库获取
+      res.locals["is_admin"] = 0;
+      if (res.locals["email"].indexOf(global.config.security.adminuser) == 0) {
+        if (res.locals["email"] == global.config.security.adminuser) {
+          res.locals["is_admin"] = 1;
+        } else {
+          let no = parseInt(res.locals["email"].substring(8));
+          if (0 <= no && no < 100) {
+            res.locals["is_admin"] = 1;
+          }
+        }
       }
 
-      var SQL = `SELECT * FROM ow_users WHERE email=? LIMIT 1`;
-      var WHERE = [`${req.body["un"]}`];
-      DB.qww(SQL, WHERE, function (err, USER) {
-        if (err || USER.length == 0) {
-          res.status(200).send({ message: "账户或密码错误" });
-          return;
-        }
+      //7天时长的毫秒数：86400000=24*60*60*1000
+      res.cookie("userid", User["id"], { maxAge: 604800000, signed: true });
+      res.cookie("email", User["email"], {
+        maxAge: 604800000,
+        signed: true,
+      });
+      res.cookie("username", User["username"], {
+        maxAge: 604800000,
+        signed: true,
+      });
+      res.cookie("display_name", User["display_name"], {
+        maxAge: 604800000,
+        signed: true,
+      });
+      var token = I.GenerateJwt({
+        userid: User["id"],
+        username: User["username"],
+        email: User["email"],
+        display_name: User["display_name"],
+        avatar: User["images"],
+      });
+      console.log(token);
+      res.cookie("token", token, { maxAge: 604800000 });
+      res.status(200).send({
+        status: "OK",
+        message: "OK",
+        userid: parseInt(User["id"]),
+        email: User["email"],
+        username: User["username"],
 
-        var User = USER[0];
-        pw = I.hash(req.body.pw)
-        if (I.checkhash(req.body.pw,User["password"])==false) {
-          res.status(200).send({ message: "账户或密码错误" });
-        } else if (User["state"] == 2) {
-          res.status(200).send({ message: "您已经被封号，请联系管理员" });
-        } else {
-          res.locals["userid"] = User["id"];
-          res.locals["username"] = User["username"];
-          res.locals["email"] = User["email"];
-          res.locals["display_name"] = User["display_name"];
-          //console.log('已登录：**********************************');
-
-          //判断系统管理员权限
-          // if (req.session['email']=='sunwuyuan'){
-          //     req.session['is_admin'] = 1;
-          // } else {
-          //     req.session['is_admin'] = 0;
-          // }
-          //判断系统管理员权限：此处写死，无需从数据库获取
-          res.locals["is_admin"] = 0;
-          if (res.locals["email"].indexOf(global.config.security.adminuser) == 0) {
-            if (res.locals["email"] == global.config.security.adminuser) {
-              res.locals["is_admin"] = 1;
-            } else {
-              let no = parseInt(res.locals["email"].substring(8));
-              if (0 <= no && no < 100) {
-                res.locals["is_admin"] = 1;
-              }
-            }
-          }
-
-          //7天时长的毫秒数：86400000=24*60*60*1000
-          res.cookie("userid", User["id"], { maxAge: 604800000, signed: true });
-          res.cookie("email", User["email"], {
-            maxAge: 604800000,
-            signed: true,
-          });
-          res.cookie("username", User["username"], {
-            maxAge: 604800000,
-            signed: true,
-          });
-          res.cookie("display_name", User["display_name"], {
-            maxAge: 604800000,
-            signed: true,
-          });
-          var token = I.GenerateJwt({
-            userid: User["id"],
-            username: User["username"],
-            email: User["email"],
-            display_name: User["display_name"],
-            avatar: User["images"]
-          })
-          console.log(token);
-          res.cookie(
-            "token",
-            token,
-            { maxAge: 604800000 }
-          );
-          res.status(200).send({
-            status: "OK",
-            message: "OK",
-            userid: parseInt(User["id"]),
-            email: User["email"],
-            username: User["username"],
-
-            display_name: User["display_name"],
-            avatar: User["images"],
-            token: token,
-          });
-        }
+        display_name: User["display_name"],
+        avatar: User["images"],
+        token: token,
       });
     }
-  );
+  });
+});
 //退出
 var logout = function (req, res) {
   //req.session.destroy();
@@ -143,7 +136,7 @@ var logout = function (req, res) {
   res.cookie("userid", "", { maxAge: 0, signed: true });
   res.cookie("email", "", { maxAge: 0, signed: true });
   res.cookie("display_name", "", { maxAge: 0, signed: true });
-  res.cookie("token", "", { maxAge: 0, signed: true 		});
+  res.cookie("token", "", { maxAge: 0, signed: true });
 };
 router.get("/logout", function (req, res) {
   logout(req, res);
@@ -151,65 +144,62 @@ router.get("/logout", function (req, res) {
 });
 
 //注册
-router.post("/register",geetest,function (req, res) {
+router.post("/register", geetest, function (req, res) {
+  //if (!req.body.pw|| !I.userpwTest(req.body.pw) || !req.body.un|| !I.emailTest(req.body.un)){ res.status(200).send( { 'status':'账户或密码格式错误' });return;}
+  //if (I.phoneTest(req.body.un)){res.status(200).send( { 'status':'手机号不能直接用于注册账户' });return;}
 
+  var email = req.body.un;
+  SQL = `SELECT id FROM ow_users WHERE email='${email}' LIMIT 1`;
+  DB.query(SQL, function (err, User) {
+    if (err) {
+      res.status(200).send({ message: "账户格式错误" });
+      return;
+    }
+    if (User.length > 0) {
+      res.status(200).send({ message: "账户已存在" });
+      return;
+    }
 
+    //对密码进行加密
+    //var pw = req.body.pw;
+    var randonpw = I.randomPassword(12);
+    //console.log(randonpw);
+    //console.log(email);
 
-        //if (!req.body.pw|| !I.userpwTest(req.body.pw) || !req.body.un|| !I.emailTest(req.body.un)){ res.status(200).send( { 'status':'账户或密码格式错误' });return;}
-        //if (I.phoneTest(req.body.un)){res.status(200).send( { 'status':'手机号不能直接用于注册账户' });return;}
+    pw = I.hash(randonpw);
+    //console.log(pw);
+    //新用户注册 //loginInfo = [{'t': new Date(),'ip':req.ip,'agent':req.headers["user-agent"]}];
+    //var display_name = email.substring(email.length-5);
+    var display_name = req.body.pw;
+    //console.log(display_name);
+    var INSERT = `INSERT INTO ow_users (username,email,password,display_name) VALUES ('${Date.now()}','${email}','${pw}','${display_name}')`;
+    DB.query(INSERT, function (err, newUser) {
+      if (err) {
+        console.error(err);
+        res.status(200).send({ message: "再试一次17" });
+        return;
+      }
+      var userid = newUser.insertId;
 
-        var email = req.body.un;
-        SQL = `SELECT id FROM ow_users WHERE email='${email}' LIMIT 1`;
-        DB.query(SQL, function (err, User) {
-          if (err) {
-            res.status(200).send({ message: "账户格式错误" });
-            return;
-          }
-          if (User.length > 0) {
-            res.status(200).send({ message: "账户已存在" });
-            return;
-          }
+      const transporter = nodemailer.createTransport({
+        service: global.config.mail.service, //  邮箱
+        secure: true, //  安全的发送模式
+        auth: {
+          user: global.config.mail.user, //  发件人邮箱
+          pass: global.config.mail.pass, //  授权码
+        },
+      });
 
-          //对密码进行加密
-          //var pw = req.body.pw;
-          var randonpw = I.randomPassword(12);
-          //console.log(randonpw);
-          //console.log(email);
-
-          pw = I.hash(randonpw)
-          //console.log(pw);
-          //新用户注册 //loginInfo = [{'t': new Date(),'ip':req.ip,'agent':req.headers["user-agent"]}];
-          //var display_name = email.substring(email.length-5);
-          var display_name = req.body.pw;
-          //console.log(display_name);
-          var INSERT = `INSERT INTO ow_users (username,email,password,display_name) VALUES ('${Date.now()}','${email}','${pw}','${display_name}')`;
-          DB.query(INSERT, function (err, newUser) {
-            if (err) {
-              console.error(err);
-              res.status(200).send({ message: "再试一次17" });
-              return;
-            }
-            var userid = newUser.insertId;
-
-            const transporter = nodemailer.createTransport({
-              service: global.config.mail.service, //  邮箱
-              secure: true, //  安全的发送模式
-              auth: {
-                user: global.config.mail.user, //  发件人邮箱
-                pass: global.config.mail.pass, //  授权码
-              },
-            });
-
-            transporter.sendMail(
-              {
-                // 发件人邮箱
-                from: `${global.config.site.name}"社区注册消息" <${global.config.mail.from}>`,
-                // 邮件标题
-                subject: global.config.site.name + "社区注册消息",
-                // 目标邮箱
-                to: email,
-                // 邮件内容
-                html: `<div class="page flex-col">
+      transporter.sendMail(
+        {
+          // 发件人邮箱
+          from: `${global.config.site.name}"社区注册消息" <${global.config.mail.from}>`,
+          // 邮件标题
+          subject: global.config.site.name + "社区注册消息",
+          // 目标邮箱
+          to: email,
+          // 邮件内容
+          html: `<div class="page flex-col">
                   <div class="box_3 flex-col"
                       style="display: flex;position: relative;width: 100%;height: 206px;background: #1289d82e;top: 0;left: 0;justify-content: center;">
                       <img class="section_1 flex-col" src="https://b2.190823.xyz/2023/05/d405a5b948f858b3479fa0d60478c98f.svg"
@@ -256,63 +246,62 @@ router.post("/register",geetest,function (req, res) {
                       </table>
                   </div>
               </div>`,
-              },
-              (err, data) => {
-                if (err) {
-                  console.error(err);
-                } else {
-                  console.log(data);
-                }
-              }
-            );
+        },
+        (err, data) => {
+          if (err) {
+            console.error(err);
+          } else {
+            console.log(data);
+          }
+        }
+      );
 
-            res.status(200).send({ message: "注册成功,请查看邮箱获取账户数据" });
-          });
-        });
-      });
-
+      res.status(200).send({ message: "注册成功,请查看邮箱获取账户数据" });
+    });
+  });
+});
 
 //找回密码
-router.post("/repw", geetest,function (req, res) {
-      if (req.body.un == "" || req.body.un == null) {
-        res.status(200).send({ message: "账户格式错误" });
-        return;
-      }
-      var email = req.body.un;
-      SQL = `SELECT * FROM ow_users WHERE email=? LIMIT 1`;
-      w=[email];
-      DB.qww(SQL,w, function (err, User) {
-        if (err) {
-          res.status(200).send({ message: "账户格式错误或不存在" });
-          return;
-        }
-        var user = User[0];
-        //console.log(user);
-        var jwttoken = jwt.sign(
-          { userid: user["id"], email: user["email"] },
-          global.config.security.jwttoken,
-          { expiresIn: 60 * 10 }
-        );
-        //console.log(jwttoken);
-        const transporter = nodemailer.createTransport({
-          service: global.config.mail.service, //  邮箱
-          secure: true, //  安全的发送模式
-          auth: {
-            user: global.config.mail.user, //  发件人邮箱
-            pass: global.config.mail.pass, //  授权码
-          },
-        });
+router.post("/repw", geetest, function (req, res) {
+  if (req.body.un == "" || req.body.un == null) {
+    res.status(200).send({ message: "账户格式错误" });
+    return;
+  }
+  var email = req.body.un;
+  SQL = `SELECT * FROM ow_users WHERE email=? LIMIT 1`;
+  w = [email];
+  DB.qww(SQL, w, function (err, User) {
+    if (err) {
+      res.status(200).send({ message: "账户格式错误或不存在" });
+      return;
+    }
+    var user = User[0];
+    //console.log(user);
+    var jwttoken = jwt.sign(
+      { userid: user["id"], email: user["email"] },
+      global.config.security.jwttoken,
+      { expiresIn: 60 * 10 }
+    );
+    //console.log(jwttoken);
+    const transporter = nodemailer.createTransport({
+      service: global.config.mail.service, //  邮箱
+      secure: true, //  安全的发送模式
+      auth: {
+        user: global.config.mail.user, //  发件人邮箱
+        pass: global.config.mail.pass, //  授权码
+      },
+    });
 
-        transporter.sendMail(
-          {
-            // 发件人邮箱
-            from: `${global.config.site.name}"密码重置消息" <${global.config.mail.from}>`,
-            // 邮件标题
-            subject: global.config.site.name + "密码重置消息",
-            // 目标邮箱
-            to: email,
-            // 邮件内容
-            html: `<div class="page flex-col">
+    transporter.sendMail(
+      {
+        // 发件人邮箱
+        from: `${global.config.site.name}"密码重置消息" <${global.config.mail.from}>`,
+        // 邮件标题
+        subject: global.config.site.name + "密码重置消息",
+        // 目标邮箱
+        to: email,
+        // 邮件内容
+        html: `<div class="page flex-col">
             <div class="box_3 flex-col"
                 style="display: flex;position: relative;width: 100%;height: 206px;background: #1289d82e;top: 0;left: 0;justify-content: center;">
                 <img class="section_1 flex-col" src="https://b2.190823.xyz/2023/05/d405a5b948f858b3479fa0d60478c98f.svg"
@@ -364,59 +353,51 @@ router.post("/repw", geetest,function (req, res) {
                 </table>
             </div>
         </div>`,
-          },
-          (err, data) => {
-            if (err) {
-              console.error(err);
-              res.status(200).send({ message: "出现错误" });
-
-            } else {
-              console.log(data);
-              res.status(200).send({ message: "请查看邮箱" });
-
-            }
-          }
-        );
-      });
-    }
-  );
-
+      },
+      (err, data) => {
+        if (err) {
+          console.error(err);
+          res.status(200).send({ message: "出现错误" });
+        } else {
+          console.log(data);
+          res.status(200).send({ message: "请查看邮箱" });
+        }
+      }
+    );
+  });
+});
 
 //找回密码
-router.post("/torepw",geetest, function (req, res) {
-
-      //console.log(req.body.token);
-      var user1 = jwt.verify(
-        req.body.jwttoken,
-        global.config.security.jwttoken,
-        function (err, decoded) {
-          if (err) {
-            res.status(200).send({ message: "token错误或过期" });
-            return;
-          }
-          userid = decoded.userid;
-          email = decoded.email;
-        }
-      );
-      //console.log(userid);
-      //console.log(req.body.pw);
-      var newPW = I.hash(req.body.pw)
-      //console.log(newPW);
-
-      SET = { password: newPW };
-      UPDATE = `UPDATE ow_users SET ? WHERE id=${userid} LIMIT 1`;
-      DB.qww(UPDATE, SET, function (err, u) {
-        if (err) {
-          res.status(200).send({ message: "请再试一次" });
-          return;
-        }
-
-        res.status(200).send({ message: "您的密码已更新" });
-      });
-      // Continue with your program
+router.post("/torepw", geetest, function (req, res) {
+  //console.log(req.body.token);
+  var user1 = jwt.verify(
+    req.body.jwttoken,
+    global.config.security.jwttoken,
+    function (err, decoded) {
+      if (err) {
+        res.status(200).send({ message: "token错误或过期" });
+        return;
+      }
+      userid = decoded.userid;
+      email = decoded.email;
     }
   );
+  //console.log(userid);
+  //console.log(req.body.pw);
+  var newPW = I.hash(req.body.pw);
+  //console.log(newPW);
 
+  SET = { password: newPW };
+  UPDATE = `UPDATE ow_users SET ? WHERE id=${userid} LIMIT 1`;
+  DB.qww(UPDATE, SET, function (err, u) {
+    if (err) {
+      res.status(200).send({ message: "请再试一次" });
+      return;
+    }
 
+    res.status(200).send({ message: "您的密码已更新" });
+  });
+  // Continue with your program
+});
 
 module.exports = router;

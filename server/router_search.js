@@ -18,9 +18,18 @@ router.get("/", async (req, res) => {
     search_state: stateQuery = "",
   } = req.query;
 
-  const isCurrentUser = userid && res.locals.userid && userid == res.locals.userid;
-  let state = stateQuery == "" ? (isCurrentUser ? ['private', 'public'] : ['public'])
-            : (stateQuery == 'private' ? (isCurrentUser ? ['private'] : ['public']) : [stateQuery]);
+  const isCurrentUser =
+    userid && res.locals.userid && userid == res.locals.userid;
+  let state =
+    stateQuery == ""
+      ? isCurrentUser
+        ? ["private", "public"]
+        : ["public"]
+      : stateQuery == "private"
+      ? isCurrentUser
+        ? ["private"]
+        : ["public"]
+      : [stateQuery];
 
   // 处理排序
   const [orderbyField, orderDirection] = orderbyQuery.split("_");
@@ -59,9 +68,11 @@ router.get("/", async (req, res) => {
       skip: (Number(curr) - 1) * Number(limit),
       take: Number(limit),
     });
-console.log(searchinfo)
+    console.log(searchinfo);
     // 统计项目总数
-    const projectcount = await I.prisma.ow_projects.count({ where: searchinfo });
+    const projectcount = await I.prisma.ow_projects.count({
+      where: searchinfo,
+    });
 
     // 获取作者信息
     const authorIds = [...new Set(projectresult.map((item) => item.authorid))];

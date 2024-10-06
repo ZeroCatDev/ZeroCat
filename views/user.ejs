@@ -1,70 +1,86 @@
 <%- include('html-head.ejs', {pageTitle: '用户个人主页' }); %>
-	<link rel="stylesheet" href="https://unpkg.com/@waline/client@v3/dist/waline.css" />
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/@waline/client@v3/dist/waline.css"
+/>
 
+<img class="mdui-img-circle" src="" style="height: 70px" id="mainuserimages" />
+<div
+  class="mdui-typo-display-2 display_name"
+  id="mainuserdisplay_name"
+  style="user-select: text"
+>
+  创作者
+</div>
 
-	<img class="mdui-img-circle" src="" style="height: 70px" id="mainuserimages" />
-	<div class="mdui-typo-display-2 display_name" id="mainuserdisplay_name" style="user-select: text">
-		创作者
-	</div>
+<mdui-card variant="filled">
+  <mdui-chip
+    elevated
+    icon="access_time"
+    id="regTime"
+    style="margin: 10px 0px 0px 10px"
+  ></mdui-chip
+  ><mdui-chip elevated icon="tag" id="tag" style="margin: 10px 10px 0px 10px"
+    >创作者</mdui-chip
+  >
 
-	<mdui-card variant="filled">
-		<mdui-chip elevated icon="access_time" id="regTime" style="margin: 10px 0px 0px 10px" ></mdui-chip><mdui-chip  elevated icon="tag"
-			id="tag" style="margin: 10px 10px 0px 10px">创作者</mdui-chip>
+  <div class="usermotto" id="usermotto" style="user-select: text; margin: 20px">
+    创作者
+  </div>
+</mdui-card>
+<mdui-tabs value="tab-1">
+  <mdui-tab value="tab-1">Scratch</mdui-tab>
+  <mdui-tab value="tab-2">Python</mdui-tab>
 
-		<div class="usermotto" id="usermotto" style="user-select: text; margin: 20px">
-			创作者
-		</div>
-	</mdui-card>
-	<mdui-tabs value="tab-1">
-		<mdui-tab value="tab-1">Scratch</mdui-tab>
-		<mdui-tab value="tab-2">Python</mdui-tab>
+  <mdui-tab-panel slot="panel" value="tab-1">
+    <div id="scratch_box">
+      <div class="mdui-row" id="scratch_projects" style="width: 100%"></div>
+      <div style="display: flex; justify-content: center">
+        <div id="scratch_change_page"></div>
+      </div>
+    </div>
+  </mdui-tab-panel>
+  <mdui-tab-panel slot="panel" value="tab-2">
+    <div id="python_box">
+      <div class="layui-row" id="python_projects"></div>
+      <div style="display: flex; justify-content: center">
+        <div id="python_change_page"></div>
+      </div>
+    </div>
+  </mdui-tab-panel>
+</mdui-tabs>
 
-		<mdui-tab-panel slot="panel" value="tab-1">
-			<div id="scratch_box">
-				<div class="mdui-row" id="scratch_projects" style="width: 100%;"></div>
-				<div style="display: flex; justify-content: center">
-					<div id="scratch_change_page"></div>
-				</div>
-			</div>
-		</mdui-tab-panel>
-		<mdui-tab-panel slot="panel" value="tab-2">
-			<div id="python_box">
-				<div class="layui-row" id="python_projects"></div>
-				<div style="display: flex; justify-content: center">
-					<div id="python_change_page"></div>
-				</div>
-			</div>
-		</mdui-tab-panel>
-	</mdui-tabs>
+<div id="waline"></div>
+<script type="module">
+  function getQueryString(name) {
+    const queryString = window.location.search.slice(1);
+    const reg = new RegExp("(^|&)" + name + "=([^&]*)(&|$)", "i");
+    const r = queryString.match(reg);
+    return r ? decodeURIComponent(r[2]) : null;
+  }
+  import { init } from "https://unpkg.com/@waline/client@v3/dist/waline.js";
 
-	<div id="waline"></div>
-	<script type="module">
-		function getQueryString(name) {
-			const queryString = window.location.search.slice(1);
-			const reg = new RegExp("(^|&)" + name + "=([^&]*)(&|$)", "i");
-			const r = queryString.match(reg);
-			return r ? decodeURIComponent(r[2]) : null;
-		}
-		import { init } from "https://unpkg.com/@waline/client@v3/dist/waline.js";
-
-		init({
-			el: "#waline",
-			serverURL: "<%= global.config.waline.url %>",
-			path: "user-" + getQueryString("id"),
-			copyright: false,
-			reaction: true,
-			pageview: true,
-			locale: {
-				reactionTitle: "发表下看法？",
-			},
-			emoji: [
-				"//unpkg.com/@waline/emojis@1.1.0/weibo",
-				"//unpkg.com/@waline/emojis@1.1.0/bilibili",
-			],
-			dark: "body[dark]",
-		});
-	</script>
-	<%- include('./html-footer.ejs', {page: 'user' }); %>
-		<script type="text/javascript" src="<%= global.config.urls.static %>/page/user/page.js"></script>
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.11/purify.min.js"></script>
-		<script src="<%= global.config.urls.static %>/js/marked.js"></script>
+  init({
+    el: "#waline",
+    serverURL: "<%= global.config.waline.url %>",
+    path: "user-" + getQueryString("id"),
+    copyright: false,
+    reaction: true,
+    pageview: true,
+    locale: {
+      reactionTitle: "发表下看法？",
+    },
+    emoji: [
+      "//unpkg.com/@waline/emojis@1.1.0/weibo",
+      "//unpkg.com/@waline/emojis@1.1.0/bilibili",
+    ],
+    dark: "body[dark]",
+  });
+</script>
+<%- include('./html-footer.ejs', {page: 'user' }); %>
+<script
+  type="text/javascript"
+  src="<%= global.config.urls.static %>/page/user/page.js"
+></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.11/purify.min.js"></script>
+<script src="<%= global.config.urls.static %>/js/marked.js"></script>

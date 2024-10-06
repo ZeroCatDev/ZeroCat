@@ -27,7 +27,10 @@ async function userProjectlistAdd(info) {
 
     if (!project) throw new Error("项目列表不存在");
 
-    let list = cleanAndDeduplicateList([...project.list.split(","), info.projectid]);
+    let list = cleanAndDeduplicateList([
+      ...project.list.split(","),
+      info.projectid,
+    ]);
 
     return await prisma.ow_projects_lists.update({
       where: { id: Number(info.listid), authorid: Number(info.userid) },
@@ -84,7 +87,10 @@ async function getProjectlist(listid, userid) {
       where: { id: Number(listid) },
     });
 
-    if (!project || (project.state === "private" && project.authorid !== userid)) {
+    if (
+      !project ||
+      (project.state === "private" && project.authorid !== userid)
+    ) {
       return "列表不存在或为私有，请检查或登录账户";
     }
 
@@ -98,10 +104,10 @@ async function getProjectlist(listid, userid) {
 }
 
 // 获取用户的所有项目列表
-async function getUserProjectlist(userid,state) {
+async function getUserProjectlist(userid, state) {
   try {
     return await prisma.ow_projects_lists.findMany({
-      where: { authorid: Number(userid) ,state:{in:state}},
+      where: { authorid: Number(userid), state: { in: state } },
       select: {
         id: true,
         authorid: true,
@@ -158,7 +164,6 @@ async function checkProjectlistWithUser(info) {
   }
 }
 
-
 // 更新项目列表
 async function updateProjectlist(listid, info) {
   try {
@@ -169,7 +174,9 @@ async function updateProjectlist(listid, info) {
     }, {});
 
     if (resultinfo.list) {
-      resultinfo.list = cleanAndDeduplicateList(resultinfo.list.split(",")).join();
+      resultinfo.list = cleanAndDeduplicateList(
+        resultinfo.list.split(",")
+      ).join();
     }
 
     return await prisma.ow_projects_lists.update({

@@ -12,12 +12,10 @@ router.all("*", function (req, res, next) {
   next();
 });
 
-
-
 const request = require("request");
 var nodemailer = require("nodemailer");
 router.get("/", function (req, res) {
-      res.render("user.ejs");
+  res.render("user.ejs");
 });
 //登录、注册、找回密码三合一界面
 router.get("/login", function (req, res) {
@@ -43,16 +41,19 @@ router.get("/logout", function (req, res) {
   res.redirect("/");
 });
 
-
 router.get("/tuxiaochao", function (req, res) {
   if (!res.locals.login) {
-    res.redirect("https://support.qq.com/product/" + global.config.feedback.txcid);
+    res.redirect(
+      "https://support.qq.com/product/" + global.config.feedback.txcid
+    );
   }
   if (!global.config.feedback.txcid) {
     res.redirect("https://support.qq.com/product/597800");
   }
   if (!global.config.feedback.txckey) {
-    res.redirect("https://support.qq.com/product/" + global.config.feedback.txcid);
+    res.redirect(
+      "https://support.qq.com/product/" + global.config.feedback.txcid
+    );
   }
 
   SQL = `SELECT images FROM ow_users WHERE id = ${res.locals["userid"]};`;
@@ -67,7 +68,9 @@ router.get("/tuxiaochao", function (req, res) {
     var txcinfo =
       uid +
       res.locals["display_name"] +
-      global.config.s3.staticurl+'/user/'+USER[0].images+
+      global.config.s3.staticurl +
+      "/user/" +
+      USER[0].images +
       global.config.feedback.txckey;
     var cryptostr = cryptojs.MD5(txcinfo).toString();
 
@@ -78,13 +81,14 @@ router.get("/tuxiaochao", function (req, res) {
         res.locals["userid"] +
         "&nickname=" +
         res.locals["display_name"] +
-        "&avatar="+global.config.s3.staticurl+'/user/'+USER[0].images+
+        "&avatar=" +
+        global.config.s3.staticurl +
+        "/user/" +
+        USER[0].images +
         "&user_signature=" +
         cryptostr
     );
-
   });
-
 });
 
 module.exports = router;

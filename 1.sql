@@ -1,14 +1,15 @@
-CREATE VIEW ow_public_projects AS
+CREATE VIEW
+    ow_public_projects AS
 SELECT
     project.id,
     project.type,
     project.licence,
-	project.authorid,
-	project.state,
-	project.view_count,
+    project.authorid,
+    project.state,
+    project.view_count,
     project.time,
-	project.title,
-	project.description,
+    project.title,
+    project.description,
     project.source,
     project.tags,
     author.id AS author_id,
@@ -17,9 +18,6 @@ SELECT
     author.images AS author_images
 FROM
     ow_projects project
-JOIN
-    ow_users author
-ON
-    project.authorid = author.id
+    JOIN ow_users author ON project.authorid = author.id
 WHERE
     project.state = 'public';

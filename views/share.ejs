@@ -1,14 +1,11 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title><%= global.config.site.name %>分享页面</title>
+  </head>
 
-<head>
-    <meta charset="UTF-8">
-    <title>
-        <%= global.config.site.name %>分享页面
-    </title>
-</head>
-
-<body>
+  <body>
     <div class="cursor"></div>
     <div class="shapes">
       <div class="shape shape-1"></div>
@@ -17,119 +14,122 @@
     </div>
     <div class="content">
       <h1>Hello there!</h1>
-    </div></body>
-
+    </div>
+  </body>
 </html>
 <style>
   body {
-  font-family: Montserrat, sans-serif;
-  font-weight: 900;
-}
-body, body * {
-  cursor: none;
-}
+    font-family: Montserrat, sans-serif;
+    font-weight: 900;
+  }
+  body,
+  body * {
+    cursor: none;
+  }
 
-.shapes {
-  position: relative;
-  height: 100vh;
-  width: 100vw;
-  background: #2128bd;
-  overflow: hidden;
-}
+  .shapes {
+    position: relative;
+    height: 100vh;
+    width: 100vw;
+    background: #2128bd;
+    overflow: hidden;
+  }
 
-.shape {
-  will-change: transform;
-  position: absolute;
-  border-radius: 50%;
-}
-.shape.shape-1 {
-  background: #005ffe;
-  width: 650px;
-  height: 650px;
-  margin: -325px 0 0 -325px;
-}
-.shape.shape-2 {
-  background: #ffe5e3;
-  width: 440px;
-  height: 440px;
-  margin: -220px 0 0 -220px;
-}
-.shape.shape-3 {
-  background: #ffcc57;
-  width: 270px;
-  height: 270px;
-  margin: -135px 0 0 -135px;
-}
+  .shape {
+    will-change: transform;
+    position: absolute;
+    border-radius: 50%;
+  }
+  .shape.shape-1 {
+    background: #005ffe;
+    width: 650px;
+    height: 650px;
+    margin: -325px 0 0 -325px;
+  }
+  .shape.shape-2 {
+    background: #ffe5e3;
+    width: 440px;
+    height: 440px;
+    margin: -220px 0 0 -220px;
+  }
+  .shape.shape-3 {
+    background: #ffcc57;
+    width: 270px;
+    height: 270px;
+    margin: -135px 0 0 -135px;
+  }
 
-.content {
-  top: 0;
-  left: 0;
-  position: absolute;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
-  width: 100vw;
-  background: #fff;
-  mix-blend-mode: screen;
-}
+  .content {
+    top: 0;
+    left: 0;
+    position: absolute;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    width: 100vw;
+    background: #fff;
+    mix-blend-mode: screen;
+  }
 
-h1 {
-  font-size: 100px;
-  color: #000;
-  margin: 0;
-  text-align: center;
-}
-@media (min-width: 419px) {
   h1 {
     font-size: 100px;
-    font-size: calc((0.0989119683 * 100vw + (58.5558852621px)));
+    color: #000;
+    margin: 0;
+    text-align: center;
   }
-}
-@media (min-width: 1430px) {
-  h1 {
-    font-size: 200px;
+  @media (min-width: 419px) {
+    h1 {
+      font-size: 100px;
+      font-size: calc((0.0989119683 * 100vw + (58.5558852621px)));
+    }
   }
-}
+  @media (min-width: 1430px) {
+    h1 {
+      font-size: 200px;
+    }
+  }
 
-.cursor {
-  position: fixed;
-  background: #2128bd;
-  width: 20px;
-  height: 20px;
-  margin: -10px 0 0 -10px;
-  border-radius: 50%;
-  will-change: transform;
-  -webkit-user-select: none;
-     -moz-user-select: none;
-      -ms-user-select: none;
-          user-select: none;
-  pointer-events: none;
-  z-index: 10000;
-}
+  .cursor {
+    position: fixed;
+    background: #2128bd;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border-radius: 50%;
+    will-change: transform;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    pointer-events: none;
+    z-index: 10000;
+  }
 
-::-moz-selection {
-  color: #fff;
-  background: #2128bd;
-}
+  ::-moz-selection {
+    color: #fff;
+    background: #2128bd;
+  }
 
-::selection {
-  color: #fff;
-  background: #2128bd;
-}
+  ::selection {
+    color: #fff;
+    background: #2128bd;
+  }
 </style>
-<script>document.body.addEventListener("mousemove", evt => {
+<script>
+  document.body.addEventListener("mousemove", (evt) => {
     const mouseX = evt.clientX;
     const mouseY = evt.clientY;
 
     gsap.set(".cursor", {
       x: mouseX,
-      y: mouseY });
-
+      y: mouseY,
+    });
 
     gsap.to(".shape", {
       x: mouseX,
       y: mouseY,
-      stagger: -0.1 });
-
-  });</script>
+      stagger: -0.1,
+    });
+  });
+</script>

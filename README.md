@@ -1,7 +1,6 @@
 # ZeroCat 编程社区
 
-初中喵开发，求Star支持
-
+初中喵开发，求 Star 支持
 
 ZeroCat 是一个轻量级的在线编程、分享平台
 
@@ -35,6 +34,7 @@ ZeroCat 社区的源代码，包括前端与后端
 <br/>开发一个完整的支持 Scratch、Python 与其他适合编程初学者的编成社区
 
 ## 交流
+
 QQ：964979747
 
 ## 示例
@@ -87,7 +87,7 @@ $ docker compose up -d
 
 ## 如何贡献
 
-非常欢迎你的加入！[提一个 Issue](https://github.com/ZeroCatDev/ZeroCat/issues/new) 或者提交一个 Pull Request。对于小白问题，最好在qq群里问，我们会尽量回答。
+非常欢迎你的加入！[提一个 Issue](https://github.com/ZeroCatDev/ZeroCat/issues/new) 或者提交一个 Pull Request。对于小白问题，最好在 qq 群里问，我们会尽量回答。
 
 ZeroCat 的项目 遵循 [Contributor Covenant](http://contributor-covenant.org/version/1/3/0/) 行为规范
 <br/>孙悟元 希望你遵循 [提问的智慧](https://github.com/ryanhanwu/How-To-Ask-Questions-The-Smart-Way/blob/main/README-zh_CN.md)
@@ -104,8 +104,6 @@ ZeroCat 的项目 遵循 [Contributor Covenant](http://contributor-covenant.org/
 <br/>需要闭源的使用授权请联系 QQ1847261658
 
 感谢：https://gitee.com/scratch-cn/lite
-<br/>此项目声明了MIT协议
-
+<br/>此项目声明了 MIT 协议
 
 ![社区(Github图床)](https://github.com/ZeroCatDev/ZeroCat/assets/88357633/d6f4a6ba-daa1-45c8-88f7-4b20d9edbb22)
-

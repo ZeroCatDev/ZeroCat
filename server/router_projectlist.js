@@ -79,23 +79,26 @@ router.get("/user/:id/:state?", async (req, res) => {
 
     if (state === "private" && res.locals.userid == id) {
       console.log("1");
-      info = await getUserProjectlist(id,["private"]);
+      info = await getUserProjectlist(id, ["private"]);
     } else if (state === "public") {
       console.log("2");
-      info = await getUserProjectlist(id,["public"]);
+      info = await getUserProjectlist(id, ["public"]);
     } else if (!state || ["all", "undefined", "null", ""].includes(state)) {
       console.log("3");
-      info = res.locals.userid == id
-        ? await getUserProjectlist(id,["private", "public"])
-        : await getUserProjectlist(id,["public"]);
+      info =
+        res.locals.userid == id
+          ? await getUserProjectlist(id, ["private", "public"])
+          : await getUserProjectlist(id, ["public"]);
     } else {
       console.log("4");
-      info = await getUserProjectlist(id,"public");
+      info = await getUserProjectlist(id, "public");
     }
 
     res.status(200).send({ status: "1", message: "获取成功", data: info });
   } catch (err) {
-    res.status(200).send({ status: "0", message: "列表不存在或无权打开", error: err });
+    res
+      .status(200)
+      .send({ status: "0", message: "列表不存在或无权打开", error: err });
   }
 });
 
@@ -108,7 +111,9 @@ router.get("/check", async (req, res) => {
     });
     res.status(200).send({ status: "1", message: "获取成功", data: info });
   } catch (err) {
-    res.status(200).send({ status: "0", message: "列表不存在或无权打开", error: err });
+    res
+      .status(200)
+      .send({ status: "0", message: "列表不存在或无权打开", error: err });
   }
 });
 
@@ -118,7 +123,9 @@ router.get("/:id", async (req, res) => {
     const info = await getProjectlist(req.params.id, res.locals.userid);
     res.status(200).send({ status: "1", message: "获取成功", data: info });
   } catch (err) {
-    res.status(200).send({ status: "0", message: "列表不存在或无权打开", error: err });
+    res
+      .status(200)
+      .send({ status: "0", message: "列表不存在或无权打开", error: err });
   }
 });
 
