@@ -33,7 +33,7 @@ exports.S3update = async function (name, file) {
     const data = await s3.send(command);
     console.log(data);
     console.log(
-      `用户 ${res.locals.email} 成功上传了文件 ${global.config.s3.bucket}/${name}`
+      `成功上传了文件 ${global.config.s3.bucket}/${name}`
     );
   } catch (err) {
     console.error("S3 update Error:", err);
