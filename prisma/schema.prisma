@@ -76,11 +76,41 @@ model material_tags {
   tag  String? @default("OurWorld") @db.Char(16)
 }
 
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model register {
-  username String   @id @db.Char(12)
-  code     String   @db.Char(6)
-  time     DateTime @default(now()) @db.Timestamp(0)
+model ow_comment {
+  id         Int       @id @default(autoincrement()) @db.UnsignedInt
+  user_id    Int?
+  type       String?   @default("comment") @db.VarChar(64)
+  text       String?   @db.Text
+  insertedAt DateTime? @default(now()) @db.Timestamp(0)
+  user_ip    String?   @default("") @db.VarChar(100)
+  link       String?   @db.VarChar(128)
+  pid        Int?
+  rid        Int?
+  status     String    @default("") @db.VarChar(50)
+  user_ua    String?   @db.Text
+  url        String?   @db.VarChar(255)
+  page_type  String?   @db.VarChar(32)
+  page_id    Int?
+  createdAt  DateTime? @default(now()) @db.Timestamp(0)
+  updatedAt  DateTime? @default(now()) @db.Timestamp(0)
+  page_key   String?   @db.VarChar(128)
+}
+
+model ow_counter {
+  id        Int       @id @default(autoincrement()) @db.UnsignedInt
+  time      Int?
+  reaction0 Int?
+  reaction1 Int?
+  reaction2 Int?
+  reaction3 Int?
+  reaction4 Int?
+  reaction5 Int?
+  reaction6 Int?
+  reaction7 Int?
+  reaction8 Int?
+  url       String    @default("") @db.VarChar(255)
+  createdAt DateTime? @default(now()) @db.Timestamp(0)
+  updatedAt DateTime? @default(now()) @db.Timestamp(0)
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -136,63 +166,6 @@ model ow_users {
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model ow_projects_history {
-  id          Int      @id @default(autoincrement()) @db.UnsignedInt
-  authorid    Int      @db.UnsignedInt
-  projectid   Int      @db.UnsignedInt
-  type        String?  @default("text") @db.VarChar(32)
-  time        DateTime @default(now()) @db.Timestamp(0)
-  title       String?  @default("ZeroCat新项目") @db.VarChar(50)
-  description String?  @default("commit") @db.VarChar(1000)
-  source      String?  @db.MediumText
-  state       String?  @default("private") @db.VarChar(32)
-  licence     String?  @db.VarChar(45)
-  tags        String?  @db.VarChar(100)
-}
-
-model ow_config {
-  name   String @id @db.VarChar(45)
-  config Json?
-}
-
-model ow_comment {
-  id         Int       @id @default(autoincrement()) @db.UnsignedInt
-  user_id    Int?
-  type       String?   @default("comment") @db.VarChar(64)
-  text       String?   @db.Text
-  insertedAt DateTime? @default(now()) @db.Timestamp(0)
-  user_ip    String?   @default("") @db.VarChar(100)
-  link       String?   @db.VarChar(128)
-  pid        Int?
-  rid        Int?
-  status     String    @default("") @db.VarChar(50)
-  user_ua    String?   @db.Text
-  url        String?   @db.VarChar(255)
-  page_type  String?   @db.VarChar(32)
-  page_id    Int?
-  createdAt  DateTime? @default(now()) @db.Timestamp(0)
-  updatedAt  DateTime? @default(now()) @db.Timestamp(0)
-  page_key   String?   @db.VarChar(128)
-}
-
-model ow_counter {
-  id        Int       @id @default(autoincrement()) @db.UnsignedInt
-  time      Int?
-  reaction0 Int?
-  reaction1 Int?
-  reaction2 Int?
-  reaction3 Int?
-  reaction4 Int?
-  reaction5 Int?
-  reaction6 Int?
-  reaction7 Int?
-  reaction8 Int?
-  url       String    @default("") @db.VarChar(255)
-  createdAt DateTime? @default(now()) @db.Timestamp(0)
-  updatedAt DateTime? @default(now()) @db.Timestamp(0)
-}
-
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model python {
   id          Int       @id @default(autoincrement()) @db.UnsignedInt
   authorid    String    @db.VarChar(32)
@@ -204,6 +177,13 @@ model python {
   title       String?   @default("Python新项目") @db.VarChar(50)
   description String?   @default("OurWorld上的Python项目") @db.VarChar(1000)
   src         String?   @db.MediumText
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model register {
+  username String   @id @db.Char(12)
+  code     String   @db.Char(6)
+  time     DateTime @default(now()) @db.Timestamp(0)
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -219,12 +199,6 @@ model scratch {
   title       String?   @default("Scratch新项目") @db.VarChar(50)
   description String?   @default("OurWorld上的Scratch项目") @db.VarChar(1000)
   src         String?   @db.MediumText
-}
-
-model ow_projects_file {
-  sha256      String    @id @db.VarChar(64)
-  source      String?   @db.MediumText
-  create_time DateTime? @default(now()) @db.DateTime(0)
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -327,6 +301,32 @@ model wl_users {
   updatedAt    DateTime? @default(now()) @db.Timestamp(0)
 }
 
+model ow_config {
+  name   String @id @db.VarChar(45)
+  config Json?
+}
+
+model ow_projects_file {
+  sha256      String    @id @db.VarChar(64)
+  source      String?   @db.MediumText
+  create_time DateTime? @default(now()) @db.DateTime(0)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model ow_projects_history {
+  id          Int      @id @default(autoincrement()) @db.UnsignedInt
+  authorid    Int      @db.UnsignedInt
+  projectid   Int      @db.UnsignedInt
+  type        String?  @default("text") @db.VarChar(32)
+  time        DateTime @default(now()) @db.Timestamp(0)
+  title       String?  @default("ZeroCat新项目") @db.VarChar(50)
+  description String?  @default("commit") @db.VarChar(1000)
+  source      String?  @db.MediumText
+  state       String?  @default("private") @db.VarChar(32)
+  licence     String?  @db.VarChar(45)
+  tags        String?  @db.VarChar(100)
+}
+
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model ow_projects_lists {
   id          Int       @id @default(autoincrement())
@@ -339,74 +339,6 @@ model ow_projects_lists {
   createTime  DateTime? @default(now()) @db.Timestamp(0)
 }
 
-model ow_Comment {
-  id         Int       @id @default(autoincrement()) @db.UnsignedInt
-  user_id    Int?
-  comment    String?   @db.Text
-  insertedAt DateTime? @default(now()) @db.Timestamp(0)
-  ip         String?   @default("") @db.VarChar(100)
-  link       String?   @db.VarChar(255)
-  mail       String?   @db.VarChar(255)
-  nick       String?   @db.VarChar(255)
-  pid        Int?
-  rid        Int?
-  sticky     Boolean?
-  status     String    @default("") @db.VarChar(50)
-  like       Int?
-  ua         String?   @db.Text
-  url        String?   @db.VarChar(255)
-  createdAt  DateTime? @default(now()) @db.Timestamp(0)
-  updatedAt  DateTime? @default(now()) @db.Timestamp(0)
-}
-
-model ow_Counter {
-  id        Int       @id @default(autoincrement()) @db.UnsignedInt
-  time      Int?
-  reaction0 Int?
-  reaction1 Int?
-  reaction2 Int?
-  reaction3 Int?
-  reaction4 Int?
-  reaction5 Int?
-  reaction6 Int?
-  reaction7 Int?
-  reaction8 Int?
-  url       String    @default("") @db.VarChar(255)
-  createdAt DateTime? @default(now()) @db.Timestamp(0)
-  updatedAt DateTime? @default(now()) @db.Timestamp(0)
-}
-
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model ow_Users {
-  id           Int       @unique(map: "id_UNIQUE") @default(autoincrement())
-  username     String    @unique(map: "user_UNIQUE") @db.Char(20)
-  email        String    @db.Char(100)
-  password     String    @db.VarChar(255)
-  display_name String    @default("OurWorld创作者") @db.Char(20)
-  state        Int       @default(0) @db.TinyInt
-  loginTime    DateTime? @db.Timestamp(0)
-  regTime      DateTime? @default(now()) @db.Timestamp(0)
-  sex          Int?      @default(0) @db.TinyInt
-  birthday     DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
-  motto        String?   @default("OurWorld创作者") @db.VarChar(1000)
-  images       String?   @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
-  avatar       String?   @default("https://owcdn.190823.xyz/user/fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
-  type         String?   @default("guest") @db.VarChar(50)
-  url          String?   @db.VarChar(255)
-  github       String?   @db.VarChar(255)
-  twitter      String?   @db.VarChar(255)
-  facebook     String?   @db.VarChar(255)
-  google       String?   @db.VarChar(255)
-  weibo        String?   @db.VarChar(255)
-  qq           String?   @db.VarChar(255)
-  fa           String?   @map("2fa") @db.VarChar(255)
-  createdAt    DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
-  updatedAt    DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
-  label        String?   @db.VarChar(255)
-
-  @@id([id, username])
-}
-
 /// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 /// This view or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 view ow_projects_view {
@@ -416,7 +348,7 @@ view ow_projects_view {
   authorid            Int
   state               String?   @default("private") @db.VarChar(32)
   view_count          Int?      @default(0) @db.UnsignedInt
-  time                DateTime? @db.Timestamp(0)
+  time                DateTime? @default(now()) @db.Timestamp(0)
   title               String?   @default("Scratch新项目") @db.VarChar(1000)
   description         String?   @default("OurWorld上的Scratch项目") @db.VarChar(1000)
   source              String?   @db.MediumText
@@ -431,14 +363,14 @@ view ow_projects_view {
 
 /// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 /// This view or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-view ow_public_projects {
+view ow_public_projects_view {
   id                  Int       @default(0) @db.UnsignedInt
   type                String?   @default("text") @db.VarChar(32)
   licence             String?   @db.VarChar(32)
   authorid            Int
   state               String?   @default("private") @db.VarChar(32)
   view_count          Int?      @default(0) @db.UnsignedInt
-  time                DateTime? @db.Timestamp(0)
+  time                DateTime? @default(now()) @db.Timestamp(0)
   title               String?   @default("Scratch新项目") @db.VarChar(1000)
   description         String?   @default("OurWorld上的Scratch项目") @db.VarChar(1000)
   source              String?   @db.MediumText

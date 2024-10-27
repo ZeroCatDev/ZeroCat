@@ -10,6 +10,10 @@ const prisma = new PrismaClient();
 
     // 遍历项目，计算哈希并更新数据库
     for (const project of projects) {
+      if (isHash256(project.source)) {
+        console.log("Source is a valid hash, processing as hash...");
+        continue;
+      }
       var source = processSource(project.source);
       const hash = calculateHash(source);
 
@@ -82,10 +86,11 @@ async function updateProjectDevsource(projectId, hash) {
 }
 
 // 检查是否为哈希值
-function isHash(str, length) {
-  const hexRegex = /^[a-fA-F0-9]+$/;
-  return str.length === length && hexRegex.test(str);
+function isHash256(str) {
+  const sha256Regex = /^[a-fA-F0-9]{64}$/;
+  return sha256Regex.test(str);
 }
+
 function processSource(source) {
   // 判断是否为 JSON 格式
   if (isJson(source)) {

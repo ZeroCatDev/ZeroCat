@@ -71,7 +71,8 @@ router.put("/:id/source", async (req, res) => {
   }
 
   try {
-    const sha256 = setProjectFile(JSON.stringify(req.body));
+    console.log(req.body);
+    const sha256 = setProjectFile(req.body);
     const projectId = Number(req.params.id);
     const userId = Number(res.locals.userid);
 
@@ -239,11 +240,31 @@ function extractProjectData(body) {
   );
 }
 
+// 工具函数：判断是否为有效 JSON
+function isJson(str) {
+  try {
+    JSON.parse(str); // 如果能成功解析，说明是合法的 JSON
+    return true;
+  } catch (error) {
+    return false; // 如果解析失败，说明不是 JSON
+  }
+}
+
+
 // 工具函数：设置项目文件
 function setProjectFile(source) {
-  const sha256 = crypto.createHash("sha256").update(source).digest("hex");
+  console.log(source);
+  let sourcedata
+  if (isJson(source)) {
+    sourcedata =String(JSON.stringify(JSON.parse(source)))
+  }else{
+    sourcedata = String(source)
+  }
+  const sha256 = crypto.createHash("sha256").update(sourcedata).digest("hex");
+  console.log("sha256:", sha256);
+  console.log(sourcedata);
   I.prisma.ow_projects_file
-    .create({ data: { sha256, source } })
+    .create({ data: { sha256, source:sourcedata } })
     .catch(console.error);
   return sha256;
 }
