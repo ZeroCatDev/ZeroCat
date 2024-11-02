@@ -64,7 +64,7 @@ const transformComment = (comments) => {
 };
 
 // 读取评论
-router.get("/api/comment", async (req, res) => {
+router.get("/api/comment", async (req, res, next) => {
   try {
     const { path, page, pageSize } = req.query;
     const sort = getSortCondition(req);
@@ -120,15 +120,15 @@ router.get("/api/comment", async (req, res) => {
       users,
     });
   } catch (err) {
-    handleError(res, err, "保存失败");
+    next(err);
   }
 });
 
 // 创建评论
-router.post("/api/comment", async (req, res) => {
-  checkLogin(res);
-
+router.post("/api/comment", async (req, res, next) => {
   try {
+    checkLogin(res);
+
     const { url, comment, pid, rid } = req.body;
     const { userid, display_name } = res.locals;
     const user_ua = req.headers["user-agent"] || "";
@@ -154,12 +154,12 @@ router.post("/api/comment", async (req, res) => {
       data: transformComment([newComment])[0],
     });
   } catch (err) {
-    handleError(res, err, "保存失败");
+    next(err);
   }
 });
 
 // 删除评论
-router.delete("/api/comment/:id", async (req, res) => {
+router.delete("/api/comment/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
     const { user_id } = res.locals;
@@ -176,7 +176,7 @@ router.delete("/api/comment/:id", async (req, res) => {
 
     res.status(200).send({ errno: 0, errmsg: "", data: "" });
   } catch (err) {
-    handleError(res, err, "保存失败");
+    next(err);
   }
 });
 

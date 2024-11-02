@@ -234,6 +234,16 @@ process.on("uncaughtException", function (err) {
   console.log("Caught exception: " + err);
 });
 
+// Centralized error-handling middleware function
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).send({
+    status: "error",
+    message: "Something went wrong!",
+    error: err.message,
+  });
+});
+
 //放在最后，友好的处理地址不存在的访问
 app.all("*", function (req, res, next) {
   res.locals.tipType = "访问错误";

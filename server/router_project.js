@@ -9,7 +9,7 @@ const default_project = require("./lib/default_project.js");
 router.all("*", (req, res, next) => next());
 
 // 创建新作品
-router.post("/", async (req, res) => {
+router.post("/", async (req, res, next) => {
   if (!res.locals.login) {
     return res.status(404).send({ status: "0", msg: "请先登录" });
   }
@@ -26,12 +26,12 @@ router.post("/", async (req, res) => {
     const result = await I.prisma.ow_projects.create({ data: outputJson });
     res.status(200).send({ status: "1", msg: "保存成功", id: result.id });
   } catch (err) {
-    handleError(res, err, "保存失败");
+    next(err);
   }
 });
 
 // Fork 作品
-router.post("/:id/fork", async (req, res) => {
+router.post("/:id/fork", async (req, res, next) => {
   if (!res.locals.login) {
     return res.status(404).send({ status: "0", msg: "请先登录" });
   }
@@ -60,12 +60,12 @@ router.post("/:id/fork", async (req, res) => {
       res.status(403).send({ status: "0", msg: "改编失败" });
     }
   } catch (err) {
-    handleError(res, err, "改编失败");
+    next(err);
   }
 });
 
 // 保存源代码
-router.put("/:id/source", async (req, res) => {
+router.put("/:id/source", async (req, res, next) => {
   if (!res.locals.userid) {
     return res.status(403).send({ status: "0", msg: "请先登录" });
   }
@@ -91,12 +91,12 @@ router.put("/:id/source", async (req, res) => {
 
     res.status(200).send({ status: "1", msg: "保存成功" });
   } catch (err) {
-    handleError(res, err, "保存失败");
+    next(err);
   }
 });
 
 // 更新作品信息
-router.put("/:id", async (req, res) => {
+router.put("/:id", async (req, res, next) => {
   if (!res.locals.userid) {
     return res.status(403).send({ status: "0", msg: "请先登录" });
   }
@@ -109,12 +109,12 @@ router.put("/:id", async (req, res) => {
     });
     res.status(200).send({ status: "1", msg: "保存成功" });
   } catch (err) {
-    handleError(res, err, "保存失败");
+    next(err);
   }
 });
 
 // 推送作品
-router.post("/:id/push", async (req, res) => {
+router.post("/:id/push", async (req, res, next) => {
   if (!res.locals.userid) {
     return res.status(403).send({ status: "0", msg: "请先登录" });
   }
@@ -154,12 +154,12 @@ router.post("/:id/push", async (req, res) => {
 
     res.status(200).send({ status: "1", msg: "推送成功" });
   } catch (err) {
-    handleError(res, err, "推送失败");
+    next(err);
   }
 });
 
 // 获取项目信息
-router.get("/:id", async (req, res) => {
+router.get("/:id", async (req, res, next) => {
   try {
     const project = await I.prisma.ow_projects.findFirst({
       where: { id: Number(req.params.id) },
@@ -180,12 +180,12 @@ router.get("/:id", async (req, res) => {
     project.author = author;
     res.status(200).send(project);
   } catch (err) {
-    handleError(res, err, "作品不存在或无权打开");
+    next(err);
   }
 });
 
 // 获取源代码
-router.get("/:id/source/:env?", async (req, res) => {
+router.get("/:id/source/:env?", async (req, res, next) => {
   try {
     const project = await I.prisma.ow_projects.findFirst({
       where: { id: Number(req.params.id) },
@@ -207,19 +207,19 @@ router.get("/:id/source/:env?", async (req, res) => {
       res.status(403).send({ status: "0", msg: "无权访问此项目" });
     }
   } catch (err) {
-    handleError(res, err, "作品不存在或无权打开");
+    next(err);
   }
 });
 
 // 删除作品
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", async (req, res, next) => {
   try {
     await I.prisma.ow_projects.delete({
       where: { id: Number(req.params.id), authorid: res.locals.userid },
     });
     res.status(200).send({ status: "1", msg: "删除成功" });
   } catch (err) {
-    handleError(res, err, "删除失败");
+    next(err);
   }
 });
 

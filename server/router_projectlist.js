@@ -24,17 +24,17 @@ const handleError = (res, message, err) => {
 };
 
 // 创建新收藏夹
-router.post("/", needlogin, async (req, res) => {
+router.post("/", needlogin, async (req, res, next) => {
   try {
     const result = await createProjectlist(res.locals.userid);
     res.status(200).send({ status: "1", msg: "创建成功", id: result.id });
   } catch (err) {
-    handleError(res, "创建失败", err);
+    next(err);
   }
 });
 
 // 添加作品到作品列表
-router.post("/add", needlogin, async (req, res) => {
+router.post("/add", needlogin, async (req, res, next) => {
   try {
     const result = await userProjectlistAdd({
       projectid: req.body.projectid,
@@ -43,12 +43,12 @@ router.post("/add", needlogin, async (req, res) => {
     });
     res.status(200).send({ status: "1", message: "添加成功", data: result });
   } catch (err) {
-    handleError(res, "添加失败", err);
+    next(err);
   }
 });
 
 // 删除作品从作品列表
-router.post("/delete", needlogin, async (req, res) => {
+router.post("/delete", needlogin, async (req, res, next) => {
   try {
     const result = await userProjectlistDelete({
       projectid: req.body.projectid,
@@ -57,22 +57,22 @@ router.post("/delete", needlogin, async (req, res) => {
     });
     res.status(200).send({ status: "1", message: "删除成功", data: result });
   } catch (err) {
-    handleError(res, "删除失败", err);
+    next(err);
   }
 });
 
 // 更新作品列表信息
-router.put("/:id", needlogin, async (req, res) => {
+router.put("/:id", needlogin, async (req, res, next) => {
   try {
     const info = await updateProjectlist(req.params.id, req.body);
     res.status(200).send({ status: "1", message: "保存成功", data: info });
   } catch (err) {
-    handleError(res, "保存失败", err);
+    next(err);
   }
 });
 
 // 获取用户的作品列表信息
-router.get("/user/:id/:state?", async (req, res) => {
+router.get("/user/:id/:state?", async (req, res, next) => {
   try {
     const { id, state } = req.params;
     let info;
@@ -96,14 +96,12 @@ router.get("/user/:id/:state?", async (req, res) => {
 
     res.status(200).send({ status: "1", message: "获取成功", data: info });
   } catch (err) {
-    res
-      .status(200)
-      .send({ status: "0", message: "列表不存在或无权打开", error: err });
+    next(err);
   }
 });
 
 // 检查作品是否在用户列表中
-router.get("/check", async (req, res) => {
+router.get("/check", async (req, res, next) => {
   try {
     const info = await checkProjectlistWithUser({
       projectid: req.query.projectid,
@@ -111,31 +109,27 @@ router.get("/check", async (req, res) => {
     });
     res.status(200).send({ status: "1", message: "获取成功", data: info });
   } catch (err) {
-    res
-      .status(200)
-      .send({ status: "0", message: "列表不存在或无权打开", error: err });
+    next(err);
   }
 });
 
 // 获取作品列表信息
-router.get("/:id", async (req, res) => {
+router.get("/:id", async (req, res, next) => {
   try {
     const info = await getProjectlist(req.params.id, res.locals.userid);
     res.status(200).send({ status: "1", message: "获取成功", data: info });
   } catch (err) {
-    res
-      .status(200)
-      .send({ status: "0", message: "列表不存在或无权打开", error: err });
+    next(err);
   }
 });
 
 // 删除作品列表
-router.delete("/:id", needlogin, async (req, res) => {
+router.delete("/:id", needlogin, async (req, res, next) => {
   try {
     await deleteProjectlist(req.params.id, res.locals.userid);
     res.status(200).send({ status: "1", message: "删除成功" });
   } catch (err) {
-    handleError(res, "删除失败", err);
+    next(err);
   }
 });
 
