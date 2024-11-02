@@ -57,7 +57,7 @@
 				import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
 				init({
 					el: '#waline',
-					serverURL: '<%= global.config.waline.url %>',
+					serverURL: "<%= global.configManager['waline.url'] %>",
 					path: `project-${_work_id}`,
 					copyright: false,
 					reaction: true,
@@ -77,25 +77,25 @@
 			</script>	</div></div>
 		<%- include('../html-footer.ejs', {page: 'python' }); %>
 
-			<script type="text/javascript" src="<%= global.config.urls.static %>/js/social-share.js"></script>
-			<link rel="stylesheet" href="<%= global.config.urls.static %>/css/social-share.css" />
-			<script type="text/javascript" src="<%= global.config.urls.static %>/pythonstatic/CodeMirror.js"></script>
-			<script type="text/javascript" src="<%= global.config.urls.static %>/pythonstatic/js/file-saver.js"></script>
-			<script type="text/javascript" src="<%= global.config.urls.static %>/pythonstatic/skulpt.min.js"></script>
-			<script type="text/javascript" src="<%= global.config.urls.static %>/pythonstatic/skulpt-stdlib.js"></script>
-			<script type="text/javascript" src="<%= global.config.urls.static %>/pythonstatic/mode/python.js"></script>
-			<script type="text/javascript" src="<%= global.config.urls.static %>/pythonstatic/js/show-hint.js"></script>
-			<script type="text/javascript" src="<%= global.config.urls.static %>/layui/layui.all.js"></script>
-			<script type="text/javascript" src="<%= global.config.urls.static %>/pythonstatic/public.js"></script>
+			<script type="text/javascript" src="<%= global.configManager['urls.static'] %>/js/social-share.js"></script>
+			<link rel="stylesheet" href="<%= global.configManager['urls.static'] %>/css/social-share.css" />
+			<script type="text/javascript" src="<%= global.configManager['urls.static'] %>/pythonstatic/CodeMirror.js"></script>
+			<script type="text/javascript" src="<%= global.configManager['urls.static'] %>/pythonstatic/js/file-saver.js"></script>
+			<script type="text/javascript" src="<%= global.configManager['urls.static'] %>/pythonstatic/skulpt.min.js"></script>
+			<script type="text/javascript" src="<%= global.configManager['urls.static'] %>/pythonstatic/skulpt-stdlib.js"></script>
+			<script type="text/javascript" src="<%= global.configManager['urls.static'] %>/pythonstatic/mode/python.js"></script>
+			<script type="text/javascript" src="<%= global.configManager['urls.static'] %>/pythonstatic/js/show-hint.js"></script>
+			<script type="text/javascript" src="<%= global.configManager['urls.static'] %>/layui/layui.all.js"></script>
+			<script type="text/javascript" src="<%= global.configManager['urls.static'] %>/pythonstatic/public.js"></script>
 
 
-			<script type="text/javascript" src="<%= global.config.urls.static %>/pythonstatic/python_play.js"></script>
+			<script type="text/javascript" src="<%= global.configManager['urls.static'] %>/pythonstatic/python_play.js"></script>
 			<script>
 
 				var $config = {
 					title: _work_title,
-					description: `${_work_title} 是<%= global.config.site.name %>上的Python作品`,
-					image: `<%= global.config.s3.staticurl%>/scratch_slt/${_work_id}`,
+					description: `${_work_title} 是<%= global.configManager['site.name'] %>上的Python作品`,
+					image: `<%= global.configManager['s3.staticurl'] %>/scratch_slt/${_work_id}`,
 					wechatqrcodeTitle: "微信扫一扫分享",
 					wechatqrcodeHelper: '<p>打开扫一扫</p><p>在手机上打开即可分享至朋友圈。</p>',
 				};

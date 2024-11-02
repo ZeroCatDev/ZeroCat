@@ -7,7 +7,7 @@
 <link
   rel="stylesheet"
   type="text/css"
-  href="<%= global.config.urls.static %>/css/scratch_play.css"
+  href="<%= global.configManager['urls.static'] %>/css/scratch_play.css"
 />
 <div class="mdui-row">
   <div class="mdui-col-xs-12 mdui-col-md-8">
@@ -49,7 +49,7 @@
           <div
             id="project_slt"
             style="
-              background-image: url(<%= global.config.s3.staticurl %>/scratch_slt/1);
+              background-image: url("<%= global.configManager['s3.staticurl'] %>/scratch_slt/1");
             "
           >
             <mdui-button
@@ -226,7 +226,7 @@
       import { init } from "https://unpkg.com/@waline/client@v3/dist/waline.js";
       init({
         el: "#waline",
-        serverURL: "<%= global.config.waline.url %>",
+        serverURL: "<%= global.configManager['waline.url'] %>",
         path: "project-" + getQueryString("id"),
         copyright: false,
         reaction: true,
@@ -248,35 +248,35 @@
 
 <script
   type="text/javascript"
-  src="<%= global.config.urls.static %>/js/social-share.js"
+  src="<%= global.configManager['urls.static'] %>/js/social-share.js"
 ></script>
 <link
   rel="stylesheet"
-  href="<%= global.config.urls.static %>/css/social-share.css"
+  href="<%= global.configManager['urls.static'] %>/css/social-share.css"
 />
 <script
   type="text/javascript"
-  src="<%= global.config.urls.static %>/js/scratch.vm.min.js"
+  src="<%= global.configManager['urls.static'] %>/js/scratch.vm.min.js"
 ></script>
 <script
   type="text/javascript"
-  src="<%= global.config.urls.static %>/js/clipboard.min.js"
+  src="<%= global.configManager['urls.static'] %>/js/clipboard.min.js"
 ></script>
 <script></script>
 <script
   type="text/javascript"
-  src="<%= global.config.urls.static %>/js/scratch_play.js"
+  src="<%= global.configManager['urls.static'] %>/js/scratch_play.js"
 ></script>
 
 <script
   type="text/javascript"
-  src="<%= global.config.urls.static %>/js/scratch-analysis-core.js"
+  src="<%= global.configManager['urls.static'] %>/js/scratch-analysis-core.js"
 ></script>
 
 <script>
-  S3staticurl = "<%= global.config.s3.staticurl %>";
-  editorurl = "<%= global.config.urls.editor %>";
+  S3staticurl = "<%= global.configManager['s3.staticurl'] %>";
+  editorurl = "<%= global.configManager['urls.editor'] %>";
 </script>
-<script src="<%= global.config.urls.static %>/js/echarts.js"></script>
+<script src="<%= global.configManager['urls.static'] %>/js/echarts.js"></script>
 
-<script src="<%= global.config.urls.static %>/page/scratch/playpage.js"></script>
+<script src="<%= global.configManager['urls.static'] %>/page/scratch/playpage.js"></script>

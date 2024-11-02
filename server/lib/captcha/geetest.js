@@ -1,3 +1,5 @@
+const configManager = require("../../configManager");
+
 const express = require("express");
 const querystring = require("querystring");
 const crypto = require("crypto");
@@ -6,9 +8,14 @@ const axios = require("axios");
 const app = express();
 
 // 从配置中读取极验的相关信息
-const { GEE_CAPTCHA_ID, GEE_CAPTCHA_KEY, GEE_API_SERVER } =
-  global.config.captcha;
-const API_URL = `${GEE_API_SERVER}/validate?captcha_id=${GEE_CAPTCHA_ID}`;
+let GEE_CAPTCHA_ID, GEE_CAPTCHA_KEY, GEE_API_SERVER,API_URL
+(async () => {
+  GEE_CAPTCHA_ID = await configManager.getConfig("captcha.GEE_CAPTCHA_ID");
+  GEE_CAPTCHA_KEY = await configManager.getConfig("captcha.GEE_CAPTCHA_KEY");
+  GEE_API_SERVER = await configManager.getConfig("captcha.GEE_API_SERVER");
+  API_URL = `${GEE_API_SERVER}/validate?captcha_id=${GEE_CAPTCHA_ID}`;
+})();
+
 
 // 中间件处理极验验证码验证
 app.use(async (req, res, next) => {
@@ -58,13 +65,11 @@ app.use(async (req, res, next) => {
       next(); // 验证成功，继续处理请求
     } else {
       console.log(`Validate fail: ${result.reason}`);
-      res
-        .status(500)
-        .send({
-          code: 500,
-          msg: `请完成验证码/${result.reason}`,
-          status: `请完成验证码/${result.reason}`,
-        });
+      res.status(500).send({
+        code: 500,
+        msg: `请完成验证码/${result.reason}`,
+        status: `请完成验证码/${result.reason}`,
+      });
     }
   } catch (error) {
     console.error("Geetest server error:", error);

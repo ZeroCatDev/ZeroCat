@@ -3,43 +3,43 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Python编程 - <%= global.config.site.name %></title>
+    <title>Python编程 - <%= global.configManager['site.name'] %></title>
     <link
       rel="shortcut icon"
-      href="<%= global.config.urls.static %>/img/siteicon.png"
+      href="<%= global.configManager['urls.static'] %>/img/siteicon.png"
     />
     <link
       rel="stylesheet"
-      href="<%= global.config.urls.static %>/pythonstatic/css/style.css"
+      href="<%= global.configManager['urls.static'] %>/pythonstatic/css/style.css"
     />
     <link
       type="text/css"
       rel="stylesheet"
-      href="<%= global.config.urls.static %>/pythonstatic/showWorks.css"
+      href="<%= global.configManager['urls.static'] %>/pythonstatic/showWorks.css"
     />
     <link
       rel="stylesheet"
-      href="<%= global.config.urls.static %>/mdui-v1.0.2/css/mdui.min.css"
+      href="<%= global.configManager['urls.static'] %>/mdui-v1.0.2/css/mdui.min.css"
     />
     <link id="layui_theme_css" rel="stylesheet" />
     <link
       rel="stylesheet"
-      href="<%= global.config.urls.static %>/layui/css/layui.css"
+      href="<%= global.configManager['urls.static'] %>/layui/css/layui.css"
     />
     <link
       rel="stylesheet"
-      href="<%= global.config.urls.static %>/css/projectspage.css"
+      href="<%= global.configManager['urls.static'] %>/css/projectspage.css"
     />
     <link
       rel="stylesheet"
-      href="<%= global.config.urls.static %>/css/main.css"
+      href="<%= global.configManager['urls.static'] %>/css/main.css"
     />
 
-    <script src="<%= global.config.urls.static %>/js/js-cookie.js"></script>
+    <script src="<%= global.configManager['urls.static'] %>/js/js-cookie.js"></script>
 
-    <script src="<%= global.config.urls.static %>/mdui-v1.0.2/js/mdui.min.js"></script>
+    <script src="<%= global.configManager['urls.static'] %>/mdui-v1.0.2/js/mdui.min.js"></script>
 
-    <script src="<%= global.config.urls.static %>/js/jquery.3.7.1.js"></script>
+    <script src="<%= global.configManager['urls.static'] %>/js/jquery.3.7.1.js"></script>
     <script>
       function automsg(msg) {
         if (typeof msg === "string") {
@@ -55,7 +55,7 @@
     <link
       rel="stylesheet"
       data-name="vs/editor/editor.main"
-      href="<%= global.config.urls.static %>/pythonstatic/vs/editor/editor.main.css"
+      href="<%= global.configManager['urls.static'] %>/pythonstatic/vs/editor/editor.main.css"
     />
   </head>
 
@@ -79,7 +79,7 @@
         >
         <a href="/"
           ><span class="mdui-typo-title">
-            <%= global.config.site.name %> Python编辑器
+            <%= global.configManager['site.name'] %> Python编辑器
           </span></a
         >
         <div class="mdui-toolbar-spacer"></div>
@@ -233,7 +233,7 @@
                     id="canvas_box"
                     style="
                       height: calc(50vh);
-                      background: url(<%= global.config.urls.static %>/pythonstatic/img/welcome_python_editor.png)
+                      background: url("<%= global.configManager['urls.static'] %>/pythonstatic/img/welcome_python_editor.png")
                         no-repeat center;
                       background-size: contain;
                       background-size: auto 100%;
@@ -356,62 +356,62 @@
 
     <script>
       self.require = {
-        paths: { vs: "<%= global.config.urls.static %>/pythonstatic/vs" },
+        paths: { vs: "<%= global.configManager['urls.static'] %>/pythonstatic/vs" },
         "vs/nls": { availableLanguages: { "*": "zh-cn" } },
       };
     </script>
 
-    <script src="<%= global.config.urls.static %>/pythonstatic/vs/loader.js"></script>
-    <script src="<%= global.config.urls.static %>/pythonstatic/vs/editor/editor.main.js"></script>
+    <script src="<%= global.configManager['urls.static'] %>/pythonstatic/vs/loader.js"></script>
+    <script src="<%= global.configManager['urls.static'] %>/pythonstatic/vs/editor/editor.main.js"></script>
 
     <script
       type="text/javascript"
-      src="<%= global.config.urls.static %>/page/main.js"
-    ></script>
-
-    <script
-      type="text/javascript"
-      src="<%= global.config.urls.static %>/js/jquery.3.7.1.js"
-    ></script>
-    <script
-      type="text/javascript"
-      src="<%= global.config.urls.static %>/pythonstatic/js/file-saver.js"
-    ></script>
-    <script
-      type="text/javascript"
-      src="<%= global.config.urls.static %>/pythonstatic/skulpt.min.js"
-    ></script>
-    <script
-      type="text/javascript"
-      src="<%= global.config.urls.static %>/pythonstatic/skulpt-stdlib.js"
-    ></script>
-    <script
-      type="text/javascript"
-      src="<%= global.config.urls.static %>/pythonstatic/mode/python.js"
-    ></script>
-    <script
-      type="text/javascript"
-      src="<%= global.config.urls.static %>/pythonstatic/js/show-hint.js"
-    ></script>
-    <script
-      type="text/javascript"
-      src="<%= global.config.urls.static %>/layui/layui.all.js"
-    ></script>
-    <script
-      type="text/javascript"
-      src="<%= global.config.urls.static %>/pythonstatic/public.js"
+      src="<%= global.configManager['urls.static'] %>/page/main.js"
     ></script>
 
     <script
       type="text/javascript"
-      src="<%= global.config.urls.static %>/pythonstatic/python_edit.js"
+      src="<%= global.configManager['urls.static'] %>/js/jquery.3.7.1.js"
+    ></script>
+    <script
+      type="text/javascript"
+      src="<%= global.configManager['urls.static'] %>/pythonstatic/js/file-saver.js"
+    ></script>
+    <script
+      type="text/javascript"
+      src="<%= global.configManager['urls.static'] %>/pythonstatic/skulpt.min.js"
+    ></script>
+    <script
+      type="text/javascript"
+      src="<%= global.configManager['urls.static'] %>/pythonstatic/skulpt-stdlib.js"
+    ></script>
+    <script
+      type="text/javascript"
+      src="<%= global.configManager['urls.static'] %>/pythonstatic/mode/python.js"
+    ></script>
+    <script
+      type="text/javascript"
+      src="<%= global.configManager['urls.static'] %>/pythonstatic/js/show-hint.js"
+    ></script>
+    <script
+      type="text/javascript"
+      src="<%= global.configManager['urls.static'] %>/layui/layui.all.js"
+    ></script>
+    <script
+      type="text/javascript"
+      src="<%= global.configManager['urls.static'] %>/pythonstatic/public.js"
+    ></script>
+
+    <script
+      type="text/javascript"
+      src="<%= global.configManager['urls.static'] %>/pythonstatic/python_edit.js"
     ></script>
   </body>
 </html>
 <script>
-  S3staticurl = "<%= global.config.s3.staticurl %>";
-  staticfile = "<%= global.config.urls.static %>";
-  window.staticfile = "<%= global.config.urls.static %>";
+  S3staticurl = "<%= global.configManager['s3.staticurl'] %>";
+  staticfile = "<%= global.configManager['urls.static'] %>";
+  window.staticfile = "<%= global.configManager['urls.static'] %>";
 </script>
 <script>
   if (localStorage.darkTheme) {
@@ -421,7 +421,7 @@
     document.body.setAttribute("dark", "");
     $("#layui_theme_css").attr(
       "href",
-      "<%= global.config.urls.static %>/css/layui-theme-dark.css"
+      "<%= global.configManager['urls.static'] %>/css/layui-theme-dark.css"
     );
   }
   document.getElementById("switch-theme").addEventListener("click", () => {
@@ -433,7 +433,7 @@
       localStorage.darkTheme = true;
       $("#layui_theme_css").attr(
         "href",
-        "<%= global.config.urls.static %>/css/layui-theme-dark.css"
+        "<%= global.configManager['urls.static'] %>/css/layui-theme-dark.css"
       );
     } else {
       delete localStorage.darkTheme;
@@ -443,11 +443,11 @@
   mdui.setColorScheme("#2087fd");
 </script>
 <script>
-  staticurl = "<%= global.config.urls.static %>";
-  S3staticurl = "<%= global.config.s3.staticurl %>";
+  staticurl = "<%= global.configManager['urls.static'] %>";
+  S3staticurl = "<%= global.configManager['s3.staticurl'] %>";
 </script>
 
-<script src="<%= global.config.urls.static %>/js/jwt-decode.js"></script>
+<script src="<%= global.configManager['urls.static'] %>/js/jwt-decode.js"></script>
 <script>
   $(function () {
     if (!Cookies.get("token")) {
@@ -458,5 +458,5 @@
 
 <script
   type="text/javascript"
-  src="<%= global.config.urls.static %>/page/main.js"
+  src="<%= global.configManager['urls.static'] %>/page/main.js"
 ></script>

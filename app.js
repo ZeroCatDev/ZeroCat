@@ -1,24 +1,9 @@
 var express = require("express");
 var app = express();
 const jwt = require("jsonwebtoken");
-const { body, validationResult } = require("express-validator");
-const configManager = require('./server/configManager');
 
-(async () => {
-    try {
-        await configManager.initialize(); // 初始化并加载配置
+const configManager = require("./server/configManager.js");
 
-        // 使用 getConfig 函数获取配置
-        const host = await configManager.getConfig('host.data.name');
-        console.log('Host:', host);
-
-        // 其他逻辑...
-    } catch (error) {
-        console.error('Error:', error);
-    } finally {
-        await configManager.prisma.$disconnect(); // 关闭 Prisma 客户端连接
-    }
-})();
 require("dotenv").config({ override: true });
 //console.log(global.config);
 // 日志部分
@@ -46,6 +31,22 @@ const sdk = new opentelemetry.NodeSDK({
 });
 sdk.start();
 */
+/*
+const express = require('express');
+const app = express();
+const configManager = require('./configManager');
+
+app.use(async (req, res, next) => {
+    try {
+        await configManager.initialize(); // 确保每个请求前初始化
+        next();
+    } catch (error) {
+        console.error('Middleware initialization error:', error);
+        res.status(500).send('Internal Server Error');
+    }
+});*/
+
+// 路由处理...
 
 var morganlogger = require("morgan");
 morganlogger.token("colored-status", (req, res) => {
@@ -68,7 +69,12 @@ app.use(
 
 // cors配置
 var cors = require("cors");
-corslist = global.config.cors;
+let corslist;
+(async () => {
+  corslist = (await configManager.getConfig("cors")).split(",");
+})();
+console.log(corslist);
+
 var corsOptions = {
   origin: (origin, callback) => {
     if (!origin || corslist.indexOf(new URL(origin).hostname) !== -1) {
@@ -86,10 +92,8 @@ var corsOptions = {
 app.use(cors(corsOptions)); // 应用CORS配置函数
 
 //设置环境变量
-//var session = require("express-session"); app.use( session({ secret: global.config.security.SessionSecret, resave: false, name: "ZeroCat-session", saveUninitialized: true, cookie: { secure: false }, }) );
-//express 的cookie的解析组件
-var cookieParser = require("cookie-parser");
-app.use(cookieParser(global.config.security.SessionSecret));
+//var session = require("express-session"); app.use( session({ secret: await configManager.getConfig('security.SessionSecret'), resave: false, name: "ZeroCat-session", saveUninitialized: true, cookie: { secure: false }, }) );
+
 
 //express 的http请求体进行解析组件
 var bodyParser = require("body-parser");
@@ -121,72 +125,71 @@ global.dirname = __dirname;
 //  console.log("Listening on http://localhost:3000");
 //}); // 平台总入口
 app.options("*", cors());
-app.all("*", function (req, res, next) {
+
+let zcjwttoken
+(async () => {
+  zcjwttoken = await configManager.getConfig("security.jwttoken")
+})();
+app.all("*", async function (req, res, next) {
   //console.log(req.method +' '+ req.url + " IP:" + req.ip);
-
   const token =
-    req.cookies.token ||
-    req.body.token ||
-    req.headers["token"] ||
-    req.query.token || // 获取JWT令牌
-    (req.headers["authorization"] || "").replace("Bearer ", "");
+    (req.cookies && req.cookies.token) ||
+    (req.body && req.body.token) ||
+    (req.headers && req.headers["token"]) ||
+    (req.query && req.query.token) ||
+    ((req.headers["authorization"] || "").replace("Bearer ", ""));
 
-  if (token) {
-    jwt.verify(token, global.config.security.jwttoken, (err, decodedToken) => {
-      // 解析并验证JWT
-      if (err) {
-        // 如果验证失败，清除本地登录状态
-        res.locals = {
-          login: false,
-          userid: "",
-          email: "",
-          username: "",
-          display_name: "",
-          avatar: "",
-          is_admin: 0,
-          usertoken: "",
-        };
-        console.log("JWT验证失败: " + err.message);
-      } else {
-        // 如果验证成功，将用户信息存储在res.locals和session中
-        let userInfo = decodedToken;
-        res.locals = {
-          login: true,
-          userid: userInfo.userid,
-          email: userInfo.email,
-          username: userInfo.username,
-          display_name: userInfo.display_name,
-          avatar: userInfo.avatar,
-          is_admin: 0,
-          usertoken: token,
-        };
-        //res.locals["is_admin"] = 0;
-        //if (userInfo.email == global.config.security.adminuser) {
-        //  res.locals["is_admin"] = 1;
-        //}
-        //console.log("JWT验证成功: " + userInfo.email);
-        //console.log( "调试用户信息(session)：" + res.locals.userid + "," + res.locals.email + "," + res.locals.username + "," + res.locals.display_name + "," + res.locals.is_admin );
+// Continue with the token verification
+if (token) {
+    jwt.verify(token, zcjwttoken, (err, decodedToken) => {
+        if (err) {
+            // If verification fails, clear local login state
+            res.locals = {
+                login: false,
+                userid: "",
+                email: "",
+                username: "",
+                display_name: "",
+                avatar: "",
+                is_admin: 0,
+                usertoken: "",
+            };
+            //console.log("JWT验证失败: " + err.message);
+        } else {
+            // If verification succeeds, store user info
+            let userInfo = decodedToken;
+            res.locals = {
+                login: true,
+                userid: userInfo.userid,
+                email: userInfo.email,
+                username: userInfo.username,
+                display_name: userInfo.display_name,
+                avatar: userInfo.avatar,
+                is_admin: 0,
+                usertoken: token,
+            };
+            //console.log("JWT验证成功: " + userInfo.email);
+            //console.log("调试用户信息(session): " + JSON.stringify(res.locals));
+        }
 
-        //console.log( "调试用户信息(locals )：" + res.locals.userid + "," + res.locals.email + "," + res.locals.username + "," + res.locals.display_name + "," + res.locals.is_admin );
-      }
-
-      next();
+        next();
     });
-  } else {
-    // 如果未找到token，则清除本地登录状态
+} else {
+    // If no token is found, clear local login state
     res.locals = {
-      login: false,
-      userid: 0,
-      email: "",
-      username: "",
-      display_name: "未登录",
-      avatar: "",
-      is_admin: 0,
-      usertoken: "",
+        login: false,
+        userid: 0,
+        email: "",
+        username: "",
+        display_name: "未登录",
+        avatar: "",
+        is_admin: 0,
+        usertoken: "",
     };
-    //console.log("未找到JWT Token");
+    console.log("未找到JWT Token");
     next();
-  }
+}
+
 });
 
 //首页

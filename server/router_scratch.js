@@ -1,3 +1,5 @@
+const configManager = require("./configManager");
+
 var express = require("express");
 var router = express.Router();
 var fs = require("fs");
@@ -698,7 +700,7 @@ router.get("/getSound", (req, res, next) => {
 });
 
 // 取自定义扩展
-router.get("/getExtensionLibrary", (req, res, next) => {
+router.get("/getExtensionLibrary", async (req, res, next) => {
   try {
     var resultData = [
       {
@@ -707,7 +709,7 @@ router.get("/getExtensionLibrary", (req, res, next) => {
         extensionURL: "/static/extensions/coco-math-extension.js",
         iconURL: "/static/extensions/cocoExt.jpg",
         insetIconURL: "/static/extensions/cocoLogo.png",
-        description: global.config.site.name + "自定义扩展",
+        description: await configManager.getConfig('site.name') + "自定义扩展",
         featured: true,
       },
     ];
@@ -1026,7 +1028,7 @@ router.post("/getRandomSprite", function (req, res, next) {
 });
 
 //Scratch启动时，自动获取一次登录信息
-router.post("/getSession", (req, res, next) => {
+router.post("/getSession", async (req, res, next) => {
   try {
     if (!res.locals.login) {
       var new_session = {
@@ -1044,7 +1046,7 @@ router.post("/getSession", (req, res, next) => {
         username: res.locals["username"],
 
         display_name: res.locals["display_name"],
-        avatar: `${global.config.s3.staticurl}/user/${res.locals["avatar"]}`,
+        avatar: `${await configManager.getConfig('s3.staticurl')}/user/${res.locals["avatar"]}`,
       };
     }
 

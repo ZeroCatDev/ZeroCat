@@ -1,3 +1,5 @@
+const configManager = require("./configManager.js");
+
 var express = require("express");
 var router = express["Router"]();
 var fs = require("fs");
@@ -40,24 +42,24 @@ router.get("/logout", function (req, res) {
   res.redirect("/");
 });
 
-router.get("/tuxiaochao", function (req, res) {
+router.get("/tuxiaochao", async function (req, res) {
   if (!res.locals.login) {
     res.redirect(
-      "https://support.qq.com/product/" + global.config.feedback.txcid
+      "https://support.qq.com/product/" + await configManager.getConfig('feedback.txcid')
     );
   }
-  if (!global.config.feedback.txcid) {
+  if (!await configManager.getConfig('feedback.txcid')) {
     res.redirect("https://support.qq.com/product/597800");
   }
-  if (!global.config.feedback.txckey) {
+  if (!await configManager.getConfig('feedback.txckey')) {
     res.redirect(
-      "https://support.qq.com/product/" + global.config.feedback.txcid
+      "https://support.qq.com/product/" + await configManager.getConfig('feedback.txcid')
     );
   }
 
   SQL = `SELECT images FROM ow_users WHERE id = ${res.locals["userid"]};`;
 
-  DB.query(SQL, function (err, USER) {
+  DB.query(SQL, async function (err, USER) {
     if (err || USER.length == 0) {
       res.locals.tip = { opt: "flash", msg: "用户不存在" };
       res.render("404.ejs");
@@ -67,21 +69,21 @@ router.get("/tuxiaochao", function (req, res) {
     var txcinfo =
       uid +
       res.locals["display_name"] +
-      global.config.s3.staticurl +
+      await configManager.getConfig('s3.staticurl') +
       "/user/" +
       USER[0].images +
-      global.config.feedback.txckey;
+      await configManager.getConfig('feedback.txckey');
     var cryptostr = cryptojs.MD5(txcinfo).toString();
 
     res.redirect(
       "https://support.qq.com/product/" +
-        global.config.feedback.txcid +
+        await configManager.getConfig('feedback.txcid') +
         "?openid=" +
         res.locals["userid"] +
         "&nickname=" +
         res.locals["display_name"] +
         "&avatar=" +
-        global.config.s3.staticurl +
+        await configManager.getConfig('s3.staticurl') +
         "/user/" +
         USER[0].images +
         "&user_signature=" +

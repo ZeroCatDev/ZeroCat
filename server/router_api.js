@@ -1,3 +1,5 @@
+const configManager = require("./configManager");
+
 var express = require("express");
 var router = express.Router();
 var fs = require("fs");
@@ -80,13 +82,13 @@ router.post("/getProjectsInfo", async function (req, res, next) {
 router.get("/usertx", async function (req, res, next) {
   try {
     SQL = `SELECT images FROM ow_users WHERE id = ${req.query.id};`;
-    DB.query(SQL, function (err, USER) {
+    DB.query(SQL, async function (err, USER) {
       if (err || USER.length == 0) {
         res.locals.tip = { opt: "flash", msg: "用户不存在" };
         res.render("404.ejs");
         return;
       }
-      res.redirect(302, global.config.s3.staticurl + "/user/" + USER[0].images);
+      res.redirect(302, await configManager.getConfig('s3.staticurl') + "/user/" + USER[0].images);
     });
   } catch (err) {
     next(err);

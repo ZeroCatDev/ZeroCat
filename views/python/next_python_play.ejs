@@ -6,35 +6,34 @@
       name="viewport"
       content="width=device-width, initial-scale=1, shrink-to-fit=no"
     />
-    <title><%= global.config.site.name %></title>
+    <title><%= global.configManager['site.name'] %></title>
     <link
       rel="shortcut icon"
-      href="<%= global.config.urls.static %>/img/siteicon.png"
+      href="<%= global.configManager['urls.static'] %>/img/siteicon.png"
     />
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
     <meta charset="UTF-8" />
 
     <link
       rel="stylesheet"
-      href="<%= global.config.urls.static %>/mdui2/mdui.css"
+      href="<%= global.configManager['urls.static'] %>/mdui2/mdui.css"
       id="mdui_css"
     />
     <link
       rel="stylesheet"
-      href="<%= global.config.urls.static %>/layui/css/layui.css"
+      href="<%= global.configManager['urls.static'] %>/layui/css/layui.css"
     />
     <link
       rel="stylesheet"
-      href="<%= global.config.urls.static %>/css/main.css"
+      href="<%= global.configManager['urls.static'] %>/css/main.css"
     />
 
     <link id="layui_theme_css" rel="stylesheet" />
 
     <script
       type="text/javascript"
-      src="<%= global.config.urls.static %>/js/jquery.3.7.1.js"
+      src="<%= global.configManager['urls.static'] %>/js/jquery.3.7.1.js"
     ></script>
-    <%- global.config.headhtml %>
   </head>
   <style>
     :not(:defined) {
@@ -92,20 +91,20 @@
       <textarea id="code_textarea"></textarea>
     </div>
   </body>
-  <link href="<%= global.config.urls.static %>/font1.css" rel="stylesheet" />
+  <link href="<%= global.configManager['urls.static'] %>/font1.css" rel="stylesheet" />
 
   <script
     type="text/javascript"
-    src="<%= global.config.urls.static %>/layui/layui.all.js"
+    src="<%= global.configManager['urls.static'] %>/layui/layui.all.js"
   ></script>
-  <script src="<%= global.config.urls.static %>/mdui2/mdui.global.js"></script>
+  <script src="<%= global.configManager['urls.static'] %>/mdui2/mdui.global.js"></script>
   <script
     type="text/javascript"
-    src="<%= global.config.urls.static %>/js/main.js"
+    src="<%= global.configManager['urls.static'] %>/js/main.js"
   ></script>
   <script
     type="text/javascript"
-    src="<%= global.config.urls.static %>/page/main.js"
+    src="<%= global.configManager['urls.static'] %>/page/main.js"
   ></script>
 
   <script>
@@ -113,45 +112,45 @@
   </script>
 
   <script>
-    staticurl = "<%= global.config.urls.static %>";
-    S3staticurl = "<%= global.config.s3.staticurl %>";
-    editorurl = "<%= global.config.urls.editor %>";
+    staticurl = "<%= global.configManager['urls.static'] %>";
+    S3staticurl = "<%= global.configManager['s3.staticurl'] %>";
+    editorurl = "<%= global.configManager['urls.editor'] %>";
   </script>
 </html>
 <script
   type="text/javascript"
-  src="<%= global.config.urls.static %>/pythonstatic/CodeMirror.js"
+  src="<%= global.configManager['urls.static'] %>/pythonstatic/CodeMirror.js"
 ></script>
 <script
   type="text/javascript"
-  src="<%= global.config.urls.static %>/pythonstatic/js/file-saver.js"
+  src="<%= global.configManager['urls.static'] %>/pythonstatic/js/file-saver.js"
 ></script>
 <script
   type="text/javascript"
-  src="<%= global.config.urls.static %>/pythonstatic/skulpt.min.js"
+  src="<%= global.configManager['urls.static'] %>/pythonstatic/skulpt.min.js"
 ></script>
 <script
   type="text/javascript"
-  src="<%= global.config.urls.static %>/pythonstatic/skulpt-stdlib.js"
+  src="<%= global.configManager['urls.static'] %>/pythonstatic/skulpt-stdlib.js"
 ></script>
 <script
   type="text/javascript"
-  src="<%= global.config.urls.static %>/pythonstatic/mode/python.js"
+  src="<%= global.configManager['urls.static'] %>/pythonstatic/mode/python.js"
 ></script>
 <script
   type="text/javascript"
-  src="<%= global.config.urls.static %>/pythonstatic/js/show-hint.js"
+  src="<%= global.configManager['urls.static'] %>/pythonstatic/js/show-hint.js"
 ></script>
 <script
   type="text/javascript"
-  src="<%= global.config.urls.static %>/layui/layui.all.js"
+  src="<%= global.configManager['urls.static'] %>/layui/layui.all.js"
 ></script>
 <script
   type="text/javascript"
-  src="<%= global.config.urls.static %>/pythonstatic/public.js"
+  src="<%= global.configManager['urls.static'] %>/pythonstatic/public.js"
 ></script>
 
 <script
   type="text/javascript"
-  src="<%= global.config.urls.static %>/pythonstatic/next_python_play.js"
+  src="<%= global.configManager['urls.static'] %>/pythonstatic/next_python_play.js"
 ></script>

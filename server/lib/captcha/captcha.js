@@ -1,9 +1,11 @@
+const configManager = require("../configManager");
+
 const express = require("express");
 
 const app = express();
 const request = require("request");
 
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
   const recaptcha =
     req.body.recaptcha || req.body.re || req.query.recaptcha || req.query.re;
 
@@ -13,8 +15,8 @@ app.use((req, res, next) => {
 
   request.post(
     {
-      url: global.config.captcha.reverify,
-      form: { secret: global.config.captcha.resecret, response: recaptcha },
+      url: await configManager.getConfig('captcha.reverify'),
+      form: { secret: await configManager.getConfig('captcha.resecret'), response: recaptcha },
     },
     function (error, httpResponse, body) {
       if (error) {

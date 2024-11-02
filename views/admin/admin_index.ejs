@@ -9,13 +9,13 @@
     />
     <link
       rel="shortcut icon"
-      href="<%= global.config.urls.static %>/img/siteicon.png"
+      href="<%= global.configManager['urls.static'] %>/img/siteicon.png"
     />
     <link
       rel="stylesheet"
-      href="<%= global.config.urls.static %>/mdui-v1.0.2/css/mdui.min.css"
+      href="<%= global.configManager['urls.static'] %>/mdui-v1.0.2/css/mdui.min.css"
     />
-    <script src="<%= global.config.urls.static %>/mdui-v1.0.2/js/mdui.min.js"></script>
+    <script src="<%= global.configManager['urls.static'] %>/mdui-v1.0.2/js/mdui.min.js"></script>
 
     <script>
       function automsg(msg) {
@@ -28,12 +28,12 @@
 
     <link
       rel="stylesheet"
-      href="<%= global.config.urls.static %>/layui/css/layui.css"
+      href="<%= global.configManager['urls.static'] %>/layui/css/layui.css"
     />
     <link
       id="layui_theme_css"
       rel="stylesheet"
-      href="<%= global.config.urls.static %>/css/layui-theme-dark.css"
+      href="<%= global.configManager['urls.static'] %>/css/layui-theme-dark.css"
     />
   </head>
   <body class="mdui-theme-light layui-layout-body">
@@ -43,7 +43,7 @@
         <div class="layui-logo">
           <a href="/"
             ><img
-              src="<%= global.config.urls.static %>/img/logo_w.png"
+              src="<%= global.configManager['urls.static'] %>/img/logo_w.png"
               style="width: 120px; margin: 0 20px"
           /></a>
         </div>
@@ -179,9 +179,9 @@
     </div>
   </body>
 
-  <script src="<%= global.config.urls.static %>/layui/jquery.min.js"></script>
-  <script src="<%= global.config.urls.static %>/layui/layui.all.js"></script>
-  <script src="<%= global.config.urls.static %>/js/main.js"></script>
+  <script src="<%= global.configManager['urls.static'] %>/layui/jquery.min.js"></script>
+  <script src="<%= global.configManager['urls.static'] %>/layui/layui.all.js"></script>
+  <script src="<%= global.configManager['urls.static'] %>/js/main.js"></script>
   <script>
     $(document).ready(function () {
       $("a.tar").click(function (e) {

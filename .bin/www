@@ -7,101 +7,97 @@
 //prisma client
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
-prisma.ow_config
-    .findFirst({
-        where: {
-            name: process.env.config || "default",
-        },
-    })
-    .then((config) => {
-        global.config = config.config;
+const configManager = require("../server/configManager");
 
-        //console.log(config)
-        var app = require("../app");
-        //var debug = require('debug')('scratchmirror:server');
-        var http = require("http");
 
-        /**
-         * Get port from environment and store in Express.
-         */
+// 使用 getConfig 函数获取配置
+(async () => {
+    await configManager.initialize(); // 初始化并加载配置
 
-        var port = normalizePort(process.env.PORT || "3000");
-        app.set("port", port);
+  console.log("site.name:", await configManager.getConfig("site.name"));
+})();
 
-        app.set("host", process.env.HOST || "0.0.0.0");
+//console.log(config)
+var app = require("../app");
+//var debug = require('debug')('scratchmirror:server');
+var http = require("http");
 
-        /**
-         * Create HTTP server.
-         */
+/**
+ * Get port from environment and store in Express.
+ */
 
-        var server = http.createServer(app);
+var port = normalizePort(process.env.PORT || "3000");
+app.set("port", port);
 
-        /**
-         * Listen on provided port, on all network interfaces.
-         */
+app.set("host", process.env.HOST || "0.0.0.0");
 
-        server.listen(port);
-        server.on("error", onError);
-        server.on("listening", onListening);
+/**
+ * Create HTTP server.
+ */
 
-        /**
-         * Normalize a port into a number, string, or false.
-         */
+var server = http.createServer(app);
 
-        function normalizePort(val) {
-            var port = parseInt(val, 10);
+/**
+ * Listen on provided port, on all network interfaces.
+ */
 
-            if (isNaN(port)) {
-                // named pipe
-                return val;
-            }
+server.listen(port);
+server.on("error", onError);
+server.on("listening", onListening);
 
-            if (port >= 0) {
-                // port number
-                return port;
-            }
+/**
+ * Normalize a port into a number, string, or false.
+ */
 
-            return false;
-        }
+function normalizePort(val) {
+  var port = parseInt(val, 10);
 
-        /**
-         * Event listener for HTTP server "error" event.
-         */
+  if (isNaN(port)) {
+    // named pipe
+    return val;
+  }
 
-        function onError(error) {
-            if (error.syscall !== "listen") {
-                throw error;
-            }
+  if (port >= 0) {
+    // port number
+    return port;
+  }
 
-            var bind = typeof port === "string" ? "Pipe " + port : "Port " + port;
+  return false;
+}
 
-            // handle specific listen errors with friendly messages
-            switch (error.code) {
-                case "EACCES":
-                    console.error(bind + " requires elevated privileges");
-                    process.exit(1);
-                    break;
-                case "EADDRINUSE":
-                    console.error(bind + " is already in use");
-                    process.exit(1);
-                    break;
-                default:
-                    throw error;
-            }
-        }
+/**
+ * Event listener for HTTP server "error" event.
+ */
 
-        /**
-         * Event listener for HTTP server "listening" event.
-         */
+function onError(error) {
+  if (error.syscall !== "listen") {
+    throw error;
+  }
 
-        function onListening() {
-            var addr = server.address();
-            var bind =
-                typeof addr === "string" ? "pipe " + addr : "port " + addr.port;
-            console.log("Listening on " + bind);
-            console.log("http://localhost:" + addr.port);
-        }
-    })
-    .catch((err) => {
-        console.log(err);
-    });
+  var bind = typeof port === "string" ? "Pipe " + port : "Port " + port;
+
+  // handle specific listen errors with friendly messages
+  switch (error.code) {
+    case "EACCES":
+      console.error(bind + " requires elevated privileges");
+      process.exit(1);
+      break;
+    case "EADDRINUSE":
+      console.error(bind + " is already in use");
+      process.exit(1);
+      break;
+    default:
+      throw error;
+  }
+}
+
+/**
+ * Event listener for HTTP server "listening" event.
+ */
+
+function onListening() {
+  var addr = server.address();
+  var bind = typeof addr === "string" ? "pipe " + addr : "port " + addr.port;
+  console.log("Listening on " + bind);
+  console.log("http://localhost:" + addr.port);
+}

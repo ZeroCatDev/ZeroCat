@@ -3,25 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Scratch编程 - <%= global.config.site.name %></title>
+    <title>Scratch编程 - <%= global.configManager['site.name'] %></title>
     <link
       rel="shortcut icon"
-      href="<%= global.config.urls.static %>/img/siteicon.png"
+      href="<%= global.configManager['urls.static'] %>/img/siteicon.png"
     />
   </head>
 
   <body>
     <script type="text/javascript">
       var _scratch_logo =
-        "<%= global.config.urls.static %>/img/scratch-logo.png";
+        "<%= global.configManager['urls.static'] %>/img/scratch-logo.png";
     </script>
   </body>
   <script
     type="text/javascript"
-    src="<%= global.config.urls.static %>/js/scratch.min.js"
+    src="<%= global.configManager['urls.static'] %>/js/scratch.min.js"
   ></script>
 </html>
 <script>
-  S3staticurl = "<%= global.config.s3.staticurl %>";
-  this.assetHost = "<%= global.config.s3.staticurl %>/material/asset";
+  S3staticurl = "<%= global.configManager['s3.staticurl'] %>";
+  this.assetHost = "<%= global.configManager['s3.staticurl'] %>/material/asset";
 </script>

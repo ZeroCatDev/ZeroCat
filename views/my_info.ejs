@@ -66,7 +66,7 @@
     <br />
     <br />
     <!--	<mdui-button class="avatarUpload " lay-data="{exts:'png|jpg', size:1024}">修改头像</mdui-button>-->
-    <script src="<%= global.config.urls.static %>/js/compressorjs.js"></script>
+    <script src="<%= global.configManager['urls.static'] %>/js/compressorjs.js"></script>
 
     <mdui-button icon="attach_file" id="updateinages" onclick="updateinages()"
       >修改头像</mdui-button
@@ -162,18 +162,18 @@
 </script>
 <script
   type="text/javascript"
-  src="<%= global.config.urls.static %>/js/gter.js"
+  src="<%= global.configManager['urls.static'] %>/js/gter.js"
 ></script>
 
 <%- include('./html-footer.ejs', {page: 'myinfo' }); %>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.11/purify.min.js"></script>
 <script
   type="text/javascript"
-  src="<%= global.config.urls.static %>/page/user/info.js"
+  src="<%= global.configManager['urls.static'] %>/page/user/info.js"
 ></script>
 
 <script>
-  captchaid = "<%= global.config.captcha.GEE_CAPTCHA_ID %>";
+  captchaid = "<%= global.configManager['captcha.GEE_CAPTCHA_ID'] %>";
 </script>
 <script
   type="text/javascript"
@@ -181,6 +181,6 @@
 ></script>
 <script
   type="text/javascript"
-  src="<%= global.config.urls.static %>/page/geetest.js"
+  src="<%= global.configManager['urls.static'] %>/page/geetest.js"
 ></script>
 <!--<script src="?compat=recaptcha&onload=onloadCallback" async defer></script>-->

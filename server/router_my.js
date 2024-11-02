@@ -1,3 +1,5 @@
+const configManager = require("./configManager");
+
 //个人中心
 var express = require("express");
 var router = express.Router();
@@ -346,7 +348,7 @@ router.post("/set/userinfo", geetest, function (req, res) {
     sex: req.body["sex"],
     birthday: new Date(`2000-01-01 00:00:00`),
   };
-  DB.qww(UPDATE, SET, function (err, u) {
+  DB.qww(UPDATE, SET, async function (err, u) {
     if (err) {
       res.status(200).send({ status: "请再试一次" });
       return;
@@ -354,18 +356,7 @@ router.post("/set/userinfo", geetest, function (req, res) {
 
     res.locals["display_name"] = req.body["display_name"];
 
-    res.cookie(
-      "token",
-      I.GenerateJwt({
-        userid: res.locals["userid"],
-        email: res.locals["email"],
-        username: res.locals["username"],
-
-        display_name: res.locals["display_name"],
-        avatar: res.locals["avatar"],
-      }),
-      { maxAge: 604800000 }
-    );
+    // res.cookie( "token", await I.GenerateJwt({ userid: res.locals["userid"], email: res.locals["email"], username: res.locals["username"], display_name: res.locals["display_name"], avatar: res.locals["avatar"], }), { maxAge: 604800000 } );
     res.status(200).send({ status: "个人信息修成成功" });
   });
 });
@@ -375,7 +366,7 @@ router.post("/set/username", geetest, function (req, res) {
   var SET = {
     username: req.body.username,
   };
-  DB.qww(UPDATE, SET, function (err, u) {
+  DB.qww(UPDATE, SET, async function (err, u) {
     if (err) {
       res.status(200).send({ status: "请再试一次" });
       return;
@@ -383,17 +374,7 @@ router.post("/set/username", geetest, function (req, res) {
 
     res.locals["username"] = req.body["username"];
 
-    res.cookie(
-      "token",
-      I.GenerateJwt({
-        userid: res.locals["userid"],
-        email: res.locals["email"],
-        username: res.locals["username"],
-        display_name: res.locals["display_name"],
-        avatar: res.locals["avatar"],
-      }),
-      { maxAge: 604800000 }
-    );
+    // res.cookie( "token", await I.GenerateJwt({ userid: res.locals["userid"], email: res.locals["email"], username: res.locals["username"], display_name: res.locals["display_name"], avatar: res.locals["avatar"], }), { maxAge: 604800000 } );
     res.status(200).send({ status: "用户名修成成功" });
   });
 });

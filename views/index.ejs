@@ -1,6 +1,6 @@
 <%- include('./html-head.ejs', {pageTitle: '首页' }); %>
 <link
-  href="<%= global.config.urls.static %>/css/webpixels-1.2.6.css"
+  href="<%= global.configManager['urls.static'] %>/css/webpixels-1.2.6.css"
   rel="stylesheet"
 />
 
@@ -11,7 +11,7 @@
         <div class="col-12 col-lg-5 mb-10 mb-lg-0">
           <div class="display-4 mb-5 mt-n16">🚀</div>
           <div class="ls-tight font-bolder display-3 mb-5">
-            <%= global.config.site.name %>，<br />启动！
+            <%= global.configManager['site.name'] %>，<br />启动！
           </div>
           <p class="lead mb-10">新一代开源编程社区</p>
 
@@ -40,7 +40,7 @@
               <span
                 class="d-none d-xl-block position-absolute bottom-0 end-0 transform translate-x-16 translate-y-16 w-32 h-32 bg-warning opacity-60 rounded-circle filter blur-50"></span>
 
-              <img alt="..." src="<%= global.config.urls.static %>/img/toutu.png"
+              <img alt="..." src="<%= global.configManager['urls.static'] %>/img/toutu.png"
                 class="shadow-4 rounded-4 position-relative overlap-10" />
             </div>
           </div>-->
@@ -64,7 +64,7 @@
         >
           <mdui-card>
             <img
-              src="<%= global.config.urls.static %>/img/owscratch.png"
+              src="<%= global.configManager['urls.static'] %>/img/owscratch.png"
               style="pointer-events: none; width: 100%"
             />
           </mdui-card>
@@ -86,7 +86,7 @@
         >
           <mdui-card>
             <img
-              src="<%= global.config.urls.static %>/img/owpython.png"
+              src="<%= global.configManager['urls.static'] %>/img/owpython.png"
               style="pointer-events: none; width: 100%"
             />
           </mdui-card>

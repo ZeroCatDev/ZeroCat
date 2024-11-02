@@ -1,3 +1,5 @@
+const configManager = require("./configManager");
+
 const express = require("express");
 const router = express.Router();
 const needlogin = require("./lib/needlogin.js");

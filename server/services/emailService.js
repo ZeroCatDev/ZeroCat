@@ -1,18 +1,20 @@
+const configManager = require("../configManager");
+
 const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
-  service: global.config.mail.service,
+  service:  configManager.getConfigSync('mail.service'),
   secure: true,
   auth: {
-    user: global.config.mail.user,
-    pass: global.config.mail.pass,
+    user:  configManager.getConfigSync('mail.user'),
+    pass:  configManager.getConfigSync('mail.pass'),
   },
 });
 
 const sendEmail = async (to, subject, html) => {
   try {
     await transporter.sendMail({
-      from: `${global.config.site.name} <${global.config.mail.from}>`,
+      from: `${await configManager.getConfig('site.name')} <${await configManager.getConfig('mail.from')}>`,
       to,
       subject,
       html,

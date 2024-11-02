@@ -1,3 +1,5 @@
+const configManager = require("../configManager");
+
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken"); // 确保安装了 jsonwebtoken 库
 const { PasswordHash } = require("phpass");
@@ -9,23 +11,46 @@ const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 // prisma client
 const prisma = new PrismaClient();
 exports.prisma = prisma;
+let s3config;
+
+(async () => {
+  try {
+    const configKeys = [
+      "s3.endpoint",
+      "s3.region",
+      "s3.AWS_ACCESS_KEY_ID",
+      "s3.AWS_SECRET_ACCESS_KEY",
+    ];
+
+    const configValues = await Promise.all(
+      configKeys.map((key) => configManager.getConfig(key))
+    );
+
+    s3config = {
+      endpoint: configValues[0],
+      region: configValues[1],
+      credentials: {
+        accessKeyId: configValues[2],
+        secretAccessKey: configValues[3],
+      },
+    };
+  } catch (error) {
+    console.error("Error retrieving S3 config:", error);
+  } finally {
+    // Optionally disconnect Prisma client if needed
+    // await configManager.prisma.$disconnect();
+  }
+})();
 
 // Create an S3 client
-const s3 = new S3Client({
-  endpoint: global.config.s3.endpoint,
-  region: global.config.s3.region,
-  credentials: {
-    accessKeyId: global.config.s3.AWS_ACCESS_KEY_ID,
-    secretAccessKey: global.config.s3.AWS_SECRET_ACCESS_KEY,
-  },
-});
+const s3 = new S3Client(s3config);
 
 // 上传文件到 S3
 exports.S3update = async function (name, file) {
   try {
     const fileContent = fs.readFileSync(file);
     const command = new PutObjectCommand({
-      Bucket: global.config.s3.bucket,
+      Bucket: await configManager.getConfig("s3.bucket"),
       Key: name,
       Body: fileContent,
     });
@@ -33,7 +58,7 @@ exports.S3update = async function (name, file) {
     const data = await s3.send(command);
     console.log(data);
     console.log(
-      `成功上传了文件 ${global.config.s3.bucket}/${name}`
+      `成功上传了文件 ${await configManager.getConfig("s3.bucket")}/${name}`
     );
   } catch (err) {
     console.error("S3 update Error:", err);
@@ -77,7 +102,24 @@ exports.jwt = (data) => {
   return token;
 };
 
-exports.GenerateJwt = (json) => jwt.sign(json, global.config.security.jwttoken);
+
+exports.GenerateJwt = async (json) => {
+    try {
+        // Retrieve the JWT secret from config
+        const secret = await configManager.getConfig("security.jwttoken");
+console.log(secret)
+        // Check if the secret is defined
+        if (!secret) {
+            throw new Error('JWT secret is not defined in the configuration');
+        }
+
+        // Generate and return the JWT
+        return jwt.sign(json, secret);
+    } catch (error) {
+        console.error('Error generating JWT:', error);
+        throw error; // Rethrow or handle as needed
+    }
+};
 
 // 判断是否为 JSON 字符串
 exports.isJSON = (str) => {

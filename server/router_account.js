@@ -1,3 +1,5 @@
+const configManager = require("./configManager");
+
 var express = require("express");
 var router = express["Router"]();
 var fs = require("fs");
@@ -10,6 +12,15 @@ const { registrationTemplate, passwordResetTemplate } = require("./services/emai
 router.all("*", function (req, res, next) {
   next();
 });
+(async () => {
+    try {
+        console.log('site.name:', await configManager.getConfig('site.name'));
+
+        // 其他逻辑...
+    } catch (error) {
+        console.error('Error:', error);
+    }
+})();
 
 const request = require("request");
 router.get("/", function (req, res) {
@@ -32,8 +43,8 @@ router.get("/repw", function (req, res) {
   res.render("repw.ejs");
 });
 const geetest = require("./lib/captcha/geetest.js");
-
-router.post("/login", geetest, async function (req, res, next) {
+//geetest,
+router.post("/login",  async function (req, res, next) {
   try {
     if (
       !req.body.pw ||
@@ -47,7 +58,7 @@ router.post("/login", geetest, async function (req, res, next) {
 
     var SQL = `SELECT * FROM ow_users WHERE email=? LIMIT 1`;
     var WHERE = [`${req.body["un"]}`];
-    DB.qww(SQL, WHERE, function (err, USER) {
+    DB.qww(SQL, WHERE, async function (err, USER) {
       if (err || USER.length == 0) {
         res.status(200).send({ message: "账户或密码错误" });
         return;
@@ -66,8 +77,8 @@ router.post("/login", geetest, async function (req, res, next) {
         res.locals["display_name"] = User["display_name"];
 
         res.locals["is_admin"] = 0;
-        if (res.locals["email"].indexOf(global.config.security.adminuser) == 0) {
-          if (res.locals["email"] == global.config.security.adminuser) {
+        if (res.locals["email"].indexOf(await configManager.getConfig('security.adminuser')) == 0) {
+          if (res.locals["email"] == await configManager.getConfig('security.adminuser')) {
             res.locals["is_admin"] = 1;
           } else {
             let no = parseInt(res.locals["email"].substring(8));
@@ -77,28 +88,20 @@ router.post("/login", geetest, async function (req, res, next) {
           }
         }
 
-        res.cookie("userid", User["id"], { maxAge: 604800000, signed: true });
-        res.cookie("email", User["email"], {
-          maxAge: 604800000,
-          signed: true,
-        });
-        res.cookie("username", User["username"], {
-          maxAge: 604800000,
-          signed: true,
-        });
-        res.cookie("display_name", User["display_name"], {
-          maxAge: 604800000,
-          signed: true,
-        });
-        var token = I.GenerateJwt({
+        // res.cookie("userid", User["id"], { maxAge: 604800000, signed: true });
+        // res.cookie("email", User["email"], { maxAge: 604800000, signed: true, });
+        // res.cookie("username", User["username"], { maxAge: 604800000, signed: true, });
+        // res.cookie("display_name", User["display_name"], { maxAge: 604800000, signed: true, });
+
+        var token =await I.GenerateJwt({
           userid: User["id"],
           username: User["username"],
           email: User["email"],
           display_name: User["display_name"],
           avatar: User["images"],
         });
-        console.log(token);
-        res.cookie("token", token, { maxAge: 604800000 });
+        //console.log(token);
+        // res.cookie("token", token, { maxAge: 604800000 });
         res.status(200).send({
           status: "OK",
           message: "OK",
@@ -120,10 +123,10 @@ var logout = function (req, res) {
   res.locals["userid"] = null;
   res.locals["email"] = null;
 
-  res.cookie("userid", "", { maxAge: 0, signed: true });
-  res.cookie("email", "", { maxAge: 0, signed: true });
-  res.cookie("display_name", "", { maxAge: 0, signed: true });
-  res.cookie("token", "", { maxAge: 0, signed: true });
+  // res.cookie("userid", "", { maxAge: 0, signed: true });
+  // res.cookie("email", "", { maxAge: 0, signed: true });
+  // res.cookie("display_name", "", { maxAge: 0, signed: true });
+  // res.cookie("token", "", { maxAge: 0, signed: true });
 };
 
 router.get("/logout", function (req, res) {
@@ -149,7 +152,7 @@ router.post("/register", geetest, async function (req, res, next) {
       pw = I.hash(randonpw);
       var display_name = req.body.pw;
       var INSERT = `INSERT INTO ow_users (username,email,password,display_name) VALUES ('${Date.now()}','${email}','${pw}','${display_name}')`;
-      DB.query(INSERT, function (err, newUser) {
+      DB.query(INSERT, async function (err, newUser) {
         if (err) {
           console.error(err);
           res.status(200).send({ message: "再试一次17" });
@@ -159,7 +162,7 @@ router.post("/register", geetest, async function (req, res, next) {
 
         sendEmail(
           email,
-          `${global.config.site.name}社区注册消息`,
+          `${await configManager.getConfig('site.name')}社区注册消息`,
           registrationTemplate(email, randonpw)
         );
 
@@ -180,7 +183,7 @@ router.post("/repw", geetest, async function (req, res, next) {
     var email = req.body.un;
     SQL = `SELECT * FROM ow_users WHERE email=? LIMIT 1`;
     w = [email];
-    DB.qww(SQL, w, function (err, User) {
+    DB.qww(SQL, w, async function (err, User) {
       if (err) {
         res.status(200).send({ message: "账户格式错误或不存在" });
         return;
@@ -188,13 +191,13 @@ router.post("/repw", geetest, async function (req, res, next) {
       var user = User[0];
       var jwttoken = jwt.sign(
         { userid: user["id"], email: user["email"] },
-        global.config.security.jwttoken,
+        await configManager.getConfig('security.jwttoken'),
         { expiresIn: 60 * 10 }
       );
 
       sendEmail(
         email,
-        `${global.config.site.name}密码重置消息`,
+        `${await configManager.getConfig('site.name')}密码重置消息`,
         passwordResetTemplate(email, jwttoken)
       );
 
@@ -209,7 +212,7 @@ router.post("/torepw", geetest, async function (req, res, next) {
   try {
     var user1 = jwt.verify(
       req.body.jwttoken,
-      global.config.security.jwttoken,
+      await configManager.getConfig('security.jwttoken'),
       function (err, decoded) {
         if (err) {
           res.status(200).send({ message: "token错误或过期" });
