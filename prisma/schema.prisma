@@ -339,6 +339,16 @@ model ow_projects_lists {
   createTime  DateTime? @default(now()) @db.Timestamp(0)
 }
 
+model newconfig {
+  id         Int       @id @default(autoincrement())
+  key        String    @unique(map: "config_key") @db.VarChar(255)
+  value      String    @db.Text
+  user_id    Int?
+  created_at DateTime? @default(now()) @db.DateTime(0)
+  updated_at DateTime? @default(now()) @db.DateTime(0)
+  is_public  Boolean?  @default(false)
+}
+
 /// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 /// This view or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 view ow_projects_view {

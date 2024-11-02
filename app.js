@@ -2,7 +2,23 @@ var express = require("express");
 var app = express();
 const jwt = require("jsonwebtoken");
 const { body, validationResult } = require("express-validator");
+const configManager = require('./server/configManager');
 
+(async () => {
+    try {
+        await configManager.initialize(); // 初始化并加载配置
+
+        // 使用 getConfig 函数获取配置
+        const host = await configManager.getConfig('host.data.name');
+        console.log('Host:', host);
+
+        // 其他逻辑...
+    } catch (error) {
+        console.error('Error:', error);
+    } finally {
+        await configManager.prisma.$disconnect(); // 关闭 Prisma 客户端连接
+    }
+})();
 require("dotenv").config({ override: true });
 //console.log(global.config);
 // 日志部分
