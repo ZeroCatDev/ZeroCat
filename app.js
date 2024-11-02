@@ -1,6 +1,7 @@
 var express = require("express");
 var app = express();
 const jwt = require("jsonwebtoken");
+const { body, validationResult } = require("express-validator");
 
 require("dotenv").config({ override: true });
 //console.log(global.config);
@@ -232,6 +233,16 @@ app.use("/python", router_python);
 
 process.on("uncaughtException", function (err) {
   console.log("Caught exception: " + err);
+});
+
+// Centralized error-handling middleware function
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).send({
+    status: "error",
+    message: "Something went wrong!",
+    error: err.message,
+  });
 });
 
 //放在最后，友好的处理地址不存在的访问
