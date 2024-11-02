@@ -1,6 +1,7 @@
 var express = require("express");
 var app = express();
 const jwt = require("jsonwebtoken");
+const { body, validationResult } = require("express-validator");
 
 require("dotenv").config({ override: true });
 //console.log(global.config);
