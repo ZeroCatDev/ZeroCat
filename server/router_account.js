@@ -5,8 +5,8 @@ var jwt = require("jsonwebtoken");
 var DB = require("./lib/database.js");
 var I = require("./lib/global.js");
 let cryptojs = require("crypto-js");
-const { sendEmail } = require("./lib/email");
-const { registrationTemplate, passwordResetTemplate } = require("./lib/emailTemplates");
+const { sendEmail } = require("../services/emailService");
+const { registrationTemplate, passwordResetTemplate } = require("../services/emailTemplates");
 router.all("*", function (req, res, next) {
   next();
 });
