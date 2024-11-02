@@ -1,23 +1,23 @@
-//用户账户功能路由：注册、登录等
 var express = require("express");
 var router = express["Router"]();
 var fs = require("fs");
 var jwt = require("jsonwebtoken");
-//数据库
 var DB = require("./lib/database.js");
-//功能函数集
 var I = require("./lib/global.js");
 let cryptojs = require("crypto-js");
+const { sendEmail } = require("./services/emailService");
+const { registrationTemplate, passwordResetTemplate } = require("./services/emailTemplates");
+
 router.all("*", function (req, res, next) {
   next();
 });
 
 const request = require("request");
-var nodemailer = require("nodemailer");
+
 router.get("/", function (req, res) {
   res.render("user.ejs");
 });
-//登录、注册、找回密码三合一界面
+
 router.get("/login", function (req, res) {
   var SQL = `SELECT id FROM sys_ini WHERE iniKey='regist' AND iniValue=1 LIMIT 1`;
   DB.query(SQL, function (err, Regist) {
@@ -31,7 +31,6 @@ router.get("/login", function (req, res) {
   });
 });
 
-//登录、注册、找回密码三合一界面
 router.get("/repw", function (req, res) {
   res.render("repw.ejs");
 });
