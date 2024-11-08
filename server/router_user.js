@@ -9,6 +9,48 @@ var I = require("./lib/global.js");
 let cryptojs = require("crypto-js");
 const { sendEmail } = require("./services/emailService");
 const { registrationTemplate, passwordResetTemplate } = require("./services/emailTemplates");
+const passport = require("passport");
+const TwoFAStartegy = require("passport-2fa-totp").Strategy;
+const { authenticator } = require("otplib");
+
+passport.use(new TwoFAStartegy(
+  {
+    usernameField: 'email',
+    passwordField: 'password',
+    codeField: 'otp',
+    passReqToCallback: true,
+  },
+  function (req, email, password, done) {
+    DB.query('SELECT * FROM ow_users WHERE email = ?', [email], function (err, results) {
+      if (err) { return done(err); }
+      if (!results.length) {
+        return done(null, false, { message: 'Incorrect email.' });
+      }
+      const user = results[0];
+      if (user.password !== password) {
+        return done(null, false, { message: 'Incorrect password.' });
+      }
+      return done(null, user);
+    });
+  },
+  function (req, user, done) {
+    if (!user.fa_enabled) {
+      return done(null, false, { message: '2FA is not enabled for this user.' });
+    }
+    return done(null, user, user.fa_secret);
+  }
+));
+
+passport.serializeUser(function (user, done) {
+  done(null, user.id);
+});
+
+passport.deserializeUser(function (id, done) {
+  DB.query('SELECT * FROM ow_users WHERE id = ?', [id], function (err, results) {
+    if (err) { return done(err); }
+    done(null, results[0]);
+  });
+});
 
 router.all("*", function (req, res, next) {
   next();
@@ -90,6 +132,34 @@ router.get("/tuxiaochao", async function (req, res) {
         cryptostr
     );
   });
+});
+
+router.post("/2fa/setup", passport.authenticate('local', { session: false }), async function (req, res, next) {
+  try {
+    const secret = authenticator.generateSecret();
+    const otpauth = authenticator.keyuri(req.user.email, await configManager.getConfig('2FA_ISSUER'), secret);
+
+    await I.prisma.ow_users.update({
+      where: { id: req.user.id },
+      data: { fa_secret: secret, fa_enabled: true },
+    });
+
+    res.status(200).send({ otpauth });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/2fa/verify", passport.authenticate('local', { session: false }), async function (req, res, next) {
+  try {
+    const isValid = authenticator.check(req.body.otp, req.user.fa_secret);
+    if (!isValid) {
+      return res.status(401).send({ message: 'Invalid OTP' });
+    }
+    res.status(200).send({ message: '2FA verification successful' });
+  } catch (err) {
+    next(err);
+  }
 });
 
 module.exports = router;

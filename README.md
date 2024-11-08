@@ -107,3 +107,59 @@ ZeroCat 的项目 遵循 [Contributor Covenant](http://contributor-covenant.org/
 <br/>此项目声明了 MIT 协议
 
 ![社区(Github图床)](https://github.com/ZeroCatDev/ZeroCat/assets/88357633/d6f4a6ba-daa1-45c8-88f7-4b20d9edbb22)
+
+## Editing MySQL Database
+
+### Connecting to the MySQL Database
+
+To connect to the MySQL database, you can use any MySQL client such as MySQL Workbench, phpMyAdmin, or the MySQL command-line tool. Use the following connection details:
+
+- Host: `your_mysql_host`
+- Port: `your_mysql_port`
+- User: `your_mysql_user`
+- Password: `your_mysql_password`
+- Database: `your_mysql_database`
+
+### Common SQL Queries
+
+Here are some common SQL queries for editing the MySQL database:
+
+- **Select all users:**
+  ```sql
+  SELECT * FROM ow_users;
+  ```
+
+- **Insert a new user:**
+  ```sql
+  INSERT INTO ow_users (username, email, password, display_name) VALUES ('newuser', 'newuser@example.com', 'password', 'New User');
+  ```
+
+- **Update a user's email:**
+  ```sql
+  UPDATE ow_users SET email = 'newemail@example.com' WHERE id = 1;
+  ```
+
+- **Delete a user:**
+  ```sql
+  DELETE FROM ow_users WHERE id = 1;
+  ```
+
+- **Select all projects:**
+  ```sql
+  SELECT * FROM ow_projects;
+  ```
+
+- **Insert a new project:**
+  ```sql
+  INSERT INTO ow_projects (title, description, authorid, type, state) VALUES ('New Project', 'Project Description', 1, 'scratch', 'public');
+  ```
+
+- **Update a project's title:**
+  ```sql
+  UPDATE ow_projects SET title = 'Updated Project Title' WHERE id = 1;
+  ```
+
+- **Delete a project:**
+  ```sql
+  DELETE FROM ow_projects WHERE id = 1;
+  ```
