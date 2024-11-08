@@ -1,6 +1,8 @@
 var express = require("express");
 var app = express();
 const jwt = require("jsonwebtoken");
+const passport = require("passport");
+const LocalStrategy = require("passport-local").Strategy;
 
 const configManager = require("./server/configManager.js");
 
@@ -192,6 +194,37 @@ if (token) {
 
 });
 
+// Passport configuration
+passport.use(new LocalStrategy(
+  function(username, password, done) {
+    DB.query('SELECT * FROM users WHERE username = ?', [username], function(err, results) {
+      if (err) { return done(err); }
+      if (!results.length) {
+        return done(null, false, { message: 'Incorrect username.' });
+      }
+      const user = results[0];
+      if (user.password !== password) {
+        return done(null, false, { message: 'Incorrect password.' });
+      }
+      return done(null, user);
+    });
+  }
+));
+
+passport.serializeUser(function(user, done) {
+  done(null, user.id);
+});
+
+passport.deserializeUser(function(id, done) {
+  DB.query('SELECT * FROM users WHERE id = ?', [id], function(err, results) {
+    if (err) { return done(err); }
+    done(null, results[0]);
+  });
+});
+
+app.use(passport.initialize());
+app.use(passport.session());
+
 //首页
 app.get("/", function (req, res) {
   res.render("index.ejs");
@@ -249,6 +282,10 @@ app.get("/search", function (req, res, next) {
 //python路由
 var router_python = require("./server/router_python.js");
 app.use("/python", router_python);
+
+app.get('/api/protected', passport.authenticate('local', { session: false }), function(req, res) {
+  res.json({ message: 'This is a protected route' });
+});
 
 process.on("uncaughtException", function (err) {
   console.log("Caught exception: " + err);

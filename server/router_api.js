@@ -3,6 +3,7 @@ const configManager = require("./configManager");
 var express = require("express");
 var router = express.Router();
 var fs = require("fs");
+const passport = require("passport");
 
 var I = require("./lib/global.js");
 var DB = require("./lib/database.js");
@@ -251,6 +252,10 @@ router.get("/projectinfo", async function (req, res, next) {
   } catch (err) {
     next(err);
   }
+});
+
+router.get("/protected", passport.authenticate('local', { session: false }), function(req, res) {
+  res.json({ message: 'This is a protected route' });
 });
 
 module.exports = router;

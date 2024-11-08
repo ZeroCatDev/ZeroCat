@@ -161,6 +161,8 @@ model ow_users {
   createdAt    DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
   updatedAt    DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
   label        String?   @db.VarChar(255)
+  fa_secret    String?   @db.VarChar(255)
+  fa_enabled   Boolean?  @default(false)
 
   @@id([id, username])
 }
