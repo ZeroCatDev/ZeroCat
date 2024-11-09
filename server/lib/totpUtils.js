@@ -66,10 +66,10 @@ async function isTotpTokenValid(userId, token) {
 }
 
 // Function to check if the TOTP token is valid by specific TOTP ID
-async function isTotpTokenValidById(userId, token, totpId) {
+async function isTotpTokenValidById(userId, token, totp_id) {
   try {
     const userTotp = await I.prisma.ow_users_totp.findUnique({
-      where: { user_id: Number(userId), id: Number(totpId) },
+      where: { user_id: Number(userId), id: Number(totp_id) },
       select: {
         totp_secret: true,
         totp_algorithm: true,
@@ -126,7 +126,7 @@ async function createTotpTokenForUser(userId) {
       message: "验证器已创建",
       secret: result.totp_secret,
       otpauth_url: otpauthUrl,
-      totpid: result.id,
+      totp_id: result.id,
     };
   } catch (error) {
     return {
@@ -146,23 +146,23 @@ function generateTotpUrlForUser(userId, secret) {
 }
 
 // Function to enable (activate) a TOTP token after validating the token
-async function enableTotpToken(userId, totpId, token) {
+async function enableTotpToken(userId, totp_id, token) {
   try {
-    const isValid = await isTotpTokenValidById(userId, token, totpId);
+    const isValid = await isTotpTokenValidById(userId, token, totp_id);
 
     if (!isValid.valid) {
       return { status: "0", message: "无法激活令牌：" + isValid.message };
     }
     const needupdatedTotp = await I.prisma.ow_users_totp.findUnique({
       where: {
-        id: Number(totpId),
+        id: Number(totp_id),
         user_id: Number(userId),
       },
     });
     if (needupdatedTotp.status === "unverified" && isValid.valid) {
       const updatedTotp = await I.prisma.ow_users_totp.update({
         where: {
-          id: Number(totpId),
+          id: Number(totp_id),
           user_id: Number(userId),
         },
         data: {
@@ -184,10 +184,10 @@ async function enableTotpToken(userId, totpId, token) {
 }
 
 // Function to remove a TOTP token
-async function removeTotpToken(userId, totpId) {
+async function removeTotpToken(userId, totp_id) {
   try {
     const result = await I.prisma.ow_users_totp.delete({
-      where: { id: Number(totpId), user_id: Number(userId) },
+      where: { id: Number(totp_id), user_id: Number(userId) },
       select: { id: true, user_id: true, name: true, type: true, status: true },
     });
 

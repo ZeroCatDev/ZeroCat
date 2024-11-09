@@ -291,8 +291,8 @@ router.get("/totp/list", needlogin, async (req, res) => {
   }
 });
 router.post("/totp/rename", needlogin, async (req, res) => {
-  const { totpId, name } = req.body;
-  if (!totpId || !name) {
+  const { totp_id, name } = req.body;
+  if (!totp_id || !name) {
     return res.status(400).json({
       status: "error",
       message: "TOTP ID 和名称是必需的",
@@ -300,7 +300,7 @@ router.post("/totp/rename", needlogin, async (req, res) => {
   }
   try {
     var renamedTotp = await I.prisma.ow_users_totp.update({
-      where: { id: Number(totpId) },
+      where: { id: Number(totp_id) },
       data: { name: name },
       select: {
         id: true,
@@ -325,8 +325,8 @@ router.post("/totp/rename", needlogin, async (req, res) => {
   }
 });
 router.post("/totp/check", async (req, res) => {
-  const { totptoken, userId } = req.body;
-  if (!totptoken || !userId) {
+  const { totp_token, userId } = req.body;
+  if (!totp_token || !userId) {
     return res.status(400).json({
       status: "error",
       message: "验证器令牌和用户 ID 是必需的",
@@ -334,7 +334,7 @@ router.post("/totp/check", async (req, res) => {
   }
 
   try {
-    const isValid = await isTotpTokenValid(userId, totptoken);
+    const isValid = await isTotpTokenValid(userId, totp_token);
     return res.json({
       status: "success",
       message: "令牌验证结果",
@@ -350,15 +350,15 @@ router.post("/totp/check", async (req, res) => {
   }
 });
 router.post("/totp/delete", needlogin, async (req, res) => {
-  const { totpId } = req.body;
-  if (!totpId) {
+  const { totp_id } = req.body;
+  if (!totp_id) {
     return res.status(400).json({
       status: "error",
       message: "验证器 ID 是必需的",
     });
   }
   try {
-    const deletedTotp = await removeTotpToken(res.locals.userid, totpId);
+    const deletedTotp = await removeTotpToken(res.locals.userid, totp_id);
     return res.json({
       status: "success",
       message: "验证器已删除",
@@ -392,9 +392,9 @@ router.post("/totp/generate", needlogin, async (req, res) => {
 });
 
 router.post("/totp/activate", needlogin, async (req, res) => {
-  const { totpId, totptoken } = req.body;
+  const { totp_id, totp_token } = req.body;
 
-  if (!totpId || !totptoken) {
+  if (!totp_id || !totp_token) {
     return res.status(400).json({
       status: "error",
       message: "验证器ID和令牌是必需的",
@@ -404,8 +404,8 @@ router.post("/totp/activate", needlogin, async (req, res) => {
   try {
     const activatedTotp = await enableTotpToken(
       res.locals.userid,
-      totpId,
-      totptoken
+      totp_id,
+      totp_token
     );
     return res.json({
       status: "success",
