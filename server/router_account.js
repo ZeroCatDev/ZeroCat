@@ -2,26 +2,37 @@ const configManager = require("./configManager");
 
 var express = require("express");
 var router = express["Router"]();
-var fs = require("fs");
 var jwt = require("jsonwebtoken");
 var DB = require("./lib/database.js");
 var I = require("./lib/global.js");
-let cryptojs = require("crypto-js");
 const { sendEmail } = require("./services/emailService");
-const { registrationTemplate, passwordResetTemplate } = require("./services/emailTemplates");
+const {
+  registrationTemplate,
+  passwordResetTemplate,
+} = require("./services/emailTemplates");
+const needlogin = require("./lib/needlogin.js");
+
+const {
+  isTotpTokenValid,
+  createTotpTokenForUser,
+  enableTotpToken,
+  removeTotpToken,
+} = require("./lib/totpUtils.js");
+const validateTotpToken = require("./lib/validateTotpToken.js"); // Import the middleware
 router.all("*", function (req, res, next) {
   next();
 });
+/*
 (async () => {
-    try {
-        console.log('site.name:', await configManager.getConfig('site.name'));
+  try {
+    console.log("site.name:", await configManager.getConfig("site.name"));
 
-        // 其他逻辑...
-    } catch (error) {
-        console.error('Error:', error);
-    }
+    // 其他逻辑...
+  } catch (error) {
+    console.error("Error:", error);
+  }
 })();
-
+*/
 const request = require("request");
 router.get("/", function (req, res) {
   res.render("user.ejs");
@@ -44,7 +55,7 @@ router.get("/repw", function (req, res) {
 });
 const geetest = require("./lib/captcha/geetest.js");
 //geetest,
-router.post("/login",  async function (req, res, next) {
+router.post("/login", async function (req, res, next) {
   try {
     if (
       !req.body.pw ||
@@ -77,8 +88,15 @@ router.post("/login",  async function (req, res, next) {
         res.locals["display_name"] = User["display_name"];
 
         res.locals["is_admin"] = 0;
-        if (res.locals["email"].indexOf(await configManager.getConfig('security.adminuser')) == 0) {
-          if (res.locals["email"] == await configManager.getConfig('security.adminuser')) {
+        if (
+          res.locals["email"].indexOf(
+            await configManager.getConfig("security.adminuser")
+          ) == 0
+        ) {
+          if (
+            res.locals["email"] ==
+            (await configManager.getConfig("security.adminuser"))
+          ) {
             res.locals["is_admin"] = 1;
           } else {
             let no = parseInt(res.locals["email"].substring(8));
@@ -93,7 +111,7 @@ router.post("/login",  async function (req, res, next) {
         // res.cookie("username", User["username"], { maxAge: 604800000, signed: true, });
         // res.cookie("display_name", User["display_name"], { maxAge: 604800000, signed: true, });
 
-        var token =await I.GenerateJwt({
+        var token = await I.GenerateJwt({
           userid: User["id"],
           username: User["username"],
           email: User["email"],
@@ -162,7 +180,7 @@ router.post("/register", geetest, async function (req, res, next) {
 
         sendEmail(
           email,
-          `${await configManager.getConfig('site.name')}社区注册消息`,
+          `${await configManager.getConfig("site.name")}社区注册消息`,
           registrationTemplate(email, randonpw)
         );
 
@@ -191,13 +209,13 @@ router.post("/repw", geetest, async function (req, res, next) {
       var user = User[0];
       var jwttoken = jwt.sign(
         { userid: user["id"], email: user["email"] },
-        await configManager.getConfig('security.jwttoken'),
+        await configManager.getConfig("security.jwttoken"),
         { expiresIn: 60 * 10 }
       );
 
       sendEmail(
         email,
-        `${await configManager.getConfig('site.name')}密码重置消息`,
+        `${await configManager.getConfig("site.name")}密码重置消息`,
         passwordResetTemplate(email, jwttoken)
       );
 
@@ -212,7 +230,7 @@ router.post("/torepw", geetest, async function (req, res, next) {
   try {
     var user1 = jwt.verify(
       req.body.jwttoken,
-      await configManager.getConfig('security.jwttoken'),
+      await configManager.getConfig("security.jwttoken"),
       function (err, decoded) {
         if (err) {
           res.status(200).send({ message: "token错误或过期" });
@@ -235,6 +253,180 @@ router.post("/torepw", geetest, async function (req, res, next) {
   } catch (err) {
     next(err);
   }
+});
+
+router.get("/totp/list", needlogin, async (req, res) => {
+  try {
+    var totpData = await I.prisma.ow_users_totp.findMany({
+      where: { user_id: Number(res.locals.userid) },
+      select: {
+        id: true,
+        user_id: true,
+        name: true,
+        type: true,
+        status: true,
+      },
+    });
+    // 获取列表中status为unverified的数量并从列表中删除这些数据
+    const unverifiedTotpCount = totpData.filter(
+      (totp) => totp.status === "unverified"
+    ).length;
+    totpData = totpData.filter((item) => item.status !== "unverified");
+
+    return res.json({
+      status: "success",
+      message: "获取成功",
+      data: {
+        list: totpData,
+        unverified: unverifiedTotpCount,
+      },
+    });
+  } catch (error) {
+    console.error("获取验证器列表时出错:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "获取验证器列表失败",
+      error: error.message,
+    });
+  }
+});
+router.post("/totp/rename", needlogin, async (req, res) => {
+  const { totpId, name } = req.body;
+  if (!totpId || !name) {
+    return res.status(400).json({
+      status: "error",
+      message: "TOTP ID 和名称是必需的",
+    });
+  }
+  try {
+    var renamedTotp = await I.prisma.ow_users_totp.update({
+      where: { id: Number(totpId) },
+      data: { name: name },
+      select: {
+        id: true,
+        user_id: true,
+        name: true,
+        type: true,
+        status: true,
+      },
+    });
+    return res.json({
+      status: "success",
+      message: "验证器已重命名",
+      data: renamedTotp,
+    });
+  } catch (error) {
+    console.error("重命名验证器时出错:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "重命名验证器失败",
+      error: error.message,
+    });
+  }
+});
+router.post("/totp/check", async (req, res) => {
+  const { totptoken, userId } = req.body;
+  if (!totptoken || !userId) {
+    return res.status(400).json({
+      status: "error",
+      message: "验证器令牌和用户 ID 是必需的",
+    });
+  }
+
+  try {
+    const isValid = await isTotpTokenValid(userId, totptoken);
+    return res.json({
+      status: "success",
+      message: "令牌验证结果",
+      data: { validated: isValid },
+    });
+  } catch (error) {
+    console.error("验证令牌时出错:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "验证令牌失败",
+      error: error.message,
+    });
+  }
+});
+router.post("/totp/delete", needlogin, async (req, res) => {
+  const { totpId } = req.body;
+  if (!totpId) {
+    return res.status(400).json({
+      status: "error",
+      message: "验证器 ID 是必需的",
+    });
+  }
+  try {
+    const deletedTotp = await removeTotpToken(res.locals.userid, totpId);
+    return res.json({
+      status: "success",
+      message: "验证器已删除",
+      data: deletedTotp,
+    });
+  } catch (error) {
+    console.error("删除验证器时出错:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "删除验证器失败",
+      error: error.message,
+    });
+  }
+});
+router.post("/totp/generate", needlogin, async (req, res) => {
+  try {
+    const info = await createTotpTokenForUser(res.locals.userid);
+    return res.json({
+      status: "success",
+      message: "验证器创建成功",
+      data: info,
+    });
+  } catch (error) {
+    console.error("创建验证器时出错:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "创建验证器失败",
+      error: error.message,
+    });
+  }
+});
+
+router.post("/totp/activate", needlogin, async (req, res) => {
+  const { totpId, totptoken } = req.body;
+
+  if (!totpId || !totptoken) {
+    return res.status(400).json({
+      status: "error",
+      message: "验证器ID和令牌是必需的",
+    });
+  }
+
+  try {
+    const activatedTotp = await enableTotpToken(
+      res.locals.userid,
+      totpId,
+      totptoken
+    );
+    return res.json({
+      status: "success",
+      message: "验证器已激活",
+      data: activatedTotp,
+    });
+  } catch (error) {
+    console.error("激活验证器时出错:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "激活验证器失败",
+      error: error.message,
+    });
+  }
+});
+
+router.post("/totp/protected-route", validateTotpToken, (req, res) => {
+  return res.json({
+    status: "success",
+    message: "请求成功，验证器令牌验证通过",
+  });
 });
 
 module.exports = router;

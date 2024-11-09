@@ -73,7 +73,6 @@ let corslist;
 (async () => {
   corslist = (await configManager.getConfig("cors")).split(",");
 })();
-console.log(corslist);
 
 var corsOptions = {
   origin: (origin, callback) => {
@@ -133,12 +132,12 @@ let zcjwttoken
 app.all("*", async function (req, res, next) {
   //console.log(req.method +' '+ req.url + " IP:" + req.ip);
   const token =
+  ((req.headers["authorization"] || "").replace("Bearer ", ""))||
     (req.cookies && req.cookies.token) ||
     (req.body && req.body.token) ||
     (req.headers && req.headers["token"]) ||
-    (req.query && req.query.token) ||
-    ((req.headers["authorization"] || "").replace("Bearer ", ""));
-
+    (req.query && req.query.token)
+console.log(token);
 // Continue with the token verification
 if (token) {
     jwt.verify(token, zcjwttoken, (err, decodedToken) => {

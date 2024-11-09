@@ -8,7 +8,7 @@ class ConfigManager {
     }
 
     async loadAllConfigs() {
-        const configs = await this.prisma.newconfig.findMany();
+        const configs = await this.prisma.ow_config.findMany();
         configs.forEach(({ key, value }) => {
             this.config[key] = value;
         });
@@ -40,7 +40,7 @@ class ConfigManager {
         }
 
         // 如果未缓存，直接从数据库获取
-        const config = this.prisma.newconfig.findFirst({
+        const config = this.prisma.ow_config.findFirst({
             where: { key: key }
         });
         this.config[key] = config ? config.value : null;
@@ -53,7 +53,7 @@ class ConfigManager {
 
 
     async getConfigFromDB(key) {
-        const config = await this.prisma.newconfig.findFirst({
+        const config = await this.prisma.ow_config.findFirst({
             where: { key: key }
         });
 

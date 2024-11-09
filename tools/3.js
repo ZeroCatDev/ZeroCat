@@ -14,7 +14,7 @@ const json = {}
         const [key, value] = entries[i];
         const valueToStore = Array.isArray(value) ? value.join(',') : value;
 
-        await prisma.newconfig.upsert({
+        await prisma.ow_config.upsert({
           create: {
             key: key,
             value: valueToStore,

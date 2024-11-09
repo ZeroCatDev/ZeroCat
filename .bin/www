@@ -4,17 +4,13 @@
  * Module dependencies.
  */
 
-//prisma client
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
 const configManager = require("../server/configManager");
 
 
 // 使用 getConfig 函数获取配置
 (async () => {
     await configManager.initialize(); // 初始化并加载配置
-
-  console.log("site.name:", await configManager.getConfig("site.name"));
+  console.log("加载网站:", await configManager.getConfig("site.name"));
 })();
 
 //console.log(config)
@@ -97,7 +93,5 @@ function onError(error) {
 
 function onListening() {
   var addr = server.address();
-  var bind = typeof addr === "string" ? "pipe " + addr : "port " + addr.port;
-  console.log("Listening on " + bind);
-  console.log("http://localhost:" + addr.port);
+  console.log("Listening on http://localhost:" + addr.port);
 }

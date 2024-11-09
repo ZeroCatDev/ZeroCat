@@ -301,11 +301,6 @@ model wl_users {
   updatedAt    DateTime? @default(now()) @db.Timestamp(0)
 }
 
-model ow_config {
-  name   String @id @db.VarChar(45)
-  config Json?
-}
-
 model ow_projects_file {
   sha256      String    @id @db.VarChar(64)
   source      String?   @db.MediumText
@@ -339,7 +334,7 @@ model ow_projects_lists {
   createTime  DateTime? @default(now()) @db.Timestamp(0)
 }
 
-model newconfig {
+model ow_config {
   id         Int       @id @default(autoincrement())
   key        String    @unique(map: "config_key") @db.VarChar(255)
   value      String    @db.Text
@@ -347,6 +342,21 @@ model newconfig {
   created_at DateTime? @default(now()) @db.DateTime(0)
   updated_at DateTime? @default(now()) @db.DateTime(0)
   is_public  Boolean?  @default(false)
+}
+
+model ow_users_totp {
+  id                Int       @id @default(autoincrement())
+  name              String    @default("验证器") @db.VarChar(128)
+  user_id           Int
+  type              String    @default("totp") @db.VarChar(45)
+  status            String    @default("unverified") @db.VarChar(32)
+  totp_secret       String?   @db.VarChar(255)
+  totp_algorithm    String?   @default("SHA256") @db.VarChar(10)
+  totp_digits       Int?      @default(6)
+  totp_period       Int?      @default(30)
+  totp_last_updated DateTime? @db.Timestamp(0)
+  created_at        DateTime? @default(now()) @db.Timestamp(0)
+  updated_at        DateTime? @default(now()) @db.Timestamp(0)
 }
 
 /// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
