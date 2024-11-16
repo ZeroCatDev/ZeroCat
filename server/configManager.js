@@ -27,14 +27,17 @@ class ConfigManager {
     // Configuration information
     global.configinfo = configs;
 
-    console.log(global.configinfo); // Log the updated config info
+    //console.log(global.configinfo); // Log the updated config info
   }
 
   async getConfig(key) {
     // Check if the value is already cached
-    if (global.config && global.config[key]) {
+    if (global.config && global.config[key]!=null) {
       return global.config[key];
     }
+    var config = await this.prisma.ow_config.findFirst({ where: { key: key } });
+    console.log(config);
+    return config.value;
     // If not cached, fetch from the database
     await this.loadConfigsFromDB();
     // If not cached, fetch from the database
