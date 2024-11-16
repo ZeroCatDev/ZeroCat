@@ -412,7 +412,7 @@ router.post("/totp/protected-route", validateTotpToken, (req, res) => {
   });
 });
 
-router.post("/magiclink/generate", async (req, res) => {
+router.post("/magiclink/generate", geetest, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email || !I.emailTest(email)) {
