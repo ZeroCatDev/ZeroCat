@@ -448,7 +448,7 @@ router.post("/magiclink/generate", geetest, async (req, res) => {
 
     res.status(200).json({status: "success", message: "Magic Link 已发送到您的邮箱" });
   } catch (error) {
-    console.error("生成 Magic Link 时出错:", error);
+    //console.error("生成 Magic Link 时出错:", error);
     res.status(200).json({ status: "error", message: "生成 Magic Link 失败" });
   }
 });
@@ -496,7 +496,7 @@ router.get("/magiclink/validate", async (req, res) => {
       token: jwtToken,
     });
   } catch (error) {
-    console.error("验证 Magic Link 时出错:", error);
+    //console.error("验证 Magic Link 时出错:", error);
     res.status(200).json({ status: "error",message: "验证 Magic Link 失败" });
   }
 });
