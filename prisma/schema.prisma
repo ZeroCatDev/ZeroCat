@@ -364,7 +364,6 @@ model MagicLinkToken {
   userId     Int
   token      String   @unique
   expiresAt  DateTime
-  user       ow_users @relation(fields: [userId], references: [id])
 }
 
 /// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
