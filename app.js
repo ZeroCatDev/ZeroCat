@@ -206,10 +206,6 @@ app.use("/user", router_register);
 var router_admin = require("./server/router_my.js");
 app.use("/my", router_admin);
 
-//系统平台路由
-var router_admin = require("./server/router_admin.js");
-app.use("/admin", router_admin);
-
 //搜索api
 var router_search = require("./server/router_search.js");
 app.use("/searchapi", router_search);
@@ -232,20 +228,6 @@ app.use("/project", router_project);
 //项目处理路由
 var router_comment = require("./server/router_comment.js");
 app.use("/comment", router_comment);
-app.get("/about", function (req, res, next) {
-  res.render("about.ejs");
-});
-app.get("/share", function (req, res, next) {
-  res.render("share.ejs");
-});
-
-app.get("/search", function (req, res, next) {
-  res.render("search.ejs");
-});
-
-//python路由
-var router_python = require("./server/router_python.js");
-app.use("/python", router_python);
 
 app.get("/check", function (req, res, next) {
   res.status(200).json({
@@ -270,7 +252,12 @@ app.use((err, req, res, next) => {
 //放在最后，友好的处理地址不存在的访问
 app.all("*", function (req, res, next) {
   res.locals.tipType = "访问错误";
-  res.render("404.ejs");
+  res.status(404).json({
+    status: "error",
+    code: "404",
+    message: "找不到页面",
+  });
+
 });
 
 module.exports = app;

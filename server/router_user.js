@@ -15,26 +15,6 @@ router.all("*", function (req, res, next) {
 
 const request = require("request");
 
-router.get("/", function (req, res) {
-  res.render("user.ejs");
-});
-
-router.get("/login", function (req, res) {
-  var SQL = `SELECT id FROM sys_ini WHERE iniKey='regist' AND iniValue=1 LIMIT 1`;
-  DB.query(SQL, function (err, Regist) {
-    if (err || Regist.length == 0) {
-      res.locals.reg = 0;
-    } else {
-      res.locals.reg = 1;
-    }
-
-    res.render("login_or_register.ejs");
-  });
-});
-
-router.get("/repw", function (req, res) {
-  res.render("repw.ejs");
-});
 
 router.get("/logout", function (req, res) {
   logout(req, res);
@@ -63,7 +43,11 @@ router.get("/tuxiaochao", async function (req, res) {
   DB.query(SQL, async function (err, USER) {
     if (err || USER.length == 0) {
       res.locals.tip = { opt: "flash", msg: "用户不存在" };
-      res.render("404.ejs");
+      res.status(404).json({
+    status: "error",
+    code: "404",
+    message: "找不到页面",
+  });
       return;
     }
     uid = res.locals["userid"].toString();

@@ -33,26 +33,9 @@ router.all("*", function (req, res, next) {
   }
 })();
 */
-const request = require("request");
-router.get("/", function (req, res) {
-  res.render("user.ejs");
-});
 
-router.get("/login", function (req, res, next) {
-  var SQL = `SELECT id FROM sys_ini WHERE iniKey='regist' AND iniValue=1 LIMIT 1`;
-  DB.query(SQL, function (err, Regist) {
-    if (err || Regist.length == 0) {
-      res.locals.reg = 0;
-    } else {
-      res.locals.reg = 1;
-    }
-    res.render("login_or_register.ejs");
-  });
-});
 
-router.get("/repw", function (req, res) {
-  res.render("repw.ejs");
-});
+
 const geetest = require("./lib/captcha/geetest.js");
 //geetest,
 router.post("/login", async function (req, res, next) {

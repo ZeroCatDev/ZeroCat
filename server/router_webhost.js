@@ -19,12 +19,20 @@ router.get("/:id/*", function (req, res) {
   DB.query(SQL, function (err, PROJECT) {
     if (err) {
       res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
-      res.render("404.ejs");
+      res.status(404).json({
+    status: "error",
+    code: "404",
+    message: "找不到页面",
+  });
       return;
     }
     if (PROJECT.length == 0) {
       res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
-      res.render("404.ejs");
+      res.status(404).json({
+    status: "error",
+    code: "404",
+    message: "找不到页面",
+  });
       return;
     }
     function getValue(arr, obj) {
@@ -62,7 +70,11 @@ router.get("/:id/*", function (req, res) {
     DB.query(SQL, function (err, U) {
       if (err || U.affectedRows == 0) {
         res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
-        res.render("404.ejs");
+        res.status(404).json({
+    status: "error",
+    code: "404",
+    message: "找不到页面",
+  });
         return;
       }
     });

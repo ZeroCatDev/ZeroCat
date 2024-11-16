@@ -32,51 +32,6 @@ router.get("/project", function (req, res) {
   res.redirect("/my/scratch");
 });
 
-//作品
-router.get("/scratch", function (req, res) {
-  var SQL =
-    `SELECT ` +
-    ` count(case when state='private' then 1 end) AS state0_count, ` +
-    ` count(case when state='public' then 1 end) AS state1_count, ` +
-    ` '' AS state2_count ` +
-    ` FROM scratch WHERE authorid=${res.locals["userid"]}`;
-
-  DB.query(SQL, function (err, data) {
-    if (err) {
-      res.locals.state0_count = 0;
-      res.locals.state1_count = 0;
-      res.locals.state2_count = 0;
-    } else {
-      res.locals.state0_count = data[0].state0_count;
-      res.locals.state1_count = data[0].state1_count;
-      res.locals.state2_count = data[0].state2_count;
-    }
-    res.render("scratch/my_scratch_projects.ejs");
-  });
-});
-
-//作品
-router.get("/python", function (req, res) {
-  var SQL =
-    `SELECT ` +
-    ` count(case when state='private' then 1 end) AS state0_count, ` +
-    ` count(case when state='public' then 1 end) AS state1_count, ` +
-    ` '' AS state2_count ` +
-    ` FROM python WHERE authorid=${res.locals.userid}`;
-
-  DB.query(SQL, function (err, data) {
-    if (err) {
-      res.locals.state0_count = 0;
-      res.locals.state1_count = 0;
-      res.locals.state2_count = 0;
-    } else {
-      res.locals.state0_count = data[0].state0_count;
-      res.locals.state1_count = data[0].state1_count;
-      res.locals.state2_count = data[0].state2_count;
-    }
-    res.render("python/my_python_projects.ejs");
-  });
-});
 //显示Scratch项目列表：数据，{curr:obj.curr, limit:obj.limit,state:state}
 router.get("/getScratchProjects", function (req, res) {
   var curr = parseInt(req.query.curr); //当前要显示的页码
@@ -292,10 +247,6 @@ router.post("/project/del", function (req, res) {
 
     res.status(200).send({ status: "success", msg: "删除成功" });
   });
-});
-//个人设置
-router.get("/info", function (req, res) {
-  res.render("my_info.ejs");
 });
 //修改头像
 router.post("/set/avatar", geetest, function (req, res) {

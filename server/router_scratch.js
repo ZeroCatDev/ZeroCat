@@ -12,14 +12,6 @@ router.all("*", function (req, res, next) {
   next();
 });
 
-//首页
-router.get("/", function (req, res, next) {
-  try {
-    res.render("scratch/scratch_projects.ejs");
-  } catch (err) {
-    next(err);
-  }
-});
 
 router.get("/scratchcount", function (req, res, next) {
   try {
@@ -97,13 +89,6 @@ router.get("/view/seachScratchProjects", function (req, res, next) {
 //1：已发布；
 //2：已开源；（开源的必须发布）
 //Scratch项目展示
-router.get("/play", function (req, res, next) {
-  try {
-    res.render("scratch/scratch_play.ejs");
-  } catch (err) {
-    next(err);
-  }
-});
 
 router.get("/projectinfo", function (req, res, next) {
   try {
@@ -271,13 +256,14 @@ router.get("/play/project/:id", function (req, res, next) {
       DB.query(SQL, function (err, U) {
         if (err || U.affectedRows == 0) {
           res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
-          res.render("404.ejs");
+          res.status(404).json({
+    status: "error",
+    code: "404",
+    message: "找不到页面",
+  });
           return;
         }
 
-        //res.render("scratch/scratch_play.ejs");
-
-        ////console.log(SCRATCH[0]);
       });
     });
   } catch (err) {
@@ -321,21 +307,6 @@ router.post("/play/openSrc", function (req, res, next) {
   }
 });
 
-//Scratch编程界面
-router.get("/edit", function (req, res, next) {
-  try {
-    res.render("scratch/scratch_edit.ejs");
-  } catch (err) {
-    next(err);
-  }
-});
-router.get("/editnew", function (req, res, next) {
-  try {
-    res.render("scratch/scratch_edit_next.ejs");
-  } catch (err) {
-    next(err);
-  }
-});
 //Scratch内部调用一：获取作品数据：JSON源代码
 //支持两种方案加载默认作品
 //1、从指定文件加载

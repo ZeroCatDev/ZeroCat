@@ -85,7 +85,11 @@ router.get("/usertx", async function (req, res, next) {
     DB.query(SQL, async function (err, USER) {
       if (err || USER.length == 0) {
         res.locals.tip = { opt: "flash", msg: "用户不存在" };
-        res.render("404.ejs");
+        res.status(404).json({
+    status: "error",
+    code: "404",
+    message: "找不到页面",
+  });
         return;
       }
       res.redirect(302, await configManager.getConfig('s3.staticurl') + "/user/" + USER[0].images);
@@ -127,7 +131,11 @@ router.get("/getuserinfo", async function (req, res, next) {
     if (!user[0]) {
       console.log("用户不存在");
       res.locals.tip = { opt: "flash", msg: "用户不存在" };
-      res.render("404.ejs");
+      res.status(404).json({
+    status: "error",
+    code: "404",
+    message: "找不到页面",
+  });
     }
     res.send({
       status: "ok",
