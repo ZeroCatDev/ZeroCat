@@ -1,5 +1,5 @@
 {
-  "name": "zerocat",
+  "name": "zerocat-backend",
   "private": true,
   "type": "commonjs",
   "scripts": {
