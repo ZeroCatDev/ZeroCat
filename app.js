@@ -93,7 +93,6 @@ app.use(cors(corsOptions)); // 应用CORS配置函数
 //设置环境变量
 //var session = require("express-session"); app.use( session({ secret: await configManager.getConfig('security.SessionSecret'), resave: false, name: "ZeroCat-session", saveUninitialized: true, cookie: { secure: false }, }) );
 
-
 //express 的http请求体进行解析组件
 var bodyParser = require("body-parser");
 app.use(bodyParser["urlencoded"]({ limit: "50mb", extended: false }));
@@ -125,70 +124,69 @@ global.dirname = __dirname;
 //}); // 平台总入口
 app.options("*", cors());
 
-let zcjwttoken
+let zcjwttoken;
 (async () => {
-  zcjwttoken = await configManager.getConfig("security.jwttoken")
+  zcjwttoken = await configManager.getConfig("security.jwttoken");
 })();
 app.all("*", async function (req, res, next) {
   //console.log(req.method +' '+ req.url + " IP:" + req.ip);
   const token =
-  ((req.headers["authorization"] || "").replace("Bearer ", ""))||
+    (req.headers["authorization"] || "").replace("Bearer ", "") ||
     (req.cookies && req.cookies.token) ||
     (req.body && req.body.token) ||
     (req.headers && req.headers["token"]) ||
-    (req.query && req.query.token)
-console.log(token);
-// Continue with the token verification
-if (token) {
+    (req.query && req.query.token);
+  console.log(token);
+  // Continue with the token verification
+  if (token) {
     jwt.verify(token, zcjwttoken, (err, decodedToken) => {
-        if (err) {
-            // If verification fails, clear local login state
-            res.locals = {
-                login: false,
-                userid: "",
-                email: "",
-                username: "",
-                display_name: "",
-                avatar: "",
-                is_admin: 0,
-                usertoken: "",
-            };
-            //console.log("JWT验证失败: " + err.message);
-        } else {
-            // If verification succeeds, store user info
-            let userInfo = decodedToken;
-            res.locals = {
-                login: true,
-                userid: userInfo.userid,
-                email: userInfo.email,
-                username: userInfo.username,
-                display_name: userInfo.display_name,
-                avatar: userInfo.avatar,
-                is_admin: 0,
-                usertoken: token,
-            };
-            //console.log("JWT验证成功: " + userInfo.email);
-            //console.log("调试用户信息(session): " + JSON.stringify(res.locals));
-        }
+      if (err) {
+        // If verification fails, clear local login state
+        res.locals = {
+          login: false,
+          userid: "",
+          email: "",
+          username: "",
+          display_name: "",
+          avatar: "",
+          is_admin: 0,
+          usertoken: "",
+        };
+        //console.log("JWT验证失败: " + err.message);
+      } else {
+        // If verification succeeds, store user info
+        let userInfo = decodedToken;
+        res.locals = {
+          login: true,
+          userid: userInfo.userid,
+          email: userInfo.email,
+          username: userInfo.username,
+          display_name: userInfo.display_name,
+          avatar: userInfo.avatar,
+          is_admin: 0,
+          usertoken: token,
+        };
+        //console.log("JWT验证成功: " + userInfo.email);
+        //console.log("调试用户信息(session): " + JSON.stringify(res.locals));
+      }
 
-        next();
+      next();
     });
-} else {
+  } else {
     // If no token is found, clear local login state
     res.locals = {
-        login: false,
-        userid: 0,
-        email: "",
-        username: "",
-        display_name: "未登录",
-        avatar: "",
-        is_admin: 0,
-        usertoken: "",
+      login: false,
+      userid: 0,
+      email: "",
+      username: "",
+      display_name: "未登录",
+      avatar: "",
+      is_admin: 0,
+      usertoken: "",
     };
     console.log("未找到JWT Token");
     next();
-}
-
+  }
 });
 
 //首页
@@ -249,6 +247,12 @@ app.get("/search", function (req, res, next) {
 var router_python = require("./server/router_python.js");
 app.use("/python", router_python);
 
+app.get("/check", function (req, res, next) {
+  res.status(200).sendjson({
+    message: "success",
+    code: 200,
+  });
+});
 process.on("uncaughtException", function (err) {
   console.log("Caught exception: " + err);
 });
