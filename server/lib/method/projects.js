@@ -1,8 +1,8 @@
 //prisma client
-import { PrismaClient } from "@prisma/client";
+const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
-import { getUsersByList } from "./users.js";
+const { getUsersByList } = require("./users.js");
 
 async function getProjectsByList(list, userid) {
   var select = {
@@ -43,7 +43,7 @@ async function getProjectsAndUsersByProjectsList(list, userid) {
 //(async () => {console.log(await getProjectsAndUsersByProjectsList([3, 126, 130, 131, 129], 2));})();
 
 //console.log(await getProjectsAndUsersByProjectsList([3, 126, 130, 131, 129], 2))
-export default {
+module.exports = {
   getProjectsByList,
   getUsersByList,
   getProjectsAndUsersByProjectsList,

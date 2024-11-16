@@ -1,9 +1,9 @@
-import configManager from "./configManager.js";
+const configManager = require("./configManager");
 
-import { Router } from "express";
-const router = Router();
-import { prisma } from "./lib/global.js"; // 功能函数集
-import { qww } from "./lib/database.js"; // 数据库
+const express = require("express");
+const router = express.Router();
+const I = require("./lib/global.js"); // 功能函数集
+const DB = require("./lib/database.js"); // 数据库
 
 // 搜索：Scratch项目列表：数据（只搜索标题）
 router.get("/", async (req, res, next) => {
@@ -53,7 +53,7 @@ router.get("/", async (req, res, next) => {
     };
 
     // 查询项目结果
-    const projectresult = await prisma.ow_projects.findMany({
+    const projectresult = await I.prisma.ow_projects.findMany({
       where: searchinfo,
       orderBy: { [orderBy]: order },
       select: {
@@ -72,13 +72,13 @@ router.get("/", async (req, res, next) => {
     });
     console.log(searchinfo);
     // 统计项目总数
-    const projectcount = await prisma.ow_projects.count({
+    const projectcount = await I.prisma.ow_projects.count({
       where: searchinfo,
     });
 
     // 获取作者信息
     const authorIds = [...new Set(projectresult.map((item) => item.authorid))];
-    const userresult = await prisma.ow_users.findMany({
+    const userresult = await I.prisma.ow_users.findMany({
       where: { id: { in: authorIds } },
       select: {
         id: true,
@@ -110,7 +110,7 @@ router.post("/user", async (req, res, next) => {
     const SQL = `SELECT id, display_name, motto, images FROM ow_users WHERE display_name LIKE ?`;
     const WHERE = [`%${searchTxt}%`];
 
-    qww(SQL, WHERE, (err, data) => {
+    DB.qww(SQL, WHERE, (err, data) => {
       if (err) {
         return res.status(500).send([]); // 如果有数据库错误，返回500状态码
       }
@@ -121,4 +121,4 @@ router.post("/user", async (req, res, next) => {
   }
 });
 
-export default router;
+module.exports = router;

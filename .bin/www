@@ -4,7 +4,7 @@
  * Module dependencies.
  */
 
-import configManager from "../server/configManager.js";
+const configManager = require("../server/configManager");
 
 
 // 使用 getConfig 函数获取配置
@@ -14,9 +14,9 @@ import configManager from "../server/configManager.js";
 })();
 
 //console.log(config)
-import app from "../app.js";
+var app = require("../app");
 //var debug = require('debug')('scratchmirror:server');
-import { createServer } from "http";
+var http = require("http");
 
 /**
  * Get port from environment and store in Express.
@@ -31,7 +31,7 @@ app.set("host", process.env.HOST || "0.0.0.0");
  * Create HTTP server.
  */
 
-var server = createServer(app);
+var server = http.createServer(app);
 
 /**
  * Listen on provided port, on all network interfaces.

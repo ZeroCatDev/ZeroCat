@@ -1,13 +1,13 @@
-import configManager from "../configManager.js";
+const configManager = require("../configManager");
 
-import { Router } from "express";
-var router = Router();
-import { encode, decode } from "html-entities";
+var express = require("express");
+var router = express.Router();
+const { encode, decode } = require("html-entities");
 
-import { query, qww } from "./lib/database.js"; // 数据库
+var DB = require("./lib/database.js"); // 数据库
 
 //功能函数集
-import I from "./lib/global.js";
+var I = require("./lib/global.js");
 router.all("*", function (req, res, next) {
   next();
 });
@@ -16,7 +16,7 @@ router.all("*", function (req, res, next) {
 //获取源代码数据
 router.get("/:id/*", function (req, res) {
   var SQL = `SELECT source FROM ow_projects WHERE id=${req.params.id} LIMIT 1`;
-  query(SQL, function (err, PROJECT) {
+  DB.query(SQL, function (err, PROJECT) {
     if (err) {
       res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
       res.status(404).json({
@@ -67,7 +67,7 @@ router.get("/:id/*", function (req, res) {
 
     //浏览数+1
     var SQL = `UPDATE ow_projects SET view_count=view_count+1 WHERE id=${req.params.id} LIMIT 1`;
-    query(SQL, function (err, U) {
+    DB.query(SQL, function (err, U) {
       if (err || U.affectedRows == 0) {
         res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
         res.status(404).json({
@@ -117,7 +117,7 @@ router.post("/update/:id", function (req, res) {
     source: JSON.stringify(encodeHtmlInJson(req.body)),
     //        description:req.body.description
   };
-  qww(UPDATE, SET, function (err, u) {
+  DB.qww(UPDATE, SET, function (err, u) {
     if (err) {
       res.status(200).send({ status: "0", msg: "保存失败" });
       return;
@@ -127,4 +127,4 @@ router.post("/update/:id", function (req, res) {
   });
 });
 
-export default router;
+module.exports = router;

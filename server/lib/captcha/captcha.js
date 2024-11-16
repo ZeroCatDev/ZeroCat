@@ -1,9 +1,9 @@
-import { getConfig } from "../configManager.js";
+const configManager = require("../configManager");
 
-import express from "express";
+const express = require("express");
 
 const app = express();
-import { post } from "request";
+const request = require("request");
 
 app.use(async (req, res, next) => {
   const recaptcha =
@@ -13,10 +13,10 @@ app.use(async (req, res, next) => {
     return res.status(200).send({ message: "请完成验证码" });
   }
 
-  post(
+  request.post(
     {
-      url: await getConfig('captcha.reverify'),
-      form: { secret: await getConfig('captcha.resecret'), response: recaptcha },
+      url: await configManager.getConfig('captcha.reverify'),
+      form: { secret: await configManager.getConfig('captcha.resecret'), response: recaptcha },
     },
     function (error, httpResponse, body) {
       if (error) {
@@ -35,4 +35,4 @@ app.use(async (req, res, next) => {
   );
 });
 
-export default app;
+module.exports = app;

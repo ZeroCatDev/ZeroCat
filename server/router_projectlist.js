@@ -1,10 +1,20 @@
-import configManager from "./configManager.js";
+const configManager = require("./configManager");
 
-import { Router } from "express";
-const router = Router();
-import needlogin from "./lib/needlogin.js";
+const express = require("express");
+const router = express.Router();
+const needlogin = require("./lib/needlogin.js");
 
-import { userProjectlistAdd, userProjectlistDelete, getProjectlist, deleteProjectlist, updateProjectlist, createProjectlist, getUserPublicProjectlist, getUserProjectlist, checkProjectlistWithUser } from "./lib/method/projectlist.js";
+const {
+  userProjectlistAdd,
+  userProjectlistDelete,
+  getProjectlist,
+  deleteProjectlist,
+  updateProjectlist,
+  createProjectlist,
+  getUserPublicProjectlist,
+  getUserProjectlist,
+  checkProjectlistWithUser,
+} = require("./lib/method/projectlist.js");
 
 // 中间件，确保所有请求均经过该处理
 router.all("*", (req, res, next) => next());
@@ -126,4 +136,4 @@ router.delete("/:id", needlogin, async (req, res, next) => {
 });
 
 
-export default router;
+module.exports = router;

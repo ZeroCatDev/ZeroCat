@@ -1,5 +1,3 @@
-import configManager from "../configManager.js";
-
 const registrationTemplate = async (email, password) => `
   <div class="page flex-col">
     <div class="box_3 flex-col"
@@ -105,7 +103,7 @@ const passwordResetTemplate = async (email, token) => `
   </div>
 `;
 
-export {
+module.exports = {
   registrationTemplate,
   passwordResetTemplate,
 };

@@ -1,5 +1,5 @@
-import express from 'express';
-import {isTotpTokenValid} from "./totpUtils.js";
+const express = require('express');
+const { isTotpTokenValid } = require('./totpUtils');
 
 // TOTP validation middleware
 async function validateTotpToken(req, res, next) {
@@ -42,4 +42,4 @@ async function validateTotpToken(req, res, next) {
   }
 }
 
-export default validateTotpToken;
+module.exports = validateTotpToken;

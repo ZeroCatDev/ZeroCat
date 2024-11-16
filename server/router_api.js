@@ -1,11 +1,11 @@
-import configManager from "./configManager.js";
+const configManager = require("./configManager");
 
-import { Router } from "express";
-var router = Router();
-import fs from "fs";
+var express = require("express");
+var router = express.Router();
+var fs = require("fs");
 
-import { prisma } from "./lib/global.js";
-import { query } from "./lib/database.js";
+var I = require("./lib/global.js");
+var DB = require("./lib/database.js");
 
 router.get("/", async function (req, res, next) {
   try {
@@ -13,7 +13,7 @@ router.get("/", async function (req, res, next) {
       `SELECT ` +
       ` (SELECT count(id) FROM ow_projects WHERE state='public' AND type='scratch' ) AS scratch_count, ` +
       ` (SELECT count(id) FROM ow_projects WHERE state='public' AND type='python') AS python_count `;
-    query(SQL, function (err, data) {
+    DB.query(SQL, function (err, data) {
       if (err) {
         res.locals.scratch_count = 0;
         res.locals.python_count = 0;
@@ -36,7 +36,7 @@ router.post("/getUserScratchProjects", async function (req, res, next) {
     var SQL = `SELECT id, title,state,view_count,description FROM ow_projects WHERE authorid=${userid} AND state='public' AND type='scratch' ORDER BY view_count DESC LIMIT ${
       (curr - 1) * limit
     }, ${limit}`;
-    query(SQL, function (err, data) {
+    DB.query(SQL, function (err, data) {
       if (err) {
         res.status(200).send([]);
       } else {
@@ -56,7 +56,7 @@ router.post("/getUserPythonProjects", async function (req, res, next) {
     var SQL = `SELECT id, title,state,view_count,description FROM ow_projects WHERE authorid=${userid} AND state='public' AND type='python' ORDER BY view_count DESC LIMIT ${
       (curr - 1) * limit
     }, ${limit}`;
-    query(SQL, function (err, data) {
+    DB.query(SQL, function (err, data) {
       if (err) {
         res.status(200).send([]);
       } else {
@@ -82,7 +82,7 @@ router.post("/getProjectsInfo", async function (req, res, next) {
 router.get("/usertx", async function (req, res, next) {
   try {
     SQL = `SELECT images FROM ow_users WHERE id = ${req.query.id};`;
-    query(SQL, async function (err, USER) {
+    DB.query(SQL, async function (err, USER) {
       if (err || USER.length == 0) {
         res.locals.tip = { opt: "flash", msg: "用户不存在" };
         res.status(404).json({
@@ -101,7 +101,7 @@ router.get("/usertx", async function (req, res, next) {
 
 router.get("/getuserinfo", async function (req, res, next) {
   try {
-    user = await prisma.ow_users.findMany({
+    user = await I.prisma.ow_users.findMany({
       where: {
         id: parseInt(req.query.id),
       },
@@ -116,13 +116,13 @@ router.get("/getuserinfo", async function (req, res, next) {
       },
     });
 
-    scratchcount = await prisma.ow_projects.count({
+    scratchcount = await I.prisma.ow_projects.count({
       where: {
         type: "scratch",
         state: "public",
       },
     });
-    pythoncount = await prisma.ow_projects.count({
+    pythoncount = await I.prisma.ow_projects.count({
       where: {
         type: "python",
         state: "public",
@@ -148,9 +148,9 @@ router.get("/getuserinfo", async function (req, res, next) {
 
 router.get("/info", async (req, res, next) => {
   try {
-    const userCount = await prisma.ow_users.count();
-    const scratchCount = await prisma.ow_projects.count();
-    const pythonCount = await prisma.ow_projects.count();
+    const userCount = await I.prisma.ow_users.count();
+    const scratchCount = await I.prisma.ow_projects.count();
+    const pythonCount = await I.prisma.ow_projects.count();
 
     res.send({
       user: userCount,
@@ -178,7 +178,7 @@ router.get("/myprojectcount", async function (req, res, next) {
       ` '' AS state2_count ` +
       ` FROM ow_projects WHERE authorid=${res.locals["userid"]} AND type='${res.locals.type}'`;
 
-    query(SQL, function (err, data) {
+    DB.query(SQL, function (err, data) {
       if (err) {
         res.locals.state0_count = 0;
         res.locals.state1_count = 0;
@@ -210,7 +210,7 @@ router.get("/work/info", async function (req, res, next) {
       `'' AS state2_count ` +
       ` FROM ow_projects WHERE authorid=${res.locals["userid"]} AND type='${res.locals.type}'`;
 
-    query(SQL, function (err, data) {
+    DB.query(SQL, function (err, data) {
       if (err) {
         res.locals.state0_count = 0;
         res.locals.state1_count = 0;
@@ -239,7 +239,7 @@ router.get("/projectinfo", async function (req, res, next) {
       ` FROM ow_projects ` +
       ` LEFT JOIN ow_users ON (ow_users.id=ow_projects.authorid) ` +
       ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state='public' or ow_projects.authorid=${res.locals.userid}) LIMIT 1`;
-    query(SQL, function (err, SCRATCH) {
+    DB.query(SQL, function (err, SCRATCH) {
       if (err || SCRATCH.length == 0) {
         res.locals.tip = { opt: "flash", msg: "项目不存在或未发布", error: err };
         res.send({
@@ -261,4 +261,4 @@ router.get("/projectinfo", async function (req, res, next) {
   }
 });
 
-export default router;
+module.exports = router;

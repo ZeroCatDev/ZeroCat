@@ -1,5 +1,5 @@
 //prisma client
-import { PrismaClient } from "@prisma/client";
+const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
 async function getUsersByList(list) {
@@ -25,4 +25,4 @@ async function getUsersByList(list) {
 
   return users;
 }
-export  { getUsersByList };
+module.exports = { getUsersByList };
