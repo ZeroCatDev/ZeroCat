@@ -1,13 +1,22 @@
 const configManager = require("../configManager");
 
 const nodemailer = require('nodemailer');
-
+let service, user, pass
+ configManager.getConfig('mail.service').then((res) => {
+  service = res
+});
+ configManager.getConfig('mail.user').then((res) => {
+  user = res
+});
+ configManager.getConfig('mail.pass').then((res) => {
+  pass = res
+});
 const transporter = nodemailer.createTransport({
-  service:  configManager.getConfigSync('mail.service'),
+  service:  service,
   secure: true,
   auth: {
-    user:  configManager.getConfigSync('mail.user'),
-    pass:  configManager.getConfigSync('mail.pass'),
+    user:  user,
+    pass:  pass,
   },
 });
 

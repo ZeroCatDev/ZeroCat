@@ -1,44 +1,14 @@
 <!DOCTYPE html>
-<html lang="zh-cmn-Hans">
+<html lang="zh-cmn-Hans" class="mdui-theme-dark">
 
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>
-    <%= global.configManager['site.name'] %>
+    <%= global.config['site.name'] %>
   </title>
-  <link rel="shortcut icon" href="<%= global.configManager['urls.static'] %>/img/siteicon.png" />
-  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-  <meta charset="UTF-8" />
-
-  <meta name="description" content="ZeroCat是新一代开源编程社区！坚信每一行代码都可以改变世界，我们致力于提供优质的开源编程社区，让开源编程更加容易。" />
-  <meta name="keyword" content="scratch编程,scratch社区,python编程,python社区,在线编程,编程社区,开源,自托管,开源编程社区,代码,阿尔法营,有道小图灵" />
-  <meta name="author" content="<%= global.configManager['site.name'] %>" />
-  <meta name="generator" content="<%= global.configManager['site.domain'] %>" />
-  <meta name="HandheldFriendly" content="true" />
-  <meta name="MobileOptimized" content="320" />
-  <meta name="screen-orientation" content="portrait" />
-  <meta name="x5-orientation" content="portrait" />
-  <meta name="renderer" content="webkit" />
-  <meta name="force-rendering" content="webkit" />
-  <meta name="format-detection" content="telephone=no" />
-  <meta name="format-detection" content="date=no" />
-  <meta name="format-detection" content="address=no" />
-  <meta content="”telephone"="no”" name="”format-detection”" />
-  <meta property="og:title"
-    content="<%= global.configManager['site.name'] %> - <%= global.configManager['site.slogan'] %>" />
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="<%= global.configManager['urls.frontend'] %>" />
-  <meta property="og:image" content="<%= global.configManager['urls.static'] %>/img/toutu.png" />
-  <meta name="referrer" content="origin-when-cross-origin" />
-
-  <meta http-equiv="X-UA-Compatible" content="IE=edge, chrome=1" />
-
-  <link rel="stylesheet" href="<%= global.configManager['urls.static'] %>/mdui2/mdui.css" id="mdui_css" />
-
-  <meta name="view-transition" content="same-origin" />
-
-  <script type="text/javascript" src="<%= global.configManager['urls.static'] %>/js/jquery.3.7.1.js"></script>
+  <link rel="shortcut icon" href="<%= global.config['urls.static'] %>/img/siteicon.png">
+  <link rel="stylesheet" href="<%= global.config['urls.static'] %>/mdui2/mdui.css" id="mdui_css">
 </head>
 <style>
   :not(:defined) {
@@ -46,44 +16,36 @@
   }
 </style>
 
-<body class="mdui-theme-dark mdui-theme-accent-blue mdui-loaded">
+<body>
   <mdui-layout style="height: 100vh">
-    <link href="<%= global.configManager['urls.static'] %>/font1.css" rel="stylesheet" />
+    <link href="<%= global.config['urls.static'] %>/font1.css" rel="stylesheet" />
 
     <mdui-layout-main>
-      <div class="zc-container" style="border-radius: 15px">
-        <link href="<%= global.configManager['urls.static'] %>/css/webpixels-1.2.6.css" rel="stylesheet" />
 
-        <div>
-          <div class="py-24">
-            <div class="container max-w-screen-xl">
-              <div class="row align-items-center">
-                <div class="col-12 col-lg-5 mb-10 mb-lg-0">
-                  <div class="display-4 mb-5 mt-n16">🚀</div>
-                  <div class="ls-tight font-bolder display-3 mb-5">
-                    <%= global.configManager['site.name'] %>，<br />启动！
-                  </div>
-                  <p class="lead mb-10">
-                    <%= global.configManager['site.slogan'] %>
-                  </p>
 
-                  <div class="mx-n2">
-                    <mdui-button variant="filled" href="<%= global.configManager['urls.frontend'] %>">立刻加入</mdui-button>
-                    <mdui-button variant="elevated" href="#">了解更多</mdui-button><mdui-list>
-                      <mdui-list-item icon="people" description="qq群号964979747" href="https://qm.qq.com/q/wn3TkPoZ5C"
-                        active rounded>ZeroCat现由厚浪云提供支持</mdui-list-item>
-                    </mdui-list>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+
+      <mdui-list>
+        <% const config = JSON.parse(JSON.stringify(global.publicconfig)); %>
+        <% Object.entries(config).forEach(([key, value]) => { %>
+            <mdui-list-item
+                rounded
+                headline="<%= key %>"
+                description="<%= typeof value === 'object' ? JSON.stringify(value) : value %>"
+            ></mdui-list-item>
+        <% }); %>
+    </mdui-list>
+
+        <mdui-button variant="filled" href="<%= global.config['urls.frontend'] %>">立刻加入</mdui-button>
+        <mdui-button variant="elevated" href="#">了解更多</mdui-button><mdui-list>
+          <mdui-list-item icon="people" description="qq群号964979747" href="https://qm.qq.com/q/wn3TkPoZ5C" active
+            rounded>ZeroCat现由厚浪云提供支持</mdui-list-item>
+        </mdui-list>
+
         </div>
-      </div>
     </mdui-layout-main>
   </mdui-layout>
 </body>
-<script src="<%= global.configManager['urls.static'] %>/mdui2/mdui.global.js"></script>
+<script src="<%= global.config['urls.static'] %>/mdui2/mdui.global.js"></script>
 <script>
   mdui.setColorScheme("#2087fd");
 </script>

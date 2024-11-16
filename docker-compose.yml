@@ -8,8 +8,3 @@ services:
     container_name: zerocat
     ports:
       - 3000:3000
-#    volumes:
-#      - data:/data
-#volumes:
-#  data:
-#    size: 5Gi

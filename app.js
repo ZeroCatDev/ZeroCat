@@ -31,20 +31,6 @@ const sdk = new opentelemetry.NodeSDK({
 });
 sdk.start();
 */
-/*
-const express = require('express');
-const app = express();
-const configManager = require('./configManager');
-
-app.use(async (req, res, next) => {
-    try {
-        await configManager.initialize(); // 确保每个请求前初始化
-        next();
-    } catch (error) {
-        console.error('Middleware initialization error:', error);
-        res.status(500).send('Internal Server Error');
-    }
-});*/
 
 // 路由处理...
 
@@ -235,6 +221,7 @@ app.get("/check", function (req, res, next) {
     code: 200,
   });
 });
+
 process.on("uncaughtException", function (err) {
   console.log("Caught exception: " + err);
 });

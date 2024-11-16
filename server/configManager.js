@@ -1,70 +1,74 @@
 // configManager.js
-const { PrismaClient } = require('@prisma/client');
+const { PrismaClient } = require("@prisma/client");
 
 class ConfigManager {
-    constructor() {
-        this.prisma = new PrismaClient();
-        this.config = {};
+  constructor() {
+    this.prisma = new PrismaClient();
+  }
+
+  async loadConfigsFromDB() {
+    // Fetch all configurations from the database
+    const configs = await this.prisma.ow_config.findMany();
+
+    // Internal configurations
+    global.config = {};
+    configs.forEach(({ key, value }) => {
+      global.config[key] = value;
+    });
+
+    // Public configurations
+    global.publicconfig = {};
+    configs.forEach(({ key, value, is_public }) => {
+      if (is_public == 1) {
+        global.publicconfig[key] = value;
+      }
+    });
+
+    // Configuration information
+    global.configinfo = configs;
+
+    console.log(global.configinfo); // Log the updated config info
+  }
+
+  async getConfig(key) {
+    // Check if the value is already cached
+    if (global.config && global.config[key]) {
+      return global.config[key];
+    }
+    // If not cached, fetch from the database
+    await this.loadConfigsFromDB();
+    // If not cached, fetch from the database
+    if (global.config && global.config[key]) {
+      return global.config[key];
+    }
+    throw new Error(`Config key "${key}" not found.`);
+  }
+
+  async getPublicConfigs(key) {
+    // Check if the value is already cached
+    if (global.publicconfig && global.publicconfig[key]) {
+      return global.publicconfig[key];
+    }
+    // If not cached, fetch from the database
+    await this.loadConfigsFromDB();
+
+    if (global.publicconfig && global.publicconfig[key]) {
+      return global.publicconfig[key];
+    }
+    throw new Error(`Config key "${key}" not found.`);
+  }
+
+  async getConfigFromDB(key) {
+    await this.loadConfigsFromDB();
+
+    if (global.config && global.config[key]) {
+      return global.config[key];
     }
 
-    async loadAllConfigs() {
-        const configs = await this.prisma.ow_config.findMany();
-        configs.forEach(({ key, value }) => {
-            this.config[key] = value;
-        });
-        global.configManager = this.config
-
-    }
-
-    initialize() {
-        return this.loadAllConfigs(); // 将 initialize 方法定义为加载所有配置
-    }
-
-    async getConfig(key) {
-        //console.log(this.config)
-
-        // 检查值是否已经缓存
-        if (this.config[key]) {
-            return this.config[key];
-        }
-        // 如果未缓存，则从数据库获取
-        return await this.getConfigFromDB(key);
-    }
-
-    getConfigSync(key) {
-        //console.log(this.config)
-
-        // 检查值是否已经缓存
-        if (this.config[key]) {
-            return this.config[key];
-        }
-
-        // 如果未缓存，直接从数据库获取
-        const config = this.prisma.ow_config.findFirst({
-            where: { key: key }
-        });
-        this.config[key] = config ? config.value : null;
-        return config ? config.value : null;
-    }
-
-    async loadAndCacheAll() {
-        await this.loadAllConfigs();
-    }
-
-
-    async getConfigFromDB(key) {
-        const config = await this.prisma.ow_config.findFirst({
-            where: { key: key }
-        });
-
-        if (config) {
-            this.config[key] = config.value; // 缓存获取的值
-            return config.value;
-        }
-
-        throw new Error(`Config key "${key}" not found.`);
-    }
+    throw new Error(`Config key "${key}" not found.`);
+  }
 }
-// 使用单例模式
+
+// Create a singleton instance of the ConfigManager class
 const configManagerInstance = new ConfigManager();
 module.exports = configManagerInstance;
