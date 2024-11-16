@@ -359,6 +359,14 @@ model ow_users_totp {
   updated_at        DateTime? @default(now()) @db.Timestamp(0)
 }
 
+model MagicLinkToken {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  token      String   @unique
+  expiresAt  DateTime
+  user       ow_users @relation(fields: [userId], references: [id])
+}
+
 /// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 /// This view or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 view ow_projects_view {

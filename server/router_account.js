@@ -412,4 +412,92 @@ router.post("/totp/protected-route", validateTotpToken, (req, res) => {
   });
 });
 
+router.post("/magiclink/generate", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email || !I.emailTest(email)) {
+      return res.status(400).json({ message: "无效的邮箱地址" });
+    }
+
+    const user = await I.prisma.ow_users.findUnique({ where: { email } });
+    if (!user) {
+      return res.status(404).json({ message: "用户不存在" });
+    }
+
+    const token = jwt.sign(
+      { userId: user.id },
+      await configManager.getConfig("MAGICLINK_SECRET"),
+      { expiresIn: await configManager.getConfig("MAGICLINK_EXPIRATION") }
+    );
+
+    await I.prisma.magicLinkToken.create({
+      data: {
+        userId: user.id,
+        token,
+        expiresAt: new Date(Date.now() + parseInt(await configManager.getConfig("MAGICLINK_EXPIRATION")) * 1000),
+      },
+    });
+
+    const magicLink = `${await configManager.getConfig("MAGICLINK_BASE_URL")}/magiclink/validate?token=${token}`;
+    await sendEmail(
+      email,
+      "Magic Link 登录",
+      `点击以下链接登录：<a href="${magicLink}">${magicLink}</a>`
+    );
+
+    res.status(200).json({ message: "Magic Link 已发送到您的邮箱" });
+  } catch (error) {
+    console.error("生成 Magic Link 时出错:", error);
+    res.status(500).json({ message: "生成 Magic Link 失败" });
+  }
+});
+
+router.get("/magiclink/validate", async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) {
+      return res.status(400).json({ message: "无效的 Magic Link" });
+    }
+
+    const decoded = jwt.verify(token, await configManager.getConfig("MAGICLINK_SECRET"));
+    const magicLinkToken = await I.prisma.magicLinkToken.findUnique({
+      where: { token },
+    });
+
+    if (!magicLinkToken || magicLinkToken.expiresAt < new Date()) {
+      return res.status(400).json({ message: "Magic Link 已过期" });
+    }
+
+    const user = await I.prisma.ow_users.findUnique({
+      where: { id: magicLinkToken.userId },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "用户不存在" });
+    }
+
+    const jwtToken = await I.GenerateJwt({
+      userid: user.id,
+      username: user.username,
+      email: user.email,
+      display_name: user.display_name,
+      avatar: user.images,
+    });
+
+    res.status(200).json({
+      status: "OK",
+      message: "登录成功",
+      userid: user.id,
+      email: user.email,
+      username: user.username,
+      display_name: user.display_name,
+      avatar: user.images,
+      token: jwtToken,
+    });
+  } catch (error) {
+    console.error("验证 Magic Link 时出错:", error);
+    res.status(500).json({ message: "验证 Magic Link 失败" });
+  }
+});
+
 module.exports = router;
