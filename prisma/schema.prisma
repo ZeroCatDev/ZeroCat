@@ -162,7 +162,7 @@ model ow_users {
   updatedAt    DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
   label        String?   @db.VarChar(255)
 
-  @@id([id, username])
+  @@id([id, username, email])
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -357,6 +357,13 @@ model ow_users_totp {
   totp_last_updated DateTime? @db.Timestamp(0)
   created_at        DateTime? @default(now()) @db.Timestamp(0)
   updated_at        DateTime? @default(now()) @db.Timestamp(0)
+}
+
+model magiclinktoken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  token     String   @unique(map: "token") @db.VarChar(255)
+  expiresAt DateTime @db.DateTime(0)
 }
 
 /// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
