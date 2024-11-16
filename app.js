@@ -248,7 +248,7 @@ var router_python = require("./server/router_python.js");
 app.use("/python", router_python);
 
 app.get("/check", function (req, res, next) {
-  res.status(200).sendjson({
+  res.status(200).json({
     message: "success",
     code: 200,
   });
