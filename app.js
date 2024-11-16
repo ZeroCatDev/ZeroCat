@@ -1,41 +1,21 @@
-var express = require("express");
+import express from "express";
 var app = express();
-const jwt = require("jsonwebtoken");
+import jsonwebtoken from "jsonwebtoken";
 
-const configManager = require("./server/configManager.js");
+import configManager from "./server/configManager.js";
+import dotenv from "dotenv";
+dotenv.config({ override: true });
+//import path from 'path';
 
-require("dotenv").config({ override: true });
-//console.log(global.config);
-// 日志部分
-/*
-const opentelemetry = require("@opentelemetry/sdk-node");
-const {
-  getNodeAutoInstrumentations,
-} = require("@opentelemetry/auto-instrumentations-node");
-const {
-  OTLPTraceExporter,
-} = require("@opentelemetry/exporter-trace-otlp-proto");
-const { BatchSpanProcessor } = require("@opentelemetry/sdk-trace-base");
-const { Resource } = require("@opentelemetry/resources");
-const {
-  SemanticResourceAttributes,
-} = require("@opentelemetry/semantic-conventions");
-const traceExporter = new OTLPTraceExporter({ url: "https://api.axiom.co/v1/traces", headers: { Authorization: `Bearer ${process.env.AXIOM_TOKEN}`, "X-Axiom-Dataset": process.env.AXIOM_DATASET, }, });
-const resource = new Resource({
-  [SemanticResourceAttributes.SERVICE_NAME]: "node traces",
-});
-const sdk = new opentelemetry.NodeSDK({
-  spanProcessor: new BatchSpanProcessor(traceExporter),
-  resource: resource,
-  instrumentations: [getNodeAutoInstrumentations()],
-});
-sdk.start();
-*/
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
-// 路由处理...
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+console.log("运行目录：" + __dirname);
 
-var morganlogger = require("morgan");
-morganlogger.token("colored-status", (req, res) => {
+import morganlogger, { token as _token } from "morgan";
+_token("colored-status", (req, res) => {
   const status = res.statusCode;
   let color;
   if (status >= 500) {
@@ -54,7 +34,7 @@ app.use(
 );
 
 // cors配置
-var cors = require("cors");
+import cors from "cors";
 let corslist;
 (async () => {
   corslist = (await configManager.getConfig("cors")).split(",");
@@ -80,26 +60,23 @@ app.use(cors(corsOptions)); // 应用CORS配置函数
 //var session = require("express-session"); app.use( session({ secret: await configManager.getConfig('security.SessionSecret'), resave: false, name: "ZeroCat-session", saveUninitialized: true, cookie: { secure: false }, }) );
 
 //express 的http请求体进行解析组件
-var bodyParser = require("body-parser");
+import bodyParser from "body-parser";
 app.use(bodyParser["urlencoded"]({ limit: "50mb", extended: false }));
 app.use(bodyParser["json"]({ limit: "50mb" }));
 app.use(bodyParser["text"]({ limit: "50mb" }));
 
 //文件上传模块
-var multipart = require("connect-multiparty");
+import multipart from "connect-multiparty";
 app.use(multipart({ uploadDir: "./data/upload_tmp" }));
 
 //压缩组件，需要位于 express.static 前面，否则不起作用
-var compress = require("compression");
+import compress from "compression";
 app.use(compress());
 
 app.set("env", __dirname + "/.env");
 app.set("data", __dirname + "/data");
 app.set("views", __dirname + "/views");
 app.set("view engine", "ejs");
-
-//数据库
-var DB = require("./server/lib/database.js");
 
 //全局变量
 global.dirname = __dirname;
@@ -125,7 +102,7 @@ app.all("*", async function (req, res, next) {
   console.log(token);
   // Continue with the token verification
   if (token) {
-    jwt.verify(token, zcjwttoken, (err, decodedToken) => {
+    jsonwebtoken.verify(token, zcjwttoken, (err, decodedToken) => {
       if (err) {
         // If verification fails, clear local login state
         res.locals = {
@@ -182,39 +159,40 @@ app.get("/", function (req, res) {
 
 //放在最后，确保路由时能先执行app.all=====================
 //注册、登录等功能路由
-var router_register = require("./server/router_account.js");
+import router_register from "./server/router_account.js";
 app.use("/account", router_register);
 
-var router_register = require("./server/router_user.js");
-app.use("/user", router_register);
+import router_user from "./server/router_user.js";
+app.use("/user", router_user);
 
-//个人中心路由//学生平台路由
-var router_admin = require("./server/router_my.js");
+//个人中心路由
+import router_admin from "./server/router_my.js";
 app.use("/my", router_admin);
 
 //搜索api
-var router_search = require("./server/router_search.js");
+import router_search from "./server/router_search.js";
 app.use("/searchapi", router_search);
 
 //scratch路由
-var router_scratch = require("./server/router_scratch.js");
+import router_scratch from "./server/router_scratch.js";
 app.use("/scratch", router_scratch);
-//api路由
-var apiserver = require("./server/router_api.js");
-app.use("/api", apiserver);
-//api路由
 
-var router_projectlist = require("./server/router_projectlist.js");
+//api路由
+import apiserver from "./server/router_api.js";
+app.use("/api", apiserver);
+
+import router_projectlist from "./server/router_projectlist.js";
 app.use("/projectlist", router_projectlist);
 
-//项目处理路由
-var router_project = require("./server/router_project.js");
+//项目路由
+import router_project from "./server/router_project.js";
 app.use("/project", router_project);
 
-//项目处理路由
-var router_comment = require("./server/router_comment.js");
+//评论路由
+import router_comment from "./server/router_comment.js";
 app.use("/comment", router_comment);
 
+// 在线状态检查
 app.get("/check", function (req, res, next) {
   res.status(200).json({
     message: "success",
@@ -223,6 +201,7 @@ app.get("/check", function (req, res, next) {
 });
 
 process.on("uncaughtException", function (err) {
+  throw err;
   console.log("Caught exception: " + err);
 });
 
@@ -244,7 +223,5 @@ app.all("*", function (req, res, next) {
     code: "404",
     message: "找不到页面",
   });
-
 });
-
-module.exports = app;
+export default app; // 默认导出 `app` 对象

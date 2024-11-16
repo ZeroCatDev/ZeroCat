@@ -1,9 +1,9 @@
-const configManager = require("../../configManager");
+import configManager from "../../configManager.js";
 
-const express = require("express");
-const querystring = require("querystring");
-const crypto = require("crypto");
-const axios = require("axios");
+import express from "express";
+import { parse } from "querystring";
+import { createHmac } from "crypto";
+import axios from "axios";
 
 const app = express();
 
@@ -32,10 +32,10 @@ app.use(async (req, res, next) => {
         geetest = req.body.captcha;
       }
     } else {
-      const queryCaptcha = querystring.parse(req.url.split("?")[1]).captcha;
+      const queryCaptcha = parse(req.url.split("?")[1]).captcha;
       geetest = queryCaptcha
         ? JSON.parse(queryCaptcha)
-        : querystring.parse(req.url.split("?")[1]) || req.body;
+        : parse(req.url.split("?")[1]) || req.body;
     }
   } catch (error) {
     console.error("Captcha Parsing Error:", error);
@@ -79,7 +79,7 @@ app.use(async (req, res, next) => {
 
 // 生成签名的函数，使用 HMAC-SHA256
 function hmac_sha256_encode(value, key) {
-  return crypto.createHmac("sha256", key).update(value, "utf8").digest("hex");
+  return createHmac("sha256", key).update(value, "utf8").digest("hex");
 }
 
 // 发送 POST 请求
@@ -101,4 +101,4 @@ async function post_form(datas, url) {
   }
 }
 
-module.exports = app;
+export default app;

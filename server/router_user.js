@@ -1,19 +1,18 @@
-const configManager = require("./configManager.js");
-var express = require("express");
+import configManager from "./configManager.js";
+import express from "express";
 var router = express["Router"]();
-var fs = require("fs");
-var jwt = require("jsonwebtoken");
-var DB = require("./lib/database.js");
-var I = require("./lib/global.js");
-let cryptojs = require("crypto-js");
-const needlogin = require("./lib/needlogin.js");
+import { query } from "./lib/database.js";
+
+import cryptojs from 'crypto-js';
+const { MD5 } = cryptojs;
+import needlogin from "./lib/needlogin.js";
 
 
 router.all("*", function (req, res, next) {
   next();
 });
 
-const request = require("request");
+import request from "request";
 
 
 router.get("/logout", function (req, res) {
@@ -40,7 +39,7 @@ router.get("/tuxiaochao", async function (req, res) {
 
   SQL = `SELECT images FROM ow_users WHERE id = ${res.locals["userid"]};`;
 
-  DB.query(SQL, async function (err, USER) {
+  query(SQL, async function (err, USER) {
     if (err || USER.length == 0) {
       res.locals.tip = { opt: "flash", msg: "用户不存在" };
       res.status(404).json({
@@ -58,7 +57,7 @@ router.get("/tuxiaochao", async function (req, res) {
       "/user/" +
       USER[0].images +
       (await configManager.getConfig("feedback.txckey"));
-    var cryptostr = cryptojs.MD5(txcinfo).toString();
+    var cryptostr = MD5(txcinfo).toString();
 
     res.redirect(
       "https://support.qq.com/product/" +
@@ -77,4 +76,4 @@ router.get("/tuxiaochao", async function (req, res) {
   });
 });
 
-module.exports = router;
+export default router;

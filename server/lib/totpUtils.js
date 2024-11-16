@@ -1,7 +1,7 @@
-const OTPAuth = require("otpauth");
-const QRCode = require("qrcode");
-const I = require("./global.js");
-const e = require("express");
+import { TOTP, Secret } from "otpauth";
+import QRCode from "qrcode";
+import { prisma } from "./global.js";
+import e from "express";
 
 // Common function to create a TOTP instance
 function createTotpInstance(
@@ -10,7 +10,7 @@ function createTotpInstance(
   digits = 6,
   period = 30
 ) {
-  return new OTPAuth.TOTP({
+  return new TOTP({
     secret: secret,
     algorithm: algorithm,
     digits: digits,
@@ -23,7 +23,7 @@ function createTotpInstance(
 // Function to check if the TOTP token is valid
 async function isTotpTokenValid(userId, token) {
   try {
-    const userTotps = await I.prisma.ow_users_totp.findMany({
+    const userTotps = await prisma.ow_users_totp.findMany({
       where: { user_id: Number(userId), status: "enabled" },
       select: {
         totp_secret: true,
@@ -68,7 +68,7 @@ async function isTotpTokenValid(userId, token) {
 // Function to check if the TOTP token is valid by specific TOTP ID
 async function isTotpTokenValidById(userId, token, totp_id) {
   try {
-    const userTotp = await I.prisma.ow_users_totp.findUnique({
+    const userTotp = await prisma.ow_users_totp.findUnique({
       where: { user_id: Number(userId), id: Number(totp_id) },
       select: {
         totp_secret: true,
@@ -108,7 +108,7 @@ async function isTotpTokenValidById(userId, token, totp_id) {
 // Function to create a TOTP token for a user and return the secret and TOTP URL
 async function createTotpTokenForUser(userId) {
   try {
-    const secret = new OTPAuth.Secret();
+    const secret = new Secret();
     const totpConfig = {
       user_id: userId,
       totp_secret: secret.base32,
@@ -118,7 +118,7 @@ async function createTotpTokenForUser(userId) {
       status: "unverified",
     };
 
-    const result = await I.prisma.ow_users_totp.create({ data: totpConfig });
+    const result = await prisma.ow_users_totp.create({ data: totpConfig });
     const otpauthUrl = generateTotpUrlForUser(userId, secret.base32);
 
     return {
@@ -153,14 +153,14 @@ async function enableTotpToken(userId, totp_id, token) {
     if (!isValid.valid) {
       return { status: "0", message: "无法激活令牌：" + isValid.message };
     }
-    const needupdatedTotp = await I.prisma.ow_users_totp.findUnique({
+    const needupdatedTotp = await prisma.ow_users_totp.findUnique({
       where: {
         id: Number(totp_id),
         user_id: Number(userId),
       },
     });
     if (needupdatedTotp.status === "unverified" && isValid.valid) {
-      const updatedTotp = await I.prisma.ow_users_totp.update({
+      const updatedTotp = await prisma.ow_users_totp.update({
         where: {
           id: Number(totp_id),
           user_id: Number(userId),
@@ -186,7 +186,7 @@ async function enableTotpToken(userId, totp_id, token) {
 // Function to remove a TOTP token
 async function removeTotpToken(userId, totp_id) {
   try {
-    const result = await I.prisma.ow_users_totp.delete({
+    const result = await prisma.ow_users_totp.delete({
       where: { id: Number(totp_id), user_id: Number(userId) },
       select: { id: true, user_id: true, name: true, type: true, status: true },
     });
@@ -197,7 +197,7 @@ async function removeTotpToken(userId, totp_id) {
   }
 }
 
-module.exports = {
+export  {
   isTotpTokenValid,
   isTotpTokenValidById,
   createTotpTokenForUser,

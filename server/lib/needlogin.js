@@ -1,4 +1,4 @@
-const express = require("express");
+import express from "express";
 
 const app = express();
 
@@ -11,4 +11,4 @@ app.use((req, res, next) => {
   next(); // 已登录，继续处理请求
 });
 
-module.exports = app;
+export default app;

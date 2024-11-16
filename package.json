@@ -1,7 +1,7 @@
 {
   "name": "zerocat-backend",
   "private": true,
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
     "build": "npm i -g @vercel/ncc && ncc build app.js && mkdir dist/api && cp dist/index.js dist/api/index.js",
     "test": "echo \"No test specified\" && exit 1",
@@ -11,6 +11,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.688.0",
     "@prisma/client": "^5.22.0",
+    "@types/jsonwebtoken": "^9.0.7",
     "axios": "^1.7.3",
     "body-parser": "^1.20.1",
     "compression": "^1.7.5",
@@ -36,6 +37,12 @@
     "request": "^2.88.0"
   },
   "devDependencies": {
+    "@types/body-parser": "^1.19.5",
+    "@types/compression": "^1.7.5",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/morgan": "^1.9.9",
+    "@types/node": "^22.9.0",
     "prisma": "^5.22.0"
   }
 }

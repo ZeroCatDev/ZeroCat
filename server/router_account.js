@@ -1,24 +1,16 @@
-const configManager = require("./configManager");
+import configManager from "./configManager.js";
 
-var express = require("express");
+import express from "express";
 var router = express["Router"]();
-var jwt = require("jsonwebtoken");
-var DB = require("./lib/database.js");
-var I = require("./lib/global.js");
-const { sendEmail } = require("./services/emailService");
-const {
-  registrationTemplate,
-  passwordResetTemplate,
-} = require("./services/emailTemplates");
-const needlogin = require("./lib/needlogin.js");
+import jsonwebtoken from "jsonwebtoken";
+import { qww, query } from "./lib/database.js";
+import { userpwTest, emailTest, hash, checkhash, GenerateJwt, randomPassword, prisma } from "./lib/global.js";
+import { sendEmail } from "./services/emailService.js";
+import { registrationTemplate, passwordResetTemplate } from "./services/emailTemplates.js";
+import needlogin from "./lib/needlogin.js";
 
-const {
-  isTotpTokenValid,
-  createTotpTokenForUser,
-  enableTotpToken,
-  removeTotpToken,
-} = require("./lib/totpUtils.js");
-const validateTotpToken = require("./lib/validateTotpToken.js"); // Import the middleware
+import { isTotpTokenValid, createTotpTokenForUser, enableTotpToken, removeTotpToken } from "./lib/totpUtils.js";
+import validateTotpToken from "./lib/validateTotpToken.js"; // Import the middleware
 router.all("*", function (req, res, next) {
   next();
 });
@@ -36,15 +28,15 @@ router.all("*", function (req, res, next) {
 
 
 
-const geetest = require("./lib/captcha/geetest.js");
+import geetest from "./lib/captcha/geetest.js";
 //geetest,
 router.post("/login", async function (req, res, next) {
   try {
     if (
       !req.body.pw ||
-      !I.userpwTest(req.body.pw) ||
+      !userpwTest(req.body.pw) ||
       !req.body.un ||
-      !I.emailTest(req.body.un)
+      !emailTest(req.body.un)
     ) {
       res.status(200).send({ message: "账户或密码错误" });
       return;
@@ -52,15 +44,15 @@ router.post("/login", async function (req, res, next) {
 
     var SQL = `SELECT * FROM ow_users WHERE email=? LIMIT 1`;
     var WHERE = [`${req.body["un"]}`];
-    DB.qww(SQL, WHERE, async function (err, USER) {
+    qww(SQL, WHERE, async function (err, USER) {
       if (err || USER.length == 0) {
         res.status(200).send({ message: "账户或密码错误" });
         return;
       }
 
       var User = USER[0];
-      pw = I.hash(req.body.pw);
-      if (I.checkhash(req.body.pw, User["password"]) == false) {
+      pw = hash(req.body.pw);
+      if (checkhash(req.body.pw, User["password"]) == false) {
         res.status(200).send({ message: "账户或密码错误" });
       } else if (User["state"] == 2) {
         res.status(200).send({ message: "您已经被封号，请联系管理员" });
@@ -94,7 +86,7 @@ router.post("/login", async function (req, res, next) {
         // res.cookie("username", User["username"], { maxAge: 604800000, signed: true, });
         // res.cookie("display_name", User["display_name"], { maxAge: 604800000, signed: true, });
 
-        var token = await I.GenerateJwt({
+        var token = await GenerateJwt({
           userid: User["id"],
           username: User["username"],
           email: User["email"],
@@ -139,7 +131,7 @@ router.post("/register", geetest, async function (req, res, next) {
   try {
     var email = req.body.un;
     SQL = `SELECT id FROM ow_users WHERE email='${email}' LIMIT 1`;
-    DB.query(SQL, function (err, User) {
+    query(SQL, function (err, User) {
       if (err) {
         res.status(200).send({ message: "账户格式错误" });
         return;
@@ -149,11 +141,11 @@ router.post("/register", geetest, async function (req, res, next) {
         return;
       }
 
-      var randonpw = I.randomPassword(12);
-      pw = I.hash(randonpw);
+      var randonpw = randomPassword(12);
+      pw = hash(randonpw);
       var display_name = req.body.pw;
       var INSERT = `INSERT INTO ow_users (username,email,password,display_name) VALUES ('${Date.now()}','${email}','${pw}','${display_name}')`;
-      DB.query(INSERT, async function (err, newUser) {
+      query(INSERT, async function (err, newUser) {
         if (err) {
           console.error(err);
           res.status(200).send({ message: "再试一次17" });
@@ -184,13 +176,13 @@ router.post("/repw", geetest, async function (req, res, next) {
     var email = req.body.un;
     SQL = `SELECT * FROM ow_users WHERE email=? LIMIT 1`;
     w = [email];
-    DB.qww(SQL, w, async function (err, User) {
+    qww(SQL, w, async function (err, User) {
       if (err) {
         res.status(200).send({ message: "账户格式错误或不存在" });
         return;
       }
       var user = User[0];
-      var jwttoken = jwt.sign(
+      var jwttoken = jsonwebtoken.sign(
         { userid: user["id"], email: user["email"] },
         await configManager.getConfig("security.jwttoken"),
         { expiresIn: 60 * 10 }
@@ -211,7 +203,7 @@ router.post("/repw", geetest, async function (req, res, next) {
 
 router.post("/torepw", geetest, async function (req, res, next) {
   try {
-    var user1 = jwt.verify(
+    jsonwebtoken.verify(
       req.body.jwttoken,
       await configManager.getConfig("security.jwttoken"),
       function (err, decoded) {
@@ -223,10 +215,10 @@ router.post("/torepw", geetest, async function (req, res, next) {
         email = decoded.email;
       }
     );
-    var newPW = I.hash(req.body.pw);
+    var newPW = hash(req.body.pw);
     SET = { password: newPW };
     UPDATE = `UPDATE ow_users SET ? WHERE id=${userid} LIMIT 1`;
-    DB.qww(UPDATE, SET, function (err, u) {
+    qww(UPDATE, SET, function (err, u) {
       if (err) {
         res.status(200).send({ message: "请再试一次" });
         return;
@@ -240,7 +232,7 @@ router.post("/torepw", geetest, async function (req, res, next) {
 
 router.get("/totp/list", needlogin, async (req, res) => {
   try {
-    var totpData = await I.prisma.ow_users_totp.findMany({
+    var totpData = await prisma.ow_users_totp.findMany({
       where: { user_id: Number(res.locals.userid) },
       select: {
         id: true,
@@ -282,7 +274,7 @@ router.post("/totp/rename", needlogin, async (req, res) => {
     });
   }
   try {
-    var renamedTotp = await I.prisma.ow_users_totp.update({
+    var renamedTotp = await prisma.ow_users_totp.update({
       where: { id: Number(totp_id) },
       data: { name: name },
       select: {
@@ -412,4 +404,4 @@ router.post("/totp/protected-route", validateTotpToken, (req, res) => {
   });
 });
 
-module.exports = router;
+export default router;

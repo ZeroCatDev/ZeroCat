@@ -1,7 +1,7 @@
-const { PrismaClient } = require("@prisma/client");
+import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
-const { getProjectsAndUsersByProjectsList } = require("./projects.js");
-
+import projects from "./projects.js";
+const { getProjectsAndUsersByProjectsList } = projects;
 // 统一处理 list 的过滤和去重
 function cleanAndDeduplicateList(list) {
   return list.filter(Boolean).reduce((accumulator, item) => {
@@ -200,7 +200,7 @@ async function deleteProjectlist(listid, userid) {
   }
 }
 
-module.exports = {
+export  {
   userProjectlistAdd,
   userProjectlistDelete,
   getProjectlist,

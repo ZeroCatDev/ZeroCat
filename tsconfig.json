@@ -1,0 +1,19 @@
+{
+    "compilerOptions": {
+      "target": "ESNext",               // 使用 ESNext 语法
+      "module": "ESNext",               // 使用 ES 模块
+      "moduleResolution": "node",       // 模块解析模式
+      "esModuleInterop": true,          // 确保支持 `import` 和 `require` 混合使用
+      "allowJs": true,               // 如果有混合 JS 和 TS 文件，启用
+      "checkJs": true,                  // 如果有混合 JS 和 TS 文件，启用
+      "skipLibCheck": true,             // 避免库类型检查
+      "strict": true,                   // 启用严格模式
+      "baseUrl": ".",                   // 基础路径
+      "paths": {
+        "*": ["node_modules/*"]         // 模块路径别名
+      },
+      "types": [
+        "node"]
+    },
+    "exclude": ["node_modules"]         // 排除 node_modules
+  }

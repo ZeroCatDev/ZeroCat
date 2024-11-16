@@ -1,16 +1,17 @@
-const configManager = require("../configManager");
+import configManager from "../configManager.js";
 
-const crypto = require("crypto");
-const jwt = require("jsonwebtoken"); // 确保安装了 jsonwebtoken 库
-const { PasswordHash } = require("phpass");
+import { createHash } from "crypto";
+import jsonwebtoken from 'jsonwebtoken';
+import { PasswordHash } from "phpass";
 const pwdHash = new PasswordHash();
-const fs = require("fs");
-const { PrismaClient } = require("@prisma/client");
-const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
+import { readFileSync } from "fs";
+import { PrismaClient } from "@prisma/client";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 // prisma client
 const prisma = new PrismaClient();
-exports.prisma = prisma;
+const _prisma = prisma;
+export { _prisma as prisma };
 let s3config;
 
 (async () => {
@@ -46,9 +47,9 @@ let s3config;
 const s3 = new S3Client(s3config);
 
 // 上传文件到 S3
-exports.S3update = async function (name, file) {
+export async function S3update(name, file) {
   try {
-    const fileContent = fs.readFileSync(file);
+    const fileContent = readFileSync(file);
     const command = new PutObjectCommand({
       Bucket: await configManager.getConfig("s3.bucket"),
       Key: name,
@@ -57,72 +58,79 @@ exports.S3update = async function (name, file) {
 
     const data = await s3.send(command);
     console.log(data);
-    console.log(
-      `成功上传了文件 ${await configManager.getConfig("s3.bucket")}/${name}`
-    );
+    console.log(`成功上传了文件 ${await configManager.getConfig("s3.bucket")}/${name}`);
   } catch (err) {
     console.error("S3 update Error:", err);
   }
-};
+}
 
 // 创建 MD5 哈希值
-exports.md5 = (data) => crypto.createHash("md5").update(data).digest("base64");
+export function md5(data) {
+  return createHash("md5").update(data).digest("base64");
+}
 
 // 密码哈希与校验
-exports.hash = (data) => pwdHash.hashPassword(data);
-exports.checkhash = (pwd, storeHash) => pwdHash.checkPassword(pwd, storeHash);
+export function hash(data) {
+  return pwdHash.hashPassword(data);
+}
+export function checkhash(pwd, storeHash) {
+  return pwdHash.checkPassword(pwd, storeHash);
+}
 
 // 校验用户密码格式
-exports.userpwTest = (pw) => /^(?:\d+|[a-zA-Z]+|[!@#$%^&*]+){6,16}$/.test(pw);
+export function userpwTest(pw) {
+  return /^(?:\d+|[a-zA-Z]+|[!@#$%^&*]+){6,16}$/.test(pw);
+}
 
 // 校验邮箱格式
-exports.emailTest = (email) =>
-  /^([a-zA-Z]|[0-9])(\w|\-)+@[a-zA-Z0-9]+\.[a-zA-Z]{2,4}$/.test(email);
+export function emailTest(email) {
+  return /^([a-zA-Z]|[0-9])(\w|\-)+@[a-zA-Z0-9]+\.[a-zA-Z]{2,4}$/.test(email);
+}
 
 // 校验手机号格式
-exports.phoneTest = (phone) => /^1[3456789]\d{9}$/.test(phone);
+export function phoneTest(phone) {
+  return /^1[3456789]\d{9}$/.test(phone);
+}
 
-// 常用失败返回信息
-exports.msg_fail = { status: "fail", msg: "请再试一次19" };
+export const msg_fail = { status: "fail", msg: "请再试一次19" };
 
 // 生成随机密码
-exports.randomPassword = (len = 12) => {
+export function randomPassword(len = 12) {
   const chars = "ABCDEFGHJKMNPQRSTWXYZabcdefhijkmnprstwxyz2345678"; // 默认去掉混淆字符
   const maxPos = chars.length;
   let password = Array.from({ length: len - 4 }, () =>
     chars.charAt(Math.floor(Math.random() * maxPos))
   ).join("");
   return `${password}@Aa1`;
-};
+}
 
 // JWT 生成与校验
-exports.jwt = (data) => {
+export function jwt(data) {
   const token = jwt.sign(data, "test");
   console.log(token);
   return token;
-};
+}
 
-
-exports.GenerateJwt = async (json) => {
-    try {
-        // Retrieve the JWT secret from config
-        const secret = await configManager.getConfig("security.jwttoken");
-console.log(secret)
-        // Check if the secret is defined
-        if (!secret) {
-            throw new Error('JWT secret is not defined in the configuration');
-        }
-
-        // Generate and return the JWT
-        return jwt.sign(json, secret);
-    } catch (error) {
-        console.error('Error generating JWT:', error);
-        throw error; // Rethrow or handle as needed
+export async function GenerateJwt(json) {
+  try {
+    // Retrieve the JWT secret from config
+    const secret = await configManager.getConfig("security.jwttoken");
+    console.log(secret);
+    // Check if the secret is defined
+    if (!secret) {
+      throw new Error("JWT secret is not defined in the configuration");
     }
-};
+
+    // Generate and return the JWT
+    return jsonwebtoken.sign(json, secret);
+  } catch (error) {
+    console.error("Error generating JWT:", error);
+    throw error; // Rethrow or handle as needed
+  }
+}
 
 // 判断是否为 JSON 字符串
-exports.isJSON = (str) => {
+export function isJSON(str) {
   if (typeof str !== "string") return false;
   try {
     const obj = JSON.parse(str);
@@ -131,4 +139,4 @@ exports.isJSON = (str) => {
     console.error("error:", str, e);
     return false;
   }
-};
+}

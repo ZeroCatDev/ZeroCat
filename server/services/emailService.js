@@ -1,6 +1,6 @@
-const configManager = require("../configManager");
+import configManager from "../configManager.js";
 
-const nodemailer = require('nodemailer');
+import { createTransport } from 'nodemailer';
 let service, user, pass
  configManager.getConfig('mail.service').then((res) => {
   service = res
@@ -11,7 +11,7 @@ let service, user, pass
  configManager.getConfig('mail.pass').then((res) => {
   pass = res
 });
-const transporter = nodemailer.createTransport({
+const transporter = createTransport({
   service:  service,
   secure: true,
   auth: {
@@ -33,4 +33,4 @@ const sendEmail = async (to, subject, html) => {
   }
 };
 
-module.exports = { sendEmail };
+export  { sendEmail };

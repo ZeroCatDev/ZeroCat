@@ -1,5 +1,4 @@
-// configManager.js
-const { PrismaClient } = require("@prisma/client");
+import { PrismaClient } from "@prisma/client";
 
 class ConfigManager {
   constructor() {
@@ -27,7 +26,7 @@ class ConfigManager {
     // Configuration information
     global.configinfo = configs;
 
-    console.log(global.configinfo); // Log the updated config info
+    //console.log(global.configinfo); // Log the updated config info
   }
 
   async getConfig(key) {
@@ -71,4 +70,4 @@ class ConfigManager {
 
 // Create a singleton instance of the ConfigManager class
 const configManagerInstance = new ConfigManager();
-module.exports = configManagerInstance;
+export default configManagerInstance;
