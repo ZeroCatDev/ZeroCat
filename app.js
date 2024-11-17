@@ -96,6 +96,9 @@ app.use(compress());
 app.set("env", __dirname + "/.env");
 app.set("data", __dirname + "/data");
 app.set("views", __dirname + "/views");
+app.set("prisma", __dirname + "/prisma");
+app.set("node_modules/@prisma/client", __dirname + "/node_modules/@prisma/client");
+
 app.set("view engine", "ejs");
 
 //数据库

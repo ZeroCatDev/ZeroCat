@@ -1,7 +1,5 @@
 const OTPAuth = require("otpauth");
-const QRCode = require("qrcode");
 const I = require("./global.js");
-const e = require("express");
 
 // Common function to create a TOTP instance
 function createTotpInstance(

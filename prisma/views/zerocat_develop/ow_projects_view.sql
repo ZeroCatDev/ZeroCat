@@ -16,6 +16,6 @@ SELECT
   `author`.`images` AS `author_images`
 FROM
   (
-    `zerocat`.`ow_projects` `project`
-    JOIN `zerocat`.`ow_users` `author` ON((`project`.`authorid` = `author`.`id`))
+    `zerocat_develop`.`ow_projects` `project`
+    JOIN `zerocat_develop`.`ow_users` `author` ON((`project`.`authorid` = `author`.`id`))
   )
