@@ -7,6 +7,7 @@ class ConfigManager {
   }
 
   async loadConfigsFromDB() {
+    try {
     // Fetch all configurations from the database
     const configs = await this.prisma.ow_config.findMany();
 
@@ -26,7 +27,9 @@ class ConfigManager {
 
     // Configuration information
     global.configinfo = configs;
-
+  } catch (error) {
+    console.error("Error loading configs from database:", error);
+  }
     //console.log(global.configinfo); // Log the updated config info
   }
 

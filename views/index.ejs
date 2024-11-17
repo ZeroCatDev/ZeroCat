@@ -17,9 +17,8 @@
 </style>
 
 <body>
-  <mdui-layout style="height: 100vh">
+  <mdui-layout>
     <link href="<%= global.config['urls.static'] %>/font1.css" rel="stylesheet" />
-
     <mdui-layout-main>
       <mdui-list>
         <% const config=JSON.parse(JSON.stringify(global.publicconfig)); %>
@@ -30,7 +29,6 @@
       </mdui-list>
       <mdui-button variant="filled" href="<%= global.config['urls.frontend'] %>">立刻加入</mdui-button>
       <mdui-button variant="elevated" href="#">了解更多</mdui-button><mdui-list>
-        <!-- 判断feedback.qqgroup是否存在 -->
         <% if (global.publicconfig['feedback.qq.group']) { %>
         <mdui-list-item icon="people" description="qq群<%= global.config['feedback.qq.group'] %>" <% if (global.publicconfig['feedback.qq.link']) { %>href="<%= global.config['feedback.qq.link'] %>"<% } %> active
           rounded><%= global.config['feedback.qq.description'] %></mdui-list-item>
@@ -42,7 +40,7 @@
 </body>
 <script src="<%= global.config['urls.static'] %>/mdui2/mdui.global.js"></script>
 <script>
-  mdui.setColorScheme("#2087fd");
+  mdui.setColorScheme("<%= global.config['theme.mdui.color.primary'] %>");
 </script>
 
 </html>

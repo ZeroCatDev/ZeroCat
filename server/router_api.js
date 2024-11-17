@@ -6,79 +6,7 @@ var fs = require("fs");
 
 var I = require("./lib/global.js");
 var DB = require("./lib/database.js");
-
-router.get("/", async function (req, res, next) {
-  try {
-    var SQL =
-      `SELECT ` +
-      ` (SELECT count(id) FROM ow_projects WHERE state='public' AND type='scratch' ) AS scratch_count, ` +
-      ` (SELECT count(id) FROM ow_projects WHERE state='public' AND type='python') AS python_count `;
-    DB.query(SQL, function (err, data) {
-      if (err) {
-        res.locals.scratch_count = 0;
-        res.locals.python_count = 0;
-      } else {
-        res.locals.scratch_count = data[0].scratch_count;
-        res.locals.python_count = data[0].python_count;
-      }
-      res.status(200).send({ name: "index", count: data[0] });
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.post("/getUserScratchProjects", async function (req, res, next) {
-  try {
-    var curr = parseInt(req.body.curr);
-    var limit = parseInt(req.body.limit);
-    var userid = parseInt(req.body.userid);
-    var SQL = `SELECT id, title,state,view_count,description FROM ow_projects WHERE authorid=${userid} AND state='public' AND type='scratch' ORDER BY view_count DESC LIMIT ${
-      (curr - 1) * limit
-    }, ${limit}`;
-    DB.query(SQL, function (err, data) {
-      if (err) {
-        res.status(200).send([]);
-      } else {
-        res.status(200).send(data);
-      }
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.post("/getUserPythonProjects", async function (req, res, next) {
-  try {
-    var curr = parseInt(req.body.curr);
-    var limit = parseInt(req.body.limit);
-    var userid = parseInt(req.body.userid);
-    var SQL = `SELECT id, title,state,view_count,description FROM ow_projects WHERE authorid=${userid} AND state='public' AND type='python' ORDER BY view_count DESC LIMIT ${
-      (curr - 1) * limit
-    }, ${limit}`;
-    DB.query(SQL, function (err, data) {
-      if (err) {
-        res.status(200).send([]);
-      } else {
-        res.status(200).send(data);
-      }
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.post("/getProjectsInfo", async function (req, res, next) {
-  try {
-    res.status(200).send([
-      { name: "Scratch编程", info: "Scartch创作", link: "/scratch" },
-      { name: "Python编程", info: "Python编程", link: "/python" },
-    ]);
-  } catch (err) {
-    next(err);
-  }
-});
-
+var { needadmin } = require("./middleware/auth.js");
 router.get("/usertx", async function (req, res, next) {
   try {
     SQL = `SELECT images FROM ow_users WHERE id = ${req.query.id};`;
@@ -86,13 +14,18 @@ router.get("/usertx", async function (req, res, next) {
       if (err || USER.length == 0) {
         res.locals.tip = { opt: "flash", msg: "用户不存在" };
         res.status(404).json({
-    status: "error",
-    code: "404",
-    message: "找不到页面",
-  });
+          status: "error",
+          code: "404",
+          message: "找不到页面",
+        });
         return;
       }
-      res.redirect(302, await configManager.getConfig('s3.staticurl') + "/user/" + USER[0].images);
+      res.redirect(
+        302,
+        (await configManager.getConfig("s3.staticurl")) +
+          "/user/" +
+          USER[0].images
+      );
     });
   } catch (err) {
     next(err);
@@ -132,10 +65,10 @@ router.get("/getuserinfo", async function (req, res, next) {
       console.log("用户不存在");
       res.locals.tip = { opt: "flash", msg: "用户不存在" };
       res.status(404).json({
-    status: "error",
-    code: "404",
-    message: "找不到页面",
-  });
+        status: "error",
+        code: "404",
+        message: "找不到页面",
+      });
     }
     res.send({
       status: "ok",
@@ -163,70 +96,6 @@ router.get("/info", async (req, res, next) => {
   }
 });
 
-router.get("/myprojectcount", async function (req, res, next) {
-  try {
-    res.locals.type = "scratch";
-    if (req.query.type == "python") {
-      res.locals.type = "python";
-    } else if (req.query.type == "scratch") {
-      res.locals.type = "scratch";
-    }
-    var SQL =
-      `SELECT ` +
-      ` count(case when state='private' then 1 end) AS state0_count, ` +
-      ` count(case when state='public' then 1 end) AS state1_count, ` +
-      ` '' AS state2_count ` +
-      ` FROM ow_projects WHERE authorid=${res.locals["userid"]} AND type='${res.locals.type}'`;
-
-    DB.query(SQL, function (err, data) {
-      if (err) {
-        res.locals.state0_count = 0;
-        res.locals.state1_count = 0;
-        res.locals.state2_count = 0;
-      } else {
-        res.locals.state0_count = data[0].state0_count;
-        res.locals.state1_count = data[0].state1_count;
-        res.locals.state2_count = data[0].state2_count;
-      }
-      res.send(data[0]);
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-router.get("/work/info", async function (req, res, next) {
-  try {
-    res.locals.type = "scratch";
-    if (req.query.type == "python") {
-      res.locals.type = "python";
-    } else if (req.query.type == "scratch") {
-      res.locals.type = "scratch";
-    }
-    var SQL =
-      `SELECT ` +
-      ` count(case when state='private' then 1 end) AS state0_count, ` +
-      ` count(case when state='public' then 1 end) AS state1_count, ` +
-      `'' AS state2_count ` +
-      ` FROM ow_projects WHERE authorid=${res.locals["userid"]} AND type='${res.locals.type}'`;
-
-    DB.query(SQL, function (err, data) {
-      if (err) {
-        res.locals.state0_count = 0;
-        res.locals.state1_count = 0;
-        res.locals.state2_count = 0;
-      } else {
-        res.locals.state0_count = data[0].state0_count;
-        res.locals.state1_count = data[0].state1_count;
-        res.locals.state2_count = data[0].state2_count;
-      }
-      res.send(data[0]);
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
 router.get("/projectinfo", async function (req, res, next) {
   try {
     SQL =
@@ -241,7 +110,11 @@ router.get("/projectinfo", async function (req, res, next) {
       ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state='public' or ow_projects.authorid=${res.locals.userid}) LIMIT 1`;
     DB.query(SQL, function (err, SCRATCH) {
       if (err || SCRATCH.length == 0) {
-        res.locals.tip = { opt: "flash", msg: "项目不存在或未发布", error: err };
+        res.locals.tip = {
+          opt: "flash",
+          msg: "项目不存在或未发布",
+          error: err,
+        };
         res.send({
           code: 404,
           status: "404",
@@ -259,6 +132,47 @@ router.get("/projectinfo", async function (req, res, next) {
   } catch (err) {
     next(err);
   }
+});
+
+router.get("/config", async function (req, res, next) {
+  const result = await I.prisma.ow_config.findMany({
+    where: { is_public: true },
+    select: { key: true, value: true },
+  });
+
+  res.status(200).send(
+    result.reduce((acc, { key, value }) => {
+      acc[key] = value;
+      return acc;
+    }, {})
+  );
+});
+
+router.get("/config/reload", needadmin, async function (req, res, next) {
+  await configManager.loadConfigsFromDB();
+
+  res.status(200).send({
+    status: "success",
+    message: "配置已重新加载",
+  });
+});
+router.get("/config/:key", async function (req, res, next) {
+  const result = await I.prisma.ow_config.findFirst({
+    where: { is_public: true, key: req.params.key },
+    select: { key: true, value: true },
+  });
+
+  if (!result) {
+    res.status(404).send({
+      status: "error",
+      code: "404",
+      message: "找不到配置项",
+    });
+    return;
+  }
+  res.status(200).send({
+    [result.key]: result.value,
+  });
 });
 
 module.exports = router;
