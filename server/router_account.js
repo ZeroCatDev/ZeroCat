@@ -10,15 +10,15 @@ const {
   registrationTemplate,
   passwordResetTemplate,
 } = require("./services/emailTemplates");
-const needlogin = require("./lib/needlogin.js");
+const {  needlogin } = require("./middleware/auth.js");
 
 const {
   isTotpTokenValid,
   createTotpTokenForUser,
   enableTotpToken,
   removeTotpToken,
+  validateTotpToken
 } = require("./lib/totpUtils.js");
-const validateTotpToken = require("./lib/validateTotpToken.js"); // Import the middleware
 router.all("*", function (req, res, next) {
   next();
 });

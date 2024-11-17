@@ -1,12 +1,8 @@
 const configManager = require("./configManager.js");
 var express = require("express");
 var router = express["Router"]();
-var fs = require("fs");
-var jwt = require("jsonwebtoken");
 var DB = require("./lib/database.js");
-var I = require("./lib/global.js");
 let cryptojs = require("crypto-js");
-const needlogin = require("./lib/needlogin.js");
 
 
 router.all("*", function (req, res, next) {

@@ -21,27 +21,22 @@
     <link href="<%= global.config['urls.static'] %>/font1.css" rel="stylesheet" />
 
     <mdui-layout-main>
-
-
-
       <mdui-list>
-        <% const config = JSON.parse(JSON.stringify(global.publicconfig)); %>
-        <% Object.entries(config).forEach(([key, value]) => { %>
-            <mdui-list-item
-                rounded
-                headline="<%= key %>"
-                description="<%= typeof value === 'object' ? JSON.stringify(value) : value %>"
-            ></mdui-list-item>
-        <% }); %>
-    </mdui-list>
-
-        <mdui-button variant="filled" href="<%= global.config['urls.frontend'] %>">立刻加入</mdui-button>
-        <mdui-button variant="elevated" href="#">了解更多</mdui-button><mdui-list>
-          <mdui-list-item icon="people" description="qq群号964979747" href="https://qm.qq.com/q/wn3TkPoZ5C" active
-            rounded>ZeroCat现由厚浪云提供支持</mdui-list-item>
-        </mdui-list>
-
-        </div>
+        <% const config=JSON.parse(JSON.stringify(global.publicconfig)); %>
+          <% Object.entries(config).forEach(([key, value])=> { %>
+            <mdui-list-item rounded headline="<%= key %>"
+              description="<%= typeof value === 'object' ? JSON.stringify(value) : value %>"></mdui-list-item>
+            <% }); %>
+      </mdui-list>
+      <mdui-button variant="filled" href="<%= global.config['urls.frontend'] %>">立刻加入</mdui-button>
+      <mdui-button variant="elevated" href="#">了解更多</mdui-button><mdui-list>
+        <!-- 判断feedback.qqgroup是否存在 -->
+        <% if (global.publicconfig['feedback.qq.group']) { %>
+        <mdui-list-item icon="people" description="qq群<%= global.config['feedback.qq.group'] %>" <% if (global.publicconfig['feedback.qq.link']) { %>href="<%= global.config['feedback.qq.link'] %>"<% } %> active
+          rounded><%= global.config['feedback.qq.description'] %></mdui-list-item>
+        <% } %>
+      </mdui-list>
+      </div>
     </mdui-layout-main>
   </mdui-layout>
 </body>
