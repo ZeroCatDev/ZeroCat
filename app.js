@@ -3,36 +3,9 @@ var app = express();
 const jwt = require("jsonwebtoken");
 
 const configManager = require("./server/configManager.js");
+const logger = require("./server/logger.js");
 
 require("dotenv").config({ override: true });
-//console.log(global.config);
-// 日志部分
-/*
-const opentelemetry = require("@opentelemetry/sdk-node");
-const {
-  getNodeAutoInstrumentations,
-} = require("@opentelemetry/auto-instrumentations-node");
-const {
-  OTLPTraceExporter,
-} = require("@opentelemetry/exporter-trace-otlp-proto");
-const { BatchSpanProcessor } = require("@opentelemetry/sdk-trace-base");
-const { Resource } = require("@opentelemetry/resources");
-const {
-  SemanticResourceAttributes,
-} = require("@opentelemetry/semantic-conventions");
-const traceExporter = new OTLPTraceExporter({ url: "https://api.axiom.co/v1/traces", headers: { Authorization: `Bearer ${process.env.AXIOM_TOKEN}`, "X-Axiom-Dataset": process.env.AXIOM_DATASET, }, });
-const resource = new Resource({
-  [SemanticResourceAttributes.SERVICE_NAME]: "node traces",
-});
-const sdk = new opentelemetry.NodeSDK({
-  spanProcessor: new BatchSpanProcessor(traceExporter),
-  resource: resource,
-  instrumentations: [getNodeAutoInstrumentations()],
-});
-sdk.start();
-*/
-
-// 路由处理...
 
 var morganlogger = require("morgan");
 morganlogger.token("colored-status", (req, res) => {
@@ -65,7 +38,7 @@ var corsOptions = {
     if (!origin || corslist.indexOf(new URL(origin).hostname) !== -1) {
       callback(null, true);
     } else {
-      console.log(origin);
+      logger.info(origin);
       callback(new Error("Not allowed by CORS"));
     }
   },
@@ -125,7 +98,7 @@ app.all("*", async function (req, res, next) {
     (req.body && req.body.token) ||
     (req.headers && req.headers["token"]) ||
     (req.query && req.query.token);
-  console.log(token);
+  logger.info(token);
   // Continue with the token verification
   if (token) {
     jwt.verify(token, zcjwttoken, (err, decodedToken) => {
@@ -141,7 +114,7 @@ app.all("*", async function (req, res, next) {
           is_admin: 0,
           usertoken: "",
         };
-        //console.log("JWT验证失败: " + err.message);
+        logger.error("JWT验证失败: " + err.message);
       } else {
         // If verification succeeds, store user info
         let userInfo = decodedToken;
@@ -155,8 +128,8 @@ app.all("*", async function (req, res, next) {
           is_admin: 0,
           usertoken: token,
         };
-        //console.log("JWT验证成功: " + userInfo.email);
-        //console.log("调试用户信息(session): " + JSON.stringify(res.locals));
+        logger.info("JWT验证成功: " + userInfo.email);
+        logger.info("调试用户信息(session): " + JSON.stringify(res.locals));
       }
 
       next();
@@ -173,7 +146,7 @@ app.all("*", async function (req, res, next) {
       is_admin: 0,
       usertoken: "",
     };
-    console.log("未找到JWT Token");
+    logger.info("未找到JWT Token");
     next();
   }
 });
@@ -226,12 +199,12 @@ app.get("/check", function (req, res, next) {
 });
 
 process.on("uncaughtException", function (err) {
-  console.log("Caught exception: " + err);
+  logger.error("Caught exception: " + err);
 });
 
 // Centralized error-handling middleware function
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  logger.error(err.stack);
   res.status(500).send({
     status: "error",
     message: "Something went wrong!",

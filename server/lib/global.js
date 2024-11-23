@@ -1,4 +1,5 @@
 const configManager = require("../configManager");
+const logger = require("../logger");
 
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken"); // 确保安装了 jsonwebtoken 库
@@ -35,7 +36,7 @@ let s3config;
       },
     };
   } catch (error) {
-    console.error("Error retrieving S3 config:", error);
+    logger.error("Error retrieving S3 config:", error);
   } finally {
     // Optionally disconnect Prisma client if needed
     // await configManager.prisma.$disconnect();
@@ -56,12 +57,12 @@ exports.S3update = async function (name, file) {
     });
 
     const data = await s3.send(command);
-    console.log(data);
-    console.log(
+    logger.info(data);
+    logger.info(
       `成功上传了文件 ${await configManager.getConfig("s3.bucket")}/${name}`
     );
   } catch (err) {
-    console.error("S3 update Error:", err);
+    logger.error("S3 update Error:", err);
   }
 };
 
@@ -98,7 +99,7 @@ exports.randomPassword = (len = 12) => {
 // JWT 生成与校验
 exports.jwt = (data) => {
   const token = jwt.sign(data, "test");
-  console.log(token);
+  logger.info(token);
   return token;
 };
 
@@ -107,7 +108,7 @@ exports.GenerateJwt = async (json) => {
     try {
         // Retrieve the JWT secret from config
         const secret = await configManager.getConfig("security.jwttoken");
-console.log(secret)
+logger.info(secret)
         // Check if the secret is defined
         if (!secret) {
             throw new Error('JWT secret is not defined in the configuration');
@@ -116,7 +117,7 @@ console.log(secret)
         // Generate and return the JWT
         return jwt.sign(json, secret);
     } catch (error) {
-        console.error('Error generating JWT:', error);
+        logger.error('Error generating JWT:', error);
         throw error; // Rethrow or handle as needed
     }
 };
@@ -128,7 +129,7 @@ exports.isJSON = (str) => {
     const obj = JSON.parse(str);
     return obj && typeof obj === "object";
   } catch (e) {
-    console.error("error:", str, e);
+    logger.error("error:", str, e);
     return false;
   }
 };

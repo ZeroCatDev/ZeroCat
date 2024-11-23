@@ -1,5 +1,5 @@
-// configManager.js
 const { PrismaClient } = require("@prisma/client");
+const logger = require("./logger");
 
 class ConfigManager {
   constructor() {
@@ -8,38 +8,36 @@ class ConfigManager {
 
   async loadConfigsFromDB() {
     try {
-    // Fetch all configurations from the database
-    const configs = await this.prisma.ow_config.findMany();
+      // Fetch all configurations from the database
+      const configs = await this.prisma.ow_config.findMany();
 
-    // Internal configurations
-    global.config = {};
-    configs.forEach(({ key, value }) => {
-      global.config[key] = value;
-    });
+      // Internal configurations
+      global.config = {};
+      configs.forEach(({ key, value }) => {
+        global.config[key] = value;
+      });
 
-    // Public configurations
-    global.publicconfig = {};
-    configs.forEach(({ key, value, is_public }) => {
-      if (is_public == 1) {
-        global.publicconfig[key] = value;
-      }
-    });
+      // Public configurations
+      global.publicconfig = {};
+      configs.forEach(({ key, value, is_public }) => {
+        if (is_public == 1) {
+          global.publicconfig[key] = value;
+        }
+      });
 
-    // Configuration information
-    global.configinfo = configs;
-  } catch (error) {
-    console.error("Error loading configs from database:", error);
-  }
-    //console.log(global.configinfo); // Log the updated config info
+      // Configuration information
+      global.configinfo = configs;
+    } catch (error) {
+      logger.error("Error loading configs from database:", error);
+    }
   }
 
   async getConfig(key) {
     // Check if the value is already cached
-    if (global.config && global.config[key]!=null) {
+    if (global.config && global.config[key] != null) {
       return global.config[key];
     }
     var config = await this.prisma.ow_config.findFirst({ where: { key: key } });
-    //console.log(config);
     if (config == null) {
       return null;
     }
@@ -59,8 +57,9 @@ class ConfigManager {
     if (global.publicconfig && global.publicconfig[key]) {
       return global.publicconfig[key];
     }
-    var config = await this.prisma.ow_config.findFirst({ where: { key: key, is_public: 1 } });
-    //console.log(config);
+    var config = await this.prisma.ow_config.findFirst({
+      where: { key: key, is_public: 1 },
+    });
     if (config == null) {
       return null;
     }

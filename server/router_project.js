@@ -1,11 +1,11 @@
 const configManager = require("./configManager");
-
 const express = require("express");
 const router = express.Router();
 const crypto = require("crypto");
 const DB = require("./lib/database.js");
 const I = require("./lib/global.js");
 const default_project = require("./lib/default_project.js");
+const logger = require("./logger.js");
 
 // 中间件，确保所有请求均经过该处理
 router.all("*", (req, res, next) => next());
@@ -28,6 +28,7 @@ router.post("/", async (req, res, next) => {
     const result = await I.prisma.ow_projects.create({ data: outputJson });
     res.status(200).send({ status: "1", msg: "保存成功", id: result.id });
   } catch (err) {
+    logger.error("Error creating new project:", err);
     next(err);
   }
 });
@@ -62,6 +63,7 @@ router.post("/:id/fork", async (req, res, next) => {
       res.status(403).send({ status: "0", msg: "改编失败" });
     }
   } catch (err) {
+    logger.error("Error forking project:", err);
     next(err);
   }
 });
@@ -73,7 +75,7 @@ router.put("/:id/source", async (req, res, next) => {
   }
 
   try {
-    console.log(req.body);
+    logger.info(req.body);
     const sha256 = setProjectFile(req.body);
     const projectId = Number(req.params.id);
     const userId = Number(res.locals.userid);
@@ -93,6 +95,7 @@ router.put("/:id/source", async (req, res, next) => {
 
     res.status(200).send({ status: "1", msg: "保存成功" });
   } catch (err) {
+    logger.error("Error saving source code:", err);
     next(err);
   }
 });
@@ -111,6 +114,7 @@ router.put("/:id", async (req, res, next) => {
     });
     res.status(200).send({ status: "1", msg: "保存成功" });
   } catch (err) {
+    logger.error("Error updating project information:", err);
     next(err);
   }
 });
@@ -156,6 +160,7 @@ router.post("/:id/push", async (req, res, next) => {
 
     res.status(200).send({ status: "1", msg: "推送成功" });
   } catch (err) {
+    logger.error("Error pushing project:", err);
     next(err);
   }
 });
@@ -182,6 +187,7 @@ router.get("/:id", async (req, res, next) => {
     project.author = author;
     res.status(200).send(project);
   } catch (err) {
+    logger.error("Error fetching project information:", err);
     next(err);
   }
 });
@@ -209,6 +215,7 @@ router.get("/:id/source/:env?", async (req, res, next) => {
       res.status(403).send({ status: "0", msg: "无权访问此项目" });
     }
   } catch (err) {
+    logger.error("Error fetching project source code:", err);
     next(err);
   }
 });
@@ -221,6 +228,7 @@ router.delete("/:id", async (req, res, next) => {
     });
     res.status(200).send({ status: "1", msg: "删除成功" });
   } catch (err) {
+    logger.error("Error deleting project:", err);
     next(err);
   }
 });
@@ -255,7 +263,7 @@ function isJson(str) {
 
 // 工具函数：设置项目文件
 function setProjectFile(source) {
-  console.log(source);
+  logger.info(source);
   let sourcedata
   if (isJson(source)) {
     sourcedata =String(JSON.stringify(JSON.parse(source)))
@@ -263,11 +271,11 @@ function setProjectFile(source) {
     sourcedata = String(source)
   }
   const sha256 = crypto.createHash("sha256").update(sourcedata).digest("hex");
-  console.log("sha256:", sha256);
-  console.log(sourcedata);
+  logger.info("sha256:", sha256);
+  logger.info(sourcedata);
   I.prisma.ow_projects_file
     .create({ data: { sha256, source:sourcedata } })
-    .catch(console.error);
+    .catch(logger.error);
   return sha256;
 }
 
@@ -281,7 +289,7 @@ async function getProjectFile(sha256) {
 
 // 工具函数：处理错误响应
 function handleError(res, err, msg) {
-  console.error(err);
+  logger.error(err);
   res.status(500).send({ status: "0", msg, error: err });
 }
 
