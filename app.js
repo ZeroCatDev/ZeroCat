@@ -92,64 +92,66 @@ let zcjwttoken;
 app.all("*", async function (req, res, next) {
   Error("test");
 
-  //console.log(req.method +' '+ req.url + " IP:" + req.ip);
-  const token =
-    (req.headers["authorization"] || "").replace("Bearer ", "") ||
-    (req.cookies && req.cookies.token) ||
-    (req.body && req.body.token) ||
-    (req.headers && req.headers["token"]) ||
-    (req.query && req.query.token);
-  logger.debug(token);
-  // Continue with the token verification
-  if (token) {
-    jwt.verify(token, zcjwttoken, (err, decodedToken) => {
-      if (err) {
-        // If verification fails, clear local login state
-        res.locals = {
-          login: false,
-          userid: "",
-          email: "",
-          username: "",
-          display_name: "",
-          avatar: "",
-          is_admin: 0,
-          usertoken: "",
-        };
-        logger.error("JWT验证失败: " + err.message);
-      } else {
-        // If verification succeeds, store user info
-        let userInfo = decodedToken;
-        res.locals = {
-          login: true,
-          userid: userInfo.userid,
-          email: userInfo.email,
-          username: userInfo.username,
-          display_name: userInfo.display_name,
-          avatar: userInfo.avatar,
-          is_admin: 0,
-          usertoken: token,
-        };
-        logger.debug("JWT验证成功: " + userInfo.email);
-        logger.debug("调试用户信息(session): " + JSON.stringify(res.locals));
-      }
+  // List of possible locations where the token might be found
+  const tokenSources = [
+    req.headers["authorization"]?.replace("Bearer ", ""),
+    req.cookies?.token,
+    req.body?.token,
+    req.headers?.["token"],
+    req.query?.token,
+  ];
 
-      next();
-    });
-  } else {
-    // If no token is found, clear local login state
+  // Initialize token variable
+  let token = null;
+
+  // Iterate through the token sources and find the first valid token
+  for (let source of tokenSources) {
+    if (source) {
+      try {
+        // Try to verify the token and extract user info
+        const decodedToken = jwt.verify(source, zcjwttoken);
+        // If the token contains a valid 'userid', use this token
+        if (decodedToken?.userid) {
+          token = source;
+          logger.debug(token);
+          // Store user information in res.locals
+          res.locals = {
+            login: true,
+            userid: decodedToken.userid,
+            email: decodedToken.email,
+            username: decodedToken.username,
+            display_name: decodedToken.display_name,
+            avatar: decodedToken.avatar,
+            is_admin: decodedToken.is_admin || 0, // Default to 0 if is_admin is not present
+            usertoken: token,
+          };
+          logger.debug("找到登录信息");
+          logger.debug(JSON.stringify(res.locals));
+          break; // Stop iterating once we find a valid token
+        }
+      } catch (err) {
+        // If verification fails, continue to next token source
+        continue;
+      }
+    }
+  }
+
+  // If no valid token is found, set the default behavior
+  if (!token) {
     res.locals = {
       login: false,
-      userid: 0,
+      userid: "",
       email: "",
       username: "",
-      display_name: "未登录",
+      display_name: "",
       avatar: "",
       is_admin: 0,
       usertoken: "",
     };
-    logger.debug("未找到JWT Token");
-    next();
   }
+
+  // Proceed with the request
+  next();
 });
 
 //首页
@@ -190,6 +192,7 @@ app.use("/project", router_project);
 
 //项目处理路由
 var router_comment = require("./server/router_comment.js");
+const { log } = require("winston");
 app.use("/comment", router_comment);
 
 app.get("/check", function (req, res, next) {
