@@ -1,3 +1,4 @@
+const logger = require("./lib/logger.js");
 const configManager = require("./configManager");
 
 const express = require("express");
@@ -9,7 +10,7 @@ router.all("*", (req, res, next) => next());
 
 // 统一的错误处理函数
 const handleError = (res, err, message) => {
-  console.error(err);
+  logger.error(err);
   res.status(500).send({ errno: 1, errmsg: message, data: err });
 };
 
@@ -96,7 +97,7 @@ router.get("/api/comment", async (req, res, next) => {
     //去重
     user_ids = Array.from(new Set(user_ids));
 
-    console.log(user_ids);
+    logger.debug(user_ids);
     const users = await getUsersByList(user_ids);
     const result = transformedComments.map((comment) => {
       const children = transformedChildrenComments.filter(

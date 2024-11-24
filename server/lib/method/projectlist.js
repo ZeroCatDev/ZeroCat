@@ -1,3 +1,4 @@
+const logger = require("../logger.js");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const { getProjectsAndUsersByProjectsList } = require("./projects.js");
@@ -14,7 +15,7 @@ function cleanAndDeduplicateList(list) {
 
 // 统一的错误处理函数
 function handleError(error) {
-  console.error(error);
+  logger.error(error);
   throw new Error(error.message || "发生了错误");
 }
 

@@ -1,3 +1,4 @@
+const logger = require("../logger.js");
 //prisma client
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
@@ -26,11 +27,11 @@ async function getProjectsByList(list, userid) {
     select: select,
   });
 
-  //console.log(projects);
+  //logger.debug(projects);
   projects = projects.filter((project) => {
     return !(project.state == "private" && project.authorid != userid);
   });
-  //console.log(projects);
+  //logger.debug(projects);
 
   return projects;
 }
@@ -40,9 +41,9 @@ async function getProjectsAndUsersByProjectsList(list, userid) {
   var users = await getUsersByList(userslist);
   return { projects: projects, users: users };
 }
-//(async () => {console.log(await getProjectsAndUsersByProjectsList([3, 126, 130, 131, 129], 2));})();
+//(async () => {logger.debug(await getProjectsAndUsersByProjectsList([3, 126, 130, 131, 129], 2));})();
 
-//console.log(await getProjectsAndUsersByProjectsList([3, 126, 130, 131, 129], 2))
+//logger.debug(await getProjectsAndUsersByProjectsList([3, 126, 130, 131, 129], 2))
 module.exports = {
   getProjectsByList,
   getUsersByList,

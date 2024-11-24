@@ -1,3 +1,4 @@
+const logger = require("./logger.js");
 const OTPAuth = require("otpauth");
 const I = require("./global.js");
 
@@ -203,7 +204,7 @@ async function validateTotpToken(req, res, next) {
       req.query.totp_token ||
       req.body.totp_token ||
       req.headers["x-totp-token"];
-    console.log(token);
+    logger.debug(token);
     if (!res.locals.login) {
       // 未登录，返回401 Unauthorized状态码
       return res.status(401).send({ status: "0", msg: "请先登录以继续操作" });
@@ -231,7 +232,7 @@ async function validateTotpToken(req, res, next) {
     // If valid, move to the next middleware or route handler
     next();
   } catch (error) {
-    console.error("Error in TOTP validation middleware:", error);
+    logger.error("Error in TOTP validation middleware:", error);
     return res.status(500).json({
       status: "error",
       message: "Internal server error during TOTP validation.",

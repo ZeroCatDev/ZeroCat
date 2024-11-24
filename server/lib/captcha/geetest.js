@@ -1,3 +1,4 @@
+const logger = require("../logger.js");
 const configManager = require("../../configManager");
 
 const express = require("express");
@@ -23,7 +24,7 @@ app.use(async (req, res, next) => {
 
   // 处理验证码信息
   try {
-    console.log(req.body.captcha);
+    logger.debug(req.body.captcha);
     if (req.body.captcha) {
       // 如果是字符串则转为json
       if (typeof req.body.captcha === "string") {
@@ -38,12 +39,12 @@ app.use(async (req, res, next) => {
         : querystring.parse(req.url.split("?")[1]) || req.body;
     }
   } catch (error) {
-    console.error("Captcha Parsing Error:", error);
+    logger.error("Captcha Parsing Error:", error);
     res.status(400).send({ code: 400, msg: "Invalid captcha data" });
     return;
   }
 
-  console.log(geetest);
+  logger.debug(geetest);
 
   // 生成签名
   const sign_token = hmac_sha256_encode(geetest.lot_number, GEE_CAPTCHA_KEY);
@@ -64,7 +65,7 @@ app.use(async (req, res, next) => {
     if (result.result === "success") {
       next(); // 验证成功，继续处理请求
     } else {
-      console.log(`Validate fail: ${result.reason}`);
+      logger.debug(`Validate fail: ${result.reason}`);
       res.status(500).send({
         code: 500,
         msg: `请完成验证码/${result.reason}`,
@@ -72,7 +73,7 @@ app.use(async (req, res, next) => {
       });
     }
   } catch (error) {
-    console.error("Geetest server error:", error);
+    logger.error("Geetest server error:", error);
     next(); // 极验服务器出错时放行，避免阻塞业务逻辑
   }
 });
@@ -91,12 +92,12 @@ async function post_form(datas, url) {
     });
 
     if (response.status !== 200) {
-      console.error(`Geetest Response Error, StatusCode: ${response.status}`);
+      logger.error(`Geetest Response Error, StatusCode: ${response.status}`);
       throw new Error("Geetest Response Error");
     }
     return response.data;
   } catch (error) {
-    console.error("Request to Geetest failed:", error);
+    logger.error("Request to Geetest failed:", error);
     throw error;
   }
 }

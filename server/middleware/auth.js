@@ -1,3 +1,4 @@
+const logger = require("../lib/logger.js");
 const configManager = require("../configManager");
 
 async function needlogin(req, res, next) {

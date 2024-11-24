@@ -3,11 +3,9 @@ var app = express();
 const jwt = require("jsonwebtoken");
 
 const configManager = require("./server/configManager.js");
-const logger = require("./server/logger.js");
+const logger = require("./server/lib/logger.js");
 
 require("dotenv").config({ override: true });
-
-
 
 expressWinston = require("express-winston");
 
@@ -199,7 +197,8 @@ app.get("/check", function (req, res, next) {
     message: "success",
     code: 200,
   });
-logger.debug("check");});
+  logger.debug("check");
+});
 
 process.on("uncaughtException", function (err) {
   logger.error("Caught exception: " + err);
@@ -207,7 +206,7 @@ process.on("uncaughtException", function (err) {
 
 // Centralized error-handling middleware function
 app.use((err, req, res, next) => {
-  logger.error(err.stack);
+  logger.error(err);
   res.status(500).send({
     status: "error",
     message: "Something went wrong!",

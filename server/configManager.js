@@ -1,5 +1,5 @@
+const logger = require("./lib/logger.js");
 const { PrismaClient } = require("@prisma/client");
-const logger = require("./logger");
 
 class ConfigManager {
   constructor() {

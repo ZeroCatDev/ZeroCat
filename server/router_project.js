@@ -1,3 +1,4 @@
+const logger = require("./lib/logger.js");
 const configManager = require("./configManager");
 const express = require("express");
 const router = express.Router();
@@ -5,7 +6,6 @@ const crypto = require("crypto");
 const DB = require("./lib/database.js");
 const I = require("./lib/global.js");
 const default_project = require("./lib/default_project.js");
-const logger = require("./logger.js");
 
 // 中间件，确保所有请求均经过该处理
 router.all("*", (req, res, next) => next());

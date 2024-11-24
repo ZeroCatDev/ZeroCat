@@ -1,3 +1,4 @@
+const logger = require("./lib/logger.js");
 const configManager = require("./configManager.js");
 var express = require("express");
 var router = express["Router"]();

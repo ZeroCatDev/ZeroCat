@@ -1,5 +1,5 @@
 const configManager = require("../configManager");
-const logger = require("../logger");
+const logger = require("./logger");
 
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken"); // 确保安装了 jsonwebtoken 库

@@ -1,3 +1,4 @@
+const logger = require("../lib/logger.js");
 const configManager = require("../configManager");
 
 const nodemailer = require("nodemailer");
@@ -10,7 +11,7 @@ configManager.getConfig("mail.service").then((res) => {
 
     configManager.getConfig("mail.pass").then((res) => {
       pass = res;
-      //console.log(service, user, pass);
+      //logger.debug(service, user, pass);
       transporter = nodemailer.createTransport({
         service: service,
         secure: true,
@@ -34,7 +35,7 @@ const sendEmail = async (to, subject, html) => {
       html,
     });
   } catch (error) {
-    console.error("Error sending email:", error);
+    logger.error("Error sending email:", error);
   }
 };
 
