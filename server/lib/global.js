@@ -57,8 +57,8 @@ exports.S3update = async function (name, file) {
     });
 
     const data = await s3.send(command);
-    logger.info(data);
-    logger.info(
+    logger.debug(data);
+    logger.debug(
       `成功上传了文件 ${await configManager.getConfig("s3.bucket")}/${name}`
     );
   } catch (err) {
@@ -99,7 +99,7 @@ exports.randomPassword = (len = 12) => {
 // JWT 生成与校验
 exports.jwt = (data) => {
   const token = jwt.sign(data, "test");
-  logger.info(token);
+  logger.debug(token);
   return token;
 };
 
@@ -108,7 +108,7 @@ exports.GenerateJwt = async (json) => {
     try {
         // Retrieve the JWT secret from config
         const secret = await configManager.getConfig("security.jwttoken");
-logger.info(secret)
+logger.debug(secret)
         // Check if the secret is defined
         if (!secret) {
             throw new Error('JWT secret is not defined in the configuration');

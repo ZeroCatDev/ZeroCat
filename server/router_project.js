@@ -75,7 +75,7 @@ router.put("/:id/source", async (req, res, next) => {
   }
 
   try {
-    logger.info(req.body);
+    logger.debug(req.body);
     const sha256 = setProjectFile(req.body);
     const projectId = Number(req.params.id);
     const userId = Number(res.locals.userid);
@@ -263,7 +263,7 @@ function isJson(str) {
 
 // 工具函数：设置项目文件
 function setProjectFile(source) {
-  logger.info(source);
+  logger.debug(source);
   let sourcedata
   if (isJson(source)) {
     sourcedata =String(JSON.stringify(JSON.parse(source)))
@@ -271,8 +271,8 @@ function setProjectFile(source) {
     sourcedata = String(source)
   }
   const sha256 = crypto.createHash("sha256").update(sourcedata).digest("hex");
-  logger.info("sha256:", sha256);
-  logger.info(sourcedata);
+  logger.debug("sha256:", sha256);
+  logger.debug(sourcedata);
   I.prisma.ow_projects_file
     .create({ data: { sha256, source:sourcedata } })
     .catch(logger.error);
