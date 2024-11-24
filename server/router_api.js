@@ -176,4 +176,53 @@ router.get("/config/:key", async function (req, res, next) {
   });
 });
 
+router.get("/tuxiaochao", async function (req, res) {
+  const userId = res.locals["userid"];
+  const displayName = res.locals["display_name"];
+
+  // 获取配置
+  const txcid = await configManager.getConfig("feedback.txcid");
+  const txckey = await configManager.getConfig("feedback.txckey");
+  const staticUrl = await configManager.getConfig("s3.staticurl");
+
+  // 判断登录状态和配置
+  if (!res.locals.login || !txcid || !txckey) {
+    res.redirect(txcid ? `https://support.qq.com/product/${txcid}` : "https://support.qq.com/product/597800");
+    return;
+  }
+
+  try {
+    // 查询用户信息
+    const USER = await prisma.ow_users.findFirst({
+      where: { id: userId },
+      select: { images: true },
+    });
+
+    if (!USER) {
+      res.locals.tip = { opt: "flash", msg: "用户不存在" };
+      res.status(404).json({
+        status: "error",
+        code: "404",
+        message: "找不到页面",
+      });
+      return;
+    }
+
+    const userImage = USER.images;
+    const txcinfo = `${userId}${displayName}${staticUrl}/user/${userImage}${txckey}`;
+    const cryptostr = cryptojs.MD5(txcinfo).toString();
+
+    // 构建重定向链接
+    const redirectUrl = `https://support.qq.com/product/${txcid}?openid=${userId}&nickname=${displayName}&avatar=${staticUrl}/user/${userImage}&user_signature=${cryptostr}`;
+    res.redirect(redirectUrl);
+
+  } catch (error) {
+    // 错误处理
+    console.error(error);
+    res.status(500).json({
+      status: "error",
+      message: "服务器内部错误",
+    });
+  }
+});
 module.exports = router;

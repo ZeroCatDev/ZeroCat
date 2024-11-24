@@ -3,10 +3,10 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "build": "npm i -g @vercel/ncc && ncc build .bin/www",
     "test": "echo \"No test specified\" && exit 1",
     "start": "node .bin/www",
-    "prisma": "prisma db pull && prisma generate"
+    "prisma": "prisma db pull && prisma generate",
+    "dev": " pnpm run start --development"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",

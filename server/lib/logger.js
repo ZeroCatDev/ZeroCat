@@ -9,10 +9,14 @@ const logDirectory = process.env.LOG_DIR || "logs";
 
 // 自定义日志格式化方式
 const logFormat = printf(({ level, message, timestamp, stack }) => {
-  let logMessage = `${timestamp} ${level.padEnd(7)}: ${message}`;
+  // 确保 message 是一个字符串类型，如果是对象，则使用 JSON.stringify()
+  let logMessage = `${timestamp} ${level.padEnd(7)}: ${typeof message === 'object' ? JSON.stringify(message) : message}`;
+
+  // 如果存在 stack（通常是错误对象的堆栈），确保它是字符串
   if (stack) {
-    logMessage += `\n${stack}`;
+    logMessage += `\n${typeof stack === 'object' ? JSON.stringify(stack) : stack}`;
   }
+
   return logMessage;
 });
 
@@ -62,9 +66,7 @@ if (process.env.NODE_ENV === "development") {
       format: combine(
         colorize(),
         timestamp(),
-        printf(
-          ({ level, message, timestamp }) => `${timestamp} ${level}: ${message}`
-        )
+        logFormat
       ),
     })
   );

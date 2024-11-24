@@ -164,9 +164,6 @@ app.get("/", function (req, res) {
 var router_register = require("./server/router_account.js");
 app.use("/account", router_register);
 
-var router_register = require("./server/router_user.js");
-app.use("/user", router_register);
-
 //个人中心路由//学生平台路由
 var router_admin = require("./server/router_my.js");
 app.use("/my", router_admin);
@@ -204,7 +201,7 @@ app.get("/check", function (req, res, next) {
 });
 
 process.on("uncaughtException", function (err) {
-  logger.error("Caught exception: " + err);
+  logger.error(err);
 });
 
 // Centralized error-handling middleware function
