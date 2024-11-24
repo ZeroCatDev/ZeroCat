@@ -1,3 +1,4 @@
+const logger = require("./lib/logger.js");
 const configManager = require("./configManager");
 
 var express = require("express");
@@ -25,11 +26,11 @@ router.all("*", function (req, res, next) {
 /*
 (async () => {
   try {
-    console.log("site.name:", await configManager.getConfig("site.name"));
+    logger.debug("site.name:", await configManager.getConfig("site.name"));
 
     // 其他逻辑...
   } catch (error) {
-    console.error("Error:", error);
+    logger.error("Error:", error);
   }
 })();
 */
@@ -101,7 +102,7 @@ router.post("/login", async function (req, res, next) {
           display_name: User["display_name"],
           avatar: User["images"],
         });
-        //console.log(token);
+        //logger.debug(token);
         // res.cookie("token", token, { maxAge: 604800000 });
         res.status(200).send({
           status: "OK",
@@ -155,7 +156,7 @@ router.post("/register", geetest, async function (req, res, next) {
       var INSERT = `INSERT INTO ow_users (username,email,password,display_name) VALUES ('${Date.now()}','${email}','${pw}','${display_name}')`;
       DB.query(INSERT, async function (err, newUser) {
         if (err) {
-          console.error(err);
+          logger.error(err);
           res.status(200).send({ message: "再试一次17" });
           return;
         }
@@ -265,7 +266,7 @@ router.get("/totp/list", needlogin, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("获取验证器列表时出错:", error);
+    logger.error("获取验证器列表时出错:", error);
     return res.status(500).json({
       status: "error",
       message: "获取验证器列表失败",
@@ -299,7 +300,7 @@ router.post("/totp/rename", needlogin, async (req, res) => {
       data: renamedTotp,
     });
   } catch (error) {
-    console.error("重命名验证器时出错:", error);
+    logger.error("重命名验证器时出错:", error);
     return res.status(500).json({
       status: "error",
       message: "重命名验证器失败",
@@ -324,7 +325,7 @@ router.post("/totp/check", async (req, res) => {
       data: { validated: isValid },
     });
   } catch (error) {
-    console.error("验证令牌时出错:", error);
+    logger.error("验证令牌时出错:", error);
     return res.status(500).json({
       status: "error",
       message: "验证令牌失败",
@@ -348,7 +349,7 @@ router.post("/totp/delete", needlogin, async (req, res) => {
       data: deletedTotp,
     });
   } catch (error) {
-    console.error("删除验证器时出错:", error);
+    logger.error("删除验证器时出错:", error);
     return res.status(500).json({
       status: "error",
       message: "删除验证器失败",
@@ -365,7 +366,7 @@ router.post("/totp/generate", needlogin, async (req, res) => {
       data: info,
     });
   } catch (error) {
-    console.error("创建验证器时出错:", error);
+    logger.error("创建验证器时出错:", error);
     return res.status(500).json({
       status: "error",
       message: "创建验证器失败",
@@ -396,7 +397,7 @@ router.post("/totp/activate", needlogin, async (req, res) => {
       data: activatedTotp,
     });
   } catch (error) {
-    console.error("激活验证器时出错:", error);
+    logger.error("激活验证器时出错:", error);
     return res.status(500).json({
       status: "error",
       message: "激活验证器失败",
@@ -448,7 +449,7 @@ router.post("/magiclink/generate", geetest, async (req, res) => {
 
     res.status(200).json({status: "success", message: "Magic Link 已发送到您的邮箱" });
   } catch (error) {
-    console.error("生成 Magic Link 时出错:", error);
+    logger.error("生成 Magic Link 时出错:", error);
     res.status(200).json({ status: "error", message: "生成 Magic Link 失败" });
   }
 });
@@ -496,7 +497,7 @@ router.get("/magiclink/validate", async (req, res) => {
       token: jwtToken,
     });
   } catch (error) {
-    //console.error("验证 Magic Link 时出错:", error);
+    //logger.error("验证 Magic Link 时出错:", error);
     res.status(200).json({ status: "error",message: "验证 Magic Link 失败" });
   }
 });

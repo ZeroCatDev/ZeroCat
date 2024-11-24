@@ -1,3 +1,4 @@
+const logger = require("../lib/logger.js");
 const registrationTemplate = async (email, password) => `
   <div class="page flex-col">
     <div class="box_3 flex-col"

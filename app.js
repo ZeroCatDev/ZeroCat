@@ -3,54 +3,23 @@ var app = express();
 const jwt = require("jsonwebtoken");
 
 const configManager = require("./server/configManager.js");
+const logger = require("./server/lib/logger.js");
 
 require("dotenv").config({ override: true });
-//console.log(global.config);
-// 日志部分
-/*
-const opentelemetry = require("@opentelemetry/sdk-node");
-const {
-  getNodeAutoInstrumentations,
-} = require("@opentelemetry/auto-instrumentations-node");
-const {
-  OTLPTraceExporter,
-} = require("@opentelemetry/exporter-trace-otlp-proto");
-const { BatchSpanProcessor } = require("@opentelemetry/sdk-trace-base");
-const { Resource } = require("@opentelemetry/resources");
-const {
-  SemanticResourceAttributes,
-} = require("@opentelemetry/semantic-conventions");
-const traceExporter = new OTLPTraceExporter({ url: "https://api.axiom.co/v1/traces", headers: { Authorization: `Bearer ${process.env.AXIOM_TOKEN}`, "X-Axiom-Dataset": process.env.AXIOM_DATASET, }, });
-const resource = new Resource({
-  [SemanticResourceAttributes.SERVICE_NAME]: "node traces",
-});
-const sdk = new opentelemetry.NodeSDK({
-  spanProcessor: new BatchSpanProcessor(traceExporter),
-  resource: resource,
-  instrumentations: [getNodeAutoInstrumentations()],
-});
-sdk.start();
-*/
 
-// 路由处理...
+expressWinston = require("express-winston");
 
-var morganlogger = require("morgan");
-morganlogger.token("colored-status", (req, res) => {
-  const status = res.statusCode;
-  let color;
-  if (status >= 500) {
-    color = "\x1b[31m"; // 红色
-  } else if (status >= 400) {
-    color = "\x1b[33m"; // 黄色
-  } else if (status >= 300) {
-    color = "\x1b[36m"; // 青色
-  } else {
-    color = "\x1b[32m"; // 绿色
-  }
-  return color + status + "\x1b[0m"; // 重置颜色
-});
 app.use(
-  morganlogger(":method :colored-status :response-time ms :remote-addr :url")
+  expressWinston.logger({
+    winstonInstance: logger, // 使用外部定义的logger
+    meta: true, // optional: control whether you want to log the meta data about the request (default to true).
+    msg: "HTTP {{req.method}} {{res.statusCode}} {{res.responseTime}}ms {{req.url}} {{req.ip}}", // optional: customize the default logging message. Eg. "{{res.statusCode}} {{req.method}} {{res.responseTime}}ms {{req.url}}"
+    colorize: false, // Color the text and status code, using the Express/morgan color palette (text: gray, status: default green, 3XX cyan, 4XX yellow, 5XX red).
+    ignoreRoute: function (req, res) {
+      return false;
+    }, // optional: allows to skip some loggin. It is passed the http request and http response objects, should return true to skip the request logging.
+    level: "info", // 记录所有请求为info级别
+  })
 );
 
 // cors配置
@@ -65,7 +34,7 @@ var corsOptions = {
     if (!origin || corslist.indexOf(new URL(origin).hostname) !== -1) {
       callback(null, true);
     } else {
-      console.log(origin);
+      logger.debug(origin);
       callback(new Error("Not allowed by CORS"));
     }
   },
@@ -97,7 +66,10 @@ app.set("env", __dirname + "/.env");
 app.set("data", __dirname + "/data");
 app.set("views", __dirname + "/views");
 app.set("prisma", __dirname + "/prisma");
-app.set("node_modules/@prisma/client", __dirname + "/node_modules/@prisma/client");
+app.set(
+  "node_modules/@prisma/client",
+  __dirname + "/node_modules/@prisma/client"
+);
 
 app.set("view engine", "ejs");
 
@@ -118,6 +90,8 @@ let zcjwttoken;
   zcjwttoken = await configManager.getConfig("security.jwttoken");
 })();
 app.all("*", async function (req, res, next) {
+  Error("test");
+
   //console.log(req.method +' '+ req.url + " IP:" + req.ip);
   const token =
     (req.headers["authorization"] || "").replace("Bearer ", "") ||
@@ -125,7 +99,7 @@ app.all("*", async function (req, res, next) {
     (req.body && req.body.token) ||
     (req.headers && req.headers["token"]) ||
     (req.query && req.query.token);
-  console.log(token);
+  logger.debug(token);
   // Continue with the token verification
   if (token) {
     jwt.verify(token, zcjwttoken, (err, decodedToken) => {
@@ -141,7 +115,7 @@ app.all("*", async function (req, res, next) {
           is_admin: 0,
           usertoken: "",
         };
-        //console.log("JWT验证失败: " + err.message);
+        logger.error("JWT验证失败: " + err.message);
       } else {
         // If verification succeeds, store user info
         let userInfo = decodedToken;
@@ -155,8 +129,8 @@ app.all("*", async function (req, res, next) {
           is_admin: 0,
           usertoken: token,
         };
-        //console.log("JWT验证成功: " + userInfo.email);
-        //console.log("调试用户信息(session): " + JSON.stringify(res.locals));
+        logger.debug("JWT验证成功: " + userInfo.email);
+        logger.debug("调试用户信息(session): " + JSON.stringify(res.locals));
       }
 
       next();
@@ -173,7 +147,7 @@ app.all("*", async function (req, res, next) {
       is_admin: 0,
       usertoken: "",
     };
-    console.log("未找到JWT Token");
+    logger.debug("未找到JWT Token");
     next();
   }
 });
@@ -223,15 +197,16 @@ app.get("/check", function (req, res, next) {
     message: "success",
     code: 200,
   });
+  logger.debug("check");
 });
 
 process.on("uncaughtException", function (err) {
-  console.log("Caught exception: " + err);
+  logger.error("Caught exception: " + err);
 });
 
 // Centralized error-handling middleware function
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  logger.error(err);
   res.status(500).send({
     status: "error",
     message: "Something went wrong!",
@@ -247,7 +222,6 @@ app.all("*", function (req, res, next) {
     code: "404",
     message: "找不到页面",
   });
-
 });
 
 module.exports = app;

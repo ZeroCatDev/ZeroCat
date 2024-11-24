@@ -1,3 +1,4 @@
+const logger = require("./lib/logger.js");
 const configManager = require("../configManager");
 
 var express = require("express");
@@ -52,13 +53,13 @@ router.get("/:id/*", function (req, res) {
     var filestr = "";
     var filename = req.path.split("/");
     filename.splice(0, 2);
-    //console.log(filename)
-    //console.log(req.params.filename)
-    //console.log(JSON.parse(PROJECT[0].source));
+    //logger.debug(filename)
+    //logger.debug(req.params.filename)
+    //logger.debug(JSON.parse(PROJECT[0].source));
 
     if (getValue(filename, JSON.parse(PROJECT[0].source)) != false) {
       filestr = decode(getValue(filename, JSON.parse(PROJECT[0].source)));
-      console.log(filestr);
+      logger.debug(filestr);
 
       res.type("html").send(decode(filestr));
     } else {
@@ -107,8 +108,8 @@ router.post("/update/:id", function (req, res) {
 
   // 新作品
   //if (req.body.id == '0'){ var INSERT =`INSERT INTO ow_projects (authorid, title,source) VALUES (${res.locals.userid}, ?, ?)`; var SET = [req.body.title,req.body.data] DB.qww(INSERT, SET, function (err, newPython) { if (err || newPython.affectedRows==0) { res.status(200).send({status: "0", msg: "保存失败" }); return; } res.status(200).send({status: "ok", msg: "保存成功", 'newid': newPython['insertId']}) }); return; }
-  console.log(req.body);
-  console.log(encodeHtmlInJson(req.body));
+  logger.debug(req.body);
+  logger.debug(encodeHtmlInJson(req.body));
 
   // 旧作品
   var UPDATE = `UPDATE ow_projects SET ? WHERE id=${req.params.id} AND authorid=${res.locals.userid} LIMIT 1`;

@@ -1,3 +1,4 @@
+const logger = require("./lib/logger.js");
 const configManager = require("./configManager");
 
 var express = require("express");
@@ -21,7 +22,7 @@ router.get("/scratchcount", function (req, res, next) {
       ` (SELECT count(id) FROM ow_projects WHERE state='public' AND type='scratch' ) AS scratch_count `;
     DB.query(SQL, function (err, data) {
       if (err) {
-        // console.error('数据库操作出错：');
+        // logger.error('数据库操作出错：');
         res.locals.scratch_count = 0;
       } else {
         res.locals.scratch_count = data[0].scratch_count;
@@ -112,7 +113,7 @@ router.get("/projectinfo", function (req, res, next) {
       res.locals["is_author"] =
         SCRATCH[0].authorid == res.locals.userid ? true : false;
 
-      ////console.log(SCRATCH[0]);
+      ////logger.debug(SCRATCH[0]);
       res.json(SCRATCH[0]);
     });
   } catch (err) {
@@ -133,7 +134,7 @@ router.get("/projectinfo2", function (req, res, next) {
       ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state='public' or ow_projects.authorid=${res.locals.userid}) AND ow_projects.type='scratch' LIMIT 1`;
     DB.query(SQL, function (err, SCRATCH) {
       if (err || SCRATCH.length == 0) {
-        console.log(err);
+        logger.debug(err);
         res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
         res.send({ code: 404, status: "404", msg: "项目不存在或未发布" });
         return;
@@ -231,7 +232,7 @@ router.get("/projectinfo2", function (req, res, next) {
         },
         project_token: res.locals.usertoken || "",
       };
-      ////console.log(SCRATCH[0]);
+      ////logger.debug(SCRATCH[0]);
       res.json(jsontw);
     });
   } catch (err) {
@@ -313,7 +314,7 @@ router.post("/play/openSrc", function (req, res, next) {
 //2、从数据库加载
 router.post("/project/:projectid", function (req, res, next) {
   try {
-    ////console.log('服务器：获取作品JSON源代码');
+    ////logger.debug('服务器：获取作品JSON源代码');
     var projectid = 0;
     if (req.params.projectid) {
       projectid = req.params.projectid;
@@ -433,7 +434,7 @@ router.post("/saveProjcetTitle", function (req, res, next) {
 //保存作品源代码：此时作品已存在。req.body为项目JSON源代码
 router.put("/projects/:projectid", function (req, res, next) {
   try {
-    // //console.log('服务器：保存作品JSON源代码');
+    // //logger.debug('服务器：保存作品JSON源代码');
     if (!res.locals.login) {
       res.status(404).send({});
       return;
@@ -469,7 +470,7 @@ router.put("/projects/:projectid", function (req, res, next) {
 //保存作品：缩略图
 router.post("/thumbnail/:projectid", function (req, res, next) {
   try {
-    ////console.log('开始保存缩略图：'+req.params.projectid);
+    ////logger.debug('开始保存缩略图：'+req.params.projectid);
 
     // 请求的头部为 'Content-Type': 'image/png'时，用req.on接收文件
     var _data = [];
@@ -485,12 +486,12 @@ router.post("/thumbnail/:projectid", function (req, res, next) {
       fs.writeFile(strFileName, content, function (err) {
         if (err) {
           res.status(404).send({ status: "err" });
-          //console.log(err);
-          //console.log("保存缩略图失败：" + strFileName);
+          //logger.debug(err);
+          //logger.debug("保存缩略图失败：" + strFileName);
         } else {
           I.S3update("scratch_slt/" + req.params.projectid, strFileName);
 
-          ////console.log('保存缩略图成功：'+strFileName);
+          ////logger.debug('保存缩略图成功：'+strFileName);
           res.status(200).send({ status: "ok" });
           //fs.unlink(`./data/scratch_slt/${req.params.projectid}`,function (err) { if (err) { res.status(200).send( {'status':'文件上传失败'}); return; }})
         }
@@ -531,7 +532,7 @@ router.post("/shareProject/:projectid", function (req, res, next) {
 //保存新作品：保存源代码及作品名称。req.body为项目JSON源代码,?title=作品名称
 router.post("/projects", function (req, res, next) {
   try {
-    //console.log("服务器：新建作品JSON源代码");
+    //logger.debug("服务器：新建作品JSON源代码");
 
     //if (!req.body) { res.send(404); return; }
     var title = "新作品";
@@ -564,7 +565,7 @@ router.post("/assets/:filename", function (req, res, next) {
       strFileName,
       function (bExists) {
         //if (bExists) {
-        //  console.log("素材已存在：" + strFileName);
+        //  logger.debug("素材已存在：" + strFileName);
         //  res.status(200).send({ status: "ok" });
         //} else {
         var _data = [];
@@ -578,11 +579,11 @@ router.post("/assets/:filename", function (req, res, next) {
           fs.writeFile(strFileName, content, function (err) {
             if (err) {
               res.send(404);
-              //console.log("素材保存失败：" + strFileName);
+              //logger.debug("素材保存失败：" + strFileName);
             } else {
               I.S3update("material/asset/" + req.params.filename, strFileName);
 
-              console.log("素材保存成功：" + strFileName);
+              logger.debug("素材保存成功：" + strFileName);
               res.status(200).send({ status: "ok" });
               //fs.unlink('./data/material/asset/' + req.params.filename,function (err) { if (err) { res.status(200).send( {'status':'文件上传失败'}); return; }})
             }
@@ -819,7 +820,7 @@ router.post("/getRandomBackdrop", function (req, res, next) {
 // 组件获取条件 tag：是否获取分类; f: 搜索字符串; t: 分类; l: 已经获取的背景数; n: 每次获取的背景数，默认为32个
 router.post("/getCostumeLibrary", function (req, res, next) {
   try {
-    // //console.log(req.body);
+    // //logger.debug(req.body);
 
     var WHERE = "";
     if (req.body.t != 0) {

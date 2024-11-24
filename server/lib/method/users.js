@@ -1,4 +1,5 @@
 //prisma client
+const logger = require("../logger.js");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
@@ -21,7 +22,7 @@ async function getUsersByList(list) {
     select: select,
   });
 
-  //console.log(users);
+  //logger.debug(users);
 
   return users;
 }

@@ -1,3 +1,4 @@
+const logger = require("./lib/logger.js");
 const configManager = require("./configManager");
 
 const express = require("express");
@@ -21,7 +22,7 @@ router.all("*", (req, res, next) => next());
 
 // 统一的错误处理函数
 const handleError = (res, message, err) => {
-  console.error(err);
+  logger.error(err);
   res.status(500).send({ status: "0", message, error: err });
 };
 
@@ -80,19 +81,19 @@ router.get("/user/:id/:state?", async (req, res, next) => {
     let info;
 
     if (state === "private" && res.locals.userid == id) {
-      console.log("1");
+      logger.debug("1");
       info = await getUserProjectlist(id, ["private"]);
     } else if (state === "public") {
-      console.log("2");
+      logger.debug("2");
       info = await getUserProjectlist(id, ["public"]);
     } else if (!state || ["all", "undefined", "null", ""].includes(state)) {
-      console.log("3");
+      logger.debug("3");
       info =
         res.locals.userid == id
           ? await getUserProjectlist(id, ["private", "public"])
           : await getUserProjectlist(id, ["public"]);
     } else {
-      console.log("4");
+      logger.debug("4");
       info = await getUserProjectlist(id, "public");
     }
 

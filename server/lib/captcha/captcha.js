@@ -1,3 +1,4 @@
+const logger = require("../logger.js");
 const configManager = require("../configManager");
 
 const express = require("express");
@@ -20,12 +21,12 @@ app.use(async (req, res, next) => {
     },
     function (error, httpResponse, body) {
       if (error) {
-        console.error("Error verifying recaptcha:", error);
+        logger.error("Error verifying recaptcha:", error);
         res.status(200).send({ message: "验证码验证失败", error: error });
       }
 
       const response = JSON.parse(body);
-      console.log(response);
+      logger.debug(response);
       if (response.success) {
         next();
       } else {

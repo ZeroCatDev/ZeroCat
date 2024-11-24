@@ -1,3 +1,4 @@
+const logger = require("./lib/logger.js");
 const configManager = require("./configManager");
 
 const express = require("express");
@@ -70,7 +71,7 @@ router.get("/", async (req, res, next) => {
       skip: (Number(curr) - 1) * Number(limit),
       take: Number(limit),
     });
-    console.log(searchinfo);
+    logger.debug(searchinfo);
     // 统计项目总数
     const projectcount = await I.prisma.ow_projects.count({
       where: searchinfo,

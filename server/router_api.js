@@ -1,3 +1,4 @@
+const logger = require("./lib/logger.js");
 const configManager = require("./configManager");
 
 var express = require("express");
@@ -62,7 +63,7 @@ router.get("/getuserinfo", async function (req, res, next) {
       },
     });
     if (!user[0]) {
-      console.log("用户不存在");
+      logger.debug("用户不存在");
       res.locals.tip = { opt: "flash", msg: "用户不存在" };
       res.status(404).json({
         status: "error",
