@@ -3,6 +3,8 @@ const logger = require("../logger.js");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
+const crypto = require("crypto");
+
 const { getUsersByList } = require("./users.js");
 
 async function getProjectsByList(list, userid) {
@@ -88,7 +90,7 @@ function setProjectFile(source) {
   logger.debug("sha256:", sha256);
   logger.debug(sourcedata);
   prisma.ow_projects_file
-    .create({ data: { sha256, source:sourcedata } })
+    .create({ data: { sha256: sha256, source:sourcedata } })
     .catch(logger.error);
   return sha256;
 }

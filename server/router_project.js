@@ -2,7 +2,6 @@ const logger = require("./lib/logger.js");
 const configManager = require("./configManager");
 const express = require("express");
 const router = express.Router();
-const crypto = require("crypto");
 const DB = require("./lib/database.js");
 const I = require("./lib/global.js");
 const default_project = require("./lib/default_project.js");
@@ -86,6 +85,12 @@ router.put("/:id/source", async (req, res, next) => {
   }
 
   try {
+    var project=await I.prisma.ow_projects.findFirst({
+      where: { id: Number(req.params.id), authorid: Number(res.locals.userid) },
+    })
+    if(project==null){
+      return res.status(403).send({ status: "0", msg: "没有权限" });
+    }
     logger.debug(req.body);
     const sha256 = setProjectFile(req.body);
     const projectId = Number(req.params.id);
