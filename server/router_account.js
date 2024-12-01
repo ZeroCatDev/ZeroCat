@@ -11,14 +11,14 @@ const {
   registrationTemplate,
   passwordResetTemplate,
 } = require("./services/emailTemplates");
-const {  needlogin } = require("./middleware/auth.js");
+const { needlogin } = require("./middleware/auth.js");
 
 const {
   isTotpTokenValid,
   createTotpTokenForUser,
   enableTotpToken,
   removeTotpToken,
-  validateTotpToken
+  validateTotpToken,
 } = require("./lib/totpUtils.js");
 router.all("*", function (req, res, next) {
   next();
@@ -34,8 +34,6 @@ router.all("*", function (req, res, next) {
   }
 })();
 */
-
-
 
 const geetest = require("./lib/captcha/geetest.js");
 //geetest,
@@ -417,13 +415,17 @@ router.post("/magiclink/generate", geetest, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email || !I.emailTest(email)) {
-      return res.status(200).json({ status: "error",message: "无效的邮箱地址" });
+      return res
+        .status(200)
+        .json({ status: "error", message: "无效的邮箱地址" });
     }
 
     const user = await I.prisma.ow_users.findFirst({ where: { email } });
     if (!user) {
       //用户不存在
-      return res.status(404).json({ status: "error",message: "无效的邮箱地址" });
+      return res
+        .status(404)
+        .json({ status: "error", message: "无效的邮箱地址" });
     }
 
     const token = jwt.sign(
@@ -440,14 +442,18 @@ router.post("/magiclink/generate", geetest, async (req, res) => {
       },
     });
 
-    const magicLink = `${await configManager.getConfig("urls.frontend")}/account/magiclink/validate?token=${token}`;
+    const magicLink = `${await configManager.getConfig(
+      "urls.frontend"
+    )}/account/magiclink/validate?token=${token}`;
     await sendEmail(
       email,
       "Magic Link 登录",
       `点击以下链接登录：<a href="${magicLink}">${magicLink}</a>`
     );
 
-    res.status(200).json({status: "success", message: "Magic Link 已发送到您的邮箱" });
+    res
+      .status(200)
+      .json({ status: "success", message: "Magic Link 已发送到您的邮箱" });
     logger.debug(magicLink);
   } catch (error) {
     logger.error("生成 Magic Link 时出错:", error);
@@ -459,16 +465,23 @@ router.get("/magiclink/validate", async (req, res) => {
   try {
     const { token } = req.query;
     if (!token) {
-      return res.status(200).json({status: "error", message: "无效的 Magic Link" });
+      return res
+        .status(200)
+        .json({ status: "error", message: "无效的 Magic Link" });
     }
 
-    const decoded = jwt.verify(token, await configManager.getConfig("security.jwttoken"));
+    const decoded = jwt.verify(
+      token,
+      await configManager.getConfig("security.jwttoken")
+    );
     const magicLinkToken = await I.prisma.magiclinktoken.findUnique({
       where: { token },
     });
 
     if (!magicLinkToken || magicLinkToken.expiresAt < new Date()) {
-      return res.status(200).json({ status: "error",message: "Magic Link 已过期" });
+      return res
+        .status(200)
+        .json({ status: "error", message: "Magic Link 已过期" });
     }
 
     const user = await I.prisma.ow_users.findUnique({
@@ -476,7 +489,7 @@ router.get("/magiclink/validate", async (req, res) => {
     });
 
     if (!user) {
-      return res.status(404).json({ status: "error",message: "用户不存在" });
+      return res.status(404).json({ status: "error", message: "用户不存在" });
     }
 
     const jwtToken = await I.GenerateJwt({
@@ -499,7 +512,7 @@ router.get("/magiclink/validate", async (req, res) => {
     });
   } catch (error) {
     //logger.error("验证 Magic Link 时出错:", error);
-    res.status(200).json({ status: "error",message: "验证 Magic Link 失败" });
+    res.status(200).json({ status: "error", message: "验证 Magic Link 失败" });
   }
 });
 

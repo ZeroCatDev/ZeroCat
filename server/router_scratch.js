@@ -1,5 +1,6 @@
 const logger = require("./lib/logger.js");
 const configManager = require("./configManager");
+const jsonwebtoken = require("jsonwebtoken");
 
 var express = require("express");
 var router = express.Router();
@@ -8,11 +9,23 @@ var DB = require("./lib/database.js"); // 数据库
 
 //功能函数集
 var I = require("./lib/global.js");
-
+const { log, error } = require("console");
+const { needlogin } = require("./middleware/auth.js");
+const {
+  getProjectsByList,
+  getUsersByList,
+  getProjectsAndUsersByProjectsList,
+  extractProjectData,
+  isJson,
+  setProjectFile,
+  getProjectFile,
+  handleError,
+  projectSelectionFields,
+  authorSelectionFields,
+} = require("./lib/method/projects.js");
 router.all("*", function (req, res, next) {
   next();
 });
-
 
 router.get("/scratchcount", function (req, res, next) {
   try {
@@ -102,11 +115,18 @@ router.get("/projectinfo", function (req, res, next) {
       ` ow_users.motto AS author_motto` +
       ` FROM ow_projects ` +
       ` LEFT JOIN ow_users ON (ow_users.id=ow_projects.authorid) ` +
-      ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state='public' or ow_projects.authorid=${res.locals.userid}) AND ow_projects.type='scratch' LIMIT 1`;
+      ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state='public' ${
+        res.locals.userid ? `or ow_projects.authorid=${res.locals.userid}` : ""
+      }) AND ow_projects.type='scratch' LIMIT 1`;
     DB.query(SQL, function (err, SCRATCH) {
       if (err || SCRATCH.length == 0) {
         res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
-        res.send({ code: 404, status: "404", msg: "项目不存在或未发布" });
+        res.send({
+          code: 404,
+          status: "404",
+          msg: "项目不存在或未发布",
+          error: err,
+        });
         return;
       }
 
@@ -121,124 +141,170 @@ router.get("/projectinfo", function (req, res, next) {
   }
 });
 
-router.get("/projectinfo2", function (req, res, next) {
+router.get("/projectinfo2", async function (req, res, next) {
   try {
-    SQL =
-      `SELECT ow_projects.id,ow_projects.authorid,ow_projects.time,ow_projects.view_count,ow_projects.like_count,ow_projects.type,` +
-      ` ow_projects.favo_count,ow_projects.title,ow_projects.state,ow_projects.description,ow_projects.licence,ow_projects.tags,` +
-      ` ow_users.display_name AS author_display_name,` +
-      ` ow_users.images AS author_images,` +
-      ` ow_users.motto AS author_motto` +
-      ` FROM ow_projects ` +
-      ` LEFT JOIN ow_users ON (ow_users.id=ow_projects.authorid) ` +
-      ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state='public' or ow_projects.authorid=${res.locals.userid}) AND ow_projects.type='scratch' LIMIT 1`;
-    DB.query(SQL, function (err, SCRATCH) {
-      if (err || SCRATCH.length == 0) {
-        logger.debug(err);
-        res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
-        res.send({ code: 404, status: "404", msg: "项目不存在或未发布" });
-        return;
-      }
-      res.locals["is_author"] =
-        SCRATCH[0].authorid == res.locals.userid ? true : false;
-      json40code = {
-        code: 1,
-        data: {
-          id: SCRATCH[0].id,
-          opensource: 1,
-          publish: 1,
-          author: SCRATCH[0].authorid,
-          introduce: "",
-          name: SCRATCH[0].title,
-          time: SCRATCH[0].time,
-          image: SCRATCH[0].id,
-          look: SCRATCH[0].view_count,
-          oldlook: 0,
-          like: 0,
-          delete: 0,
-          publish_time: 1861891200,
-          update_time: 1861891200,
-          featuredLevel: 0,
-          ban: null,
-          version: 1861891200,
-          size: 1,
-          num_collections: 0,
-          ns: null,
-          raw: null,
-          onlyFirefox: null,
-          issign: 1,
-          isauthor: SCRATCH[0].authorid == res.locals.userid ? 1 : 0,
-          islike: 0,
-          is_collection: 0,
-          nickname: SCRATCH[0].author_display_name,
-          head: SCRATCH[0].author_images,
-        },
-      };
-      jsontw = {
-        id: SCRATCH[0].id,
-        title: SCRATCH[0].title,
-        description: SCRATCH[0].description,
-        instructions: "ZeroCat",
-        visibility: "visible",
-        public: SCRATCH[0].state >= 1 ? true : false,
-        comments_allowed: true,
-        is_published: SCRATCH[0].state >= 1 ? true : false,
-        author: {
-          id: SCRATCH[0].authorid,
-          username: SCRATCH[0].author_display_name,
-          scratchteam: false,
-          history: {
-            joined: "1900-01-01T00:00:00.000Z",
-          },
-          profile: {
-            id: null,
-            images: {
-              "90x90":
-                "https://s4-1.wuyuan.1r.ink/user/" + SCRATCH[0].author_images,
-              "60x60":
-                "https://s4-1.wuyuan.1r.ink/user/" + SCRATCH[0].author_images,
-              "55x55":
-                "https://s4-1.wuyuan.1r.ink/user/" + SCRATCH[0].author_images,
-              "50x50":
-                "https://s4-1.wuyuan.1r.ink/user/" + SCRATCH[0].author_images,
-              "32x32":
-                "https://s4-1.wuyuan.1r.ink/user/" + SCRATCH[0].author_images,
-            },
-          },
-        },
-        image: "https://s4-1.wuyuan.1r.ink/scratch_slt/" + SCRATCH[0].id,
-        images: {
-          "282x218": "https://s4-1.wuyuan.1r.ink/scratch_slt/" + SCRATCH[0].id,
-          "216x163": "https://s4-1.wuyuan.1r.ink/scratch_slt/" + SCRATCH[0].id,
-          "200x200": "https://s4-1.wuyuan.1r.ink/scratch_slt/" + SCRATCH[0].id,
-          "144x108": "https://s4-1.wuyuan.1r.ink/scratch_slt/" + SCRATCH[0].id,
-          "135x102": "https://s4-1.wuyuan.1r.ink/scratch_slt/" + SCRATCH[0].id,
-          "100x80": "https://s4-1.wuyuan.1r.ink/scratch_slt/" + SCRATCH[0].id,
-        },
-        history: {
-          created: SCRATCH[0].time,
-          modified: SCRATCH[0].time,
-          shared: SCRATCH[0].time,
-        },
-        stats: {
-          views: SCRATCH[0].view_count,
-          loves: 0,
-          favorites: 0,
-          remixes: 0,
-        },
-        remix: {
-          parent: null,
-          root: null,
-        },
-        project_token: res.locals.usertoken || "",
-      };
-      ////logger.debug(SCRATCH[0]);
-      res.json(jsontw);
+    var result = await I.prisma.ow_projects.findFirst({
+      where: {
+        id: Number(req.query.id),
+      },
     });
+    var author = await I.prisma.ow_users.findFirst({
+      where: {
+        id: result.authorid,
+      },
+    });
+    res.locals["is_author"] =
+      result.authorid == res.locals.userid ? true : false;
+    logger.debug(result);
+    var resulttype = {
+      id: 50,
+      type: "scratch",
+      licence: "no",
+      authorid: 89,
+      teacherid: 0,
+      state: "public",
+      view_count: 119,
+      like_count: 0,
+      favo_count: 0,
+      time: "2024-06-22T10:32:42.000Z",
+      title: "title",
+      description: "description",
+      source: "source",
+      history: true,
+      devenv: true,
+      devsource: "devsource",
+      tags: "",
+    };
+    var project_token = jsonwebtoken.sign(
+      {
+        exp: Math.floor(Date.now() / 1000) + 60 * 5,
+        data: {
+          type: "project",
+          action: "read",
+          issuer: await configManager.getConfig("site.domain"),
+          projectid: result.id,
+          userid: res.locals.userid,
+        },
+      },
+      await configManager.getConfig("security.jwttoken")
+    );
+    logger.debug(project_token);
+    jsonscratch = {
+      id: result.id,
+      title: result.title,
+      description: result.description,
+      instructions: "ZeroCat社区",
+      visibility: "visible",
+      public: result.state == "public" ? true : false,
+      comments_allowed: true,
+      is_published: result.state == "public" ? true : false,
+      author: {
+        id: result.authorid,
+        username: author.display_name,
+        scratchteam: author.id == 1 ? true : false,
+        history: {
+          joined: author.createdAt,
+        },
+        profile: {
+          id: null,
+          images: {
+            "90x90": `${global.config["urls.static"]}/user/${author.images}`,
+            "60x60": `${global.config["urls.static"]}/user/${author.images}`,
+            "55x55": `${global.config["urls.static"]}/user/${author.images}`,
+            "50x50": `${global.config["urls.static"]}/user/${author.images}`,
+            "32x32": `${global.config["urls.static"]}/user/${author.images}`,
+          },
+        },
+      },
+      image: `${global.config["urls.static"]}/scratch_slt/${result.id}`,
+      images: {
+        "282x218": `${global.config["urls.static"]}/scratch_slt/${result.id}`,
+        "216x163": `${global.config["urls.static"]}/scratch_slt/${result.id}`,
+        "200x200": `${global.config["urls.static"]}/scratch_slt/${result.id}`,
+        "144x108": `${global.config["urls.static"]}/scratch_slt/${result.id}`,
+        "135x102": `${global.config["urls.static"]}/scratch_slt/${result.id}`,
+        "100x80": `${global.config["urls.static"]}/scratch_slt/${result.id}`,
+      },
+      history: {
+        created: result.createdAt,
+        modified: result.createdAt,
+        shared: result.createdAt,
+      },
+      stats: {
+        views: result.view_count,
+        loves: 0,
+        favorites: 0,
+        remixes: 0,
+      },
+      remix: {
+        parent: null,
+        root: null,
+      },
+      project_token,
+    };
+    ////logger.debug(SCRATCH[0]);
+    res.json(jsonscratch);
   } catch (err) {
     next(err);
   }
 });
+
+// 获取源代码
+router.get("/project/:id", async (req, res, next) => {
+  try {
+    if (!req.params.id) {
+      return res.status(400).send({ status: "0", msg: "缺少项目ID" });
+    }
+    let project_token;
+    if (req.query.token) {
+      try {
+        logger.debug(await configManager.getConfig("security.jwttoken"));
+        project_token = jsonwebtoken.verify(
+          req.query.token,
+          await configManager.getConfig("security.jwttoken")
+        );
+        logger.debug(project_token);
+      } catch (err) {
+        logger.debug("Error verifying project token:", err);
+        return res.status(403).send({ status: "0", msg: "无权访问此项目" });
+      }
+      if (project_token.data.projectid != req.params.id) {
+        logger.debug("1");
+        return res.status(403).send({ status: "0", msg: "无权访问此项目" });
+      }
+      if (res.locals.userid && project_token.data.userid != res.locals.userid) {
+        logger.debug("2");
+        return res.status(403).send({ status: "0", msg: "无权访问此项目" });
+      }
+    } else {
+      logger.debug("3");
+      return res.status(403).send({ status: "0", msg: "无权访问此项目" });
+    }
+    const project = await I.prisma.ow_projects.findFirst({
+      where: { id: Number(project_token.data.projectid) },
+    });
+
+    if (!project) {
+      return res.status(404).send({ status: "0", msg: "作品不存在或无权打开" });
+    }
+
+    const source =
+      project.authorid === project_token.data.userid
+        ? project.devsource
+        : project.source;
+    const projectFile = await getProjectFile(source);
+
+    if (projectFile?.source) {
+      res.status(200).send(projectFile.source);
+    } else {
+      res.status(403).send({ status: "0", msg: "无权访问此项目" });
+    }
+  } catch (err) {
+    logger.error("Error fetching project source code:", err);
+    next(err);
+  }
+});
+
 //Scratch_play获取源代码数据部分
 router.get("/play/project/:id", function (req, res, next) {
   try {
@@ -258,13 +324,12 @@ router.get("/play/project/:id", function (req, res, next) {
         if (err || U.affectedRows == 0) {
           res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
           res.status(404).json({
-    status: "error",
-    code: "404",
-    message: "找不到页面",
-  });
+            status: "error",
+            code: "404",
+            message: "找不到页面",
+          });
           return;
         }
-
       });
     });
   } catch (err) {
@@ -296,7 +361,9 @@ router.post("/play/openSrc", function (req, res, next) {
       var UPDATE = `UPDATE ow_projects SET state=${state} WHERE id=${pid} LIMIT 1`;
       DB.query(UPDATE, function (err, SCRATCH) {
         if (err) {
-          res.status(200).send({ status: "failed", msg: "数据错误，请再试一次" });
+          res
+            .status(200)
+            .send({ status: "failed", msg: "数据错误，请再试一次" });
           return;
         }
 
@@ -681,7 +748,8 @@ router.get("/getExtensionLibrary", async (req, res, next) => {
         extensionURL: "/static/extensions/coco-math-extension.js",
         iconURL: "/static/extensions/cocoExt.jpg",
         insetIconURL: "/static/extensions/cocoLogo.png",
-        description: await configManager.getConfig('site.name') + "自定义扩展",
+        description:
+          (await configManager.getConfig("site.name")) + "自定义扩展",
         featured: true,
       },
     ];
@@ -1018,7 +1086,9 @@ router.post("/getSession", async (req, res, next) => {
         username: res.locals["username"],
 
         display_name: res.locals["display_name"],
-        avatar: `${await configManager.getConfig('s3.staticurl')}/user/${res.locals["avatar"]}`,
+        avatar: `${await configManager.getConfig("s3.staticurl")}/user/${
+          res.locals["avatar"]
+        }`,
       };
     }
 

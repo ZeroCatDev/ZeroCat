@@ -4,7 +4,8 @@ const jwt = require("jsonwebtoken");
 
 const configManager = require("./server/configManager.js");
 const logger = require("./server/lib/logger.js");
-
+logger.info(process.env.NODE_ENV);
+logger.debug('debug mode');
 require("dotenv").config({ override: true });
 
 expressWinston = require("express-winston");

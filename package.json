@@ -6,7 +6,7 @@
     "test": "echo \"No test specified\" && exit 1",
     "start": "node .bin/www",
     "prisma": "prisma db pull && prisma generate",
-    "dev": " pnpm run start --development"
+    "dev": "cross-env NODE_ENV=development nodemon node .bin/www"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",
@@ -36,6 +36,7 @@
     "winston-daily-rotate-file": "^5.0.0"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "prisma": "^5.22.0"
   }
 }
