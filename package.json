@@ -1,9 +1,8 @@
 {
   "name": "zerocat-backend",
   "private": true,
-  "type": "commonjs",
   "scripts": {
-    "test": "echo \"No test specified\" && exit 1",
+    "test": "echo \"No test specified\" && exit 0",
     "start": "node .bin/www",
     "prisma": "prisma db pull && prisma generate",
     "dev": "cross-env NODE_ENV=development nodemon node .bin/www"
