@@ -17,6 +17,7 @@ const {
   projectSelectionFields,
   authorSelectionFields,
 } = require("./lib/method/projects.js");
+const { Logger } = require("winston");
 // 中间件，确保所有请求均经过该处理
 router.all("*", (req, res, next) => next());
 
@@ -91,8 +92,11 @@ router.put("/:id/source", async (req, res, next) => {
     if(project==null){
       return res.status(403).send({ status: "0", msg: "没有权限" });
     }
-    logger.debug(req.body);
-    const sha256 = setProjectFile(req.body);
+    //logger.debug(req.body);
+    var reqbody = req.body
+    logger.debug('1111111111111');
+    logger.debug(typeof reqbody);
+    const sha256 = setProjectFile(reqbody);
     const projectId = Number(req.params.id);
     const userId = Number(res.locals.userid);
 

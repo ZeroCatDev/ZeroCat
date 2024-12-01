@@ -6,6 +6,7 @@ const prisma = new PrismaClient();
 const crypto = require("crypto");
 
 const { getUsersByList } = require("./users.js");
+const { log } = require("console");
 
 async function getProjectsByList(list, userid) {
   var select = {
@@ -47,8 +48,6 @@ async function getProjectsAndUsersByProjectsList(list, userid) {
 
 //logger.debug(await getProjectsAndUsersByProjectsList([3, 126, 130, 131, 129], 2))
 
-
-
 // 工具函数：提取项目数据
 function extractProjectData(body) {
   const fields = [
@@ -69,28 +68,31 @@ function extractProjectData(body) {
 // 工具函数：判断是否为有效 JSON
 function isJson(str) {
   try {
-    JSON.parse(str); // 如果能成功解析，说明是合法的 JSON
+    JSON.stringify(str); // 如果能成功解析，说明是合法的 JSON
     return true;
   } catch (error) {
+    logger.debug(error);
     return false; // 如果解析失败，说明不是 JSON
   }
 }
 
-
 // 工具函数：设置项目文件
 function setProjectFile(source) {
-  logger.debug(source);
-  let sourcedata
+  //logger.debug(source);
+  var sourcedata='';
   if (isJson(source)) {
-    sourcedata =String(JSON.stringify(JSON.parse(source)))
-  }else{
-    sourcedata = String(source)
+    sourcedata = JSON.stringify(source);
+  }else {
+    sourcedata = source;
   }
+  logger.debug(typeof sourcedata);
+
   const sha256 = crypto.createHash("sha256").update(sourcedata).digest("hex");
   logger.debug("sha256:", sha256);
-  logger.debug(sourcedata);
+
+  //logger.debug(sourcedata);
   prisma.ow_projects_file
-    .create({ data: { sha256: sha256, source:sourcedata } })
+    .create({ data: { sha256: sha256, source: sourcedata } })
     .catch(logger.error);
   return sha256;
 }
@@ -138,7 +140,6 @@ function authorSelectionFields() {
     images: true,
   };
 }
-
 
 module.exports = {
   getProjectsByList,
