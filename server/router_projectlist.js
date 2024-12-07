@@ -6,15 +6,14 @@ const router = express.Router();
 const {  needlogin } = require("./middleware/auth.js");
 
 const {
-  userProjectlistAdd,
-  userProjectlistDelete,
+  addProjectToUserProjectlist,
   getProjectlist,
   deleteProjectlist,
   updateProjectlist,
   createProjectlist,
-  getUserPublicProjectlist,
   getUserProjectlist,
   checkProjectlistWithUser,
+  removeProjectFromUserProjectlist,
 } = require("./lib/method/projectlist.js");
 
 // 中间件，确保所有请求均经过该处理
@@ -39,10 +38,10 @@ router.post("/", needlogin, async (req, res, next) => {
 // 添加作品到作品列表
 router.post("/add", needlogin, async (req, res, next) => {
   try {
-    const result = await userProjectlistAdd({
-      projectid: req.body.projectid,
-      userid: res.locals.userid,
-      listid: req.body.listid,
+    const result = await addProjectToUserProjectlist({
+      projectId: req.body.projectid,
+      userId: res.locals.userid,
+      listId: req.body.listid,
     });
     res.status(200).send({ status: "1", message: "添加成功", data: result });
   } catch (err) {
@@ -53,10 +52,10 @@ router.post("/add", needlogin, async (req, res, next) => {
 // 删除作品从作品列表
 router.post("/delete", needlogin, async (req, res, next) => {
   try {
-    const result = await userProjectlistDelete({
-      projectid: req.body.projectid,
-      userid: res.locals.userid,
-      listid: req.body.listid,
+    const result = await removeProjectFromUserProjectlist({
+      projectId: req.body.projectid,
+      userId: res.locals.userid,
+      listId: req.body.listid,
     });
     res.status(200).send({ status: "1", message: "删除成功", data: result });
   } catch (err) {
@@ -73,29 +72,20 @@ router.put("/:id", needlogin, async (req, res, next) => {
     next(err);
   }
 });
-
 // 获取用户的作品列表信息
 router.get("/user/:id/:state?", async (req, res, next) => {
   try {
     const { id, state } = req.params;
-    let info;
+    const isOwnUser = res.locals.userid == id;
 
-    if (state === "private" && res.locals.userid == id) {
-      logger.debug("1");
-      info = await getUserProjectlist(id, ["private"]);
-    } else if (state === "public") {
-      logger.debug("2");
-      info = await getUserProjectlist(id, ["public"]);
-    } else if (!state || ["all", "undefined", "null", ""].includes(state)) {
-      logger.debug("3");
-      info =
-        res.locals.userid == id
-          ? await getUserProjectlist(id, ["private", "public"])
-          : await getUserProjectlist(id, ["public"]);
-    } else {
-      logger.debug("4");
-      info = await getUserProjectlist(id, "public");
-    }
+    const stateMap = {
+      private: isOwnUser ? ["private"] : ["public"],
+      public: ["public"],
+      all: isOwnUser ? ["private", "public"] : ["public"]
+    };
+
+    const selectedStates = stateMap[state] || stateMap.all;
+    const info = await getUserProjectlist({ userId: id, state: selectedStates }, selectedStates);
 
     res.status(200).send({ status: "1", message: "获取成功", data: info });
   } catch (err) {
@@ -107,9 +97,10 @@ router.get("/user/:id/:state?", async (req, res, next) => {
 router.get("/check", async (req, res, next) => {
   try {
     const info = await checkProjectlistWithUser({
-      projectid: req.query.projectid,
-      userid: res.locals.userid,
+      projectId: req.query.projectid,
+      userId: res.locals.userid,
     });
+    logger.debug(info);
     res.status(200).send({ status: "1", message: "获取成功", data: info });
   } catch (err) {
     next(err);
@@ -119,7 +110,7 @@ router.get("/check", async (req, res, next) => {
 // 获取作品列表信息
 router.get("/:id", async (req, res, next) => {
   try {
-    const info = await getProjectlist(req.params.id, res.locals.userid);
+    const info = await getProjectlist({ listId:req.params.id, userId: res.locals.userid });
     res.status(200).send({ status: "1", message: "获取成功", data: info });
   } catch (err) {
     next(err);
@@ -129,7 +120,7 @@ router.get("/:id", async (req, res, next) => {
 // 删除作品列表
 router.delete("/:id", needlogin, async (req, res, next) => {
   try {
-    await deleteProjectlist(req.params.id, res.locals.userid);
+    await deleteProjectlist({ listId:req.params.id, userId: res.locals.userid });
     res.status(200).send({ status: "1", message: "删除成功" });
   } catch (err) {
     next(err);

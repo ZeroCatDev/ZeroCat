@@ -1,10 +1,14 @@
-//prisma client
-const logger = require("../logger.js");
-const { PrismaClient } = require("@prisma/client");
+const logger = require('../logger');
+const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-async function getUsersByList(list) {
-  var select = {
+/**
+ * Get users by list of IDs
+ * @param {Array<number>} userIds - List of user IDs
+ * @returns {Promise<Array<User>>}
+ */
+async function getUsersByList(userIds) {
+  const select = {
     id: true,
     username: true,
     display_name: true,
@@ -14,16 +18,16 @@ async function getUsersByList(list) {
     images: true,
   };
 
-  // 获取每个用户信息
-  var users = await prisma.ow_users.findMany({
+  // Get each user's info
+  const users = await prisma.ow_users.findMany({
     where: {
-      id: { in: list.map((item) => parseInt(item)) },
+      id: { in: userIds.map((id) => parseInt(id, 10)) },
     },
-    select: select,
+    select,
   });
-
-  logger.debug(users);
 
   return users;
 }
+
 module.exports = { getUsersByList };
+

@@ -3,96 +3,94 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const { getProjectsAndUsersByProjectsList } = require("./projects.js");
 
-// 统一处理 list 的过滤和去重
-function cleanAndDeduplicateList(list) {
-  return list.filter(Boolean).reduce((accumulator, item) => {
-    if (!accumulator.includes(item)) {
-      accumulator.push(item);
+// Standardize variable names and functions
+const cleanAndDeduplicateList = (list) =>
+  list.filter(Boolean).reduce((acc, item) => {
+    if (!acc.includes(item)) {
+      acc.push(item);
     }
-    return accumulator;
+    return acc;
   }, []);
-}
 
-// 统一的错误处理函数
-function handleError(error) {
+const handleError = (error) => {
   logger.error(error);
-  throw new Error(error.message || "发生了错误");
-}
+  throw new Error(error.message || "An error occurred");
+};
 
-// 添加作品到作品列表
-async function userProjectlistAdd(info) {
+// Add project to projects list
+const addProjectToUserProjectlist = async ({ listId, projectId, userId }) => {
   try {
     const project = await prisma.ow_projects_lists.findFirst({
-      where: { id: Number(info.listid), authorid: Number(info.userid) },
+      where: { id: Number(listId), authorid: Number(userId) },
     });
 
-    if (!project) throw new Error("项目列表不存在");
+    if (!project) throw new Error("Project list does not exist");
 
-    let list = cleanAndDeduplicateList([
+    const list = cleanAndDeduplicateList([
       ...project.list.split(","),
-      info.projectid,
+      projectId,
     ]);
 
     return await prisma.ow_projects_lists.update({
-      where: { id: Number(info.listid), authorid: Number(info.userid) },
+      where: { id: Number(listId), authorid: Number(userId) },
       data: { list: list.join() },
     });
   } catch (error) {
     handleError(error);
   }
-}
+};
 
-// 从作品列表中删除作品
-async function userProjectlistDelete(info) {
+// Remove project from projects list
+const removeProjectFromUserProjectlist = async ({ listId, projectId, userId }) => {
   try {
     const project = await prisma.ow_projects_lists.findFirst({
-      where: { id: Number(info.listid), authorid: Number(info.userid) },
+      where: { id: Number(listId), authorid: Number(userId) },
     });
 
-    if (!project) throw new Error("项目列表不存在");
+    if (!project) throw new Error("Project list does not exist");
 
-    let list = cleanAndDeduplicateList(
-      project.list.split(",").filter((item) => item !== String(info.projectid))
+    const list = cleanAndDeduplicateList(
+      project.list.split(",").filter((item) => item !== String(projectId))
     );
 
     return await prisma.ow_projects_lists.update({
-      where: { id: Number(info.listid), authorid: Number(info.userid) },
+      where: { id: Number(listId), authorid: Number(userId) },
       data: { list: list.join() },
     });
   } catch (error) {
     handleError(error);
   }
-}
+};
 
-// 创建新项目列表
-async function createProjectlist(userid) {
+// Create new projects list
+const createProjectlist = async (userId) => {
   try {
     return await prisma.ow_projects_lists.create({
       data: {
-        authorid: userid,
+        authorid: userId,
         list: "",
         state: "private",
-        title: "新建项目列表",
-        description: "新建项目列表",
+        title: "New project list",
+        description: "New project list",
       },
     });
   } catch (error) {
     handleError(error);
   }
-}
+};
 
-// 获取指定项目列表详情
-async function getProjectlist(listid, userid) {
+// Get specified project list details
+const getProjectlist = async ({ listId, userId }) => {
   try {
     const project = await prisma.ow_projects_lists.findFirst({
-      where: { id: Number(listid) },
+      where: { id: Number(listId) },
     });
 
     if (
       !project ||
-      (project.state === "private" && project.authorid !== userid)
+      (project.state === "private" && project.authorid !== userId)
     ) {
-      return "列表不存在或为私有，请检查或登录账户";
+      return "Project list does not exist or is private, please check or login";
     }
 
     const list = cleanAndDeduplicateList(project.list.split(","));
@@ -102,13 +100,13 @@ async function getProjectlist(listid, userid) {
   } catch (error) {
     handleError(error);
   }
-}
+};
 
-// 获取用户的所有项目列表
-async function getUserProjectlist(userid, state) {
+// Get user's all projects list
+const getUserProjectlist = async ({ userId, state }) => {
   try {
     return await prisma.ow_projects_lists.findMany({
-      where: { authorid: Number(userid), state: { in: state } },
+      where: { authorid: Number(userId), state: { in: state } },
       select: {
         id: true,
         authorid: true,
@@ -123,13 +121,13 @@ async function getUserProjectlist(userid, state) {
   } catch (error) {
     handleError(error);
   }
-}
+};
 
-// 获取用户的公开项目列表
-async function getUserPublicProjectlist(userid) {
+// Get user's public projects list
+const getUserPublicProjectlist = async (userId) => {
   try {
     return await prisma.ow_projects_lists.findMany({
-      where: { authorid: Number(userid), state: "public" },
+      where: { authorid: Number(userId), state: "public" },
       select: {
         id: true,
         authorid: true,
@@ -144,66 +142,66 @@ async function getUserPublicProjectlist(userid) {
   } catch (error) {
     handleError(error);
   }
-}
+};
 
-// 检查项目是否在用户列表中
-async function checkProjectlistWithUser(info) {
+// Check if project is in user's list
+const checkProjectlistWithUser = async ({ projectId, userId }) => {
   try {
-    if (!info.listid && !info.userid) return "参数错误";
+    if (!projectId && !userId) return "Parameter error";
 
     const projects = await prisma.ow_projects_lists.findMany({
-      where: { authorid: Number(info.userid) },
+      where: { authorid: Number(userId) },
     });
-
+    logger.info(projects);
     return projects.map((item) => {
       const listArray = cleanAndDeduplicateList(item.list.split(","));
-      item.include = listArray.includes(String(info.projectid));
+      item.include = listArray.includes(String(projectId));
       return item;
     });
   } catch (error) {
     handleError(error);
   }
-}
+};
 
-// 更新项目列表
-async function updateProjectlist(listid, info) {
+// Update project list
+const updateProjectlist = async ({ listId, title, description, state, list }) => {
   try {
     const keys = ["title", "description", "state", "list"];
-    const resultinfo = keys.reduce((acc, key) => {
-      if (info[key]) acc[key] = info[key];
+    const resultInfo = keys.reduce((acc, key) => {
+      if (list[key]) acc[key] = list[key];
       return acc;
     }, {});
 
-    if (resultinfo.list) {
-      resultinfo.list = cleanAndDeduplicateList(
-        resultinfo.list.split(",")
+    if (resultInfo.list) {
+      resultInfo.list = cleanAndDeduplicateList(
+        resultInfo.list.split(",")
       ).join();
     }
 
     return await prisma.ow_projects_lists.update({
-      where: { id: Number(listid) },
-      data: resultinfo,
+      where: { id: Number(listId) },
+      data: resultInfo,
     });
   } catch (error) {
     handleError(error);
   }
-}
+};
 
-// 删除项目列表
-async function deleteProjectlist(listid, userid) {
+// Delete project list
+const deleteProjectlist = async ({ listId, userId }) => {
   try {
     await prisma.ow_projects_lists.delete({
-      where: { id: Number(listid), authorid: Number(userid) },
+      where: { id: Number(listId), authorid: Number(userId) },
     });
-    return "已删除列表";
+    return "Deleted project list";
   } catch (error) {
     handleError(error);
   }
-}
+};
 
 module.exports = {
-  userProjectlistAdd,
-  userProjectlistDelete,
+  addProjectToUserProjectlist,
+  removeProjectFromUserProjectlist,
   getProjectlist,
   deleteProjectlist,
   updateProjectlist,
@@ -212,3 +210,4 @@ module.exports = {
   getUserPublicProjectlist,
   checkProjectlistWithUser,
 };
+
