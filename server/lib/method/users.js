@@ -22,7 +22,7 @@ async function getUsersByList(list) {
     select: select,
   });
 
-  //logger.debug(users);
+  logger.debug(users);
 
   return users;
 }

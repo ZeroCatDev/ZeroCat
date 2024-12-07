@@ -5,7 +5,9 @@ const express = require("express");
 const router = express.Router();
 const I = require("./lib/global.js"); // 功能函数集
 const DB = require("./lib/database.js"); // 数据库
-
+const {
+  getUsersByList
+} = require("./lib/method/projects.js");
 // 搜索：Scratch项目列表：数据（只搜索标题）
 router.get("/", async (req, res, next) => {
   try {
@@ -42,16 +44,29 @@ router.get("/", async (req, res, next) => {
     const orderBy = orderbyMap[orderbyField] || "time";
     const order = orderDirectionMap[orderDirection] || "desc";
 
-    // 搜索条件
+    // 构建基本搜索条件
     const searchinfo = {
-      title: { contains: title },
+      title: title ? { contains: title } : undefined,
       source: source ? { contains: source } : undefined,
-      description: { contains: description },
-      type: { contains: type },
+      description: description ? { contains: description } : undefined,
+      type: type ? { contains: type } : undefined,
       state: { in: state },
-      tags: { contains: tags },
       authorid: userid ? { equals: Number(userid) } : undefined,
     };
+
+    // 添加标签搜索条件
+    if (tags) {
+      searchinfo['tags'] = {
+        some: {
+          name: { contains: tags }
+        }
+      };
+    }
+
+    // 查询项目总数
+    const totalCount = await I.prisma.ow_projects.count({
+      where: searchinfo,
+    });
 
     // 查询项目结果
     const projectresult = await I.prisma.ow_projects.findMany({
@@ -66,34 +81,25 @@ router.get("/", async (req, res, next) => {
         description: true,
         view_count: true,
         time: true,
-        tags: true,
+        tags: {
+          select: {
+            name: true,
+            id: true
+          }
+        }
       },
       skip: (Number(curr) - 1) * Number(limit),
       take: Number(limit),
     });
-    logger.debug(searchinfo);
-    // 统计项目总数
-    const projectcount = await I.prisma.ow_projects.count({
-      where: searchinfo,
-    });
 
     // 获取作者信息
     const authorIds = [...new Set(projectresult.map((item) => item.authorid))];
-    const userresult = await I.prisma.ow_users.findMany({
-      where: { id: { in: authorIds } },
-      select: {
-        id: true,
-        username: true,
-        display_name: true,
-        motto: true,
-        images: true,
-      },
-    });
+    const userresult = await getUsersByList(authorIds);
 
     res.status(200).send({
       projects: projectresult,
       users: userresult,
-      totalCount: [{ totalCount: projectcount }],
+      totalCount: [{ totalCount }],
     });
   } catch (error) {
     next(error);

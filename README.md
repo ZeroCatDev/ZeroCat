@@ -42,7 +42,7 @@ QQ：964979747
 想了解社区效果，请参考 [ZeroCat](https://ourworld.wuyuan.dev)。
 
 ## 安装
-
+![使用Nodejs开发](.public/Node.js.png)
 这个项目使用 [node](http://nodejs.org) , [npm](https://npmjs.com), [docker](https://docker.com)，请确保你本地已经安装了祂们
 
 ```sh
@@ -105,5 +105,6 @@ ZeroCat 的项目 遵循 [Contributor Covenant](http://contributor-covenant.org/
 
 感谢：https://gitee.com/scratch-cn/lite
 <br/>此项目声明了 MIT 协议
+
 
 ![社区(Github图床)](https://github.com/ZeroCatDev/ZeroCat/assets/88357633/d6f4a6ba-daa1-45c8-88f7-4b20d9edbb22)

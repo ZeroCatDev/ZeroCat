@@ -115,23 +115,25 @@ model ow_counter {
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model ow_projects {
-  id          Int       @id @default(autoincrement()) @db.UnsignedInt
-  type        String?   @default("text") @db.VarChar(32)
-  licence     String?   @db.VarChar(32)
+  id          Int                @id @default(autoincrement()) @db.UnsignedInt
+  type        String?            @default("text") @db.VarChar(32)
+  licence     String?            @db.VarChar(32)
   authorid    Int
-  teacherid   Int?      @default(0) @db.UnsignedInt
-  state       String?   @default("private") @db.VarChar(32)
-  view_count  Int?      @default(0) @db.UnsignedInt
-  like_count  Int?      @default(0)
-  favo_count  Int?      @default(0)
-  time        DateTime? @default(now()) @db.Timestamp(0)
-  title       String?   @default("Scratch新项目") @db.VarChar(1000)
-  description String?   @default("OurWorld上的Scratch项目") @db.VarChar(1000)
-  source      String?   @db.MediumText
-  history     Boolean   @default(true)
-  devenv      Boolean   @default(true)
-  devsource   String    @db.MediumText
-  tags        String    @default("") @db.VarChar(100)
+  teacherid   Int?               @default(0) @db.UnsignedInt
+  state       String?            @default("private") @db.VarChar(32)
+  view_count  Int?               @default(0) @db.UnsignedInt
+  like_count  Int?               @default(0)
+  favo_count  Int?               @default(0)
+  time        DateTime?          @default(now()) @db.Timestamp(0)
+  title       String?            @default("Scratch新项目") @db.VarChar(1000)
+  description String?            @default("OurWorld上的Scratch项目") @db.VarChar(1000)
+  source      String?            @db.MediumText
+  history     Boolean            @default(true)
+  devenv      Boolean            @default(true)
+  devsource   String             @db.MediumText
+  // 移除原来的 tags 字符串字段
+  // 添加与 tags 表的关联
+  tags        ow_projects_tags[]
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -362,6 +364,17 @@ model magiclinktoken {
   userId    Int
   token     String   @unique(map: "token") @db.VarChar(255)
   expiresAt DateTime @db.DateTime(0)
+}
+
+model ow_projects_tags {
+  id         Int         @id @default(autoincrement())
+  name       String      @db.VarChar(45)
+  projectid  Int
+  created_at DateTime?   @default(now()) @db.Timestamp(0)
+  // 添加与 projects 表的关联
+  project    ow_projects @relation(fields: [projectid], references: [id])
+
+  @@index([projectid])
 }
 
 /// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.

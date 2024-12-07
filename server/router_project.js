@@ -6,16 +6,12 @@ const DB = require("./lib/database.js");
 const I = require("./lib/global.js");
 const default_project = require("./lib/default_project.js");
 const {
-  getProjectsByList,
-  getUsersByList,
-  getProjectsAndUsersByProjectsList,
   extractProjectData,
-  isJson,
   setProjectFile,
   getProjectFile,
-  handleError,
   projectSelectionFields,
   authorSelectionFields,
+  handleTagsChange,
 } = require("./lib/method/projects.js");
 const { Logger } = require("winston");
 // 中间件，确保所有请求均经过该处理
@@ -94,7 +90,7 @@ router.put("/:id/source", async (req, res, next) => {
     }
     //logger.debug(req.body);
     var reqbody = req.body
-    logger.debug('1111111111111');
+    //logger.debug('1111111111111');
     logger.debug(typeof reqbody);
     const sha256 = setProjectFile(reqbody);
     const projectId = Number(req.params.id);
@@ -132,6 +128,11 @@ router.put("/:id", async (req, res, next) => {
       where: { id: Number(req.params.id), authorid: Number(res.locals.userid) },
       data: updatedData,
     });
+    // 处理标签
+    if(req.body.tags){
+      await handleTagsChange(Number(req.params.id), req.body.tags);
+    }
+
     res.status(200).send({ status: "1", msg: "保存成功" });
   } catch (err) {
     logger.error("Error updating project information:", err);
@@ -204,7 +205,16 @@ router.get("/:id", async (req, res, next) => {
       where: { id: Number(project.authorid) },
       select: authorSelectionFields(),
     });
+
+    const tags = await I.prisma.ow_projects_tags.findMany({
+      where: { projectid: Number(req.params.id) },
+      select: { name: true, id: true ,created_at: true},
+    });
+
     project.author = author;
+    project.tags = tags
+    logger.debug(tags);
+    logger.debug(project);
     res.status(200).send(project);
   } catch (err) {
     logger.error("Error fetching project information:", err);

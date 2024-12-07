@@ -12,16 +12,7 @@ var I = require("./lib/global.js");
 const { log, error } = require("console");
 const { needlogin } = require("./middleware/auth.js");
 const {
-  getProjectsByList,
-  getUsersByList,
-  getProjectsAndUsersByProjectsList,
-  extractProjectData,
-  isJson,
-  setProjectFile,
   getProjectFile,
-  handleError,
-  projectSelectionFields,
-  authorSelectionFields,
 } = require("./lib/method/projects.js");
 router.all("*", function (req, res, next) {
   next();
