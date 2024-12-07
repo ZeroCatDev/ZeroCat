@@ -42,7 +42,7 @@ QQ：964979747
 想了解社区效果，请参考 [ZeroCat](https://ourworld.wuyuan.dev)。
 
 ## 安装
-![使用Nodejs开发](.public/Node.js.png)
+![使用Nodejs开发](public/Node.js.png)
 这个项目使用 [node](http://nodejs.org) , [npm](https://npmjs.com), [docker](https://docker.com)，请确保你本地已经安装了祂们
 
 ```sh
