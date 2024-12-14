@@ -37,7 +37,7 @@ class ConfigManager {
     if (global.config && global.config[key] != null) {
       return global.config[key];
     }
-    var config = await this.prisma.ow_config.findFirst({ where: { key: key } });
+    const config = await this.prisma.ow_config.findFirst({where: {key: key}});
     if (config == null) {
       return null;
     }

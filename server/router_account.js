@@ -36,7 +36,7 @@ router.all("*", function (req, res, next) {
 */
 
 const geetest = require("./lib/captcha/geetest.js");
-//geetest,
+//geetest
 router.post("/login", async function (req, res, next) {
   try {
     if (
@@ -119,7 +119,7 @@ router.post("/login", async function (req, res, next) {
   }
 });
 
-var logout = function (req, res) {
+const logout = function (req, res) {
   res.locals["userid"] = null;
   res.locals["email"] = null;
 
@@ -136,7 +136,7 @@ router.get("/logout", function (req, res) {
 
 router.post("/register", geetest, async function (req, res, next) {
   try {
-    var email = req.body.un;
+    const email = req.body.un;
     SQL = `SELECT id FROM ow_users WHERE email='${email}' LIMIT 1`;
     DB.query(SQL, function (err, User) {
       if (err) {
@@ -150,8 +150,8 @@ router.post("/register", geetest, async function (req, res, next) {
 
       var randonpw = I.randomPassword(12);
       pw = I.hash(randonpw);
-      var display_name = req.body.pw;
-      var INSERT = `INSERT INTO ow_users (username,email,password,display_name) VALUES ('${Date.now()}','${email}','${pw}','${display_name}')`;
+      const display_name = req.body.pw;
+      const INSERT = `INSERT INTO ow_users (username,email,password,display_name) VALUES ('${Date.now()}','${email}','${pw}','${display_name}')`;
       DB.query(INSERT, async function (err, newUser) {
         if (err) {
           logger.error(err);
@@ -447,17 +447,17 @@ router.post("/magiclink/generate", geetest, async (req, res) => {
     )}/account/magiclink/validate?token=${token}`;
     await sendEmail(
       email,
-      "Magic Link 登录",
+      "魔术链接登录",
       `点击以下链接登录：<a href="${magicLink}">${magicLink}</a>`
     );
 
     res
       .status(200)
-      .json({ status: "success", message: "Magic Link 已发送到您的邮箱" });
+      .json({ status: "success", message: "魔术链接已发送到您的邮箱" });
     logger.debug(magicLink);
   } catch (error) {
-    logger.error("生成 Magic Link 时出错:", error);
-    res.status(200).json({ status: "error", message: "生成 Magic Link 失败" });
+    logger.error("生成魔术链接时出错:", error);
+    res.status(200).json({ status: "error", message: "生成魔术链接失败" });
   }
 });
 
@@ -467,7 +467,7 @@ router.get("/magiclink/validate", async (req, res) => {
     if (!token) {
       return res
         .status(200)
-        .json({ status: "error", message: "无效的 Magic Link" });
+        .json({ status: "error", message: "无效的魔术链接" });
     }
 
     const decoded = jwt.verify(
@@ -481,7 +481,7 @@ router.get("/magiclink/validate", async (req, res) => {
     if (!magicLinkToken || magicLinkToken.expiresAt < new Date()) {
       return res
         .status(200)
-        .json({ status: "error", message: "Magic Link 已过期" });
+        .json({ status: "error", message: "魔术链接已过期" });
     }
 
     const user = await I.prisma.ow_users.findUnique({
@@ -511,8 +511,8 @@ router.get("/magiclink/validate", async (req, res) => {
       token: jwtToken,
     });
   } catch (error) {
-    //logger.error("验证 Magic Link 时出错:", error);
-    res.status(200).json({ status: "error", message: "验证 Magic Link 失败" });
+    //logger.error("验证魔术链接时出错:", error);
+    res.status(200).json({ status: "error", message: "验证魔术链接失败" });
   }
 });
 

@@ -39,7 +39,7 @@ const transformComment = (comments) => {
     const browser = (
       comment.ua
         ? comment.ua.match(/(Edge|Chrome|Firefox|Safari|Opera)/)
-        : null || ["未知"]
+        : ["未知"]
     )[0];
     const os = (
       comment.ua ? comment.ua.match(/(Windows|Mac|Linux)/) : null || ["未知"]
