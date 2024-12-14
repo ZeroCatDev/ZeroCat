@@ -1,75 +1,64 @@
 import express from "express";
-var app = express();
 import jsonwebtoken from "jsonwebtoken";
 
 import configManager from "./server/configManager.js";
 import logger from "./server/lib/logger.js";
-logger.error(process.env.NODE_ENV);
-logger.error("debug mode");
 
 import "dotenv/config";
 
 import expressWinston from "express-winston";
+import cors from "cors";
+import bodyParser from "body-parser";
+import multipart from "connect-multiparty";
+import compress from "compression";
+
+const app = express();
+
 app.use(
   expressWinston.logger({
-    winstonInstance: logger, // 使用外部定义的logger
-    meta: true, // optional: control whether you want to log the meta data about the request (default to true).
-    msg: "HTTP {{req.method}} {{res.statusCode}} {{res.responseTime}}ms {{req.url}} {{req.ip}}", // optional: customize the default logging message. Eg. "{{res.statusCode}} {{req.method}} {{res.responseTime}}ms {{req.url}}"
-    colorize: false, // Color the text and status code, using the Express/morgan color palette (text: gray, status: default green, 3XX cyan, 4XX yellow, 5XX red).
-    ignoreRoute: function (req, res) {
-      return false;
-    }, // optional: allows to skip some loggin. It is passed the http request and http response objects, should return true to skip the request logging.
-    level: "info", // 记录所有请求为info级别
+    winstonInstance: logger,
+    meta: true,
+    msg: "HTTP {{req.method}} {{res.statusCode}} {{res.responseTime}}ms {{req.url}} {{req.ip}}",
+    colorize: false,
+    ignoreRoute: (req, res) => false,
+    level: "info",
   })
 );
 
 // cors配置
-import cors from "cors";
-var corslist = (await configManager.getConfig("cors")).split(",");
-
-var corsOptions = {
-  origin: (origin, callback) => {
-    if (!origin || corslist.indexOf(new URL(origin).hostname) !== -1) {
-      callback(null, true);
-    } else {
-      logger.error(origin);
-      callback(new logger.error("Not allowed by CORS"));
-    }
-  },
+const corslist = (await configManager.getConfig("cors")).split(",");
+const corsOptions = {
+  origin: (origin, callback) =>
+    origin
+      ? corslist.indexOf(new URL(origin).hostname) === -1
+        ? callback(new logger.error("Not allowed by CORS"))
+        : callback(null, true)
+      : callback(null, true),
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
   preflightContinue: false,
   optionsSuccessStatus: 200,
   credentials: true,
 };
-app.use(cors(corsOptions)); // 应用CORS配置函数
-
-//设置环境变量
-//var session = require("express-session"); app.use( session({ secret: await configManager.getConfig('security.SessionSecret'), resave: false, name: "ZeroCat-session", saveUninitialized: true, cookie: { secure: false }, }) );
+app.use(cors(corsOptions));
 
 //express 的http请求体进行解析组件
-import bodyParser from "body-parser";
 app.use(bodyParser["urlencoded"]({ limit: "50mb", extended: false }));
 app.use(bodyParser["json"]({ limit: "50mb" }));
 app.use(bodyParser["text"]({ limit: "50mb" }));
 
 //文件上传模块
-import multipart from "connect-multiparty";
 app.use(multipart({ uploadDir: "./data/upload_tmp" }));
 
 //压缩组件，需要位于 express.static 前面，否则不起作用
-import compress from "compression";
-import { fileURLToPath } from "url";
-import { dirname } from "path";
-const __dirname = dirname(fileURLToPath(import.meta.url));
 app.use(compress());
 
-app.set("env", __dirname + "/.env");
-app.set("data", __dirname + "/data");
-app.set("views", __dirname + "/views");
-app.set("prisma", __dirname + "/prisma");
+app.set("env", process.cwd());
+app.set("data", process.cwd() + "/data");
+app.set("views", process.cwd() + "/views");
+app.set("prisma", process.cwd() + "/prisma");
 app.set(
   "node_modules/@prisma/client",
-  __dirname + "/node_modules/@prisma/client"
+  process.cwd() + "/node_modules/@prisma/client"
 );
 
 app.set("view engine", "ejs");
@@ -77,8 +66,6 @@ app.set("view engine", "ejs");
 //数据库
 import DB from "./server/lib/database.js";
 
-//全局变量
-global.dirname = __dirname;
 
 //启动http(80端口)==================================
 //http.createServer(app).listen(3000, "0.0.0.0", function () {
@@ -91,9 +78,6 @@ let zcjwttoken;
   zcjwttoken = await configManager.getConfig("security.jwttoken");
 })();
 app.all("*", async function (req, res, next) {
-  logger.error("test");
-
-  // List of possible locations where the token might be found
   const tokenSources = [
     req.headers["authorization"]?.replace("Bearer ", ""),
     req.cookies?.token,
@@ -101,21 +85,14 @@ app.all("*", async function (req, res, next) {
     req.headers?.["token"],
     req.query?.token,
   ];
-
-  // Initialize token variable
   let token = null;
 
-  // Iterate through the token sources and find the first valid token
   for (let source of tokenSources) {
     if (source) {
       try {
-        // Try to verify the token and extract user info
         const decodedToken = jsonwebtoken.verify(source, zcjwttoken);
-        // If the token contains a valid 'userid', use this token
         if (decodedToken?.userid) {
           token = source;
-          logger.error(token);
-          // Store user information in res.locals
           res.locals = {
             login: true,
             userid: decodedToken.userid,
@@ -123,21 +100,17 @@ app.all("*", async function (req, res, next) {
             username: decodedToken.username,
             display_name: decodedToken.display_name,
             avatar: decodedToken.avatar,
-            is_admin: decodedToken.is_admin || 0, // Default to 0 if is_admin is not present
+            is_admin: decodedToken.is_admin || 0,
             usertoken: token,
           };
-          logger.error("找到登录信息");
-          logger.error(JSON.stringify(res.locals));
-          break; // Stop iterating once we find a valid token
+          break;
         }
       } catch (err) {
-        // If verification fails, continue to next token source
         continue;
       }
     }
   }
 
-  // If no valid token is found, set the default behavior
   if (!token) {
     res.locals = {
       login: false,
@@ -151,7 +124,6 @@ app.all("*", async function (req, res, next) {
     };
   }
 
-  // Proceed with the request
   next();
 });
 
@@ -198,7 +170,6 @@ app.get("/check", function (req, res, next) {
     message: "success",
     code: 200,
   });
-  logger.error("check");
 });
 
 process.on("uncaughtException", function (err) {
@@ -226,3 +197,4 @@ app.all("*", function (req, res, next) {
 });
 
 export default app;
+
