@@ -1,19 +1,12 @@
-const logger = require("./lib/logger.js");
-const configManager = require("./configManager");
-const express = require("express");
-const router = express.Router();
-const DB = require("./lib/database.js");
-const I = require("./lib/global.js");
-const default_project = require("./lib/default_project.js");
-const {
-  extractProjectData,
-  setProjectFile,
-  getProjectFile,
-  projectSelectionFields,
-  authorSelectionFields,
-  handleTagsChange,
-} = require("./lib/method/projects.js");
-const { Logger } = require("winston");
+import logger from "./lib/logger.js";
+import configManager from "./configManager.js";
+import { Router } from "express";
+const router = Router();
+import DB from "./lib/database.js";
+import { prisma } from "./lib/global.js";
+import default_project from "./lib/default_project.js";
+import { extractProjectData, setProjectFile, getProjectFile, projectSelectionFields, authorSelectionFields, handleTagsChange } from "./lib/method/projects.js";
+import { Logger } from "winston";
 // 中间件，确保所有请求均经过该处理
 router.all("*", (req, res, next) => next());
 
@@ -32,7 +25,7 @@ router.post("/", async (req, res, next) => {
     outputJson.devsource = outputJson.source;
     outputJson.authorid = res.locals.userid;
 
-    const result = await I.prisma.ow_projects.create({ data: outputJson });
+    const result = await prisma.ow_projects.create({ data: outputJson });
     res.status(200).send({ status: "1", msg: "保存成功", id: result.id });
   } catch (err) {
     logger.error("Error creating new project:", err);
@@ -47,12 +40,12 @@ router.post("/:id/fork", async (req, res, next) => {
   }
 
   try {
-    const original = await I.prisma.ow_projects.findFirst({
+    const original = await prisma.ow_projects.findFirst({
       where: { id: Number(req.params.id) },
     });
 
     if (original?.state === "public") {
-      const result = await I.prisma.ow_projects.create({
+      const result = await prisma.ow_projects.create({
         data: {
           authorid: res.locals.userid,
           title: `${original.title}改编`,
@@ -82,28 +75,28 @@ router.put("/:id/source", async (req, res, next) => {
   }
 
   try {
-    var project=await I.prisma.ow_projects.findFirst({
+    var project=await prisma.ow_projects.findFirst({
       where: { id: Number(req.params.id), authorid: Number(res.locals.userid) },
     })
     if(project==null){
       return res.status(403).send({ status: "0", msg: "没有权限" });
     }
-    //logger.debug(req.body);
+    //logger.logger.debug(req.body);
     var reqbody = req.body
-    //logger.debug('1111111111111');
+    //logger.logger.debug('1111111111111');
     logger.debug(typeof reqbody);
     const sha256 = setProjectFile(reqbody);
     const projectId = Number(req.params.id);
     const userId = Number(res.locals.userid);
 
     const updateData = { devsource: sha256 };
-    const result = await I.prisma.ow_projects.update({
+    const result = await prisma.ow_projects.update({
       where: { id: projectId, authorid: userId },
       data: updateData,
     });
 
     if (result.devenv === 0) {
-      await I.prisma.ow_projects.update({
+      await prisma.ow_projects.update({
         where: { id: projectId, authorid: userId },
         data: { source: sha256 },
       });
@@ -124,7 +117,7 @@ router.put("/:id", async (req, res, next) => {
 
   try {
     const updatedData = extractProjectData(req.body);
-    await I.prisma.ow_projects.update({
+    await prisma.ow_projects.update({
       where: { id: Number(req.params.id), authorid: Number(res.locals.userid) },
       data: updatedData,
     });
@@ -147,7 +140,7 @@ router.post("/:id/push", async (req, res, next) => {
   }
 
   try {
-    const project = await I.prisma.ow_projects.findFirst({
+    const project = await prisma.ow_projects.findFirst({
       where: { id: Number(req.params.id), authorid: Number(res.locals.userid) },
     });
 
@@ -157,14 +150,14 @@ router.post("/:id/push", async (req, res, next) => {
         .send({ status: "0", msg: "未开启开发环境，无法推送" });
     }
 
-    await I.prisma.ow_projects.update({
+    await prisma.ow_projects.update({
       where: { id: Number(req.params.id), authorid: Number(res.locals.userid) },
       data: { source: project.devsource },
     });
 
     if (project.history === 1) {
       const sha256 = setProjectFile(project.source);
-      await I.prisma.ow_projects_history.create({
+      await prisma.ow_projects_history.create({
         data: {
           projectid: Number(req.params.id),
           source: sha256,
@@ -189,7 +182,7 @@ router.post("/:id/push", async (req, res, next) => {
 // 获取项目信息
 router.get("/:id", async (req, res, next) => {
   try {
-    const project = await I.prisma.ow_projects.findFirst({
+    const project = await prisma.ow_projects.findFirst({
       where: { id: Number(req.params.id) },
       select: projectSelectionFields(),
     });
@@ -201,12 +194,12 @@ router.get("/:id", async (req, res, next) => {
       return res.status(404).send({ status: "0", msg: "作品不存在或无权打开" });
     }
 
-    const author = await I.prisma.ow_users.findFirst({
+    const author = await prisma.ow_users.findFirst({
       where: { id: Number(project.authorid) },
       select: authorSelectionFields(),
     });
 
-    const tags = await I.prisma.ow_projects_tags.findMany({
+    const tags = await prisma.ow_projects_tags.findMany({
       where: { projectid: Number(req.params.id) },
       select: { name: true, id: true ,created_at: true},
     });
@@ -225,7 +218,7 @@ router.get("/:id", async (req, res, next) => {
 // 获取源代码
 router.get("/:id/source/:env?", async (req, res, next) => {
   try {
-    const project = await I.prisma.ow_projects.findFirst({
+    const project = await prisma.ow_projects.findFirst({
       where: { id: Number(req.params.id) },
     });
 
@@ -253,7 +246,7 @@ router.get("/:id/source/:env?", async (req, res, next) => {
 // 删除作品
 router.delete("/:id", async (req, res, next) => {
   try {
-    await I.prisma.ow_projects.delete({
+    await prisma.ow_projects.delete({
       where: { id: Number(req.params.id), authorid: res.locals.userid },
     });
     res.status(200).send({ status: "1", msg: "删除成功" });
@@ -263,4 +256,4 @@ router.delete("/:id", async (req, res, next) => {
   }
 });
 
-module.exports = router;
+export default router;

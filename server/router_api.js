@@ -1,17 +1,17 @@
-const logger = require("./lib/logger.js");
-const configManager = require("./configManager");
+import logger from "./lib/logger.js";
+import configManager from "./configManager.js";
 
-var express = require("express");
-var router = express.Router();
-var fs = require("fs");
+import { Router } from "express";
+var router = Router();
+import fs from "fs";
 
-var I = require("./lib/global.js");
-var DB = require("./lib/database.js");
-var { needadmin } = require("./middleware/auth.js");
+import { prisma as _prisma } from "./lib/global.js";
+import { query } from "./lib/database.js";
+import { needadmin } from "./middleware/auth.js";
 router.get("/usertx", async function (req, res, next) {
   try {
     SQL = `SELECT images FROM ow_users WHERE id = ${req.query.id};`;
-    DB.query(SQL, async function (err, USER) {
+    query(SQL, async function (err, USER) {
       if (err || USER.length == 0) {
         res.locals.tip = { opt: "flash", msg: "用户不存在" };
         res.status(404).json({
@@ -35,7 +35,7 @@ router.get("/usertx", async function (req, res, next) {
 
 router.get("/getuserinfo", async function (req, res, next) {
   try {
-    user = await I.prisma.ow_users.findMany({
+    var user = await _prisma.ow_users.findMany({
       where: {
         id: parseInt(req.query.id),
       },
@@ -50,13 +50,13 @@ router.get("/getuserinfo", async function (req, res, next) {
       },
     });
 
-    scratchcount = await I.prisma.ow_projects.count({
+    var scratchcount = await _prisma.ow_projects.count({
       where: {
         type: "scratch",
         state: "public",
       },
     });
-    pythoncount = await I.prisma.ow_projects.count({
+    var pythoncount = await _prisma.ow_projects.count({
       where: {
         type: "python",
         state: "public",
@@ -82,9 +82,9 @@ router.get("/getuserinfo", async function (req, res, next) {
 
 router.get("/info", async (req, res, next) => {
   try {
-    const userCount = await I.prisma.ow_users.count();
-    const scratchCount = await I.prisma.ow_projects.count();
-    const pythonCount = await I.prisma.ow_projects.count();
+    const userCount = await _prisma.ow_users.count();
+    const scratchCount = await _prisma.ow_projects.count();
+    const pythonCount = await _prisma.ow_projects.count();
 
     res.send({
       user: userCount,
@@ -109,7 +109,7 @@ router.get("/projectinfo", async function (req, res, next) {
       ` FROM ow_projects ` +
       ` LEFT JOIN ow_users ON (ow_users.id=ow_projects.authorid) ` +
       ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state='public' or ow_projects.authorid=${res.locals.userid}) LIMIT 1`;
-    DB.query(SQL, function (err, SCRATCH) {
+    query(SQL, function (err, SCRATCH) {
       if (err || SCRATCH.length == 0) {
         res.locals.tip = {
           opt: "flash",
@@ -136,7 +136,7 @@ router.get("/projectinfo", async function (req, res, next) {
 });
 
 router.get("/config", async function (req, res, next) {
-  const result = await I.prisma.ow_config.findMany({
+  const result = await _prisma.ow_config.findMany({
     where: { is_public: true },
     select: { key: true, value: true },
   });
@@ -158,7 +158,7 @@ router.get("/config/reload", needadmin, async function (req, res, next) {
   });
 });
 router.get("/config/:key", async function (req, res, next) {
-  const result = await I.prisma.ow_config.findFirst({
+  const result = await _prisma.ow_config.findFirst({
     where: { is_public: true, key: req.params.key },
     select: { key: true, value: true },
   });
@@ -225,4 +225,4 @@ router.get("/tuxiaochao", async function (req, res) {
     });
   }
 });
-module.exports = router;
+export default router;

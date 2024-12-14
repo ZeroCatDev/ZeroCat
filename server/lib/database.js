@@ -1,10 +1,9 @@
-const logger = require("./logger.js");
+import logger from "./logger.js";
 // 连接MySQL
-var mysql = require("mysql");
-var pool = mysql.createPool(process.env.DATABASE_URL);
+import mysql, { createPool } from "mysql";
+var pool = createPool(process.env.DATABASE_URL);
 
-//防止注入：'SELECT * FROM ow_users WHERE ?', WHERE
-exports.qww = function query_with_w(SQL, W, callback) {
+export const qww = function query_with_w(SQL, W, callback) {
   pool.getConnection(function (err, connection) {
     //logger.debug(err)
     if (err) return callback(err, "");
@@ -19,7 +18,7 @@ exports.qww = function query_with_w(SQL, W, callback) {
 };
 
 //正常操作
-exports.query = function query(SQL, callback) {
+export function query(SQL, callback) {
   pool.getConnection(function (err, connection) {
     //logger.debug(err)
     if (err) return callback(err, "");
@@ -31,6 +30,6 @@ exports.query = function query(SQL, callback) {
       logger.debug(SQL);
     });
   });
-};
+}
 
-exports.mysql = mysql;
+export default mysql;

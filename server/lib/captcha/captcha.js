@@ -1,10 +1,10 @@
-const logger = require("../logger.js");
-const configManager = require("../configManager");
+import { error as _error, debug } from "../logger.js";
+import { getConfig } from "../configManager.js";
 
-const express = require("express");
+import express from "express";
 
 const app = express();
-const request = require("request");
+import { post } from "request";
 
 app.use(async (req, res, next) => {
   const recaptcha =
@@ -14,19 +14,19 @@ app.use(async (req, res, next) => {
     return res.status(200).send({ message: "请完成验证码" });
   }
 
-  request.post(
+  post(
     {
-      url: await configManager.getConfig('captcha.reverify'),
-      form: { secret: await configManager.getConfig('captcha.resecret'), response: recaptcha },
+      url: await getConfig('captcha.reverify'),
+      form: { secret: await getConfig('captcha.resecret'), response: recaptcha },
     },
     function (error, httpResponse, body) {
       if (error) {
-        logger.error("Error verifying recaptcha:", error);
+        _error("Error verifying recaptcha:", error);
         res.status(200).send({ message: "验证码验证失败", error: error });
       }
 
       const response = JSON.parse(body);
-      logger.debug(response);
+      debug(response);
       if (response.success) {
         next();
       } else {
@@ -36,4 +36,4 @@ app.use(async (req, res, next) => {
   );
 });
 
-module.exports = app;
+export default app;

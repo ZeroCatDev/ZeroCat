@@ -1,22 +1,20 @@
-const logger = require("../logger.js");
-const configManager = require("../../configManager");
+import logger from "../logger.js";
+import configManager from "../../configManager.js";
 
-const express = require("express");
-const querystring = require("querystring");
-const crypto = require("crypto");
-const axios = require("axios");
+import express from "express";
+import { parse } from "querystring";
+import { createHmac } from "crypto";
+import axios from "axios";
 
 const app = express();
 
 // 从配置中读取极验的相关信息
-let GEE_CAPTCHA_ID, GEE_CAPTCHA_KEY, GEE_API_SERVER,API_URL
-(async () => {
-  GEE_CAPTCHA_ID = await configManager.getConfig("captcha.GEE_CAPTCHA_ID");
-  GEE_CAPTCHA_KEY = await configManager.getConfig("captcha.GEE_CAPTCHA_KEY");
-  GEE_API_SERVER = await configManager.getConfig("captcha.GEE_API_SERVER");
-  API_URL = `${GEE_API_SERVER}/validate?captcha_id=${GEE_CAPTCHA_ID}`;
-})();
 
+const GEE_CAPTCHA_ID = await configManager.getConfig("captcha.GEE_CAPTCHA_ID");
+const GEE_CAPTCHA_KEY = await configManager.getConfig("captcha.GEE_CAPTCHA_KEY");
+const GEE_API_SERVER = await configManager.getConfig("captcha.GEE_API_SERVER");
+const API_URL = `${GEE_API_SERVER}/validate?captcha_id=${GEE_CAPTCHA_ID}`;
+logger.debug(API_URL);
 
 // 中间件处理极验验证码验证
 app.use(async (req, res, next) => {
@@ -33,10 +31,10 @@ app.use(async (req, res, next) => {
         geetest = req.body.captcha;
       }
     } else {
-      const queryCaptcha = querystring.parse(req.url.split("?")[1]).captcha;
+      const queryCaptcha = parse(req.url.split("?")[1]).captcha;
       geetest = queryCaptcha
         ? JSON.parse(queryCaptcha)
-        : querystring.parse(req.url.split("?")[1]) || req.body;
+        : parse(req.url.split("?")[1]) || req.body;
     }
   } catch (error) {
     logger.error("Captcha Parsing Error:", error);
@@ -57,19 +55,29 @@ app.use(async (req, res, next) => {
     gen_time: geetest.gen_time,
     sign_token,
   };
-
+  logger.debug(datas);
   try {
     // 发送请求到极验服务
-    const result = await post_form(datas, API_URL);
+    logger.debug("Sending request to Geetest server...");
+    logger.debug(API_URL);
+    const result = await axios({
+      method: "post",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      url: API_URL, // 极验验证码验证接口
+      data: datas,
+    });
 
-    if (result.result === "success") {
+    if (result.data.result === "success") {
       next(); // 验证成功，继续处理请求
     } else {
-      logger.debug(`Validate fail: ${result.reason}`);
+      console.log(result.data);
+      logger.debug(`Validate fail: ${result.data.reason}`);
       res.status(500).send({
         code: 500,
-        msg: `请完成验证码/${result.reason}`,
-        status: `请完成验证码/${result.reason}`,
+        msg: `请完成验证码/${result.data.reason}`,
+        status: `请完成验证码/${result.data.reason}`,
       });
     }
   } catch (error) {
@@ -80,26 +88,9 @@ app.use(async (req, res, next) => {
 
 // 生成签名的函数，使用 HMAC-SHA256
 function hmac_sha256_encode(value, key) {
-  return crypto.createHmac("sha256", key).update(value, "utf8").digest("hex");
+  logger.debug(value);
+  logger.debug(key);
+  return createHmac("sha256", key).update(value, "utf8").digest("hex");
 }
 
-// 发送 POST 请求
-async function post_form(datas, url) {
-  try {
-    const response = await axios.post(url, null, {
-      params: datas,
-      timeout: 5000,
-    });
-
-    if (response.status !== 200) {
-      logger.error(`Geetest Response Error, StatusCode: ${response.status}`);
-      throw new Error("Geetest Response Error");
-    }
-    return response.data;
-  } catch (error) {
-    logger.error("Request to Geetest failed:", error);
-    throw error;
-  }
-}
-
-module.exports = app;
+export default app;

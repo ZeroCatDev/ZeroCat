@@ -1,8 +1,8 @@
-const logger = require("../logger.js");
-const { PrismaClient } = require("@prisma/client");
+import logger from "../logger.js";
+import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
-const crypto = require("crypto");
-const { getUsersByList } = require("./users.js");
+import { createHash } from "crypto";
+import { getUsersByList } from "./users.js";
 
 /**
  * Get projects by list of IDs
@@ -108,7 +108,7 @@ async function handleTagsChange(projectId, tags) {
  */
 function setProjectFile(source) {
   const sourcedata = isJson(source) ? JSON.stringify(source) : source;
-  const sha256 = crypto.createHash("sha256").update(sourcedata).digest("hex");
+  const sha256 = createHash("sha256").update(sourcedata).digest("hex");
   prisma.ow_projects_file
     .create({ data: { sha256, source: sourcedata } })
     .catch(logger.error);
@@ -186,7 +186,7 @@ function isJson(str) {
   }
 }
 
-module.exports = {
+export {
   getProjectsByList,
   getUsersByList,
   getProjectsAndUsersByProjectsList,

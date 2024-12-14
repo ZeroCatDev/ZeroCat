@@ -1,15 +1,15 @@
-var express = require("express");
+import express from "express";
 var app = express();
-const jwt = require("jsonwebtoken");
+import jsonwebtoken from "jsonwebtoken";
 
-const configManager = require("./server/configManager.js");
-const logger = require("./server/lib/logger.js");
-logger.info(process.env.NODE_ENV);
-logger.debug('debug mode');
-require("dotenv").config({ override: true });
+import configManager from "./server/configManager.js";
+import logger from "./server/lib/logger.js";
+logger.error(process.env.NODE_ENV);
+logger.error("debug mode");
 
-expressWinston = require("express-winston");
+import "dotenv/config";
 
+import expressWinston from "express-winston";
 app.use(
   expressWinston.logger({
     winstonInstance: logger, // 使用外部定义的logger
@@ -24,19 +24,16 @@ app.use(
 );
 
 // cors配置
-var cors = require("cors");
-let corslist;
-(async () => {
-  corslist = (await configManager.getConfig("cors")).split(",");
-})();
+import cors from "cors";
+var corslist = (await configManager.getConfig("cors")).split(",");
 
 var corsOptions = {
   origin: (origin, callback) => {
     if (!origin || corslist.indexOf(new URL(origin).hostname) !== -1) {
       callback(null, true);
     } else {
-      logger.debug(origin);
-      callback(new Error("Not allowed by CORS"));
+      logger.error(origin);
+      callback(new logger.error("Not allowed by CORS"));
     }
   },
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
@@ -50,17 +47,20 @@ app.use(cors(corsOptions)); // 应用CORS配置函数
 //var session = require("express-session"); app.use( session({ secret: await configManager.getConfig('security.SessionSecret'), resave: false, name: "ZeroCat-session", saveUninitialized: true, cookie: { secure: false }, }) );
 
 //express 的http请求体进行解析组件
-var bodyParser = require("body-parser");
+import bodyParser from "body-parser";
 app.use(bodyParser["urlencoded"]({ limit: "50mb", extended: false }));
 app.use(bodyParser["json"]({ limit: "50mb" }));
 app.use(bodyParser["text"]({ limit: "50mb" }));
 
 //文件上传模块
-var multipart = require("connect-multiparty");
+import multipart from "connect-multiparty";
 app.use(multipart({ uploadDir: "./data/upload_tmp" }));
 
 //压缩组件，需要位于 express.static 前面，否则不起作用
-var compress = require("compression");
+import compress from "compression";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+const __dirname = dirname(fileURLToPath(import.meta.url));
 app.use(compress());
 
 app.set("env", __dirname + "/.env");
@@ -75,7 +75,7 @@ app.set(
 app.set("view engine", "ejs");
 
 //数据库
-var DB = require("./server/lib/database.js");
+import DB from "./server/lib/database.js";
 
 //全局变量
 global.dirname = __dirname;
@@ -91,7 +91,7 @@ let zcjwttoken;
   zcjwttoken = await configManager.getConfig("security.jwttoken");
 })();
 app.all("*", async function (req, res, next) {
-  Error("test");
+  logger.error("test");
 
   // List of possible locations where the token might be found
   const tokenSources = [
@@ -110,11 +110,11 @@ app.all("*", async function (req, res, next) {
     if (source) {
       try {
         // Try to verify the token and extract user info
-        const decodedToken = jwt.verify(source, zcjwttoken);
+        const decodedToken = jsonwebtoken.verify(source, zcjwttoken);
         // If the token contains a valid 'userid', use this token
         if (decodedToken?.userid) {
           token = source;
-          logger.debug(token);
+          logger.error(token);
           // Store user information in res.locals
           res.locals = {
             login: true,
@@ -126,8 +126,8 @@ app.all("*", async function (req, res, next) {
             is_admin: decodedToken.is_admin || 0, // Default to 0 if is_admin is not present
             usertoken: token,
           };
-          logger.debug("找到登录信息");
-          logger.debug(JSON.stringify(res.locals));
+          logger.error("找到登录信息");
+          logger.error(JSON.stringify(res.locals));
           break; // Stop iterating once we find a valid token
         }
       } catch (err) {
@@ -162,35 +162,35 @@ app.get("/", function (req, res) {
 
 //放在最后，确保路由时能先执行app.all=====================
 //注册、登录等功能路由
-var router_register = require("./server/router_account.js");
+import router_register from "./server/router_account.js";
 app.use("/account", router_register);
 
 //个人中心路由//学生平台路由
-var router_admin = require("./server/router_my.js");
+import router_admin from "./server/router_my.js";
 app.use("/my", router_admin);
 
 //搜索api
-var router_search = require("./server/router_search.js");
+import router_search from "./server/router_search.js";
 app.use("/searchapi", router_search);
 
 //scratch路由
-var router_scratch = require("./server/router_scratch.js");
+import router_scratch from "./server/router_scratch.js";
 app.use("/scratch", router_scratch);
 //api路由
-var apiserver = require("./server/router_api.js");
+import apiserver from "./server/router_api.js";
 app.use("/api", apiserver);
 //api路由
 
-var router_projectlist = require("./server/router_projectlist.js");
+import router_projectlist from "./server/router_projectlist.js";
 app.use("/projectlist", router_projectlist);
 
 //项目处理路由
-var router_project = require("./server/router_project.js");
+import router_project from "./server/router_project.js";
 app.use("/project", router_project);
 
 //项目处理路由
-var router_comment = require("./server/router_comment.js");
-const { log } = require("winston");
+import router_comment from "./server/router_comment.js";
+
 app.use("/comment", router_comment);
 
 app.get("/check", function (req, res, next) {
@@ -198,7 +198,7 @@ app.get("/check", function (req, res, next) {
     message: "success",
     code: 200,
   });
-  logger.debug("check");
+  logger.error("check");
 });
 
 process.on("uncaughtException", function (err) {
@@ -225,4 +225,4 @@ app.all("*", function (req, res, next) {
   });
 });
 
-module.exports = app;
+export default app;

@@ -1,7 +1,7 @@
-const { createLogger, format, transports } = require("winston");
+import { createLogger, format, transports } from "winston";
 const { combine, timestamp, printf, errors, colorize } = format;
-const DailyRotateFile = require("winston-daily-rotate-file");
-const path = require("path");
+import DailyRotateFile from "winston-daily-rotate-file";
+import { join } from "path";
 
 // 获取环境变量中的日志级别和日志目录
 const logLevel = process.env.LOG_LEVEL || "info";
@@ -32,6 +32,7 @@ const logger = createLogger({
     new transports.Console({
       format: combine(
         colorize(), // 控制台输出颜色
+
         logFormat // 输出格式
       ),
     }),
@@ -39,7 +40,7 @@ const logger = createLogger({
     // 错误日志文件：每天生成一个错误日志文件
     new DailyRotateFile({
       level: "error",
-      filename: path.join(logDirectory, "error-%DATE%.log"),
+      filename: join(logDirectory, "error-%DATE%.log"),
       datePattern: "YYYY-MM-DD",
       zippedArchive: true,
       maxSize: "20m",
@@ -49,7 +50,7 @@ const logger = createLogger({
     // 综合日志文件：记录所有日志
     new DailyRotateFile({
       level: logLevel,
-      filename: path.join(logDirectory, "combined-%DATE%.log"),
+      filename: join(logDirectory, "combined-%DATE%.log"),
       datePattern: "YYYY-MM-DD",
       zippedArchive: true,
       maxSize: "20m",
@@ -73,4 +74,4 @@ if (process.env.NODE_ENV === "development") {
 }
 
 // 导出logger
-module.exports = logger;
+export default logger;

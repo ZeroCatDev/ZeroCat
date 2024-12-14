@@ -1,7 +1,7 @@
-const logger = require("../logger.js");
-const { PrismaClient } = require("@prisma/client");
+import logger from "../logger.js";
+import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
-const { getProjectsAndUsersByProjectsList } = require("./projects.js");
+import { getProjectsAndUsersByProjectsList } from "./projects.js";
 
 // Standardize variable names and functions
 const cleanAndDeduplicateList = (list) =>
@@ -199,7 +199,7 @@ const deleteProjectlist = async ({ listId, userId }) => {
   }
 };
 
-module.exports = {
+export {
   addProjectToUserProjectlist,
   removeProjectFromUserProjectlist,
   getProjectlist,

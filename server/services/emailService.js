@@ -1,7 +1,7 @@
-const logger = require("../lib/logger.js");
-const configManager = require("../configManager");
+import logger from "../lib/logger.js";
+import configManager from "../configManager.js";
 
-const nodemailer = require("nodemailer");
+import { createTransport } from "nodemailer";
 let service, user, pass, transporter;
 configManager.getConfig("mail.service").then((res) => {
   service = res;
@@ -12,7 +12,7 @@ configManager.getConfig("mail.service").then((res) => {
     configManager.getConfig("mail.pass").then((res) => {
       pass = res;
       //logger.debug(service, user, pass);
-      transporter = nodemailer.createTransport({
+      transporter = createTransport({
         service: service,
         secure: true,
         auth: {
@@ -39,4 +39,4 @@ const sendEmail = async (to, subject, html) => {
   }
 };
 
-module.exports = { sendEmail };
+export  { sendEmail };

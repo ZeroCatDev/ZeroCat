@@ -1,13 +1,11 @@
-const logger = require("./lib/logger.js");
-const configManager = require("./configManager");
+import logger from "./lib/logger.js";
+import configManager from "./configManager.js";
 
-const express = require("express");
-const router = express.Router();
-const I = require("./lib/global.js"); // 功能函数集
-const DB = require("./lib/database.js"); // 数据库
-const {
-  getUsersByList
-} = require("./lib/method/projects.js");
+import { Router } from "express";
+const router = Router();
+import { prisma } from "./lib/global.js"; // 功能函数集
+import { qww } from "./lib/database.js"; // 数据库
+import { getUsersByList } from "./lib/method/projects.js";
 // 搜索：Scratch项目列表：数据（只搜索标题）
 router.get("/", async (req, res, next) => {
   try {
@@ -64,12 +62,12 @@ router.get("/", async (req, res, next) => {
     }
 
     // 查询项目总数
-    const totalCount = await I.prisma.ow_projects.count({
+    const totalCount = await prisma.ow_projects.count({
       where: searchinfo,
     });
 
     // 查询项目结果
-    const projectresult = await I.prisma.ow_projects.findMany({
+    const projectresult = await prisma.ow_projects.findMany({
       where: searchinfo,
       orderBy: { [orderBy]: order },
       select: {
@@ -117,7 +115,7 @@ router.post("/user", async (req, res, next) => {
     const SQL = `SELECT id, display_name, motto, images FROM ow_users WHERE display_name LIKE ?`;
     const WHERE = [`%${searchTxt}%`];
 
-    DB.qww(SQL, WHERE, (err, data) => {
+    qww(SQL, WHERE, (err, data) => {
       if (err) {
         return res.status(500).send([]); // 如果有数据库错误，返回500状态码
       }
@@ -128,4 +126,4 @@ router.post("/user", async (req, res, next) => {
   }
 });
 
-module.exports = router;
+export default router;

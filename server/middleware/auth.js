@@ -1,5 +1,5 @@
-const logger = require("../lib/logger.js");
-const configManager = require("../configManager");
+import logger from "../lib/logger.js";
+import configManager from "../configManager.js";
 
 async function needlogin(req, res, next) {
   if (!res.locals.login) {
@@ -19,7 +19,7 @@ async function needadmin(req, res, next) {
   }
   next(); // 已登录，继续处理请求
 }
-module.exports = {
+export {
   needlogin,
   needadmin
 };

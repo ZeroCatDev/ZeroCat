@@ -1,6 +1,7 @@
 {
   "name": "zerocat-backend",
   "private": true,
+  "type": "module",
   "scripts": {
     "test": "echo \"No test specified\" && exit 0",
     "start": "node .bin/www",

@@ -1,5 +1,5 @@
-const logger = require('../logger');
-const { PrismaClient } = require('@prisma/client');
+import logger from "../logger.js";
+import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 /**
@@ -29,5 +29,5 @@ async function getUsersByList(userIds) {
   return users;
 }
 
-module.exports = { getUsersByList };
+export { getUsersByList };
 

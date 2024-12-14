@@ -1,10 +1,10 @@
-const logger = require("./lib/logger.js");
-const configManager = require("./configManager");
+import logger from "./lib/logger.js";
+import configManager from "./configManager.js";
 
-const express = require("express");
-const router = express.Router();
-const I = require("./lib/global.js");
-const { getUsersByList } = require("./lib/method/users.js");
+import { Router } from "express";
+const router = Router();
+import { prisma } from "./lib/global.js";
+import { getUsersByList } from "./lib/method/users.js";
 // 中间件，确保所有请求均经过该处理
 router.all("*", (req, res, next) => next());
 
@@ -72,7 +72,7 @@ router.get("/api/comment", async (req, res, next) => {
     const { path, page, pageSize } = req.query;
     const sort = getSortCondition(req);
 
-    const comments = await I.prisma.ow_comment.findMany({
+    const comments = await prisma.ow_comment.findMany({
       where: { page_key: path, pid: null, rid: null, type: "comment" },
       orderBy: sort,
       take: Number(pageSize) || 10,
@@ -83,7 +83,7 @@ router.get("/api/comment", async (req, res, next) => {
 
     const ids = transformedComments.map((comment) => comment.id);
 
-    const childrenComments = await I.prisma.ow_comment.findMany({
+    const childrenComments = await prisma.ow_comment.findMany({
       where: { page_key: path, rid: { in: ids }, type: "comment" },
     });
 
@@ -106,7 +106,7 @@ router.get("/api/comment", async (req, res, next) => {
       return { ...comment, children };
     });
 
-    const count = await I.prisma.ow_comment.count({
+    const count = await prisma.ow_comment.count({
       where: { page_key: path, pid: null, rid: null, type: "comment" },
     });
 
@@ -136,7 +136,7 @@ router.post("/api/comment", async (req, res, next) => {
     const { userid, display_name } = res.locals;
     const user_ua = req.headers["user-agent"] || "";
 
-    const newComment = await I.prisma.ow_comment.create({
+    const newComment = await prisma.ow_comment.create({
       data: {
         user_id: userid,
         type: "comment",
@@ -167,12 +167,12 @@ router.delete("/api/comment/:id", async (req, res, next) => {
     const { id } = req.params;
     const { user_id } = res.locals;
 
-    const comment = await I.prisma.ow_comment.findFirst({
+    const comment = await prisma.ow_comment.findFirst({
       where: { id: Number(id) },
     });
 
     if (comment.user_id == user_id || true) {
-      await I.prisma.ow_comment.delete({
+      await prisma.ow_comment.delete({
         where: { id: Number(id) },
       });
     }
@@ -183,4 +183,4 @@ router.delete("/api/comment/:id", async (req, res, next) => {
   }
 });
 
-module.exports = router;
+export default router;

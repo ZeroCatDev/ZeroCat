@@ -1,29 +1,15 @@
-const logger = require("./lib/logger.js");
-const configManager = require("./configManager");
+import logger from "./lib/logger.js";
+import configManager from "./configManager.js";
 
-const express = require("express");
-const router = express.Router();
-const {  needlogin } = require("./middleware/auth.js");
+import { Router } from "express";
+const router = Router();
+import { needlogin } from "./middleware/auth.js";
 
-const {
-  addProjectToUserProjectlist,
-  getProjectlist,
-  deleteProjectlist,
-  updateProjectlist,
-  createProjectlist,
-  getUserProjectlist,
-  checkProjectlistWithUser,
-  removeProjectFromUserProjectlist,
-} = require("./lib/method/projectlist.js");
+import { addProjectToUserProjectlist, getProjectlist, deleteProjectlist, updateProjectlist, createProjectlist, getUserProjectlist, checkProjectlistWithUser, removeProjectFromUserProjectlist } from "./lib/method/projectlist.js";
 
 // 中间件，确保所有请求均经过该处理
 router.all("*", (req, res, next) => next());
 
-// 统一的错误处理函数
-const handleError = (res, message, err) => {
-  logger.error(err);
-  res.status(500).send({ status: "0", message, error: err });
-};
 
 // 创建新收藏夹
 router.post("/", needlogin, async (req, res, next) => {
@@ -128,4 +114,4 @@ router.delete("/:id", needlogin, async (req, res, next) => {
 });
 
 
-module.exports = router;
+export default router;

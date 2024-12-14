@@ -1,38 +1,31 @@
-const logger = require("./lib/logger.js");
-const configManager = require("./configManager");
+import logger from "./lib/logger.js";
+import configManager from "./configManager.js";
 
-var express = require("express");
-var router = express["Router"]();
-var jwt = require("jsonwebtoken");
-var DB = require("./lib/database.js");
-var I = require("./lib/global.js");
-const { sendEmail } = require("./services/emailService");
-const {
-  registrationTemplate,
-  passwordResetTemplate,
-} = require("./services/emailTemplates");
-const { needlogin } = require("./middleware/auth.js");
+import { Router } from "express";
+var router = Router();
+import jsonwebtoken from "jsonwebtoken";
+import { qww, query } from "./lib/database.js";
+import { userpwTest, emailTest, hash, checkhash, generateJwt, randomPassword, prisma } from "./lib/global.js";
+import { sendEmail } from "./services/emailService.js";
+import { registrationTemplate, passwordResetTemplate } from "./services/emailTemplates.js";
+import  {needlogin} from "./middleware/auth.js";
 
-const {
-  isTotpTokenValid,
-  createTotpTokenForUser,
-  enableTotpToken,
-  removeTotpToken,
-  validateTotpToken,
-} = require("./lib/totpUtils.js");
+import totpUtils from "./lib/totpUtils.js";
+// { isTotpTokenValid, createTotpTokenForUser, enableTotpToken, removeTotpToken, validateTotpToken }
+const { isTotpTokenValid, createTotpTokenForUser, enableTotpToken, removeTotpToken, validateTotpToken } = totpUtils;
 router.all("*", function (req, res, next) {
   next();
 });
 
 
-const geetest = require("./lib/captcha/geetest.js");
+import geetest from "./lib/captcha/geetest.js";
 router.post("/login", async function (req, res, next) {
   try {
     if (
       !req.body.pw ||
-      !I.userpwTest(req.body.pw) ||
+      !userpwTest(req.body.pw) ||
       !req.body.un ||
-      !I.emailTest(req.body.un)
+      !emailTest(req.body.un)
     ) {
       res.status(200).send({ message: "账户或密码错误" });
       return;
@@ -40,15 +33,15 @@ router.post("/login", async function (req, res, next) {
 
     const SQL = `SELECT * FROM ow_users WHERE email=? LIMIT 1`;
     const WHERE = [`${req.body["un"]}`];
-    DB.qww(SQL, WHERE, async function (err, USER) {
+    qww(SQL, WHERE, async function (err, USER) {
       if (err || USER.length == 0) {
         res.status(200).send({ message: "账户或密码错误" });
         return;
       }
 
       var User = USER[0];
-      var pw = I.hash(req.body.pw);
-      if (I.checkhash(req.body.pw, User["password"]) == false) {
+      var pw = hash(req.body.pw);
+      if (checkhash(req.body.pw, User["password"]) == false) {
         res.status(200).send({ message: "账户或密码错误" });
       } else if (User["state"] == 2) {
         res.status(200).send({ message: "您已经被封号，请联系管理员" });
@@ -82,7 +75,7 @@ router.post("/login", async function (req, res, next) {
         // res.cookie("username", User["username"], { maxAge: 604800000, signed: true, });
         // res.cookie("display_name", User["display_name"], { maxAge: 604800000, signed: true, });
 
-        var token = await I.GenerateJwt({
+        var token = await generateJwt({
           userid: User["id"],
           username: User["username"],
           email: User["email"],
@@ -127,7 +120,7 @@ router.post("/register", geetest, async function (req, res, next) {
   try {
     const email = req.body.un;
     SQL = `SELECT id FROM ow_users WHERE email='${email}' LIMIT 1`;
-    DB.query(SQL, function (err, User) {
+    query(SQL, function (err, User) {
       if (err) {
         res.status(200).send({ message: "账户格式错误" });
         return;
@@ -137,11 +130,11 @@ router.post("/register", geetest, async function (req, res, next) {
         return;
       }
 
-      var randonpw = I.randomPassword(12);
-      pw = I.hash(randonpw);
+      var randonpw = randomPassword(12);
+      pw = hash(randonpw);
       const display_name = req.body.pw;
       const INSERT = `INSERT INTO ow_users (username,email,password,display_name) VALUES ('${Date.now()}','${email}','${pw}','${display_name}')`;
-      DB.query(INSERT, async function (err, newUser) {
+      query(INSERT, async function (err, newUser) {
         if (err) {
           logger.error(err);
           res.status(200).send({ message: "再试一次17" });
@@ -171,13 +164,13 @@ router.post("/repw", geetest, async function (req, res, next) {
     var email = req.body.un;
     SQL = `SELECT * FROM ow_users WHERE email=? LIMIT 1`;
     w = [email];
-    DB.qww(SQL, w, async function (err, User) {
+    qww(SQL, w, async function (err, User) {
       if (err) {
         res.status(200).send({ message: "账户格式错误或不存在" });
         return;
       }
       const user = User[0];
-      const jwttoken = jwt.sign(
+      const jwttoken = jsonwebtoken.sign(
           {userid: user["id"], email: user["email"]},
           await configManager.getConfig("security.jwttoken"),
           {expiresIn: 60 * 10}
@@ -201,7 +194,7 @@ router.post("/torepw", geetest, async function (req, res, next) {
   let UPDATE;
   try {
     let userid, email
-    jwt.verify(
+    jsonwebtoken.verify(
         req.body.jwttoken,
         await configManager.getConfig("security.jwttoken"),
         function (err, decoded) {
@@ -213,12 +206,12 @@ router.post("/torepw", geetest, async function (req, res, next) {
           email = decoded.email;
         }
     );
-    const newPW = I.hash(req.body.pw);
+    const newPW = hash(req.body.pw);
     SET = {password: newPW};
     UPDATE = `UPDATE ow_users
               SET ?
               WHERE id = ${userid} LIMIT 1`;
-    DB.qww(UPDATE, SET, function (err) {
+    qww(UPDATE, SET, function (err) {
       if (err) {
         res.status(200).send({message: "请再试一次"});
         return;
@@ -232,7 +225,7 @@ router.post("/torepw", geetest, async function (req, res, next) {
 
 router.get("/totp/list", needlogin, async (req, res) => {
   try {
-    let totpData = await I.prisma.ow_users_totp.findMany({
+    let totpData = await prisma.ow_users_totp.findMany({
       where: {user_id: Number(res.locals.userid)},
       select: {
         id: true,
@@ -275,7 +268,7 @@ router.post("/totp/rename", needlogin, async (req, res) => {
   }
   try {
     let renamedTotp;
-    renamedTotp = await I.prisma.ow_users_totp.update({
+    renamedTotp = await prisma.ow_users_totp.update({
       where: {id: Number(totp_id)},
       data: {name: name},
       select: {
@@ -408,13 +401,13 @@ router.post("/totp/protected-route", validateTotpToken, (req, res) => {
 router.post("/magiclink/generate", geetest, async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email || !I.emailTest(email)) {
+    if (!email || !emailTest(email)) {
       return res
         .status(200)
         .json({ status: "error", message: "无效的邮箱地址" });
     }
 
-    const user = await I.prisma.ow_users.findFirst({ where: { email } });
+    const user = await prisma.ow_users.findFirst({ where: { email } });
     if (!user) {
       //用户不存在
       return res
@@ -422,13 +415,13 @@ router.post("/magiclink/generate", geetest, async (req, res) => {
         .json({ status: "error", message: "无效的邮箱地址" });
     }
 
-    const token = jwt.sign(
+    const token = jsonwebtoken.sign(
       { id: user.id },
       await configManager.getConfig("security.jwttoken"),
       { expiresIn: 60 * 10 }
     );
 
-    await I.prisma.magiclinktoken.create({
+    await prisma.magiclinktoken.create({
       data: {
         userId: user.id,
         token,
@@ -448,7 +441,7 @@ router.post("/magiclink/generate", geetest, async (req, res) => {
     res
       .status(200)
       .json({ status: "success", message: "魔术链接已发送到您的邮箱" });
-    logger.debug(magicLink);
+      logger.debug(magicLink);
   } catch (error) {
     logger.error("生成魔术链接时出错:", error);
     res.status(200).json({ status: "error", message: "生成魔术链接失败" });
@@ -464,11 +457,11 @@ router.get("/magiclink/validate", async (req, res) => {
         .json({ status: "error", message: "无效的魔术链接" });
     }
 
-    const decoded = jwt.verify(
+    const decoded = jsonwebtoken.verify(
       token,
       await configManager.getConfig("security.jwttoken")
     );
-    const magicLinkToken = await I.prisma.magiclinktoken.findUnique({
+    const magicLinkToken = await prisma.magiclinktoken.findUnique({
       where: { token },
     });
 
@@ -478,7 +471,7 @@ router.get("/magiclink/validate", async (req, res) => {
         .json({ status: "error", message: "魔术链接已过期" });
     }
 
-    const user = await I.prisma.ow_users.findUnique({
+    const user = await prisma.ow_users.findUnique({
       where: { id: magicLinkToken.userId },
     });
 
@@ -486,7 +479,7 @@ router.get("/magiclink/validate", async (req, res) => {
       return res.status(404).json({ status: "error", message: "用户不存在" });
     }
 
-    const jwtToken = await I.GenerateJwt({
+    const jwtToken = await generateJwt({
       userid: user.id,
       username: user.username,
       email: user.email,
@@ -510,4 +503,4 @@ router.get("/magiclink/validate", async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

@@ -1,19 +1,17 @@
-const logger = require("./lib/logger.js");
-const configManager = require("./configManager");
-const jsonwebtoken = require("jsonwebtoken");
+import logger from "./lib/logger.js";
+import configManager from "./configManager.js";
+import jsonwebtoken from "jsonwebtoken";
 
-var express = require("express");
-var router = express.Router();
-var fs = require("fs");
-var DB = require("./lib/database.js"); // 数据库
+import { Router } from "express";
+var router = Router();
+import { writeFile, exists } from "fs";
+import { query, qww } from "./lib/database.js"; // 数据库
 
 //功能函数集
-var I = require("./lib/global.js");
-const { log, error } = require("console");
-const { needlogin } = require("./middleware/auth.js");
-const {
-  getProjectFile,
-} = require("./lib/method/projects.js");
+import { prisma, S3update } from "./lib/global.js";
+import { log, error } from "console";
+import { needlogin } from "./middleware/auth.js";
+import { getProjectFile } from "./lib/method/projects.js";
 router.all("*", function (req, res, next) {
   next();
 });
@@ -24,7 +22,7 @@ router.get("/scratchcount", function (req, res, next) {
     var SQL =
       `SELECT ` +
       ` (SELECT count(id) FROM ow_projects WHERE state='public' AND type='scratch' ) AS scratch_count `;
-    DB.query(SQL, function (err, data) {
+    query(SQL, function (err, data) {
       if (err) {
         // logger.error('数据库操作出错：');
         res.locals.scratch_count = 0;
@@ -50,7 +48,7 @@ router.get("/view/getScratchProjects", function (req, res, next) {
     var SQL = `SELECT ow_projects.id, ow_projects.title, ow_projects.state,ow_projects.authorid,ow_projects.view_count, ow_users.display_name,ow_users.motto,ow_users.images FROM ow_projects JOIN ow_users ON ow_projects.authorid = ow_users.id WHERE ow_projects.state='public' AND ow_projects.type='scratch' ORDER BY ow_projects.${type} DESC LIMIT ${
       (curr - 1) * limit
     }, ${limit}`;
-    DB.query(SQL, function (err, data) {
+    query(SQL, function (err, data) {
       if (err) {
         res.status(200).send([]);
       } else {
@@ -77,7 +75,7 @@ router.get("/view/seachScratchProjects", function (req, res, next) {
     //var SQL = `SELECT id, title FROM ow_projects WHERE state='public' AND (${searchinfo} LIKE ?) LIMIT 12`;
     var SQL = `SELECT ow_projects.id, ow_projects.title, ow_projects.state,ow_projects.authorid,ow_projects.description,ow_projects.view_count, ow_users.display_name,ow_users.motto FROM ow_projects JOIN ow_users ON ow_projects.authorid = ow_users.id WHERE ow_projects.state='public' AND (${searchinfo} LIKE ?) AND ow_projects.type='${tabelName}'`;
     var WHERE = [`%${req.query.txt}%`];
-    DB.qww(SQL, WHERE, function (err, data) {
+    qww(SQL, WHERE, function (err, data) {
       if (err) {
         res.status(200).send([]);
       } else {
@@ -109,7 +107,7 @@ router.get("/projectinfo", function (req, res, next) {
       ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state='public' ${
         res.locals.userid ? `or ow_projects.authorid=${res.locals.userid}` : ""
       }) AND ow_projects.type='scratch' LIMIT 1`;
-    DB.query(SQL, function (err, SCRATCH) {
+    query(SQL, function (err, SCRATCH) {
       if (err || SCRATCH.length == 0) {
         res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
         res.send({
@@ -124,7 +122,7 @@ router.get("/projectinfo", function (req, res, next) {
       res.locals["is_author"] =
         SCRATCH[0].authorid == res.locals.userid ? true : false;
 
-      ////logger.debug(SCRATCH[0]);
+      ////logger.logger.debug(SCRATCH[0]);
       res.json(SCRATCH[0]);
     });
   } catch (err) {
@@ -134,12 +132,12 @@ router.get("/projectinfo", function (req, res, next) {
 
 router.get("/projectinfo2", async function (req, res, next) {
   try {
-    var result = await I.prisma.ow_projects.findFirst({
+    var result = await prisma.ow_projects.findFirst({
       where: {
         id: Number(req.query.id),
       },
     });
-    var author = await I.prisma.ow_users.findFirst({
+    var author = await prisma.ow_users.findFirst({
       where: {
         id: result.authorid,
       },
@@ -233,7 +231,7 @@ router.get("/projectinfo2", async function (req, res, next) {
       },
       project_token,
     };
-    ////logger.debug(SCRATCH[0]);
+    ////logger.logger.debug(SCRATCH[0]);
     res.json(jsonscratch);
   } catch (err) {
     next(err);
@@ -271,7 +269,7 @@ router.get("/project/:id", async (req, res, next) => {
       logger.debug("3");
       return res.status(403).send({ status: "0", msg: "无权访问此项目" });
     }
-    const project = await I.prisma.ow_projects.findFirst({
+    const project = await prisma.ow_projects.findFirst({
       where: { id: Number(project_token.data.projectid) },
     });
 
@@ -300,7 +298,7 @@ router.get("/project/:id", async (req, res, next) => {
 router.get("/play/project/:id", function (req, res, next) {
   try {
     var SQL = `SELECT source FROM ow_projects WHERE id=${req.params.id} LIMIT 1`;
-    DB.query(SQL, function (err, SCRATCH) {
+    query(SQL, function (err, SCRATCH) {
       if (err) {
         return;
       }
@@ -311,7 +309,7 @@ router.get("/play/project/:id", function (req, res, next) {
 
       //浏览数+1
       var SQL = `UPDATE ow_projects SET view_count=view_count+1 WHERE id=${req.params.id} LIMIT 1`;
-      DB.query(SQL, function (err, U) {
+      query(SQL, function (err, U) {
         if (err || U.affectedRows == 0) {
           res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
           res.status(404).json({
@@ -338,7 +336,7 @@ router.post("/play/openSrc", function (req, res, next) {
 
     var pid = req.body["pid"];
     var SQL = `SELECT state FROM ow_projects WHERE id=${pid} AND authorid=${res.locals.userid} LIMIT 1`;
-    DB.query(SQL, function (err, RECO) {
+    query(SQL, function (err, RECO) {
       if (err || RECO.length == 0) {
         res.status(200).send({ status: "failed", msg: "数据错误，请再试一次" });
         return;
@@ -350,7 +348,7 @@ router.post("/play/openSrc", function (req, res, next) {
       }
 
       var UPDATE = `UPDATE ow_projects SET state=${state} WHERE id=${pid} LIMIT 1`;
-      DB.query(UPDATE, function (err, SCRATCH) {
+      query(UPDATE, function (err, SCRATCH) {
         if (err) {
           res
             .status(200)
@@ -372,7 +370,7 @@ router.post("/play/openSrc", function (req, res, next) {
 //2、从数据库加载
 router.post("/project/:projectid", function (req, res, next) {
   try {
-    ////logger.debug('服务器：获取作品JSON源代码');
+    ////logger.logger.debug('服务器：获取作品JSON源代码');
     var projectid = 0;
     if (req.params.projectid) {
       projectid = req.params.projectid;
@@ -382,7 +380,7 @@ router.post("/project/:projectid", function (req, res, next) {
       // 默认作品
       // 当把该块注释后，则从数据库加载默认作品
       //从指定文件加载默认作品：BEGIN==========================================
-      var _SDP = require("./lib/scratch_default_project.js");
+      var _SDP = require("./lib/scratch_default_project.js").default;
       res.status(200).send({ status: "ok", src: _SDP });
       return;
       //从指定文件加载默认作品：END============================================
@@ -407,7 +405,7 @@ router.post("/project/:projectid", function (req, res, next) {
       }
     }
 
-    DB.query(SQL, function (err, SCRATCH) {
+    query(SQL, function (err, SCRATCH) {
       if (err) {
         res.status(200).send({ status: "作品不存在或无权打开" }); //需要Scratch内部处理
         return;
@@ -416,7 +414,7 @@ router.post("/project/:projectid", function (req, res, next) {
       if (SCRATCH.length == 0) {
         //4、课堂作业作品：课程老师可以打开；
         SQL = `SELECT * FROM ow_projects WHERE id=${projectid} AND courseid!=0 AND (courseid IN (SELECT courseid FROM class WHERE teacherid=${res.locals.userid}))`;
-        DB.query(SQL, function (err, SCRATCH) {
+        query(SQL, function (err, SCRATCH) {
           if (err || SCRATCH.length == 0) {
             res.status(200).send({ status: "作品不存在或无权打开" }); //需要Scratch内部处理
             return;
@@ -424,7 +422,7 @@ router.post("/project/:projectid", function (req, res, next) {
 
           //作品被浏览次数+1
           var UPDATE = `UPDATE ow_projects SET view_count=view_count+1 WHERE id=${projectid} LIMIT 1`;
-          DB.query(UPDATE, function (err, s) {
+          query(UPDATE, function (err, s) {
             if (err) {
             }
           });
@@ -446,7 +444,7 @@ router.post("/project/:projectid", function (req, res, next) {
 
       //作品被浏览次数+1
       var UPDATE = `UPDATE ow_projects SET view_count=view_count+1 WHERE id=${projectid} LIMIT 1`;
-      DB.query(UPDATE, function (err, s) {
+      query(UPDATE, function (err, s) {
         if (err) {
         }
       });
@@ -477,7 +475,7 @@ router.post("/saveProjcetTitle", function (req, res, next) {
     }
     var UPDATE = `UPDATE ow_projects SET title=? WHERE id=${req.body.id} AND authorid=${res.locals.userid} LIMIT 1`;
     var VAL = [`${req.body.title}`];
-    DB.qww(UPDATE, VAL, function (err, SCRATCH) {
+    qww(UPDATE, VAL, function (err, SCRATCH) {
       if (err) {
         res.status(404).send({ status: "err" }); //返回内容可有可无，，因为客户端没处理
       } else {
@@ -492,14 +490,14 @@ router.post("/saveProjcetTitle", function (req, res, next) {
 //保存作品源代码：此时作品已存在。req.body为项目JSON源代码
 router.put("/projects/:projectid", function (req, res, next) {
   try {
-    // //logger.debug('服务器：保存作品JSON源代码');
+    // //logger.logger.debug('服务器：保存作品JSON源代码');
     if (!res.locals.login) {
       res.status(404).send({});
       return;
     }
 
     var SQL = `SELECT id, authorid FROM ow_projects WHERE id=${req.params.projectid} LIMIT 1`;
-    DB.query(SQL, function (err, SWork) {
+    query(SQL, function (err, SWork) {
       if (err || SWork.length == 0) {
         res.status(404).send({});
         return;
@@ -512,7 +510,7 @@ router.put("/projects/:projectid", function (req, res, next) {
 
       var UPDATE = `UPDATE ow_projects SET source=? WHERE id=${req.params.projectid} LIMIT 1`;
       var VAL = [`${JSON.stringify(req.body)}`];
-      DB.qww(UPDATE, VAL, function (err, SCRATCH) {
+      qww(UPDATE, VAL, function (err, SCRATCH) {
         if (err) {
           res.status(404).send({});
           return;
@@ -528,7 +526,7 @@ router.put("/projects/:projectid", function (req, res, next) {
 //保存作品：缩略图
 router.post("/thumbnail/:projectid", function (req, res, next) {
   try {
-    ////logger.debug('开始保存缩略图：'+req.params.projectid);
+    ////logger.logger.debug('开始保存缩略图：'+req.params.projectid);
 
     // 请求的头部为 'Content-Type': 'image/png'时，用req.on接收文件
     var _data = [];
@@ -541,15 +539,15 @@ router.post("/thumbnail/:projectid", function (req, res, next) {
       //var strFileName = './data/scratch_slt/' + req.params.projectid;
       var strFileName = `${global.dirname}/data/scratch_slt/${req.params.projectid}`;
       let content = Buffer["concat"](_data);
-      fs.writeFile(strFileName, content, function (err) {
+      writeFile(strFileName, content, function (err) {
         if (err) {
           res.status(404).send({ status: "err" });
-          //logger.debug(err);
-          //logger.debug("保存缩略图失败：" + strFileName);
+          //logger.logger.debug(err);
+          //logger.logger.debug("保存缩略图失败：" + strFileName);
         } else {
-          I.S3update("scratch_slt/" + req.params.projectid, strFileName);
+          S3update("scratch_slt/" + req.params.projectid, strFileName);
 
-          ////logger.debug('保存缩略图成功：'+strFileName);
+          ////logger.logger.debug('保存缩略图成功：'+strFileName);
           res.status(200).send({ status: "ok" });
           //fs.unlink(`./data/scratch_slt/${req.params.projectid}`,function (err) { if (err) { res.status(200).send( {'status':'文件上传失败'}); return; }})
         }
@@ -574,7 +572,7 @@ router.post("/shareProject/:projectid", function (req, res, next) {
 
     //只能分享自己的作品
     var UPDATE = `UPDATE ow_projects SET state=${s} WHERE id=${req.params.projectid} AND authorid=${res.locals.userid} LIMIT 1`;
-    DB.query(UPDATE, function (err, U) {
+    query(UPDATE, function (err, U) {
       if (err) {
         res.status(200).send({ status: "0" });
         return;
@@ -590,7 +588,7 @@ router.post("/shareProject/:projectid", function (req, res, next) {
 //保存新作品：保存源代码及作品名称。req.body为项目JSON源代码,?title=作品名称
 router.post("/projects", function (req, res, next) {
   try {
-    //logger.debug("服务器：新建作品JSON源代码");
+    //logger.logger.debug("服务器：新建作品JSON源代码");
 
     //if (!req.body) { res.send(404); return; }
     var title = "新作品";
@@ -600,7 +598,7 @@ router.post("/projects", function (req, res, next) {
 
     var INSERT = `INSERT INTO ow_projects (authorid, title, source,type) VALUES (${res.locals.userid}, ?, ?,'scratch')`;
     var VAL = [title, `${JSON.stringify(req.body.work || req.body)}`];
-    DB.qww(INSERT, VAL, function (err, newScratch) {
+    qww(INSERT, VAL, function (err, newScratch) {
       if (err || newScratch.affectedRows == 0) {
         res.send(404);
         return;
@@ -619,11 +617,11 @@ router.post("/projects", function (req, res, next) {
 router.post("/assets/:filename", function (req, res, next) {
   try {
     var strFileName = "./data/material/asset/" + req.params.filename;
-    fs.exists(
+    exists(
       strFileName,
       function (bExists) {
         //if (bExists) {
-        //  logger.debug("素材已存在：" + strFileName);
+        //  logger.logger.debug("素材已存在：" + strFileName);
         //  res.status(200).send({ status: "ok" });
         //} else {
         var _data = [];
@@ -634,12 +632,12 @@ router.post("/assets/:filename", function (req, res, next) {
         });
         req.on("end", function () {
           let content = Buffer["concat"](_data);
-          fs.writeFile(strFileName, content, function (err) {
+          writeFile(strFileName, content, function (err) {
             if (err) {
               res.send(404);
-              //logger.debug("素材保存失败：" + strFileName);
+              //logger.logger.debug("素材保存失败：" + strFileName);
             } else {
-              I.S3update("material/asset/" + req.params.filename, strFileName);
+              S3update("material/asset/" + req.params.filename, strFileName);
 
               logger.debug("素材保存成功：" + strFileName);
               res.status(200).send({ status: "ok" });
@@ -660,7 +658,7 @@ router.get("/getBackdrop", (req, res, next) => {
   try {
     var resultData = { tags: [], mates: [] };
     var SQL = `SELECT * FROM material_tags WHERE type=1`;
-    DB.query(SQL, function (err, TAGS) {
+    query(SQL, function (err, TAGS) {
       if (err || TAGS.length == 0) {
         res.status(200).send(resultData);
         return;
@@ -672,7 +670,7 @@ router.get("/getBackdrop", (req, res, next) => {
             FROM material_backdrop mb
             INNER JOIN material_tags mt ON mt.type=1
             WHERE mb.tagId=mt.id `;
-      DB.query(SQL, function (err, Mates) {
+      query(SQL, function (err, Mates) {
         if (err || Mates.length == 0) {
           res.status(200).send(resultData);
           return;
@@ -783,7 +781,7 @@ router.post("/getMyProjectLibrary", function (req, res, next) {
     }
 
     var SELECT = `SELECT id, title, time, state FROM ow_projects WHERE authorid=${res.locals["userid"]} ${WHERE} AND ow_projects.type='scratch' ORDER BY time DESC LIMIT ${req.body.l},${req.body.n}`; //正式版本中，需要限定作者本身的作品
-    DB.query(SELECT, function (err, SCRATCH) {
+    query(SELECT, function (err, SCRATCH) {
       if (err) {
         res.status(200).send({ status: "err", data: [] });
       } else {
@@ -802,7 +800,7 @@ router.post("/getYxProjectLibrary", function (req, res, next) {
       ` SELECT s.id, s.title, s.view_count, s.authorid, u.display_name, u.images FROM ow_projects s ` +
       " LEFT JOIN ow_users u ON u.id=s.authorid " +
       ` WHERE s.state='public' AND s.type='scratch' ORDER BY s.view_count DESC LIMIT ${req.body.l},${req.body.n}`;
-    DB.query(SELECT, function (err, SCRATCH) {
+    query(SELECT, function (err, SCRATCH) {
       if (err) {
         res.status(200).send({ status: "err", data: [] });
       } else {
@@ -828,7 +826,7 @@ router.post("/getBackdropLibrary", function (req, res, next) {
     }
 
     var SELECT = `SELECT id, name, md5, info0, info1, info2  FROM material_backdrop WHERE state='public' ${WHERE} ORDER BY name DESC LIMIT ${req.body.l},${req.body.n}`;
-    DB.query(SELECT, function (err, Backdrop) {
+    query(SELECT, function (err, Backdrop) {
       if (err) {
         res.status(200).send({ status: "err", data: [], tags: [] });
         return;
@@ -841,7 +839,7 @@ router.post("/getBackdropLibrary", function (req, res, next) {
 
       // 取一次背景分类
       SELECT = `SELECT id, tag FROM material_tags WHERE type=1 ORDER BY id DESC`;
-      DB.query(SELECT, function (err, tags) {
+      query(SELECT, function (err, tags) {
         if (err) {
           res.status(200).send({ status: "err", data: [], tags: [] });
           return;
@@ -862,7 +860,7 @@ router.post("/getRandomBackdrop", function (req, res, next) {
       `SELECT name, md5, info0, info1, info2 FROM material_backdrop` +
       ` JOIN (SELECT MAX(id) AS maxId, MIN(id) AS minId FROM material_backdrop WHERE state='public') AS m ` +
       ` WHERE id >= ROUND(RAND()*(m.maxId - m.minId) + m.minId) AND state='public' LIMIT 1`;
-    DB.query(SELECT, function (err, B) {
+    query(SELECT, function (err, B) {
       if (err || B.length < 1) {
         res.status(200).send({ status: "err", data: {} });
         return;
@@ -879,7 +877,7 @@ router.post("/getRandomBackdrop", function (req, res, next) {
 // 组件获取条件 tag：是否获取分类; f: 搜索字符串; t: 分类; l: 已经获取的背景数; n: 每次获取的背景数，默认为32个
 router.post("/getCostumeLibrary", function (req, res, next) {
   try {
-    // //logger.debug(req.body);
+    // //logger.logger.debug(req.body);
 
     var WHERE = "";
     if (req.body.t != 0) {
@@ -891,7 +889,7 @@ router.post("/getCostumeLibrary", function (req, res, next) {
     }
 
     var SELECT = `SELECT id, name, md5, info0, info1, info2  FROM material_costume WHERE state='public' ${WHERE} ORDER BY name DESC LIMIT ${req.body.l},${req.body.n}`;
-    DB.query(SELECT, function (err, Backdrop) {
+    query(SELECT, function (err, Backdrop) {
       if (err) {
         res.status(200).send({ status: "err", data: [], tags: [] });
         return;
@@ -904,7 +902,7 @@ router.post("/getCostumeLibrary", function (req, res, next) {
 
       // 取一次分类
       SELECT = `SELECT id, tag FROM material_tags WHERE type=3 ORDER BY id DESC`;
-      DB.query(SELECT, function (err, tags) {
+      query(SELECT, function (err, tags) {
         if (err) {
           res.status(200).send({ status: "err", data: [], tags: [] });
           return;
@@ -925,7 +923,7 @@ router.post("/getRandomCostume", function (req, res, next) {
       `SELECT name, md5, info0, info1, info2 FROM material_costume` +
       ` JOIN (SELECT MAX(id) AS maxId, MIN(id) AS minId FROM material_costume WHERE state='public') AS m ` +
       ` WHERE id >= ROUND(RAND()*(m.maxId - m.minId) + m.minId) AND state='public' LIMIT 1`;
-    DB.query(SELECT, function (err, B) {
+    query(SELECT, function (err, B) {
       if (err || B.length < 1) {
         res.status(200).send({ status: "err", data: {} });
         return;
@@ -952,7 +950,7 @@ router.post("/getSoundLibrary", function (req, res, next) {
     }
 
     var SELECT = `SELECT id, name, md5, format, rate, sampleCount FROM material_sound WHERE state='public' ${WHERE} ORDER BY name DESC LIMIT ${req.body.l},${req.body.n}`;
-    DB.query(SELECT, function (err, Backdrop) {
+    query(SELECT, function (err, Backdrop) {
       if (err) {
         res.status(200).send({ status: "err", data: [], tags: [] });
         return;
@@ -965,7 +963,7 @@ router.post("/getSoundLibrary", function (req, res, next) {
 
       // 取一次分类
       SELECT = `SELECT id, tag FROM material_tags WHERE type=4 ORDER BY id DESC`;
-      DB.query(SELECT, function (err, tags) {
+      query(SELECT, function (err, tags) {
         if (err) {
           res.status(200).send({ status: "err", data: [], tags: [] });
           return;
@@ -985,7 +983,7 @@ router.post("/getRandomSound", function (req, res, next) {
       `SELECT name, md5, format, rate, sampleCount FROM material_sound` +
       ` JOIN (SELECT MAX(id) AS maxId, MIN(id) AS minId FROM material_sound WHERE state='public') AS m ` +
       ` WHERE id >= ROUND(RAND()*(m.maxId - m.minId) + m.minId) AND state='public' LIMIT 1`;
-    DB.query(SELECT, function (err, B) {
+    query(SELECT, function (err, B) {
       if (err || B.length < 1) {
         res.status(200).send({ status: "err", data: {} });
         return;
@@ -1012,7 +1010,7 @@ router.post("/getSpriteLibrary", function (req, res, next) {
     }
 
     var SELECT = `SELECT id, name, json FROM material_sprite WHERE state='public' ${WHERE} ORDER BY name DESC LIMIT ${req.body.l},${req.body.n}`;
-    DB.query(SELECT, function (err, Backdrop) {
+    query(SELECT, function (err, Backdrop) {
       if (err) {
         res.status(200).send({ status: "err", data: [], tags: [] });
         return;
@@ -1025,7 +1023,7 @@ router.post("/getSpriteLibrary", function (req, res, next) {
 
       // 取一次分类
       SELECT = `SELECT id, tag FROM material_tags WHERE type=2 ORDER BY id DESC`;
-      DB.query(SELECT, function (err, tags) {
+      query(SELECT, function (err, tags) {
         if (err) {
           res.status(200).send({ status: "err", data: [], tags: [] });
           return;
@@ -1045,7 +1043,7 @@ router.post("/getRandomSprite", function (req, res, next) {
       `SELECT name, json FROM material_sprite` +
       ` JOIN (SELECT MAX(id) AS maxId, MIN(id) AS minId FROM material_sprite WHERE state='public') AS m ` +
       ` WHERE id >= ROUND(RAND()*(m.maxId - m.minId) + m.minId) AND state='public' LIMIT 1`;
-    DB.query(SELECT, function (err, B) {
+    query(SELECT, function (err, B) {
       if (err || B.length < 1) {
         res.status(200).send({ status: "err", data: {} });
         return;
@@ -1099,4 +1097,4 @@ router.post("/logout", function (req, res, next) {
     next(err);
   }
 });
-module.exports = router;
+export default router;
