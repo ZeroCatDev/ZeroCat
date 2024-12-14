@@ -3,7 +3,7 @@ import configManager from "./configManager.js";
 
 import { Router } from "express";
 const router = Router();
-import { needlogin } from "./middleware/auth.js";
+import { needlogin } from "../middleware/auth.js";
 
 import { addProjectToUserProjectlist, getProjectlist, deleteProjectlist, updateProjectlist, createProjectlist, getUserProjectlist, checkProjectlistWithUser, removeProjectFromUserProjectlist } from "./lib/method/projectlist.js";
 

@@ -7,7 +7,7 @@ import fs from "fs";
 
 import { prisma as _prisma } from "./lib/global.js";
 import { query } from "./lib/database.js";
-import { needadmin } from "./middleware/auth.js";
+import { needadmin } from "../middleware/auth.js";
 router.get("/usertx", async function (req, res, next) {
   try {
     SQL = `SELECT images FROM ow_users WHERE id = ${req.query.id};`;

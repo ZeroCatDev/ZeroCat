@@ -4,7 +4,7 @@
  * Module dependencies.
  */
 
-import configManager from "../server/configManager.js";
+import configManager from "../routes/configManager.js";
 
 
 // 使用 getConfig 函数获取配置

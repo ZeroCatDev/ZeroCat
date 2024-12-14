@@ -8,7 +8,7 @@ import { qww, query } from "./lib/database.js";
 import { userpwTest, emailTest, hash, checkhash, generateJwt, randomPassword, prisma } from "./lib/global.js";
 import { sendEmail } from "./services/emailService.js";
 import { registrationTemplate, passwordResetTemplate } from "./services/emailTemplates.js";
-import  {needlogin} from "./middleware/auth.js";
+import  {needlogin} from "../middleware/auth.js";
 
 import totpUtils from "./lib/totpUtils.js";
 // { isTotpTokenValid, createTotpTokenForUser, enableTotpToken, removeTotpToken, validateTotpToken }

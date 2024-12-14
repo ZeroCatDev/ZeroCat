@@ -9,7 +9,7 @@ import { query } from "./lib/database.js"; // 数据库
 
 //功能函数集
 import { prisma, S3update } from "./lib/global.js";
-import { needlogin } from "./middleware/auth.js";
+import { needlogin } from "../middleware/auth.js";
 import { getProjectFile } from "./lib/method/projects.js";
 router.all("*", function (req, res, next) {
   next();
