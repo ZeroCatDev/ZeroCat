@@ -1,6 +1,6 @@
 # ZeroCat 编程社区
 
-初中喵开发，求 Star 支持
+高中喵开发，求 Star 支持
 
 ZeroCat 是一个轻量级的在线编程、分享平台
 
@@ -23,7 +23,7 @@ ZeroCat 社区的源代码，包括前端与后端
   - [开发者](#开发者)
   - [如何贡献](#如何贡献)
     - [贡献者](#贡献者)
-  - [使用许可](#使用许可)
+  - [许可协议](#许可协议)
 
 ## 背景
 
@@ -39,10 +39,11 @@ QQ：964979747
 
 ## 示例
 
-想了解社区效果，请参考 [ZeroCat](https://ourworld.wuyuan.dev)。
+想了解社区效果，请参考 [ZeroCat](https://zerocat.houlangs.com)。
 
 ## 安装
 ![使用Nodejs开发](public/Node.js.png)
+
 这个项目使用 [node](http://nodejs.org) , [npm](https://npmjs.com), [docker](https://docker.com)，请确保你本地已经安装了祂们
 
 ```sh
@@ -95,16 +96,18 @@ ZeroCat 的项目 遵循 [Contributor Covenant](http://contributor-covenant.org/
 ### 贡献者
 
 感谢所有参与项目的人，他们的信息可以在右侧看到，这是实时的且便于查看
+## 许可协议
 
-## 使用许可
-
-[GPL](LICENSE) © 2020-2024 孙悟元 https://wuyuan.dev
-
-您可以在开源的前提下免费使用 ZeroCat 社区，您不可以使用 ZeroCat 社区的名称进行宣传，您需要保留 ZeroCat 的声明
-<br/>需要闭源的使用授权请联系 QQ1847261658
-
-感谢：https://gitee.com/scratch-cn/lite
-<br/>此项目声明了 MIT 协议
+ZeroCat 社区项目遵循 [GPL-3.0 许可证](LICENSE)。
 
 
-![社区(Github图床)](https://github.com/ZeroCatDev/ZeroCat/assets/88357633/d6f4a6ba-daa1-45c8-88f7-4b20d9edbb22)
+版权所有 (C) 2020-2024 孙悟元。
+Copyright (C) 2020-2024  Sun Wuyuan.
+
+
+您可以在开源的前提下免费使用 ZeroCat 社区，但不允许使用 ZeroCat 的名称进行宣传。您需要保留 ZeroCat 的版权声明。
+
+如需闭源使用授权，请联系 QQ1847261658。
+
+感谢 [scratch-cn/lite](https://gitee.com/scratch-cn/lite) 项目对本项目的启发，其遵循 MIT 协议。
+
