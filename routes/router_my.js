@@ -1,5 +1,5 @@
-import logger from "./lib/logger.js";
-import configManager from "./configManager.js";
+import logger from "../utils/logger.js";
+import configManager from "../utils/configManager.js";
 
 //个人中心
 import { Router } from "express";
@@ -7,10 +7,10 @@ var router = Router();
 import { rename, createReadStream } from "fs";
 import { createHash } from "crypto";
 //功能函数集
-import { msg_fail, S3update, checkhash, hash as _hash,prisma } from "./lib/global.js";
+import { msg_fail, S3update, checkhash, hash as _hash,prisma } from "../utils/global.js";
 //数据库
-import { query, qww } from "./lib/database.js";
-import geetest from "./lib/captcha/geetest.js";
+import { query, qww } from "../utils/database.js";
+import geetest from "../middleware/geetest.js";
 
 router.all("*", function (req, res, next) {
   //限定访问该模块的权限：必须已登录

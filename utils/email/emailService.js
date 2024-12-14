@@ -1,4 +1,4 @@
-import logger from "../lib/logger.js";
+import logger from "../logger.js";
 import configManager from "../configManager.js";
 
 import { createTransport } from "nodemailer";

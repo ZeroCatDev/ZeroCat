@@ -1,16 +1,16 @@
-import logger from "./lib/logger.js";
-import configManager from "./configManager.js";
+import logger from "../utils/logger.js";
+import configManager from "../utils/configManager.js";
 import jsonwebtoken from "jsonwebtoken";
 
 import { Router } from "express";
 var router = Router();
 import { writeFile, exists } from "fs";
-import { query } from "./lib/database.js"; // 数据库
+import { query } from "../utils/database.js"; // 数据库
 
 //功能函数集
-import { prisma, S3update } from "./lib/global.js";
+import { prisma, S3update } from "../utils/global.js";
 import { needlogin } from "../middleware/auth.js";
-import { getProjectFile } from "./lib/method/projects.js";
+import { getProjectFile } from "../controllers/projects.js";
 router.all("*", function (req, res, next) {
   next();
 });

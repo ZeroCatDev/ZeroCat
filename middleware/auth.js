@@ -1,5 +1,5 @@
-import logger from "../routes/lib/logger.js";
-import configManager from "../routes/configManager.js";
+import logger from "../utils/logger.js";
+import configManager from "../utils/configManager.js";
 
 async function needlogin(req, res, next) {
   if (!res.locals.login) {

@@ -1,10 +1,10 @@
-import logger from "./lib/logger.js";
-import configManager from "./configManager.js";
+import logger from "../utils/logger.js";
+import configManager from "../utils/configManager.js";
 
 import { Router } from "express";
 const router = Router();
-import { prisma } from "./lib/global.js";
-import { getUsersByList } from "./lib/method/users.js";
+import { prisma } from "../utils/global.js";
+import { getUsersByList } from "../controllers/users.js";
 // 中间件，确保所有请求均经过该处理
 router.all("*", (req, res, next) => next());
 

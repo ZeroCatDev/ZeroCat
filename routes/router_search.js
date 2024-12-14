@@ -1,11 +1,11 @@
-import logger from "./lib/logger.js";
-import configManager from "./configManager.js";
+import logger from "../utils/logger.js";
+import configManager from "../utils/configManager.js";
 
 import { Router } from "express";
 const router = Router();
-import { prisma } from "./lib/global.js"; // 功能函数集
-import { qww } from "./lib/database.js"; // 数据库
-import { getUsersByList } from "./lib/method/projects.js";
+import { prisma } from "../utils/global.js"; // 功能函数集
+import { qww } from "../utils/database.js"; // 数据库
+import { getUsersByList } from "../controllers/projects.js";
 // 搜索：Scratch项目列表：数据（只搜索标题）
 router.get("/", async (req, res, next) => {
   try {

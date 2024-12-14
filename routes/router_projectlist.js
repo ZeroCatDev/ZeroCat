@@ -1,11 +1,11 @@
-import logger from "./lib/logger.js";
-import configManager from "./configManager.js";
+import logger from "../utils/logger.js";
+import configManager from "../utils/configManager.js";
 
 import { Router } from "express";
 const router = Router();
 import { needlogin } from "../middleware/auth.js";
 
-import { addProjectToUserProjectlist, getProjectlist, deleteProjectlist, updateProjectlist, createProjectlist, getUserProjectlist, checkProjectlistWithUser, removeProjectFromUserProjectlist } from "./lib/method/projectlist.js";
+import { addProjectToUserProjectlist, getProjectlist, deleteProjectlist, updateProjectlist, createProjectlist, getUserProjectlist, checkProjectlistWithUser, removeProjectFromUserProjectlist } from "../controllers/projectlist.js";
 
 // 中间件，确保所有请求均经过该处理
 router.all("*", (req, res, next) => next());

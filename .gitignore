@@ -133,3 +133,4 @@ dist
 #!.env.vault
 
 .idea
+.vscode

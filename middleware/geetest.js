@@ -1,5 +1,5 @@
-import logger from "../logger.js";
-import configManager from "../../configManager.js";
+import logger from "../utils/logger.js";
+import configManager from "../utils/configManager.js";
 
 import express from "express";
 import { parse } from "querystring";

@@ -1,4 +1,4 @@
-import logger from "../lib/logger.js";
+import logger from "../logger.js";
 const registrationTemplate = async (email, password) => `
   <div class="page flex-col">
     <div class="box_3 flex-col"

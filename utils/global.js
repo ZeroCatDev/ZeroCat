@@ -1,4 +1,4 @@
-import configManager from "../configManager.js";
+import configManager from "./configManager.js";
 import logger from "./logger.js";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";

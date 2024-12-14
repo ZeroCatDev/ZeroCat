@@ -1,12 +1,12 @@
-import logger from "./lib/logger.js";
-import configManager from "./configManager.js";
+import logger from "../utils/logger.js";
+import configManager from "../utils/configManager.js";
 
 import { Router } from "express";
 var router = Router();
 import fs from "fs";
 
-import { prisma as _prisma } from "./lib/global.js";
-import { query } from "./lib/database.js";
+import { prisma as _prisma } from "../utils/global.js";
+import { query } from "../utils/database.js";
 import { needadmin } from "../middleware/auth.js";
 router.get("/usertx", async function (req, res, next) {
   try {

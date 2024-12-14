@@ -1,11 +1,11 @@
-import logger from "./lib/logger.js";
-import configManager from "./configManager.js";
+import logger from "../utils/logger.js";
+import configManager from "../utils/configManager.js";
 import { Router } from "express";
 const router = Router();
-import DB from "./lib/database.js";
-import { prisma } from "./lib/global.js";
-import default_project from "./lib/default_project.js";
-import { extractProjectData, setProjectFile, getProjectFile, projectSelectionFields, authorSelectionFields, handleTagsChange } from "./lib/method/projects.js";
+import DB from "../utils/database.js";
+import { prisma } from "../utils/global.js";
+import default_project from "../config/default_project.js";
+import { extractProjectData, setProjectFile, getProjectFile, projectSelectionFields, authorSelectionFields, handleTagsChange } from "../controllers/projects.js";
 import { Logger } from "winston";
 // 中间件，确保所有请求均经过该处理
 router.all("*", (req, res, next) => next());

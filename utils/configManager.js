@@ -1,4 +1,4 @@
-import logger  from "./lib/logger.js";
+import logger  from "./logger.js";
 import { PrismaClient } from "@prisma/client";
 
 class ConfigManager {

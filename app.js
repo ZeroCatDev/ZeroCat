@@ -4,8 +4,8 @@ import "dotenv/config";
 import express from "express";
 import jsonwebtoken from "jsonwebtoken";
 
-import configManager from "./routes/configManager.js";
-import logger from "./routes/lib/logger.js";
+import configManager from "./utils/configManager.js";
+import logger from "./utils/logger.js";
 
 import expressWinston from "express-winston";
 import cors from "cors";

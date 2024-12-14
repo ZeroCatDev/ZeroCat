@@ -1,16 +1,16 @@
-import logger from "./lib/logger.js";
-import configManager from "./configManager.js";
+import logger from "../utils/logger.js";
+import configManager from "../utils/configManager.js";
 
 import { Router } from "express";
 var router = Router();
 import jsonwebtoken from "jsonwebtoken";
-import { qww, query } from "./lib/database.js";
-import { userpwTest, emailTest, hash, checkhash, generateJwt, randomPassword, prisma } from "./lib/global.js";
-import { sendEmail } from "./services/emailService.js";
-import { registrationTemplate, passwordResetTemplate } from "./services/emailTemplates.js";
+import { qww, query } from "../utils/database.js";
+import { userpwTest, emailTest, hash, checkhash, generateJwt, randomPassword, prisma } from "../utils/global.js";
+import { sendEmail } from "../utils/email/emailService.js";
+import { registrationTemplate, passwordResetTemplate } from "../utils/email/emailTemplates.js";
 import  {needlogin} from "../middleware/auth.js";
 
-import totpUtils from "./lib/totpUtils.js";
+import totpUtils from "../utils/totp.js";
 // { isTotpTokenValid, createTotpTokenForUser, enableTotpToken, removeTotpToken, validateTotpToken }
 const { isTotpTokenValid, createTotpTokenForUser, enableTotpToken, removeTotpToken, validateTotpToken } = totpUtils;
 router.all("*", function (req, res, next) {
@@ -18,7 +18,7 @@ router.all("*", function (req, res, next) {
 });
 
 
-import geetest from "./lib/captcha/geetest.js";
+import geetest from "../middleware/geetest.js";
 router.post("/login", async function (req, res, next) {
   try {
     if (
