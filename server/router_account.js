@@ -23,20 +23,9 @@ const {
 router.all("*", function (req, res, next) {
   next();
 });
-/*
-(async () => {
-  try {
-    logger.debug("site.name:", await configManager.getConfig("site.name"));
 
-    // 其他逻辑...
-  } catch (error) {
-    logger.error("Error:", error);
-  }
-})();
-*/
 
 const geetest = require("./lib/captcha/geetest.js");
-//geetest
 router.post("/login", async function (req, res, next) {
   try {
     if (
@@ -49,8 +38,8 @@ router.post("/login", async function (req, res, next) {
       return;
     }
 
-    var SQL = `SELECT * FROM ow_users WHERE email=? LIMIT 1`;
-    var WHERE = [`${req.body["un"]}`];
+    const SQL = `SELECT * FROM ow_users WHERE email=? LIMIT 1`;
+    const WHERE = [`${req.body["un"]}`];
     DB.qww(SQL, WHERE, async function (err, USER) {
       if (err || USER.length == 0) {
         res.status(200).send({ message: "账户或密码错误" });
@@ -58,7 +47,7 @@ router.post("/login", async function (req, res, next) {
       }
 
       var User = USER[0];
-      pw = I.hash(req.body.pw);
+      var pw = I.hash(req.body.pw);
       if (I.checkhash(req.body.pw, User["password"]) == false) {
         res.status(200).send({ message: "账户或密码错误" });
       } else if (User["state"] == 2) {
@@ -158,12 +147,11 @@ router.post("/register", geetest, async function (req, res, next) {
           res.status(200).send({ message: "再试一次17" });
           return;
         }
-        var userid = newUser.insertId;
 
-        sendEmail(
-          email,
-          `${await configManager.getConfig("site.name")}社区注册消息`,
-          registrationTemplate(email, randonpw)
+        await sendEmail(
+            email,
+            `${await configManager.getConfig("site.name")}社区注册消息`,
+            registrationTemplate(email, randonpw)
         );
 
         res.status(200).send({ message: "注册成功,请查看邮箱获取账户数据" });
@@ -188,17 +176,17 @@ router.post("/repw", geetest, async function (req, res, next) {
         res.status(200).send({ message: "账户格式错误或不存在" });
         return;
       }
-      var user = User[0];
-      var jwttoken = jwt.sign(
-        { userid: user["id"], email: user["email"] },
-        await configManager.getConfig("security.jwttoken"),
-        { expiresIn: 60 * 10 }
+      const user = User[0];
+      const jwttoken = jwt.sign(
+          {userid: user["id"], email: user["email"]},
+          await configManager.getConfig("security.jwttoken"),
+          {expiresIn: 60 * 10}
       );
 
-      sendEmail(
-        email,
-        `${await configManager.getConfig("site.name")}密码重置消息`,
-        passwordResetTemplate(email, jwttoken)
+      await sendEmail(
+          email,
+          `${await configManager.getConfig("site.name")}密码重置消息`,
+          passwordResetTemplate(email, jwttoken)
       );
 
       res.status(200).send({ message: "请查看邮箱" });
@@ -209,28 +197,33 @@ router.post("/repw", geetest, async function (req, res, next) {
 });
 
 router.post("/torepw", geetest, async function (req, res, next) {
+  let SET;
+  let UPDATE;
   try {
-    var user1 = jwt.verify(
-      req.body.jwttoken,
-      await configManager.getConfig("security.jwttoken"),
-      function (err, decoded) {
-        if (err) {
-          res.status(200).send({ message: "token错误或过期" });
-          return;
+    let userid, email
+    jwt.verify(
+        req.body.jwttoken,
+        await configManager.getConfig("security.jwttoken"),
+        function (err, decoded) {
+          if (err) {
+            res.status(200).send({message: "token错误或过期"});
+            return;
+          }
+          userid = decoded.userid;
+          email = decoded.email;
         }
-        userid = decoded.userid;
-        email = decoded.email;
-      }
     );
-    var newPW = I.hash(req.body.pw);
-    SET = { password: newPW };
-    UPDATE = `UPDATE ow_users SET ? WHERE id=${userid} LIMIT 1`;
-    DB.qww(UPDATE, SET, function (err, u) {
+    const newPW = I.hash(req.body.pw);
+    SET = {password: newPW};
+    UPDATE = `UPDATE ow_users
+              SET ?
+              WHERE id = ${userid} LIMIT 1`;
+    DB.qww(UPDATE, SET, function (err) {
       if (err) {
-        res.status(200).send({ message: "请再试一次" });
+        res.status(200).send({message: "请再试一次"});
         return;
       }
-      res.status(200).send({ message: "您的密码已更新" });
+      res.status(200).send({message: "您的密码已更新"});
     });
   } catch (err) {
     next(err);
@@ -239,8 +232,8 @@ router.post("/torepw", geetest, async function (req, res, next) {
 
 router.get("/totp/list", needlogin, async (req, res) => {
   try {
-    var totpData = await I.prisma.ow_users_totp.findMany({
-      where: { user_id: Number(res.locals.userid) },
+    let totpData = await I.prisma.ow_users_totp.findMany({
+      where: {user_id: Number(res.locals.userid)},
       select: {
         id: true,
         user_id: true,
@@ -281,9 +274,10 @@ router.post("/totp/rename", needlogin, async (req, res) => {
     });
   }
   try {
-    var renamedTotp = await I.prisma.ow_users_totp.update({
-      where: { id: Number(totp_id) },
-      data: { name: name },
+    let renamedTotp;
+    renamedTotp = await I.prisma.ow_users_totp.update({
+      where: {id: Number(totp_id)},
+      data: {name: name},
       select: {
         id: true,
         user_id: true,
