@@ -1,113 +1,111 @@
-# ZeroCat 编程社区
+# ZeroCat Programming Community
+[中文](./README_ZH.md) | [English](./README.md)
 
-高中喵开发，求 Star 支持
+If you like this project, please give me a star.
+##
+ZeroCat is a lightweight online programming and sharing platform.
 
-ZeroCat 是一个轻量级的在线编程、分享平台
+This repository contains the backend code for ZeroCat.
 
-本仓库包含以下内容：
-ZeroCat 社区的源代码，包括前端与后端
+## Contents
 
-## 内容列表
+- [ZeroCat Programming Community](#zerocat-programming-community)
+  - [](#)
+  - [Contents](#contents)
+  - [Background](#background)
+  - [Communication](#communication)
+  - [Example](#example)
+  - [Installation](#installation)
+    - [Configure Database](#configure-database)
+    - [Configure Environment Variables](#configure-environment-variables)
+    - [Run](#run)
+    - [Use Docker](#use-docker)
+  - [Developer](#developer)
+  - [How to Contribute](#how-to-contribute)
+  - [Contributor Covenant Code of Conduct](#contributor-covenant-code-of-conduct)
+    - [Contributors](#contributors)
+  - [License](#license)
 
-- [ZeroCat 编程社区](#zerocat-编程社区)
-  - [内容列表](#内容列表)
-  - [背景](#背景)
-  - [交流](#交流)
-  - [示例](#示例)
-  - [安装](#安装)
-    - [配置数据库](#配置数据库)
-    - [配置环境变量](#配置环境变量)
-    - [运行](#运行)
-    - [使用 Docker](#使用-docker)
-  - [相关仓库](#相关仓库)
-  - [开发者](#开发者)
-  - [如何贡献](#如何贡献)
-    - [贡献者](#贡献者)
-  - [许可协议](#许可协议)
+## Background
 
-## 背景
+`ZeroCat` was originally proposed by [@sunwuyuan](https://github.com/sunwuyuan) a long time ago. Our goal is to create a fully open-source programming community, and this project started from that vision. However, significant progress was made only when Sun Wuyuan was in the second year of middle school.
 
-`ZeroCat` 最开始由 [@sunwuyuan](https://github.com/sunwuyuan) 在很早以前提出，我们希望搭建一个全开源的编程社区，这个项目也就从此开始了。但实际上项目在孙悟元初二的时候才有了很大进展。
-<br/>维护一个编程社区从某种程度上来说相当不易，但我相信，这个项目会一直开发下去。
+Maintaining a programming community is, to some extent, quite challenging, but I believe this project will continue to develop.
 
-这个仓库的目标是：
-<br/>开发一个完整的支持 Scratch、Python 与其他适合编程初学者的编成社区
+The goal of this repository is to:
+<br/>Develop a comprehensive programming community that supports Scratch, Python, and other languages suitable for beginner programmers.
 
-## 交流
+## Communication
 
-QQ：964979747
+QQ: 964979747
 
-## 示例
+## Example
 
-想了解社区效果，请参考 [ZeroCat](https://zerocat.houlangs.com)。
+To see the community in action, please refer to [ZeroCat](https://zerocat.houlangs.com).
 
-## 安装
-![使用Nodejs开发](public/Node.js.png)
+## Installation
+![Developed with Node.js](public/Node.js.png)
 
-这个项目使用 [node](http://nodejs.org) , [npm](https://npmjs.com), [docker](https://docker.com)，请确保你本地已经安装了祂们
+This project uses [Node.js](http://nodejs.org), [npm](https://npmjs.com), and [Docker](https://docker.com). Please ensure that these are installed on your local machine.
 
 ```sh
 $ npm install
-# 或者使用cnpm
+# Or use cnpm
 $ cnpm install
-# 或者使用任意奇奇怪怪的npm工具(笑
+# Or use any other npm tool you prefer (haha)
 $ XXX install
 ```
 
-### 配置数据库
+### Configure Database
 
-还没写好
+Not written yet.
 
-### 配置环境变量
+### Configure Environment Variables
 
-将`.env.example`修改为`.env`或手动配置环境变量(根据`.env.example`配置)
-<br/>请务必不要同时使用环境变量与.env，请注意不要让项目环境与其他项目环境冲突
-<br/>目前所有环境变量都必须配置
+Rename `.env.example` to `.env` or configure the environment variables manually (refer to `.env.example` for guidance).
+<br/>Please do not use both environment variables and `.env` at the same time, and ensure the project's environment does not conflict with other projects.
+<br/>Currently, all environment variables must be configured.
 
-### 运行
+### Run
 
 ```sh
 $ npm run start
 ```
 
-### 使用 Docker
+### Use Docker
 
-请确保以安装 Docker 与 DockerCompose
+Make sure Docker and Docker Compose are installed.
 
 ```sh
 $ docker compose up -d
 ```
 
-## 相关仓库
-
-- [StaticFile](https://github.com/ZeroCatOrg/StaticFile) — 静态文件仓库
-
-## 开发者
+## Developer
 
 [@SunWuyuan](https://github.com/sunwuyuan)
 
-## 如何贡献
+## How to Contribute
 
-非常欢迎你的加入！[提一个 Issue](https://github.com/ZeroCatDev/ZeroCat/issues/new) 或者提交一个 Pull Request。对于小白问题，最好在 qq 群里问，我们会尽量回答。
+- [ZeroCat](https://zerocat.houlangs.com)
+We warmly welcome your contributions! Please [submit an Issue](https://github.com/ZeroCatDev/ZeroCat/issues/new) or submit a Pull Request. For beginner-level questions, it’s best to ask in the QQ group, and we will try to help.
 
-ZeroCat 的项目 遵循 [Contributor Covenant](http://contributor-covenant.org/version/1/3/0/) 行为规范
-<br/>孙悟元 希望你遵循 [提问的智慧](https://github.com/ryanhanwu/How-To-Ask-Questions-The-Smart-Way/blob/main/README-zh_CN.md)
+## Contributor Covenant Code of Conduct
 
-### 贡献者
+The ZeroCat project follows the [Contributor Covenant](http://contributor-covenant.org/version/1/3/0/) Code of Conduct.
+<br/>Sun Wuyuan encourages you to follow [The Smart Way to Ask Questions](https://github.com/ryanhanwu/How-To-Ask-Questions-The-Smart-Way/blob/main/README-zh_CN.md).
 
-感谢所有参与项目的人，他们的信息可以在右侧看到，这是实时的且便于查看
-## 许可协议
+### Contributors
 
-ZeroCat 社区项目遵循 [GPL-3.0 许可证](LICENSE)。
+Thanks to everyone who has contributed to this project. Their information can be found on the right side of the repository page. It is updated in real time and easy to view.
 
+## License
 
-版权所有 (C) 2020-2024 孙悟元。
-Copyright (C) 2020-2024  Sun Wuyuan.
+The ZeroCat community project is licensed under the [GPL-3.0 License](LICENSE).
 
+Copyright (C) 2020-2024 Sun Wuyuan.
 
-您可以在开源的前提下免费使用 ZeroCat 社区，但不允许使用 ZeroCat 的名称进行宣传。您需要保留 ZeroCat 的版权声明。
+You are free to use the ZeroCat community under an open-source license, but you may not use the name "ZeroCat" for promotional purposes. You must retain the copyright notice for ZeroCat.
 
-如需闭源使用授权，请联系 QQ1847261658。
+For closed-source usage licenses, please contact QQ 1847261658.
 
-感谢 [scratch-cn/lite](https://gitee.com/scratch-cn/lite) 项目对本项目的启发，其遵循 MIT 协议。
-
+Thanks to the [scratch-cn/lite](https://gitee.com/scratch-cn/lite) project for inspiring this project, which is licensed under the MIT License.
