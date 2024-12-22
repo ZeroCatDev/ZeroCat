@@ -102,7 +102,7 @@ router.get("/projectinfo2", async function (req, res, next) {
       await configManager.getConfig("security.jwttoken")
     );
     logger.debug(project_token);
-    jsonscratch = {
+    var jsonscratch = {
       id: result.id,
       title: result.title,
       description: result.description,
