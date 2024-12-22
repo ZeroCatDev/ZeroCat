@@ -37,7 +37,6 @@
     "winston-daily-rotate-file": "^5.0.0"
   },
   "devDependencies": {
-    "prisma": "^6.1.0",
-    "win-node-env": "^0.6.1"
-  }
+    "prisma": "^6.1.0"
+    }
 }
