@@ -7,11 +7,11 @@
     "start": "node .bin/www",
     "prisma": "prisma generate",
     "prisma:pull": "prisma db pull && prisma generate",
-    "dev": "cross-env NODE_ENV=development nodemon node .bin/www"
+    "dev": "NODE_ENV=development nodemon node .bin/www"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.712.0",
-    "@prisma/client": "^6.0.1",
+    "@prisma/client": "^6.1.0",
     "axios": "^1.7.9",
     "body-parser": "^1.20.1",
     "compression": "^1.7.5",
@@ -37,7 +37,7 @@
     "winston-daily-rotate-file": "^5.0.0"
   },
   "devDependencies": {
-    "cross-env": "^7.0.3",
-    "prisma": "^6.0.1"
+    "prisma": "^6.1.0",
+    "win-node-env": "^0.6.1"
   }
 }

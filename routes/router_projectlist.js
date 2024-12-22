@@ -5,113 +5,151 @@ import { Router } from "express";
 const router = Router();
 import { needlogin } from "../middleware/auth.js";
 
-import { addProjectToUserProjectlist, getProjectlist, deleteProjectlist, updateProjectlist, createProjectlist, getUserProjectlist, checkProjectlistWithUser, removeProjectFromUserProjectlist } from "../controllers/projectlist.js";
+import {
+  starProject,
+  unstarProject,
+  getProjectStars,
+  getProjectStarStatus,
+  getProjectList,
+  getUserListInfoAndCheak,
+  createList,
+  deleteList,
+  addProjectToList,
+  removeProjectFromList,
+  getUserListInfo,
+  getUserListInfoPublic,
+  updateList
+} from "../controllers/projectlist.js";
 
 // 中间件，确保所有请求均经过该处理
 router.all("*", (req, res, next) => next());
 
-
-// 创建新收藏夹
-router.post("/", needlogin, async (req, res, next) => {
+router.post("/star", needlogin, async (req, res, next) => {
   try {
-    const result = await createProjectlist(res.locals.userid);
-    res.status(200).send({ status: "1", msg: "创建成功", id: result.id });
+    await starProject(res.locals.userid, req.body.projectid);
+    res.status(200).send({ status: "1", msg: "收藏成功", star: 1 });
   } catch (err) {
     next(err);
   }
 });
 
-// 添加作品到作品列表
-router.post("/add", needlogin, async (req, res, next) => {
+router.post("/unstar", needlogin, async (req, res, next) => {
   try {
-    const result = await addProjectToUserProjectlist({
-      projectId: req.body.projectid,
-      userId: res.locals.userid,
-      listId: req.body.listid,
-    });
-    res.status(200).send({ status: "1", message: "添加成功", data: result });
+    await unstarProject(res.locals.userid, req.body.projectid);
+    res.status(200).send({ status: "1", msg: "取消收藏成功", star: 0 });
   } catch (err) {
     next(err);
   }
 });
 
-// 删除作品从作品列表
+router.get("/stars", async (req, res, next) => {
+  try {
+    const stars = await getProjectStars(req.query.id);
+    res.status(200).send({ status: "1", msg: "获取成功", stars });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/checkstar", async (req, res, next) => {
+  try {
+    const status = await getProjectStarStatus(
+      res.locals.userid,
+      req.query.projectid
+    );
+    res.status(200).send({ status: "1", msg: "获取成功", star: status });
+  } catch (err) {
+    next(err);
+  }
+});
+router.get("/listid/:id", async (req, res, next) => {
+  try {
+    logger.info(res.locals.userid);
+    const list = await getProjectList(req.params.id, res.locals.userid);
+    if (!list) {
+      res.status(200).send({ status: "0", msg: "列表不存在"});
+      return;
+    }
+
+    res.status(200).send({ status: "1", msg: "获取成功", data: list });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/userid/:id/public", async (req, res, next) => {
+  try {
+    logger.info(res.locals.userid);
+    const list = await getUserListInfoPublic(req.params.id, res.locals.userid);
+    res.status(200).send({ status: "1", msg: "获取成功", data: list });
+  } catch (err) {
+    next(err);
+  }
+});
+router.get("/my", async (req, res, next) => {
+  try {
+    logger.info(res.locals.userid);
+    const list = await getUserListInfo(res.locals.userid);
+    res.status(200).send({ status: "1", msg: "获取成功", data: list });
+  } catch (err) {
+    next(err);
+  }
+});
+router.get("/check", async (req, res, next) => {
+  var result = await getUserListInfoAndCheak(
+    res.locals.userid,
+    req.query.projectid
+  );
+  res.status(200).send({ status: "1", msg: "获取成功", data: result });
+});
+
+router.post("/create", needlogin, async (req, res, next) => {
+  try {
+    const list = await createList(res.locals.userid, req.body.name);
+    res.status(200).send({ status: "1", msg: "创建成功", data: list });
+  } catch (err) {
+    next(err);
+  }
+});
 router.post("/delete", needlogin, async (req, res, next) => {
   try {
-    const result = await removeProjectFromUserProjectlist({
-      projectId: req.body.projectid,
-      userId: res.locals.userid,
-      listId: req.body.listid,
-    });
-    res.status(200).send({ status: "1", message: "删除成功", data: result });
+    const list = await deleteList(res.locals.userid, req.body.id);
+    res.status(200).send({ status: "1", msg: "删除成功", data: list });
   } catch (err) {
     next(err);
   }
 });
-
-// 更新作品列表信息
-router.put("/:id", needlogin, async (req, res, next) => {
+router.post("/add", needlogin, async (req, res, next) => {
   try {
-    const info = await updateProjectlist(req.params.id, req.body);
-    res.status(200).send({ status: "1", message: "保存成功", data: info });
+    const list = await addProjectToList(
+      res.locals.userid,
+      req.body.listid,
+      req.body.projectid
+    );
+    res.status(200).send({ status: "1", msg: "添加成功", data: list });
   } catch (err) {
     next(err);
   }
 });
-// 获取用户的作品列表信息
-router.get("/user/:id/:state?", async (req, res, next) => {
+router.post("/remove", needlogin, async (req, res, next) => {
   try {
-    const { id, state } = req.params;
-    const isOwnUser = res.locals.userid == id;
-
-    const stateMap = {
-      private: isOwnUser ? ["private"] : ["public"],
-      public: ["public"],
-      all: isOwnUser ? ["private", "public"] : ["public"]
-    };
-
-    const selectedStates = stateMap[state] || stateMap.all;
-    const info = await getUserProjectlist({ userId: id, state: selectedStates }, selectedStates);
-
-    res.status(200).send({ status: "1", message: "获取成功", data: info });
+    const list = await removeProjectFromList(
+      res.locals.userid,
+      req.body.listid,
+      req.body.projectid
+    );
+    res.status(200).send({ status: "1", msg: "删除成功", data: list });
   } catch (err) {
     next(err);
   }
 });
-
-// 检查作品是否在用户列表中
-router.get("/check", async (req, res, next) => {
+// 修改列表名称，简介，状态
+router.post("/update/:id", needlogin, async (req, res, next) => {
   try {
-    const info = await checkProjectlistWithUser({
-      projectId: req.query.projectid,
-      userId: res.locals.userid,
-    });
-    logger.debug(info);
-    res.status(200).send({ status: "1", message: "获取成功", data: info });
+    const list = await updateList(res.locals.userid,req.params.id, req.body);
+    res.status(200).send({ status: "1", msg: "修改成功", data: list });
   } catch (err) {
     next(err);
   }
-});
-
-// 获取作品列表信息
-router.get("/:id", async (req, res, next) => {
-  try {
-    const info = await getProjectlist({ listId:req.params.id, userId: res.locals.userid });
-    res.status(200).send({ status: "1", message: "获取成功", data: info });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// 删除作品列表
-router.delete("/:id", needlogin, async (req, res, next) => {
-  try {
-    await deleteProjectlist({ listId:req.params.id, userId: res.locals.userid });
-    res.status(200).send({ status: "1", message: "删除成功" });
-  } catch (err) {
-    next(err);
-  }
-});
-
-
+})
 export default router;

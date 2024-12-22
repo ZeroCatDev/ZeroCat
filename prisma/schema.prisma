@@ -8,74 +8,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model ads {
-  id         Int       @id @default(autoincrement()) @db.UnsignedInt
-  i          Int?      @default(0)
-  state      Int?      @default(0) @db.TinyInt
-  img        Int?      @default(0) @db.TinyInt
-  time       BigInt?   @default(0) @db.UnsignedBigInt
-  createtime DateTime? @default(now()) @db.Timestamp(0)
-  title      String?   @db.VarChar(32)
-  content    String?   @default("无") @db.VarChar(255)
-}
-
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model material_backdrop {
-  id    Int     @default(autoincrement()) @db.UnsignedInt
-  tagId Int     @db.UnsignedInt
-  name  String? @default("新背景") @db.Char(32)
-  md5   String? @db.Char(64)
-  info0 Int?    @default(480)
-  info1 Int?    @default(360)
-  info2 Int?    @default(2)
-  state Int?    @default(1) @db.TinyInt
-
-  @@id([id, tagId])
-}
-
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model material_costume {
-  id    Int     @default(autoincrement()) @db.UnsignedInt
-  tagId Int     @db.UnsignedInt
-  name  String? @default("新造型") @db.Char(32)
-  md5   String? @db.Char(64)
-  info0 Int?    @default(960)
-  info1 Int?    @default(720)
-  info2 Int?    @default(2)
-  state Int?    @default(1) @db.TinyInt
-
-  @@id([id, tagId])
-}
-
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model material_sound {
-  id          Int     @id @default(autoincrement()) @db.UnsignedInt
-  tagId       Int?    @db.UnsignedInt
-  name        String? @default("新声音") @db.Char(32)
-  md5         String? @db.Char(64)
-  format      String? @default("") @db.Char(16)
-  rate        Int?    @default(44100)
-  sampleCount Int?    @default(0)
-  state       Int?    @default(1) @db.TinyInt
-}
-
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model material_sprite {
-  id    Int     @id @default(autoincrement()) @db.UnsignedInt
-  tagId Int?    @db.UnsignedInt
-  name  String? @default("新角色") @db.Char(32)
-  json  String? @db.Text
-  state Int?    @default(1) @db.TinyInt
-}
-
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model material_tags {
-  id   Int     @id @default(autoincrement()) @db.UnsignedInt
-  type Int?    @db.UnsignedTinyInt
-  tag  String? @default("OurWorld") @db.Char(16)
-}
-
 model ow_comment {
   id         Int       @id @default(autoincrement()) @db.UnsignedInt
   user_id    Int?
@@ -115,25 +47,23 @@ model ow_counter {
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model ow_projects {
-  id          Int                @id @default(autoincrement()) @db.UnsignedInt
-  type        String?            @default("text") @db.VarChar(32)
-  licence     String?            @db.VarChar(32)
+  id          Int       @id @default(autoincrement()) @db.UnsignedInt
+  type        String?   @default("text") @db.VarChar(32)
+  licence     String?   @db.VarChar(32)
   authorid    Int
-  teacherid   Int?               @default(0) @db.UnsignedInt
-  state       String?            @default("private") @db.VarChar(32)
-  view_count  Int?               @default(0) @db.UnsignedInt
-  like_count  Int?               @default(0)
-  favo_count  Int?               @default(0)
-  time        DateTime?          @default(now()) @db.Timestamp(0)
-  title       String?            @default("Scratch新项目") @db.VarChar(1000)
-  description String?            @default("OurWorld上的Scratch项目") @db.VarChar(1000)
-  source      String?            @db.MediumText
-  history     Boolean            @default(true)
-  devenv      Boolean            @default(true)
-  devsource   String             @db.MediumText
-  // 移除原来的 tags 字符串字段
-  // 添加与 tags 表的关联
-  tags        ow_projects_tags[]
+  teacherid   Int?      @default(0) @db.UnsignedInt
+  state       String?   @default("private") @db.VarChar(32)
+  view_count  Int?      @default(0) @db.UnsignedInt
+  like_count  Int?      @default(0)
+  favo_count  Int?      @default(0)
+  time        DateTime? @default(now()) @db.Timestamp(0)
+  title       String?   @default("Scratch新项目") @db.VarChar(1000)
+  description String?   @default("OurWorld上的Scratch项目") @db.VarChar(1000)
+  source      String?   @db.MediumText
+  history     Boolean   @default(true)
+  devenv      Boolean   @default(true)
+  devsource   String    @db.MediumText
+  tags        String    @default("") @db.VarChar(100)
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -165,140 +95,10 @@ model ow_users {
   label        String?   @db.VarChar(255)
 }
 
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model python {
-  id          Int       @id @default(autoincrement()) @db.UnsignedInt
-  authorid    String    @db.VarChar(32)
-  state       Int?      @default(0) @db.UnsignedTinyInt
-  view_count  Int?      @default(0) @db.UnsignedInt
-  like_count  Int?      @default(0)
-  favo_count  Int?      @default(0)
-  time        DateTime? @default(now()) @db.Timestamp(0)
-  title       String?   @default("Python新项目") @db.VarChar(50)
-  description String?   @default("OurWorld上的Python项目") @db.VarChar(1000)
-  src         String?   @db.MediumText
-}
-
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model register {
-  username String   @id @db.Char(12)
-  code     String   @db.Char(6)
-  time     DateTime @default(now()) @db.Timestamp(0)
-}
-
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model scratch {
-  id          Int       @id @default(autoincrement()) @db.UnsignedInt
-  authorid    String    @db.VarChar(32)
-  teacherid   Int?      @default(0) @db.UnsignedInt
-  state       Int?      @default(0) @db.UnsignedTinyInt
-  view_count  Int?      @default(0) @db.UnsignedInt
-  like_count  Int?      @default(0)
-  favo_count  Int?      @default(0)
-  time        DateTime? @default(now()) @db.Timestamp(0)
-  title       String?   @default("Scratch新项目") @db.VarChar(50)
-  description String?   @default("OurWorld上的Scratch项目") @db.VarChar(1000)
-  src         String?   @db.MediumText
-}
-
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model scratch_favo {
-  id        Int       @default(autoincrement()) @db.UnsignedInt
-  userid    Int       @db.UnsignedInt
-  projectid Int       @db.UnsignedInt
-  time      DateTime? @default(now()) @db.Timestamp(0)
-
-  @@id([id, userid, projectid])
-}
-
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model scratch_like {
-  id        Int       @default(autoincrement()) @db.UnsignedInt
-  userid    Int       @db.UnsignedInt
-  projectid Int       @db.UnsignedInt
-  time      DateTime? @default(now()) @db.Timestamp(0)
-
-  @@id([id, userid, projectid])
-}
-
 model sys_ini {
   id       Int     @id @default(autoincrement()) @db.UnsignedInt
   iniKey   String? @db.Char(16)
   iniValue String? @db.Char(64)
-}
-
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model user {
-  id           String    @unique(map: "id_UNIQUE") @db.VarChar(32)
-  username     String    @unique(map: "user_UNIQUE") @db.Char(100)
-  pwd          String    @db.Char(100)
-  display_name String    @default("OurWorld创作者") @db.Char(20)
-  state        Int       @default(0) @db.TinyInt
-  loginTime    DateTime? @db.Timestamp(0)
-  regTime      DateTime? @default(now()) @db.Timestamp(0)
-  sex          Int?      @default(0) @db.TinyInt
-  birthday     DateTime? @default(dbgenerated("'2000-04-01 08:00:00'")) @db.Timestamp(0)
-  motto        String?   @default("OurWorld创作者") @db.VarChar(1000)
-  images       String?   @default("头像") @db.VarChar(255)
-
-  @@id([id, username])
-}
-
-model wl_comment {
-  id         Int       @id @default(autoincrement()) @db.UnsignedInt
-  user_id    Int?
-  comment    String?   @db.Text
-  insertedAt DateTime? @default(now()) @db.Timestamp(0)
-  ip         String?   @default("") @db.VarChar(100)
-  link       String?   @db.VarChar(255)
-  mail       String?   @db.VarChar(255)
-  nick       String?   @db.VarChar(255)
-  pid        Int?
-  rid        Int?
-  sticky     Boolean?
-  status     String    @default("") @db.VarChar(50)
-  like       Int?
-  ua         String?   @db.Text
-  url        String?   @db.VarChar(255)
-  createdAt  DateTime? @default(now()) @db.Timestamp(0)
-  updatedAt  DateTime? @default(now()) @db.Timestamp(0)
-}
-
-model wl_counter {
-  id        Int       @id @default(autoincrement()) @db.UnsignedInt
-  time      Int?
-  reaction0 Int?
-  reaction1 Int?
-  reaction2 Int?
-  reaction3 Int?
-  reaction4 Int?
-  reaction5 Int?
-  reaction6 Int?
-  reaction7 Int?
-  reaction8 Int?
-  url       String    @default("") @db.VarChar(255)
-  createdAt DateTime? @default(now()) @db.Timestamp(0)
-  updatedAt DateTime? @default(now()) @db.Timestamp(0)
-}
-
-model wl_users {
-  id           Int       @id @default(autoincrement()) @db.UnsignedInt
-  display_name String    @default("") @db.VarChar(255)
-  email        String    @default("") @db.VarChar(255)
-  password     String    @default("") @db.VarChar(255)
-  type         String    @default("") @db.VarChar(50)
-  label        String?   @db.VarChar(255)
-  url          String?   @db.VarChar(255)
-  avatar       String?   @db.VarChar(255)
-  github       String?   @db.VarChar(255)
-  twitter      String?   @db.VarChar(255)
-  facebook     String?   @db.VarChar(255)
-  google       String?   @db.VarChar(255)
-  weibo        String?   @db.VarChar(255)
-  qq           String?   @db.VarChar(255)
-  fa           String?   @map("2fa") @db.VarChar(32)
-  createdAt    DateTime? @default(now()) @db.Timestamp(0)
-  updatedAt    DateTime? @default(now()) @db.Timestamp(0)
 }
 
 model ow_projects_file {
@@ -320,18 +120,6 @@ model ow_projects_history {
   state       String?  @default("private") @db.VarChar(32)
   licence     String?  @db.VarChar(45)
   tags        String?  @db.VarChar(100)
-}
-
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model ow_projects_lists {
-  id          Int       @id @default(autoincrement())
-  authorid    Int?
-  title       String?   @default("收藏夹") @db.VarChar(1024)
-  description String?   @default("CURRENT_TIMESTAMP") @db.VarChar(1024)
-  state       String?   @default("private") @db.VarChar(32)
-  list        String?   @db.MediumText
-  updateTime  DateTime? @db.Timestamp(0)
-  createTime  DateTime? @default(now()) @db.Timestamp(0)
 }
 
 model ow_config {
@@ -359,22 +147,43 @@ model ow_users_totp {
   updated_at        DateTime? @default(now()) @db.Timestamp(0)
 }
 
-model magiclinktoken {
+model ow_projects_tags {
+  id         Int       @id @default(autoincrement())
+  name       String    @db.VarChar(45)
+  projectid  Int
+  created_at DateTime? @default(now()) @db.Timestamp(0)
+
+  @@index([projectid], map: "idx_projectid")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model ow_projects_lists {
+  id          Int       @id @default(autoincrement())
+  authorid    Int?
+  title       String?   @default("收藏夹") @db.VarChar(1024)
+  description String?   @default("CURRENT_TIMESTAMP") @db.VarChar(1024)
+  state       String?   @default("private") @db.VarChar(32)
+  list        String?   @db.MediumText
+  updateTime  DateTime? @db.Timestamp(0)
+  createTime  DateTime? @default(now()) @db.Timestamp(0)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model ow_projects_stars {
+  id         Int       @id @default(autoincrement())
+  userid     Int
+  projectid  Int
+  type       String    @default("star") @db.VarChar(32)
+  value      Int       @default(1) @db.TinyInt
+  listid     Int?
+  createTime DateTime? @default(now()) @db.Timestamp(0)
+}
+
+model ow_users_magiclink {
   id        Int      @id @default(autoincrement())
   userId    Int
   token     String   @unique(map: "token") @db.VarChar(255)
   expiresAt DateTime @db.DateTime(0)
-}
-
-model ow_projects_tags {
-  id         Int         @id @default(autoincrement())
-  name       String      @db.VarChar(45)
-  projectid  Int
-  created_at DateTime?   @default(now()) @db.Timestamp(0)
-  // 添加与 projects 表的关联
-  project    ow_projects @relation(fields: [projectid], references: [id])
-
-  @@index([projectid])
 }
 
 /// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.

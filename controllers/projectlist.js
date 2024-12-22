@@ -3,211 +3,178 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 import { getProjectsAndUsersByProjectsList } from "./projects.js";
 
-// Standardize variable names and functions
-const cleanAndDeduplicateList = (list) =>
-  list.filter(Boolean).reduce((acc, item) => {
-    if (!acc.includes(item)) {
-      acc.push(item);
+function starProject(userid, projectid) {
+  return prisma.ow_projects_stars.create({
+    data: {
+      projectid: Number(projectid),
+      userid: Number(userid),
+      type: "star",
+      value: 1,
+    },
+  });
+}
+function unstarProject(userid, projectid) {
+  return prisma.ow_projects_stars.deleteMany({
+    where: {
+      projectid: Number(projectid),
+      userid: Number(userid),
+      type: "star",
+      value: 1,
+    },
+  });
+}
+function getProjectStars(projectid) {
+  return prisma.ow_projects_stars.count({
+    where: {
+      projectid: Number(projectid),
+      type: "star",
+      value: 1,
+    },
+  });
+}
+function getProjectStarStatus(userid, projectid) {
+  return prisma.ow_projects_stars.count({
+    where: {
+      projectid: Number(projectid),
+      userid: Number(userid),
+      type: "star",
+      value: 1,
+    },
+  });
+}
+async function getProjectList(listid, userid) {
+  var list = await prisma.ow_projects_lists.findFirst({
+    where: { id: Number(listid) },
+  });
+  if (!list) {
+    return null;
+  }
+  logger.info(list);
+  if (list.state === "private" && list.authorid != userid) {
+    return null;
+  }
+  list.list = await prisma.ow_projects_stars.findMany({
+    where: { listid: Number(list.id), type: "list" },
+  });
+  list.projects = await getProjectsAndUsersByProjectsList(
+    list.list.map((item) => item.projectid),
+    userid
+  );
+  return list;
+}
+
+async function getUserListInfo(userid) {
+  var lists = await prisma.ow_projects_lists.findMany({
+    where: {
+      authorid: Number(userid),
+    },
+  });
+  return lists;
+}
+async function getUserListInfoPublic(userid) {
+  var lists = await prisma.ow_projects_lists.findMany({
+    where: {
+      authorid: Number(userid),
+    },
+  });
+  return lists;
+}
+async function getUserListInfoAndCheak(userid, projectid) {
+  logger.debug(userid);
+  logger.debug(projectid);
+  var lists = await getUserListInfo(userid);
+  logger.debug(lists);
+  var listids = lists.map((item) => item.id);
+  var projects = await prisma.ow_projects_stars.findMany({
+    where: {
+      userid: Number(userid),
+      type: "list",
+      projectid: Number(projectid),
+      listid: { in: listids },
+    },
+  });
+  //遍历projects，将对应的list.id等于projects.list的list项添加include=true
+  lists.forEach((list) => {
+    list.include = projects.some((item) => item.listid == list.id);
+  });
+  return lists;
+}
+//创建一个新的列表
+async function createList(userid, name) {
+  return prisma.ow_projects_lists.create({
+    data: {
+      authorid: Number(userid),
+      name: name,
+    },
+  });
+}
+//删除一个列表
+async function deleteList(userid, listid) {
+  return prisma.ow_projects_lists.delete({
+    where: {
+      id: Number(listid),
+      authorid: Number(userid),
+    },
+  });
+}
+//添加一个项目到列表
+async function addProjectToList(userid, listid, projectid) {
+  return prisma.ow_projects_stars.create({
+    data: {
+      userid: Number(userid),
+      listid: Number(listid),
+      projectid: Number(projectid),
+      type: "list",
+    },
+  });
+}
+//从列表中删除一个项目
+async function removeProjectFromList(userid, listid, projectid) {
+  return prisma.ow_projects_stars.deleteMany({
+    where: {
+      userid: Number(userid),
+      listid: Number(listid),
+      projectid: Number(projectid),
+      type: "list",
+    },
+  });
+}
+async function updateList(userid, listid, data) {
+  const updateData = {};
+  if (data.title !== undefined) updateData.title = data.title;
+  if (data.description !== undefined) updateData.description = data.description;
+  if (data.state !== undefined) {
+    if (data.state === "public" || data.state === "private") {
+      updateData.state = data.state;
+    } else {
+      throw new Error("state only allow public or private");
     }
-    return acc;
-  }, []);
-
-const handleError = (error) => {
-  logger.error(error);
-  throw new Error(error.message || "An error occurred");
-};
-
-// Add project to projects list
-const addProjectToUserProjectlist = async ({ listId, projectId, userId }) => {
-  try {
-    const project = await prisma.ow_projects_lists.findFirst({
-      where: { id: Number(listId), authorid: Number(userId) },
-    });
-
-    if (!project) throw new Error("Project list does not exist");
-
-    const list = cleanAndDeduplicateList([
-      ...project.list.split(","),
-      projectId,
-    ]);
-
-    return await prisma.ow_projects_lists.update({
-      where: { id: Number(listId), authorid: Number(userId) },
-      data: { list: list.join() },
-    });
-  } catch (error) {
-    handleError(error);
   }
-};
 
-// Remove project from projects list
-const removeProjectFromUserProjectlist = async ({ listId, projectId, userId }) => {
-  try {
-    const project = await prisma.ow_projects_lists.findFirst({
-      where: { id: Number(listId), authorid: Number(userId) },
-    });
-
-    if (!project) throw new Error("Project list does not exist");
-
-    const list = cleanAndDeduplicateList(
-      project.list.split(",").filter((item) => item !== String(projectId))
-    );
-
-    return await prisma.ow_projects_lists.update({
-      where: { id: Number(listId), authorid: Number(userId) },
-      data: { list: list.join() },
-    });
-  } catch (error) {
-    handleError(error);
-  }
-};
-
-// Create new projects list
-const createProjectlist = async (userId) => {
-  try {
-    return await prisma.ow_projects_lists.create({
-      data: {
-        authorid: userId,
-        list: "",
-        state: "private",
-        title: "New project list",
-        description: "New project list",
-      },
-    });
-  } catch (error) {
-    handleError(error);
-  }
-};
-
-// Get specified project list details
-const getProjectlist = async ({ listId, userId }) => {
-  try {
-    const project = await prisma.ow_projects_lists.findFirst({
-      where: { id: Number(listId) },
-    });
-
-    if (
-      !project ||
-      (project.state === "private" && project.authorid !== userId)
-    ) {
-      return "Project list does not exist or is private, please check or login";
-    }
-
-    const list = cleanAndDeduplicateList(project.list.split(","));
-    project.data = await getProjectsAndUsersByProjectsList(list);
-
-    return project;
-  } catch (error) {
-    handleError(error);
-  }
-};
-
-// Get user's all projects list
-const getUserProjectlist = async ({ userId, state }) => {
-  try {
-    return await prisma.ow_projects_lists.findMany({
-      where: { authorid: Number(userId), state: { in: state } },
-      select: {
-        id: true,
-        authorid: true,
-        title: true,
-        description: true,
-        state: true,
-        list: true,
-        createTime: true,
-        updateTime: true,
-      },
-    });
-  } catch (error) {
-    handleError(error);
-  }
-};
-
-// Get user's public projects list
-const getUserPublicProjectlist = async (userId) => {
-  try {
-    return await prisma.ow_projects_lists.findMany({
-      where: { authorid: Number(userId), state: "public" },
-      select: {
-        id: true,
-        authorid: true,
-        title: true,
-        description: true,
-        state: true,
-        list: true,
-        createTime: true,
-        updateTime: true,
-      },
-    });
-  } catch (error) {
-    handleError(error);
-  }
-};
-
-// Check if project is in user's list
-const checkProjectlistWithUser = async ({ projectId, userId }) => {
-  try {
-    if (!projectId && !userId) return "Parameter error";
-
-    const projects = await prisma.ow_projects_lists.findMany({
-      where: { authorid: Number(userId) },
-    });
-    logger.info(projects);
-    return projects.map((item) => {
-      const listArray = cleanAndDeduplicateList(item.list.split(","));
-      item.include = listArray.includes(String(projectId));
-      return item;
-    });
-  } catch (error) {
-    handleError(error);
-  }
-};
-
-// Update project list
-const updateProjectlist = async ({ listId, title, description, state, list }) => {
-  try {
-    const keys = ["title", "description", "state", "list"];
-    const resultInfo = keys.reduce((acc, key) => {
-      if (list[key]) acc[key] = list[key];
-      return acc;
-    }, {});
-
-    if (resultInfo.list) {
-      resultInfo.list = cleanAndDeduplicateList(
-        resultInfo.list.split(",")
-      ).join();
-    }
-
-    return await prisma.ow_projects_lists.update({
-      where: { id: Number(listId) },
-      data: resultInfo,
-    });
-  } catch (error) {
-    handleError(error);
-  }
-};
-
-// Delete project list
-const deleteProjectlist = async ({ listId, userId }) => {
-  try {
-    await prisma.ow_projects_lists.delete({
-      where: { id: Number(listId), authorid: Number(userId) },
-    });
-    return "Deleted project list";
-  } catch (error) {
-    handleError(error);
-  }
-};
+  const list = await prisma.ow_projects_lists.update({
+    where: {
+      id: Number(listid),
+      authorid: Number(userid),
+    },
+    data: updateData,
+  });
+  logger.debug(list);
+  return list;
+}
 
 export {
-  addProjectToUserProjectlist,
-  removeProjectFromUserProjectlist,
-  getProjectlist,
-  deleteProjectlist,
-  updateProjectlist,
-  createProjectlist,
-  getUserProjectlist,
-  getUserPublicProjectlist,
-  checkProjectlistWithUser,
+  starProject,
+  unstarProject,
+  getProjectStars,
+  getProjectStarStatus,
+  getProjectList,
+  getUserListInfoAndCheak,
+  createList,
+  deleteList,
+  addProjectToList,
+  removeProjectFromList,
+  getUserListInfo,
+  getUserListInfoPublic,
+  updateList,
 };
 

@@ -22,12 +22,6 @@ async function getProjectsByList(list, userid) {
   );
 }
 
-/**
- * Get projects and users by list of IDs
- * @param {Array<number>} list - List of project IDs
- * @param {number} userid - User ID
- * @returns {Promise<{ projects: Array<Project>, users: Array<User>}>}
- */
 async function getProjectsAndUsersByProjectsList(list, userid) {
   const projects = await getProjectsByList(list, userid);
   const userslist = [...new Set(projects.map((project) => project.authorid))];
@@ -55,11 +49,7 @@ function extractProjectData(body) {
   );
 }
 
-/**
- * Extract project tags from string or array
- * @param {string | Array<string>} tags - Project tags
- * @returns {Array<string>} - Extracted project tags
- */
+
 const extractProjectTags = (tags) =>
   // 如果某项为空，则删除
   Array.isArray(tags)
@@ -68,12 +58,7 @@ const extractProjectTags = (tags) =>
         .split(",")
         .map((tag) => tag.trim())
         .filter((tag) => tag);
-/**
- * Handle tags change and save
- * @param {number} projectId - Project ID
- * @param {string | Array<string>} tags - Project tags
- * @returns {Promise<void>}
- */
+
 async function handleTagsChange(projectId, tags) {
   const existingTags = await prisma.ow_projects_tags.findMany({
     where: { projectid: projectId },

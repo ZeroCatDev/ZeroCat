@@ -26,10 +26,9 @@ app.use(
   })
 );
 
-// CORS configuration
+// CORS 配置
 const corslist = (await configManager.getConfig("cors")).split(",");
-const corsOptionsDelegate = (req, callback) => {
-  const origin = req.header("Origin");
+const corsOptionsDelegate = (origin, callback) => {
   if (!origin || corslist.includes(new URL(origin).hostname)) {
     return callback(null, true);
   } else {
@@ -37,7 +36,7 @@ const corsOptionsDelegate = (req, callback) => {
     return callback(new Error("Not allowed by CORS"));
   }
 };
-app.use(cors({ credentials: true, origin: corsOptionsDelegate }));
+app.use(cors({ credentials: true, origin: (origin, callback) => corsOptionsDelegate(origin, callback) }));
 
 //express 的http请求体进行解析组件
 app.use(bodyParser.urlencoded({ limit: "50mb", extended: false }));
@@ -58,16 +57,14 @@ app.set("views", process.cwd() + "/views");
 app.set("view engine", "ejs");
 
 
-//启动http(80端口)==================================
 //http.createServer(app).listen(3000, "0.0.0.0", function () {
 //  console.log("Listening on http://localhost:3000");
-//}); // 平台总入口
+//});
+
 app.options("*", cors());
 
-let zcjwttoken;
-(async () => {
-  zcjwttoken = await configManager.getConfig("security.jwttoken");
-})();
+const SecurityToken = await configManager.getConfig("security.jwttoken");
+
 app.all("*", async function (req, res, next) {
   const tokenSources = [
     req.headers["authorization"]?.replace("Bearer ", ""),
@@ -81,7 +78,7 @@ app.all("*", async function (req, res, next) {
   for (let source of tokenSources) {
     if (source) {
       try {
-        const decodedToken = jsonwebtoken.verify(source, zcjwttoken);
+        const decodedToken = jsonwebtoken.verify(source, SecurityToken);
         if (decodedToken?.userid) {
           token = source;
           res.locals = {
@@ -128,7 +125,7 @@ app.get("/", function (req, res) {
 import router_register from "./routes/router_account.js";
 app.use("/account", router_register);
 
-//个人中心路由//学生平台路由
+//个人中心
 import router_admin from "./routes/router_my.js";
 app.use("/my", router_admin);
 
@@ -139,21 +136,21 @@ app.use("/searchapi", router_search);
 //scratch路由
 import router_scratch from "./routes/router_scratch.js";
 app.use("/scratch", router_scratch);
-//api路由
-import apiserver from "./routes/router_api.js";
-app.use("/api", apiserver);
-//api路由
 
+//api路由
+import router_api from "./routes/router_api.js";
+app.use("/api", router_api);
+
+// 项目列表
 import router_projectlist from "./routes/router_projectlist.js";
 app.use("/projectlist", router_projectlist);
 
-//项目处理路由
+// 项目
 import router_project from "./routes/router_project.js";
 app.use("/project", router_project);
 
-//项目处理路由
+// 评论
 import router_comment from "./routes/router_comment.js";
-
 app.use("/comment", router_comment);
 
 app.get("/check", function (req, res, next) {

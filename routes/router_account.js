@@ -119,7 +119,7 @@ router.get("/logout", function (req, res) {
 router.post("/register", geetest, async function (req, res, next) {
   try {
     const email = req.body.un;
-    SQL = `SELECT id FROM ow_users WHERE email='${email}' LIMIT 1`;
+    var SQL = `SELECT id FROM ow_users WHERE email='${email}' LIMIT 1`;
     query(SQL, function (err, User) {
       if (err) {
         res.status(200).send({ message: "账户格式错误" });
@@ -131,7 +131,7 @@ router.post("/register", geetest, async function (req, res, next) {
       }
 
       var randonpw = randomPassword(12);
-      pw = hash(randonpw);
+      var pw = hash(randonpw);
       const display_name = req.body.pw;
       const INSERT = `INSERT INTO ow_users (username,email,password,display_name) VALUES ('${Date.now()}','${email}','${pw}','${display_name}')`;
       query(INSERT, async function (err, newUser) {
@@ -143,8 +143,8 @@ router.post("/register", geetest, async function (req, res, next) {
 
         await sendEmail(
             email,
-            `${await configManager.getConfig("site.name")}社区注册消息`,
-            registrationTemplate(email, randonpw)
+            `注册消息`,
+           await registrationTemplate(email, randonpw)
         );
 
         res.status(200).send({ message: "注册成功,请查看邮箱获取账户数据" });
@@ -163,7 +163,7 @@ router.post("/repw", geetest, async function (req, res, next) {
     }
     var email = req.body.un;
     SQL = `SELECT * FROM ow_users WHERE email=? LIMIT 1`;
-    w = [email];
+    var w = [email];
     qww(SQL, w, async function (err, User) {
       if (err) {
         res.status(200).send({ message: "账户格式错误或不存在" });
@@ -421,7 +421,7 @@ router.post("/magiclink/generate", geetest, async (req, res) => {
       { expiresIn: 60 * 10 }
     );
 
-    await prisma.magiclinktoken.create({
+    await prisma.ow_users_magiclink.create({
       data: {
         userId: user.id,
         token,
@@ -461,18 +461,18 @@ router.get("/magiclink/validate", async (req, res) => {
       token,
       await configManager.getConfig("security.jwttoken")
     );
-    const magicLinkToken = await prisma.magiclinktoken.findUnique({
+    const ow_users_magiclink = await prisma.ow_users_magiclink.findUnique({
       where: { token },
     });
 
-    if (!magicLinkToken || magicLinkToken.expiresAt < new Date()) {
+    if (!ow_users_magiclink || ow_users_magiclink.expiresAt < new Date()) {
       return res
         .status(200)
         .json({ status: "error", message: "魔术链接已过期" });
     }
 
     const user = await prisma.ow_users.findUnique({
-      where: { id: magicLinkToken.userId },
+      where: { id: ow_users_magiclink.userId },
     });
 
     if (!user) {

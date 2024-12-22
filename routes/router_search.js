@@ -6,6 +6,7 @@ const router = Router();
 import { prisma } from "../utils/global.js"; // 功能函数集
 import { qww } from "../utils/database.js"; // 数据库
 import { getUsersByList } from "../controllers/projects.js";
+
 // 搜索：Scratch项目列表：数据（只搜索标题）
 router.get("/", async (req, res, next) => {
   try {
@@ -48,18 +49,10 @@ router.get("/", async (req, res, next) => {
       source: source ? { contains: source } : undefined,
       description: description ? { contains: description } : undefined,
       type: type ? { contains: type } : undefined,
-      state: { in: state },
+      state: state ? { in: state } : undefined,
       authorid: userid ? { equals: Number(userid) } : undefined,
+      tags: tags ? { contains: tags } : undefined,
     };
-
-    // 添加标签搜索条件
-    if (tags) {
-      searchinfo['tags'] = {
-        some: {
-          name: { contains: tags }
-        }
-      };
-    }
 
     // 查询项目总数
     const totalCount = await prisma.ow_projects.count({
@@ -79,12 +72,7 @@ router.get("/", async (req, res, next) => {
         description: true,
         view_count: true,
         time: true,
-        tags: {
-          select: {
-            name: true,
-            id: true
-          }
-        }
+        tags: true,
       },
       skip: (Number(curr) - 1) * Number(limit),
       take: Number(limit),
@@ -125,5 +113,4 @@ router.post("/user", async (req, res, next) => {
     next(error);
   }
 });
-
 export default router;
