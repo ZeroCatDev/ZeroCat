@@ -6,6 +6,8 @@ import DB from "../utils/database.js";
 import { prisma } from "../utils/global.js";
 import default_project from "../config/default_project.js";
 import { extractProjectData, setProjectFile, getProjectFile, projectSelectionFields, authorSelectionFields, handleTagsChange } from "../controllers/projects.js";
+import {getProjectStars } from "../controllers/projectlist.js";
+
 import { Logger } from "winston";
 // 中间件，确保所有请求均经过该处理
 router.all("*", (req, res, next) => next());
@@ -215,6 +217,16 @@ router.get("/:id", async (req, res, next) => {
   }
 });
 
+// 获取项目信息
+router.get("/community/:id", async (req, res, next) => {
+  try {
+var stars = await getProjectStars(req.params.id);
+    res.status(200).send({ status: "1", msg: "获取成功", data: {stars: stars} });
+  } catch (err) {
+    logger.error("Error fetching project information:", err);
+    next(err);
+  }
+});
 // 获取源代码
 router.get("/:id/source/:env?", async (req, res, next) => {
   try {

@@ -4,12 +4,7 @@ const prisma = new PrismaClient();
 import { createHash } from "crypto";
 import { getUsersByList } from "./users.js";
 
-/**
- * Get projects by list of IDs
- * @param {Array<number>} list - List of project IDs
- * @param {number} userid - User ID
- * @returns {Promise<Array<Project>>}
- */
+
 async function getProjectsByList(list, userid) {
   const select = projectSelectionFields();
   const projectIds = list.map(Number);
@@ -29,11 +24,6 @@ async function getProjectsAndUsersByProjectsList(list, userid) {
   return { projects, users };
 }
 
-/**
- * Extract project data from body
- * @param {Object} body - Request body
- * @returns {Object} - Extracted project data
- */
 function extractProjectData(body) {
   const fields = [
     "type",
