@@ -18,6 +18,14 @@ logger.debug(API_URL);
 
 // 中间件处理极验验证码验证
 app.use(async (req, res, next) => {
+
+  // 如果是开发环境，直接放行
+  if (process.env.NODE_ENV === "development") {
+    logger.debug("In development environment, bypass geetest validation.");
+    next();
+  }
+
+  // 验证码信息
   let geetest = {};
 
   // 处理验证码信息

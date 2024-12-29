@@ -249,37 +249,25 @@ router.post("/project/del", function (req, res) {
     res.status(200).send({ status: "success", msg: "删除成功" });
   });
 });
-//修改头像
-router.post(
-  "/set/avatar",
-  /* geetest,*/ function (req, res) {
-    //保存文件到正确位置
-    if (!req["files"]["file"]) {
-      res.status(200).send({ status: "文件上传失败" });
-      return;
-    }
-    // 计算图片的md5值
-    const hash = createHash("md5");
-    logger.debug(req["files"]["file"]["path"]);
-    const chunks = createReadStream(req["files"]["file"]["path"]);
-    chunks.on("data", (chunk) => {
-      hash.update(chunk);
-    });
-    chunks.on("end", async () => {
-      const hashValue = hash.digest("hex");
-      // 上传到S3
-      S3update(`user/${hashValue}`, req["files"]["file"]["path"]);
-      await prisma.ow_users.update({
-        where: { id: res.locals.userid },
-        data: { images: hashValue },
-      });
-      res.status(200).send({ status: "ok", message: "头像修改成功" });
-    });
-    //tmppath = req["files"]["file"]["path"];
-    //newpath = `./data/user/${res.locals.userid}`;
-    // rename(tmppath, newpath, function (err) { if (err) { res.status(200).send({ status: "文件上传失败" }); return; } });
+router.post("/set/avatar", geetest,async (req, res) => {
+  if (!req.files?.file) {
+    return res.status(200).send({ status: "文件上传失败" });
   }
-);
+
+  const file = req.files.file;
+  const hash = createHash("md5");
+  const chunks = createReadStream(file.path);
+  chunks.on("data", (chunk) => hash.update(chunk));
+  chunks.on("end", async () => {
+    const hashValue = hash.digest("hex");
+    await S3update(`user/${hashValue}`, file.path);
+    await prisma.ow_users.update({
+      where: { id: res.locals.userid },
+      data: { images: hashValue },
+    });
+    res.status(200).send({ status: "ok", message: "头像修改成功" });
+  });
+});
 //修改个人信息
 router.post("/set/userinfo", geetest, function (req, res) {
   var UPDATE = `UPDATE ow_users SET ? WHERE id=${res.locals.userid} LIMIT 1`;
