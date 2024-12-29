@@ -4,30 +4,33 @@ import configManager from "../utils/configManager.js";
 import { Router } from "express";
 var router = Router();
 import fs from "fs";
-
+import cryptojs from "crypto-js";
 import { prisma as _prisma } from "../utils/global.js";
-import { query } from "../utils/database.js";
-import { needadmin } from "../middleware/auth.js";
 router.get("/usertx", async function (req, res, next) {
   try {
-    SQL = `SELECT images FROM ow_users WHERE id = ${req.query.id};`;
-    query(SQL, async function (err, USER) {
-      if (err || USER.length == 0) {
-        res.locals.tip = { opt: "flash", msg: "用户不存在" };
-        res.status(404).json({
-          status: "error",
-          code: "404",
-          message: "找不到页面",
-        });
-        return;
-      }
-      res.redirect(
-        302,
-        (await configManager.getConfig("s3.staticurl")) +
-          "/user/" +
-          USER[0].images
-      );
+    const USER = await _prisma.ow_users.findFirst({
+      where: {
+        id: parseInt(req.query.id),
+      },
+      select: {
+        images: true,
+      },
     });
+    if (!USER) {
+      res.locals.tip = { opt: "flash", msg: "用户不存在" };
+      res.status(404).json({
+        status: "error",
+        code: "404",
+        message: "找不到页面",
+      });
+      return;
+    }
+    res.redirect(
+      302,
+      (await configManager.getConfig("s3.staticurl")) +
+        "/user/" +
+        USER.images
+    );
   } catch (err) {
     next(err);
   }
@@ -99,36 +102,54 @@ router.get("/info", async (req, res, next) => {
 
 router.get("/projectinfo", async function (req, res, next) {
   try {
-    SQL =
-      `SELECT ow_projects.id,ow_projects.authorid,ow_projects.time,ow_projects.view_count,ow_projects.like_count,ow_projects.type,` +
-      ` ow_projects.favo_count,ow_projects.title,ow_projects.state,ow_projects.description,ow_projects.licence,ow_projects.tags,` +
-      ` '' AS likeid, '' AS favoid,` +
-      ` ow_users.display_name AS author_display_name,` +
-      ` ow_users.images AS author_images,` +
-      ` ow_users.motto AS author_motto` +
-      ` FROM ow_projects ` +
-      ` LEFT JOIN ow_users ON (ow_users.id=ow_projects.authorid) ` +
-      ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state='public' or ow_projects.authorid=${res.locals.userid}) LIMIT 1`;
-    query(SQL, function (err, SCRATCH) {
-      if (err || SCRATCH.length == 0) {
-        res.locals.tip = {
-          opt: "flash",
-          msg: "项目不存在或未发布",
-          error: err,
-        };
-        res.send({
-          code: 404,
-          status: "404",
-          msg: "项目不存在或未发布",
-          error: err,
-        });
-        return;
-      }
+    const project = await _prisma.ow_projects.findFirst({
+      where: {
+        id: Number(req.query.id),
+        OR: [{ state: "public" }, { authorid: res.locals.userid }],
+      },
+      select: {
+        id: true,
+        authorid: true,
+        time: true,
+        view_count: true,
+        like_count: true,
+        type: true,
+        favo_count: true,
+        title: true,
+        state: true,
+        description: true,
+        licence: true,
+        tags: true,
+      },
+    });
 
-      res.locals["is_author"] =
-        SCRATCH[0].authorid == res.locals.userid ? true : false;
+    if (!project) {
+      res.locals.tip = {
+        opt: "flash",
+        msg: "项目不存在或未发布",
+      };
+      res.send({
+        code: 404,
+        status: "404",
+        msg: "项目不存在或未发布",
+      });
+      return;
+    }
 
-      res.json(SCRATCH[0]);
+    const author = await _prisma.ow_users.findFirst({
+      where: { id: project.authorid },
+      select: {
+        display_name: true,
+        images: true,
+        motto: true,
+      },
+    });
+
+    res.json({
+      ...project,
+      author_display_name: author.display_name,
+      author_images: author.images,
+      author_motto: author.motto,
     });
   } catch (err) {
     next(err);

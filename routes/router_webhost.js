@@ -5,81 +5,81 @@ import { Router } from "express";
 var router = Router();
 import { encode, decode } from "html-entities";
 
-import { query, qww } from "./lib/database.js"; // 数据库
+import { prisma } from "./lib/global.js";
 
-//功能函数集
-import I from "./lib/global.js";
 router.all("*", function (req, res, next) {
-  next();
+  // 任何请求都返回404
+  res.status(404).send({ code: 404, status: "failed", msg: "Not Found" });
+  //next();
 });
 //router.get('/', function (req, res) {})
 
 //获取源代码数据
 router.get("/:id/*", function (req, res) {
-  var SQL = `SELECT source FROM ow_projects WHERE id=${req.params.id} LIMIT 1`;
-  query(SQL, function (err, PROJECT) {
-    if (err) {
-      res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
-      res.status(404).json({
-    status: "error",
-    code: "404",
-    message: "找不到页面",
-  });
-      return;
-    }
-    if (PROJECT.length == 0) {
-      res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
-      res.status(404).json({
-    status: "error",
-    code: "404",
-    message: "找不到页面",
-  });
-      return;
-    }
-    function getValue(arr, obj) {
-      let result = obj;
-      for (let i = 0; i < arr.length; i++) {
-        // 检查当前键是否存在于对象中
-        if (result[arr[i]] !== undefined) {
-          result = result[arr[i]];
-        } else {
-          // 如果不存在对应的键，返回 false
-          return false;
-        }
-      }
-      return result;
-    }
-
-    var filestr = "";
-    var filename = req.path.split("/");
-    filename.splice(0, 2);
-    //logger.debug(filename)
-    //logger.debug(req.params.filename)
-    //logger.debug(JSON.parse(PROJECT[0].source));
-
-    if (getValue(filename, JSON.parse(PROJECT[0].source)) != false) {
-      filestr = decode(getValue(filename, JSON.parse(PROJECT[0].source)));
-      debug(filestr);
-
-      res.type("html").send(decode(filestr));
-    } else {
-      res.status(404).send({ code: 404, status: "failed", msg: "文件不存在" });
-    }
-
-    //浏览数+1
-    var SQL = `UPDATE ow_projects SET view_count=view_count+1 WHERE id=${req.params.id} LIMIT 1`;
-    query(SQL, function (err, U) {
-      if (err || U.affectedRows == 0) {
+  prisma.ow_projects
+    .findFirst({
+      where: { id: Number(req.params.id) },
+      select: { source: true },
+    })
+    .then((PROJECT) => {
+      if (!PROJECT) {
         res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
         res.status(404).json({
-    status: "error",
-    code: "404",
-    message: "找不到页面",
-  });
+          status: "error",
+          code: "404",
+          message: "找不到页面",
+        });
         return;
       }
+
+      function getValue(arr, obj) {
+        let result = obj;
+        for (let i = 0; i < arr.length; i++) {
+          // 检查当前键是否存在于对象中
+          if (result[arr[i]] !== undefined) {
+            result = result[arr[i]];
+          } else {
+            // 如果不存在对应的键，返回 false
+            return false;
+          }
+        }
+        return result;
+      }
+
+      var filestr = "";
+      var filename = req.path.split("/");
+      filename.splice(0, 2);
+      //logger.debug(filename)
+      //logger.debug(req.params.filename)
+      //logger.debug(JSON.parse(PROJECT.source));
+
+      if (getValue(filename, JSON.parse(PROJECT.source)) != false) {
+        filestr = decode(getValue(filename, JSON.parse(PROJECT.source)));
+        debug(filestr);
+
+        res.type("html").send(decode(filestr));
+      } else {
+        res.status(404).send({ code: 404, status: "failed", msg: "文件不存在" });
+      }
+
+      //浏览数+1
+      prisma.ow_projects
+        .update({
+          where: { id: Number(req.params.id) },
+          data: { view_count: { increment: 1 } },
+        })
+        .catch((err) => {
+          res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
+          res.status(404).json({
+            status: "error",
+            code: "404",
+            message: "找不到页面",
+          });
+        });
+    })
+    .catch((err) => {
+      res.status(500).send({ status: "error", code: "500", message: "服务器内部错误" });
     });
-  });
 });
 
 function encodeHtmlInJson(jsonObj) {
@@ -112,20 +112,27 @@ router.post("/update/:id", function (req, res) {
   debug(encodeHtmlInJson(req.body));
 
   // 旧作品
-  var UPDATE = `UPDATE ow_projects SET ? WHERE id=${req.params.id} AND authorid=${res.locals.userid} LIMIT 1`;
-  var SET = {
-    //        title:req.body.title,
-    source: JSON.stringify(encodeHtmlInJson(req.body)),
-    //        description:req.body.description
-  };
-  qww(UPDATE, SET, function (err, u) {
-    if (err) {
-      res.status(200).send({ status: "0", msg: "保存失败" });
-      return;
-    }
+  prisma.ow_projects
+    .update({
+      where: { id: Number(req.params.id), authorid: res.locals.userid },
+      data: {
+        //        title:req.body.title,
+        source: JSON.stringify(encodeHtmlInJson(req.body)),
+        //        description:req.body.description
+      },
+    })
+    .then((u) => {
+      if (u.count == 0) {
+        res.status(200).send({ status: "0", msg: "保存失败" });
+        return;
+      }
 
-    res.status(200).send({ status: "ok", msg: "保存成功" });
-  });
+      res.status(200).send({ status: "ok", msg: "保存成功" });
+    })
+    .catch((err) => {
+      res.status(500).send({ status: "error", code: "500", message: "服务器内部错误" });
+    });
 });
 
 export default router;
+

@@ -2,7 +2,6 @@ import logger from "../utils/logger.js";
 import configManager from "../utils/configManager.js";
 import { Router } from "express";
 const router = Router();
-import DB from "../utils/database.js";
 import { prisma } from "../utils/global.js";
 import default_project from "../config/default_project.js";
 import { extractProjectData, setProjectFile, getProjectFile, projectSelectionFields, authorSelectionFields, handleTagsChange } from "../controllers/projects.js";

@@ -4,19 +4,34 @@ import configManager from "../utils/configManager.js";
 import { Router } from "express";
 var router = Router();
 import jsonwebtoken from "jsonwebtoken";
-import { qww, query } from "../utils/database.js";
-import { userpwTest, emailTest, hash, checkhash, generateJwt, randomPassword, prisma } from "../utils/global.js";
+import {
+  userpwTest,
+  emailTest,
+  hash,
+  checkhash,
+  generateJwt,
+  randomPassword,
+  prisma,
+} from "../utils/global.js";
 import { sendEmail } from "../utils/email/emailService.js";
-import { registrationTemplate, passwordResetTemplate } from "../utils/email/emailTemplates.js";
-import  {needlogin} from "../middleware/auth.js";
+import {
+  registrationTemplate,
+  passwordResetTemplate,
+} from "../utils/email/emailTemplates.js";
+import { needlogin } from "../middleware/auth.js";
 
 import totpUtils from "../utils/totp.js";
 // { isTotpTokenValid, createTotpTokenForUser, enableTotpToken, removeTotpToken, validateTotpToken }
-const { isTotpTokenValid, createTotpTokenForUser, enableTotpToken, removeTotpToken, validateTotpToken } = totpUtils;
+const {
+  isTotpTokenValid,
+  createTotpTokenForUser,
+  enableTotpToken,
+  removeTotpToken,
+  validateTotpToken,
+} = totpUtils;
 router.all("*", function (req, res, next) {
   next();
 });
-
 
 import geetestMiddleware from "../middleware/geetest.js";
 router.post("/login", async function (req, res, next) {
@@ -31,70 +46,66 @@ router.post("/login", async function (req, res, next) {
       return;
     }
 
-    const SQL = `SELECT * FROM ow_users WHERE email=? LIMIT 1`;
-    const WHERE = [`${req.body["un"]}`];
-    qww(SQL, WHERE, async function (err, USER) {
-      if (err || USER.length == 0) {
-        res.status(200).send({ message: "账户或密码错误" });
-        return;
-      }
+    const user = await prisma.ow_users.findFirst({
+      where: { email: req.body.un },
+    });
 
-      var User = USER[0];
-      var pw = hash(req.body.pw);
-      if (checkhash(req.body.pw, User["password"]) == false) {
-        res.status(200).send({ message: "账户或密码错误" });
-      } else if (User["state"] == 2) {
-        res.status(200).send({ message: "您已经被封号，请联系管理员" });
+    if (!user) {
+      res.status(200).send({ message: "账户或密码错误" });
+      return;
+    }
+
+    if (!checkhash(req.body.pw, user.password)) {
+      res.status(200).send({ message: "账户或密码错误" });
+      return;
+    }
+
+    if (user.state == 2) {
+      res.status(200).send({ message: "您已经被封号，请联系管理员" });
+      return;
+    }
+
+    res.locals.userid = user.id;
+    res.locals.username = user.username;
+    res.locals.email = user.email;
+    res.locals.display_name = user.display_name;
+
+    res.locals.is_admin = 0;
+    if (
+      res.locals.email.indexOf(
+        await configManager.getConfig("security.adminuser")
+      ) == 0
+    ) {
+      if (
+        res.locals.email ===
+        (await configManager.getConfig("security.adminuser"))
+      ) {
+        res.locals.is_admin = 1;
       } else {
-        res.locals["userid"] = User["id"];
-        res.locals["username"] = User["username"];
-        res.locals["email"] = User["email"];
-        res.locals["display_name"] = User["display_name"];
-
-        res.locals["is_admin"] = 0;
-        if (
-          res.locals["email"].indexOf(
-            await configManager.getConfig("security.adminuser")
-          ) == 0
-        ) {
-          if (
-            res.locals["email"] ==
-            (await configManager.getConfig("security.adminuser"))
-          ) {
-            res.locals["is_admin"] = 1;
-          } else {
-            let no = parseInt(res.locals["email"].substring(8));
-            if (0 <= no && no < 100) {
-              res.locals["is_admin"] = 1;
-            }
-          }
+        let no = parseInt(res.locals.email.substring(8));
+        if (0 <= no && no < 100) {
+          res.locals.is_admin = 1;
         }
-
-        // res.cookie("userid", User["id"], { maxAge: 604800000, signed: true });
-        // res.cookie("email", User["email"], { maxAge: 604800000, signed: true, });
-        // res.cookie("username", User["username"], { maxAge: 604800000, signed: true, });
-        // res.cookie("display_name", User["display_name"], { maxAge: 604800000, signed: true, });
-
-        var token = await generateJwt({
-          userid: User["id"],
-          username: User["username"],
-          email: User["email"],
-          display_name: User["display_name"],
-          avatar: User["images"],
-        });
-        //logger.debug(token);
-        // res.cookie("token", token, { maxAge: 604800000 });
-        res.status(200).send({
-          status: "OK",
-          message: "OK",
-          userid: parseInt(User["id"]),
-          email: User["email"],
-          username: User["username"],
-          display_name: User["display_name"],
-          avatar: User["images"],
-          token: token,
-        });
       }
+    }
+
+    const token = await generateJwt({
+      userid: user.id,
+      username: user.username,
+      email: user.email,
+      display_name: user.display_name,
+      avatar: user.images,
+    });
+
+    res.status(200).send({
+      status: "OK",
+      message: "OK",
+      userid: parseInt(user.id),
+      email: user.email,
+      username: user.username,
+      display_name: user.display_name,
+      avatar: user.images,
+      token: token,
     });
   } catch (err) {
     next(err);
@@ -119,37 +130,33 @@ router.get("/logout", function (req, res) {
 router.post("/register", geetestMiddleware, async function (req, res, next) {
   try {
     const email = req.body.un;
-    var SQL = `SELECT id FROM ow_users WHERE email='${email}' LIMIT 1`;
-    query(SQL, function (err, User) {
-      if (err) {
-        res.status(200).send({ message: "账户格式错误" });
-        return;
-      }
-      if (User.length > 0) {
-        res.status(200).send({ message: "账户已存在" });
-        return;
-      }
-
-      var randonpw = randomPassword(12);
-      var pw = hash(randonpw);
-      const display_name = req.body.pw;
-      const INSERT = `INSERT INTO ow_users (username,email,password,display_name) VALUES ('${Date.now()}','${email}','${pw}','${display_name}')`;
-      query(INSERT, async function (err, newUser) {
-        if (err) {
-          logger.error(err);
-          res.status(200).send({ message: "再试一次17" });
-          return;
-        }
-
-        await sendEmail(
-            email,
-            `注册消息`,
-           await registrationTemplate(email, randonpw)
-        );
-
-        res.status(200).send({ message: "注册成功,请查看邮箱获取账户数据" });
-      });
+    const existingUser = await prisma.ow_users.findFirst({
+      where: { email: email },
     });
+    if (existingUser) {
+      res.status(200).send({ message: "账户已存在" });
+      return;
+    }
+
+    const randonpw = randomPassword(12);
+    const pw = hash(randonpw);
+    const display_name = req.body.pw;
+    const newUser = await prisma.ow_users.create({
+      data: {
+        username: Date.now().toString(),
+        email: email,
+        password: pw,
+        display_name: display_name,
+      },
+    });
+
+    await sendEmail(
+      email,
+      `注册消息`,
+      await registrationTemplate(email, randonpw)
+    );
+
+    res.status(200).send({ message: "注册成功,请查看邮箱获取账户数据" });
   } catch (err) {
     next(err);
   }
@@ -162,28 +169,29 @@ router.post("/repw", geetestMiddleware, async function (req, res, next) {
       return;
     }
     var email = req.body.un;
-    SQL = `SELECT * FROM ow_users WHERE email=? LIMIT 1`;
-    var w = [email];
-    qww(SQL, w, async function (err, User) {
-      if (err) {
-        res.status(200).send({ message: "账户格式错误或不存在" });
-        return;
-      }
-      const user = User[0];
-      const jwttoken = jsonwebtoken.sign(
-          {userid: user["id"], email: user["email"]},
-          await configManager.getConfig("security.jwttoken"),
-          {expiresIn: 60 * 10}
-      );
-
-      await sendEmail(
-          email,
-          `${await configManager.getConfig("site.name")}密码重置消息`,
-          passwordResetTemplate(email, jwttoken)
-      );
-
-      res.status(200).send({ message: "请查看邮箱" });
+    let user = await prisma.ow_users.findFirst({
+      where: {
+        email,
+      },
     });
+    if (!user) {
+      res.status(200).send({ message: "账户格式错误或不存在" });
+      return;
+    }
+
+    const jwttoken = jsonwebtoken.sign(
+      { userid: user.id, email: user.email },
+      await configManager.getConfig("security.jwttoken"),
+      { expiresIn: 60 * 10 }
+    );
+
+    await sendEmail(
+      email,
+      `密码重置消息`,
+      await passwordResetTemplate(email, jwttoken)
+    );
+
+    res.status(200).send({ message: "请查看邮箱" });
   } catch (err) {
     next(err);
   }
@@ -193,31 +201,31 @@ router.post("/torepw", geetestMiddleware, async function (req, res, next) {
   let SET;
   let UPDATE;
   try {
-    let userid, email
+    let userid, email;
     jsonwebtoken.verify(
-        req.body.jwttoken,
-        await configManager.getConfig("security.jwttoken"),
-        function (err, decoded) {
-          if (err) {
-            res.status(200).send({message: "token错误或过期"});
-            return;
-          }
-          userid = decoded.userid;
-          email = decoded.email;
+      req.body.jwttoken,
+      await configManager.getConfig("security.jwttoken"),
+      function (err, decoded) {
+        if (err) {
+          res.status(200).send({ message: "token错误或过期" });
+          return;
         }
+        userid = decoded.userid;
+        email = decoded.email;
+      }
     );
     const newPW = hash(req.body.pw);
-    SET = {password: newPW};
+    SET = { password: newPW };
     UPDATE = `UPDATE ow_users
               SET ?
               WHERE id = ${userid} LIMIT 1`;
-    qww(UPDATE, SET, function (err) {
-      if (err) {
-        res.status(200).send({message: "请再试一次"});
-        return;
-      }
-      res.status(200).send({message: "您的密码已更新"});
+    await prisma.ow_users.update({
+      data: SET,
+      where: {
+        id: userid,
+      },
     });
+    res.status(200).send({ message: "您的密码已更新" });
   } catch (err) {
     next(err);
   }
@@ -226,7 +234,7 @@ router.post("/torepw", geetestMiddleware, async function (req, res, next) {
 router.get("/totp/list", needlogin, async (req, res) => {
   try {
     let totpData = await prisma.ow_users_totp.findMany({
-      where: {user_id: Number(res.locals.userid)},
+      where: { user_id: Number(res.locals.userid) },
       select: {
         id: true,
         user_id: true,
@@ -269,8 +277,8 @@ router.post("/totp/rename", needlogin, async (req, res) => {
   try {
     let renamedTotp;
     renamedTotp = await prisma.ow_users_totp.update({
-      where: {id: Number(totp_id)},
-      data: {name: name},
+      where: { id: Number(totp_id) },
+      data: { name: name },
       select: {
         id: true,
         user_id: true,
@@ -441,7 +449,7 @@ router.post("/magiclink/generate", geetestMiddleware, async (req, res) => {
     res
       .status(200)
       .json({ status: "success", message: "魔术链接已发送到您的邮箱" });
-      logger.debug(magicLink);
+    logger.debug(magicLink);
   } catch (error) {
     logger.error("生成魔术链接时出错:", error);
     res.status(200).json({ status: "error", message: "生成魔术链接失败" });

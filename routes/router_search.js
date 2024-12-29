@@ -4,7 +4,6 @@ import configManager from "../utils/configManager.js";
 import { Router } from "express";
 const router = Router();
 import { prisma } from "../utils/global.js"; // 功能函数集
-import { qww } from "../utils/database.js"; // 数据库
 import { getUsersByList } from "../controllers/projects.js";
 
 // 搜索：Scratch项目列表：数据（只搜索标题）
@@ -92,25 +91,4 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-// 搜索：Scratch项目列表：数据（只搜索标题）
-router.post("/user", async (req, res, next) => {
-  try {
-    const searchTxt = req.body.txt;
-    if (!searchTxt) {
-      return res.status(200).send([]);
-    }
-
-    const SQL = `SELECT id, display_name, motto, images FROM ow_users WHERE display_name LIKE ?`;
-    const WHERE = [`%${searchTxt}%`];
-
-    qww(SQL, WHERE, (err, data) => {
-      if (err) {
-        return res.status(500).send([]); // 如果有数据库错误，返回500状态码
-      }
-      res.status(200).send(data);
-    });
-  } catch (error) {
-    next(error);
-  }
-});
 export default router;

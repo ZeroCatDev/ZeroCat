@@ -1,4 +1,10 @@
+// 不再使用原始的mysql库，而是使用prisma
+
+/*
+
+
 import logger from "./logger.js";
+
 // 连接MySQL
 import mysql, { createPool } from "mysql";
 var pool = createPool(process.env.DATABASE_URL);
@@ -33,3 +39,6 @@ export function query(SQL, callback) {
 }
 
 export default mysql;
+
+
+*/

@@ -5,7 +5,6 @@ import jsonwebtoken from "jsonwebtoken";
 import { Router } from "express";
 var router = Router();
 import { writeFile, exists } from "fs";
-import { query } from "../utils/database.js"; // 数据库
 
 //功能函数集
 import { prisma, S3update } from "../utils/global.js";
@@ -17,42 +16,62 @@ router.all("*", function (req, res, next) {
 
 
 
-router.get("/projectinfo", function (req, res, next) {
+router.get("/projectinfo", async function (req, res, next) {
   try {
-    SQL =
-      `SELECT ow_projects.id,ow_projects.authorid,ow_projects.time,ow_projects.view_count,ow_projects.like_count,ow_projects.type,` +
-      ` ow_projects.favo_count,ow_projects.title,ow_projects.state,ow_projects.description,ow_projects.licence,ow_projects.tags,` +
-      ` '' AS likeid, '' AS favoid,` +
-      ` ow_users.display_name AS author_display_name,` +
-      ` ow_users.images AS author_images,` +
-      ` ow_users.motto AS author_motto` +
-      ` FROM ow_projects ` +
-      ` LEFT JOIN ow_users ON (ow_users.id=ow_projects.authorid) ` +
-      ` WHERE ow_projects.id=${req.query.id} AND (ow_projects.state='public' ${
-        res.locals.userid ? `or ow_projects.authorid=${res.locals.userid}` : ""
-      }) AND ow_projects.type='scratch' LIMIT 1`;
-    query(SQL, function (err, SCRATCH) {
-      if (err || SCRATCH.length == 0) {
-        res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
-        res.send({
-          code: 404,
-          status: "404",
-          msg: "项目不存在或未发布",
-          error: err,
-        });
-        return;
-      }
+    const project = await prisma.ow_projects.findFirst({
+      where: {
+        id: Number(req.query.id),
+        state: "public",
+        type: "scratch",
+      },
+      select: {
+        id: true,
+        authorid: true,
+        time: true,
+        view_count: true,
+        like_count: true,
+        favo_count: true,
+        title: true,
+        state: true,
+        description: true,
+        licence: true,
+        tags: true,
+      },
+    });
 
-      res.locals["is_author"] =
-        SCRATCH[0].authorid == res.locals.userid ? true : false;
+    if (!project) {
+      res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
+      res.status(404).send({
+        code: 404,
+        status: "404",
+        msg: "项目不存在或未发布",
+      });
+      return;
+    }
 
-      ////logger.logger.debug(SCRATCH[0]);
-      res.json(SCRATCH[0]);
+    const author = await prisma.ow_users.findFirst({
+      where: { id: project.authorid },
+      select: {
+        display_name: true,
+        images: true,
+        motto: true,
+      },
+    });
+
+    res.locals["is_author"] =
+      project.authorid == res.locals.userid ? true : false;
+
+    res.json({
+      ...project,
+      author_display_name: author.display_name,
+      author_images: author.images,
+      author_motto: author.motto,
     });
   } catch (err) {
     next(err);
   }
 });
+
 
 router.get("/projectinfo2", async function (req, res, next) {
   try {
