@@ -220,20 +220,6 @@ router.get("/project/:id", async (req, res, next) => {
 
 
 
-//Scratch内部调用二：获取作品素材：背景、角色、音频。取素材时需要完整的文件路径
-router.get("/assets/:filename", function (req, res, next) {
-  try {
-    res.status(500).send({
-      status: "error",
-      message: "此接口已废弃",
-    });
-    return;
-    var p = `${process.cwd()}/data/material/asset/${req.params.filename}`;
-    res.sendFile(p); //必须是绝对路径
-  } catch (err) {
-    next(err);
-  }
-});
 
 
 
@@ -272,17 +258,6 @@ router.post("/thumbnail/:projectid", function (req, res, next) {
   }
 });
 
-//保存新作品：保存源代码及作品名称。req.body为项目JSON源代码,?title=作品名称
-router.post("/projects", function (req, res, next) {
-  try {
-    res.status(500).send({
-      status: "error",
-      message: "此接口已废弃",
-    });
-  } catch (err) {
-    next(err);
-  }
-});
 //新作品：保存作品素材
 router.post("/assets/:filename", function (req, res, next) {
   try {
