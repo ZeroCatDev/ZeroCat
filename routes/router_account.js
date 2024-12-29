@@ -18,7 +18,7 @@ router.all("*", function (req, res, next) {
 });
 
 
-import geetest from "../middleware/geetest.js";
+import geetestMiddleware from "../middleware/geetest.js";
 router.post("/login", async function (req, res, next) {
   try {
     if (
@@ -116,7 +116,7 @@ router.get("/logout", function (req, res) {
   res.redirect("/");
 });
 
-router.post("/register", geetest, async function (req, res, next) {
+router.post("/register", geetestMiddleware, async function (req, res, next) {
   try {
     const email = req.body.un;
     var SQL = `SELECT id FROM ow_users WHERE email='${email}' LIMIT 1`;
@@ -155,7 +155,7 @@ router.post("/register", geetest, async function (req, res, next) {
   }
 });
 
-router.post("/repw", geetest, async function (req, res, next) {
+router.post("/repw", geetestMiddleware, async function (req, res, next) {
   try {
     if (req.body.un == "" || req.body.un == null) {
       res.status(200).send({ message: "账户格式错误" });
@@ -189,7 +189,7 @@ router.post("/repw", geetest, async function (req, res, next) {
   }
 });
 
-router.post("/torepw", geetest, async function (req, res, next) {
+router.post("/torepw", geetestMiddleware, async function (req, res, next) {
   let SET;
   let UPDATE;
   try {
@@ -398,7 +398,7 @@ router.post("/totp/protected-route", validateTotpToken, (req, res) => {
   });
 });
 
-router.post("/magiclink/generate", geetest, async (req, res) => {
+router.post("/magiclink/generate", geetestMiddleware, async (req, res) => {
   try {
     const { email } = req.body;
     if (!email || !emailTest(email)) {

@@ -10,7 +10,7 @@ import { createHash } from "crypto";
 import { msg_fail, S3update, checkhash, hash as _hash,prisma } from "../utils/global.js";
 //数据库
 import { query, qww } from "../utils/database.js";
-import geetest from "../middleware/geetest.js";
+import geetestMiddleware from "../middleware/geetest.js";
 
 router.all("*", function (req, res, next) {
   //限定访问该模块的权限：必须已登录
@@ -249,7 +249,7 @@ router.post("/project/del", function (req, res) {
     res.status(200).send({ status: "success", msg: "删除成功" });
   });
 });
-router.post("/set/avatar", geetest,async (req, res) => {
+router.post("/set/avatar", geetestMiddleware,async (req, res) => {
   if (!req.files?.file) {
     return res.status(200).send({ status: "文件上传失败" });
   }
@@ -269,7 +269,7 @@ router.post("/set/avatar", geetest,async (req, res) => {
   });
 });
 //修改个人信息
-router.post("/set/userinfo", geetest, function (req, res) {
+router.post("/set/userinfo", geetestMiddleware, function (req, res) {
   var UPDATE = `UPDATE ow_users SET ? WHERE id=${res.locals.userid} LIMIT 1`;
   var SET = {
     display_name: req.body["display_name"],
@@ -290,7 +290,7 @@ router.post("/set/userinfo", geetest, function (req, res) {
   });
 });
 //修改个人信息
-router.post("/set/username", geetest, function (req, res) {
+router.post("/set/username", geetestMiddleware, function (req, res) {
   var UPDATE = `UPDATE ow_users SET ? WHERE id=${res.locals.userid} LIMIT 1`;
   var SET = {
     username: req.body.username,
@@ -308,7 +308,7 @@ router.post("/set/username", geetest, function (req, res) {
   });
 });
 //修改密码：动作
-router.post("/set/pw", geetest, function (req, res) {
+router.post("/set/pw", geetestMiddleware, function (req, res) {
   SQL = `SELECT password FROM ow_users WHERE id=? LIMIT 1`;
   id = res.locals.userid;
 

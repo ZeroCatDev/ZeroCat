@@ -35,6 +35,9 @@ importers:
       crypto-js:
         specifier: ^4.1.1
         version: 4.2.0
+      csrf-csrf:
+        specifier: ^3.1.0
+        version: 3.1.0
       dotenv:
         specifier: ^16.4.7
         version: 16.4.7
@@ -87,9 +90,6 @@ importers:
       prisma:
         specifier: ^6.1.0
         version: 6.1.0
-      win-node-env:
-        specifier: ^0.6.1
-        version: 0.6.1
 
 packages:
 
@@ -670,6 +670,9 @@ packages:
 
   crypto-js@4.2.0:
     resolution: {integrity: sha512-KALDyEYgpY+Rlob/iriUtjV6d5Eq+Y191A5g4UqLAi8CyGP9N1+FdVbkc1SxKc2r4YAYqG8JzO2KGL+AizD70Q==}
+
+  csrf-csrf@3.1.0:
+    resolution: {integrity: sha512-kZacFfFbdYFxNnFdigRHCzVAq019vJyUUtgPLjCtzh6jMXcWmf8bGUx/hsqtSEMXaNcPm8iXpjC+hW5aeOsRMg==}
 
   dashdash@1.14.1:
     resolution: {integrity: sha512-jRFi8UDGo6j+odZiEpjazZaWqEal3w/basFjQHQEwVtZJGDpxbH1MeYluwCS8Xq5wmLJooDlMgvVarmWfGM44g==}
@@ -1305,11 +1308,6 @@ packages:
   verror@1.10.0:
     resolution: {integrity: sha512-ZZKSmDAEFOijERBLkmYfJ+vmk3w+7hOLYDNkRCuRuMJGEmqYNCNLyBBFwWKVMhfwaEF3WOd0Zlw86U/WC/+nYw==}
     engines: {'0': node >=0.6.0}
-
-  win-node-env@0.6.1:
-    resolution: {integrity: sha512-oR+MLQ6jdvwqkLEkKBYxRvBOYbTlQV9dJKn8vLzjA4HCzcqdlCE6H1oOvA7lAdCgNXiOX0xfjl/Y47ZcZN6FDA==}
-    os: [win32]
-    hasBin: true
 
   winston-daily-rotate-file@5.0.0:
     resolution: {integrity: sha512-JDjiXXkM5qvwY06733vf09I2wnMXpZEhxEVOSPenZMii+g7pcDcTBt2MRugnoi8BwVSuCT2jfRXBUy+n1Zz/Yw==}
@@ -2406,6 +2404,10 @@ snapshots:
 
   crypto-js@4.2.0: {}
 
+  csrf-csrf@3.1.0:
+    dependencies:
+      http-errors: 2.0.0
+
   dashdash@1.14.1:
     dependencies:
       assert-plus: 1.0.0
@@ -3065,8 +3067,6 @@ snapshots:
       assert-plus: 1.0.0
       core-util-is: 1.0.2
       extsprintf: 1.3.0
-
-  win-node-env@0.6.1: {}
 
   winston-daily-rotate-file@5.0.0(winston@3.17.0):
     dependencies:

@@ -1,39 +1,39 @@
-import { error as _error, debug } from "../logger.js";
+import { error as loggerError, debug } from "../logger.js";
 import { getConfig } from "../configManager.js";
+import axios from "axios";
+import { URL } from "url";
 
-import express from "express";
-
-const app = express();
-import { post } from "request";
-
-app.use(async (req, res, next) => {
-  const recaptcha =
-    req.body.recaptcha || req.body.re || req.query.recaptcha || req.query.re;
+const captchaMiddleware = async (req, res, next) => {
+  const recaptcha = req.body.recaptcha || req.query.recaptcha;
 
   if (!recaptcha) {
-    return res.status(200).send({ message: "请完成验证码" });
+    return res.status(400).send({ message: "请完成验证码" });
   }
 
-  post(
-    {
-      url: await getConfig('captcha.reverify'),
-      form: { secret: await getConfig('captcha.resecret'), response: recaptcha },
-    },
-    function (error, httpResponse, body) {
-      if (error) {
-        _error("Error verifying recaptcha:", error);
-        res.status(200).send({ message: "验证码验证失败", error: error });
-      }
+  try {
+    const { url, secret } = await getConfig("captcha");
 
-      const response = JSON.parse(body);
-      debug(response);
-      if (response.success) {
-        next();
-      } else {
-        res.status(200).send({ message: "验证码无效", response: response });
+    const response = await axios.post(
+      new URL("/siteverify", url),
+      null,
+      {
+        params: {
+          secret,
+          response: recaptcha,
+        },
       }
+    );
+
+    if (response.data.success) {
+      next();
+    } else {
+      res.status(400).send({ message: "验证码无效", response: response.data });
     }
-  );
-});
+  } catch (error) {
+    loggerError("Error verifying recaptcha:", error);
+    res.status(500).send({ message: "验证码验证失败", error: error.message });
+  }
+};
 
-export default app;
+export default captchaMiddleware;
+
