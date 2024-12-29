@@ -5,12 +5,12 @@ import { Router } from "express";
 var router = Router();
 import fs from "fs";
 import cryptojs from "crypto-js";
-import { prisma as _prisma } from "../utils/global.js";
+import { prisma } from "../utils/global.js";
 import { needadmin } from "../middleware/auth.js";
 
 router.get("/usertx", async function (req, res, next) {
   try {
-    const USER = await _prisma.ow_users.findFirst({
+    const USER = await prisma.ow_users.findFirst({
       where: {
         id: parseInt(req.query.id),
       },
@@ -40,7 +40,7 @@ router.get("/usertx", async function (req, res, next) {
 
 router.get("/getuserinfo", async function (req, res, next) {
   try {
-    var user = await _prisma.ow_users.findMany({
+    var user = await prisma.ow_users.findMany({
       where: {
         id: parseInt(req.query.id),
       },
@@ -55,13 +55,13 @@ router.get("/getuserinfo", async function (req, res, next) {
       },
     });
 
-    var scratchcount = await _prisma.ow_projects.count({
+    var scratchcount = await prisma.ow_projects.count({
       where: {
         type: "scratch",
         state: "public",
       },
     });
-    var pythoncount = await _prisma.ow_projects.count({
+    var pythoncount = await prisma.ow_projects.count({
       where: {
         type: "python",
         state: "public",
@@ -87,9 +87,9 @@ router.get("/getuserinfo", async function (req, res, next) {
 
 router.get("/info", async (req, res, next) => {
   try {
-    const userCount = await _prisma.ow_users.count();
-    const scratchCount = await _prisma.ow_projects.count();
-    const pythonCount = await _prisma.ow_projects.count();
+    const userCount = await prisma.ow_users.count();
+    const scratchCount = await prisma.ow_projects.count();
+    const pythonCount = await prisma.ow_projects.count();
 
     res.send({
       user: userCount,
@@ -104,7 +104,7 @@ router.get("/info", async (req, res, next) => {
 
 router.get("/projectinfo", async function (req, res, next) {
   try {
-    const project = await _prisma.ow_projects.findFirst({
+    const project = await prisma.ow_projects.findFirst({
       where: {
         id: Number(req.query.id),
         OR: [{ state: "public" }, { authorid: res.locals.userid }],
@@ -138,7 +138,7 @@ router.get("/projectinfo", async function (req, res, next) {
       return;
     }
 
-    const author = await _prisma.ow_users.findFirst({
+    const author = await prisma.ow_users.findFirst({
       where: { id: project.authorid },
       select: {
         display_name: true,
@@ -159,7 +159,7 @@ router.get("/projectinfo", async function (req, res, next) {
 });
 
 router.get("/config", async function (req, res, next) {
-  const result = await _prisma.ow_config.findMany({
+  const result = await prisma.ow_config.findMany({
     where: { is_public: true },
     select: { key: true, value: true },
   });
@@ -181,7 +181,7 @@ router.get("/config/reload", needadmin, async function (req, res, next) {
   });
 });
 router.get("/config/:key", async function (req, res, next) {
-  const result = await _prisma.ow_config.findFirst({
+  const result = await prisma.ow_config.findFirst({
     where: { is_public: true, key: req.params.key },
     select: { key: true, value: true },
   });
