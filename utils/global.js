@@ -9,7 +9,6 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 const pwdHash = new PasswordHash();
 const prisma = new PrismaClient();
-export { prisma };
 const s3config = {
   endpoint: await configManager.getConfig("s3.endpoint"),
   region: await configManager.getConfig("s3.region"),
@@ -22,7 +21,7 @@ logger.debug(s3config);
 
 const s3 = new S3Client(s3config);
 
-export const S3update = async (name, file) => {
+async function S3update(name, file) {
   try {
     const fileContent = fs.readFileSync(file);
     const command = new PutObjectCommand({
@@ -39,41 +38,44 @@ export const S3update = async (name, file) => {
   } catch (err) {
     logger.error("S3 update Error:", err);
   }
-};
+}
 
-export const md5 = (data) =>
-  crypto.createHash("md5").update(data).digest("base64");
+function md5(data) {
+  return crypto.createHash("md5").update(data).digest("base64");
+}
 
-export const hash = (data) => pwdHash.hashPassword(data);
-export const checkhash = (pwd, storeHash) =>
-  pwdHash.checkPassword(pwd, storeHash);
+function hash(data) {
+  return pwdHash.hashPassword(data);
+}
 
-export const userpwTest = (pw) =>
-  /^(?:\d+|[a-zA-Z]+|[!@#$%^&*]+){6,16}$/.test(pw);
+function checkhash(pwd, storeHash) {
+  return pwdHash.checkPassword(pwd, storeHash);
+}
 
-export const emailTest = (email) =>
-  /^([a-zA-Z]|[0-9])(\w|\-)+@[a-zA-Z0-9]+\.[a-zA-Z]{2,4}$/.test(email);
+function userpwTest(pw) {
+  return /^(?:\d+|[a-zA-Z]+|[!@#$%^&*]+){6,16}$/.test(pw);
+}
 
-export const phoneTest = (phone) => /^1[3456789]\d{9}$/.test(phone);
+function emailTest(email) {
+  return /^([a-zA-Z]|[0-9])(\w|\-)+@[a-zA-Z0-9]+\.[a-zA-Z]{2,4}$/.test(email);
+}
 
-export const msg_fail = { status: "fail", msg: "请再试一次19" };
+function phoneTest(phone) {
+  return /^1[3456789]\d{9}$/.test(phone);
+}
 
-export const randomPassword = (len = 12) => {
+const msg_fail = { status: "fail", msg: "请再试一次19" };
+
+function randomPassword(len = 12) {
   const chars = "ABCDEFGHJKMNPQRSTWXYZabcdefhijkmnprstwxyz2345678";
   const maxPos = chars.length;
   const password = Array.from({ length: len - 4 }, () =>
     chars.charAt(Math.floor(Math.random() * maxPos))
   ).join("");
   return `${password}@Aa1`;
-};
+}
 
-export const jwtToken = (data) => {
-  const token = jwt.sign(data, "test");
-  logger.debug(token);
-  return token;
-};
-
-export const generateJwt = async (json) => {
+async function generateJwt(json) {
   try {
     const secret = await configManager.getConfig("security.jwttoken");
     logger.debug(secret);
@@ -85,9 +87,9 @@ export const generateJwt = async (json) => {
     logger.error("Error generating JWT:", error);
     throw error;
   }
-};
+}
 
-export const isJSON = (str) => {
+function isJSON(str) {
   if (typeof str !== "string") return false;
   try {
     const obj = JSON.parse(str);
@@ -96,4 +98,20 @@ export const isJSON = (str) => {
     logger.error("error:", str, e);
     return false;
   }
+}
+
+export {
+  prisma,
+  S3update,
+  md5,
+  hash,
+  checkhash,
+  userpwTest,
+  emailTest,
+  phoneTest,
+  msg_fail,
+  randomPassword,
+  generateJwt,
+  isJSON,
 };
+
