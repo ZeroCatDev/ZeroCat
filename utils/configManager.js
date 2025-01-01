@@ -1,15 +1,14 @@
 import logger  from "./logger.js";
+
 import { PrismaClient } from "@prisma/client";
+const prisma = new PrismaClient()
 
 class ConfigManager {
-  constructor() {
-    this.prisma = new PrismaClient();
-  }
 
   async loadConfigsFromDB() {
     try {
       // Fetch all configurations from the database
-      const configs = await this.prisma.ow_config.findMany();
+      const configs = await prisma.ow_config.findMany();
 
       // Internal configurations
       global.config = {};
@@ -37,7 +36,7 @@ class ConfigManager {
     if (global.config && global.config[key] != null) {
       return global.config[key];
     }
-    const config = await this.prisma.ow_config.findFirst({where: {key: key}});
+    const config = await prisma.ow_config.findFirst({where: {key: key}});
     if (config == null) {
       return null;
     }
@@ -57,7 +56,7 @@ class ConfigManager {
     if (global.publicconfig && global.publicconfig[key]) {
       return global.publicconfig[key];
     }
-    var config = await this.prisma.ow_config.findFirst({
+    var config = await prisma.ow_config.findFirst({
       where: { key: key, is_public: 1 },
     });
     if (config == null) {
@@ -87,3 +86,4 @@ class ConfigManager {
 // Create a singleton instance of the ConfigManager class
 const configManagerInstance = new ConfigManager();
 export default configManagerInstance;
+

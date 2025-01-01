@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from "../utils/global.js";
 import OTPAuth from 'otpauth';
 
-const prisma = new PrismaClient();
 
 async function validateUserTotp(userId, token) {
   // 获取该用户的所有 TOTP 配置信息

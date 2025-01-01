@@ -1,6 +1,6 @@
 import logger from "../utils/logger.js";
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import { prisma } from "../utils/global.js";
+
 
 /**
  * Get users by list of IDs

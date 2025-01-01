@@ -35,9 +35,6 @@ importers:
       crypto-js:
         specifier: ^4.1.1
         version: 4.2.0
-      csrf-csrf:
-        specifier: ^3.1.0
-        version: 3.1.0
       dotenv:
         specifier: ^16.4.7
         version: 16.4.7
@@ -670,9 +667,6 @@ packages:
 
   crypto-js@4.2.0:
     resolution: {integrity: sha512-KALDyEYgpY+Rlob/iriUtjV6d5Eq+Y191A5g4UqLAi8CyGP9N1+FdVbkc1SxKc2r4YAYqG8JzO2KGL+AizD70Q==}
-
-  csrf-csrf@3.1.0:
-    resolution: {integrity: sha512-kZacFfFbdYFxNnFdigRHCzVAq019vJyUUtgPLjCtzh6jMXcWmf8bGUx/hsqtSEMXaNcPm8iXpjC+hW5aeOsRMg==}
 
   dashdash@1.14.1:
     resolution: {integrity: sha512-jRFi8UDGo6j+odZiEpjazZaWqEal3w/basFjQHQEwVtZJGDpxbH1MeYluwCS8Xq5wmLJooDlMgvVarmWfGM44g==}
@@ -2403,10 +2397,6 @@ snapshots:
       vary: 1.1.2
 
   crypto-js@4.2.0: {}
-
-  csrf-csrf@3.1.0:
-    dependencies:
-      http-errors: 2.0.0
 
   dashdash@1.14.1:
     dependencies:

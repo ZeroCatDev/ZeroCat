@@ -4,11 +4,16 @@ import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { PasswordHash } from "phpass";
 import fs from "fs";
+
+//prisma client
 import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient()
+
+
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 const pwdHash = new PasswordHash();
-const prisma = new PrismaClient();
 const s3config = {
   endpoint: await configManager.getConfig("s3.endpoint"),
   region: await configManager.getConfig("s3.region"),
