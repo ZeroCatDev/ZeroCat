@@ -4,20 +4,37 @@ import { prisma } from "../utils/global.js";
 import { createHash } from "crypto";
 import { getUsersByList } from "./users.js";
 
-
-async function getProjectsByList(list, userid) {
+async function getProjectsByList(list, userid = null) {
   const select = projectSelectionFields();
   const projectIds = list.map(Number);
   const projects = await prisma.ow_projects.findMany({
     where: { id: { in: projectIds } },
     select,
   });
-  return projects.filter(
-    (project) => !(project.state === "private" && project.authorid !== userid)
-  );
+  if (userid) {
+    return projects.filter(
+      (project) => !(project.state === "private" && project.authorid !== userid)
+    );
+  }
+  return projects;
 }
 
-async function getProjectsAndUsersByProjectsList(list, userid) {
+async function getProjectById(projectId, userid = null) {
+  const select = projectSelectionFields();
+  const project = await prisma.ow_projects.findFirst({
+    where: { id: Number(projectId) },
+    select,
+  });
+  if (!project) {
+    return null;
+  }
+  if (userid && project.state === "private" && project.authorid !== userid) {
+    return null;
+  }
+  return project;
+}
+
+async function getProjectsAndUsersByProjectsList(list, userid = null) {
   const projects = await getProjectsByList(list, userid);
   const userslist = [...new Set(projects.map((project) => project.authorid))];
   const users = await getUsersByList(userslist);
@@ -38,7 +55,6 @@ function extractProjectData(body) {
     {}
   );
 }
-
 
 const extractProjectTags = (tags) =>
   // 如果某项为空，则删除
@@ -173,4 +189,5 @@ export {
   authorSelectionFields,
   extractProjectTags,
   handleTagsChange,
+  getProjectById,
 };

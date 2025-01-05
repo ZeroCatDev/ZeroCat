@@ -45,7 +45,7 @@ app.use(bodyParser.text({ limit: "50mb" }));
 app.use(bodyParser.raw({ limit: "50mb" }));
 
 //文件上传模块
-app.use(multipart({ uploadDir: "./data/upload_tmp" }));
+app.use(multipart({ uploadDir: "./usercontent" }));
 
 //压缩组件，需要位于 express.static 前面，否则不起作用
 app.use(compress());

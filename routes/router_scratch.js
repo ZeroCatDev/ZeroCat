@@ -4,12 +4,11 @@ import jsonwebtoken from "jsonwebtoken";
 
 import { Router } from "express";
 var router = Router();
-import { writeFile, exists } from "fs";
-
-//功能函数集
+import { writeFile, exists,createReadStream } from "fs";
+import { createHash } from "crypto";
 import { prisma, S3update } from "../utils/global.js";
 import { needlogin } from "../middleware/auth.js";
-import { getProjectFile } from "../controllers/projects.js";
+import { getProjectFile,getProjectById } from "../controllers/projects.js";
 router.all("*", function (req, res, next) {
   next();
 });
@@ -245,73 +244,52 @@ router.get("/project/:id", async (req, res, next) => {
 //保存作品：缩略图
 router.post("/thumbnail/:projectid", function (req, res, next) {
   try {
-    ////logger.logger.debug('开始保存缩略图：'+req.params.projectid);
-
-    // 请求的头部为 'Content-Type': 'image/png'时，用req.on接收文件
-    var _data = [];
-    req.on("data", function (data) {
-      if (data) {
-        _data["push"](data);
-      }
-    });
-    req.on("end", function () {
-      //var strFileName = './data/scratch_slt/' + req.params.projectid;
-      var strFileName = `${process.cwd()}/data/scratch_slt/${req.params.projectid}`;
-      let content = Buffer["concat"](_data);
-      writeFile(strFileName, content, function (err) {
-        if (err) {
-          res.status(404).send({ status: "err" });
-          //logger.logger.debug(err);
-          //logger.logger.debug("保存缩略图失败：" + strFileName);
-        } else {
-          S3update("scratch_slt/" + req.params.projectid, strFileName);
-
-          ////logger.logger.debug('保存缩略图成功：'+strFileName);
-          res.status(200).send({ status: "ok" });
-          //fs.unlink(`./data/scratch_slt/${req.params.projectid}`,function (err) { if (err) { res.status(200).send( {'status':'文件上传失败'}); return; }})
+    const _data = [];
+    req.on("data", (chunk) => _data.push(chunk));
+    req.on("end", async () => {
+      try {
+        const project = await getProjectById(Number(req.params.projectid));
+        if (!project) {
+          res.status(404).send({ status: "0", code: "404", msg: "作品不存在" });
+          return;
         }
-      });
+        if (project.authorid !== res.locals.userid) {
+          res.status(403).send({ status: "0",  code: "403", msg: "无权访问此项目" });
+          return;
+        }
+        const content = Buffer.concat(_data);
+        await S3update(`scratch_slt/${req.params.projectid}`, content);
+        res.status(200).send({ status: "ok" });
+      } catch (err) {
+        res.status(500).send({ status: "error", message: "上传失败" });
+        logger.error("Error uploading project thumbnail:", err);
+      }
     });
   } catch (err) {
     next(err);
   }
 });
-
 //新作品：保存作品素材
-router.post("/assets/:filename", function (req, res, next) {
+router.post("/assets/:filename", needlogin, function (req, res, next) {
   try {
-    var strFileName = "./data/material/asset/" + req.params.filename;
-    exists(
-      strFileName,
-      function (bExists) {
-        //if (bExists) {
-        //  logger.logger.debug("素材已存在：" + strFileName);
-        //  res.status(200).send({ status: "ok" });
-        //} else {
-        var _data = [];
-        req.on("data", function (data) {
-          if (data) {
-            _data["push"](data);
-          }
-        });
-        req.on("end", function () {
-          let content = Buffer["concat"](_data);
-          writeFile(strFileName, content, function (err) {
-            if (err) {
-              res.send(404);
-              //logger.logger.debug("素材保存失败：" + strFileName);
-            } else {
-              S3update("material/asset/" + req.params.filename, strFileName);
+    if (!req.files || !req.files.file) {
+      logger.debug("No file uploaded");
+      return res.status(400).send({ status: "error", message: "No file uploaded" });
+    }
 
-              logger.debug("素材保存成功：" + strFileName);
-              res.status(200).send({ status: "ok" });
-              //fs.unlink('./data/material/asset/' + req.params.filename,function (err) { if (err) { res.status(200).send( {'status':'文件上传失败'}); return; }})
-            }
-          });
-        });
-      }
-      //}
-    );
+    const file = req.files.file;
+    const hash = createHash("md5");
+    const chunks = createReadStream(file.path);
+    chunks.on("data", (chunk) => hash.update(chunk));
+    chunks.on("end", async () => {
+      const hashValue = hash.digest("hex");
+      const ext = req.params.filename.split('.').pop();
+      const newFilename = `${hashValue}.${ext}`;
+      logger.debug(`File hash computed: ${hashValue}`);
+      await S3update(`material/asset/${newFilename}`, file.path);
+      logger.debug(`Uploaded to S3 at path: material/asset/${newFilename}`);
+      res.status(200).send({ status: "ok" });
+    });
   } catch (err) {
     next(err);
   }
