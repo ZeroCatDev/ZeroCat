@@ -62,29 +62,14 @@ router.get("/", async (req, res, next) => {
     const projectresult = await prisma.ow_projects.findMany({
       where: searchinfo,
       orderBy: { [orderBy]: order },
-      select: {
-        id: true,
-        type: true,
-        title: true,
-        state: true,
-        authorid: true,
-        description: true,
-        view_count: true,
-        time: true,
-        tags: true,
-      },
+      select: { id: true },
       skip: (Number(curr) - 1) * Number(limit),
       take: Number(limit),
     });
 
-    // 获取作者信息
-    const authorIds = [...new Set(projectresult.map((item) => item.authorid))];
-    const userresult = await getUsersByList(authorIds);
-
     res.status(200).send({
-      projects: projectresult,
-      users: userresult,
-      totalCount: [{ totalCount }],
+      projects: projectresult.map((item) => item.id),
+      totalCount: totalCount,
     });
   } catch (error) {
     next(error);
