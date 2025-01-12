@@ -10,7 +10,7 @@
     "dev": "NODE_ENV=development nodemon node .bin/www"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.712.0",
+    "@aws-sdk/client-s3": "^3.714.0",
     "@prisma/client": "^6.1.0",
     "axios": "^1.7.9",
     "body-parser": "^1.20.1",
@@ -30,7 +30,7 @@
     "morgan": "^1.10.0",
     "mysql": "^2.18.1",
     "nodemailer": "^6.9.16",
-    "otpauth": "^9.3.5",
+    "otpauth": "^9.3.6",
     "phpass": "^0.1.1",
     "request": "^2.88.0",
     "winston": "^3.17.0",
