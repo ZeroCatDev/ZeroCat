@@ -135,4 +135,4 @@ dist
 .idea
 .vscode
 
-usercontent/
+usercontent/*
