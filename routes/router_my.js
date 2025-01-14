@@ -23,13 +23,17 @@ router.all("*", function (req, res, next) {
 
 router.post("/set/avatar", geetestMiddleware, async (req, res) => {
   if (!req.files || !req.files.file) {
-    return res.status(200).send({ status: "文件上传失败" });
+    return res.status(200).send({ status: " ", message: " " });
   }
 
   const file = req.files.file;
   const hash = createHash("md5");
   const chunks = createReadStream(file.path);
-  chunks.on("data", (chunk) => hash.update(chunk));
+  chunks.on("data", (chunk) => {
+    if (chunk != null) {
+      hash.update(chunk);
+    }
+  });
   chunks.on("end", async () => {
     const hashValue = hash.digest("hex");
     await S3update(`user/${hashValue}`, file);
@@ -37,7 +41,7 @@ router.post("/set/avatar", geetestMiddleware, async (req, res) => {
       where: { id: res.locals.userid },
       data: { images: hashValue },
     });
-    res.status(200).send({ status: "ok", message: "头像修改成功" });
+    res.status(200).send({ status: "ok", message: "修改成功" });
   });
 });
 //修改个人信息
