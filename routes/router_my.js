@@ -4,10 +4,10 @@ import configManager from "../utils/configManager.js";
 //个人中心
 import { Router } from "express";
 var router = Router();
-import {  createReadStream } from "fs";
+import { createReadStream } from "fs";
 import { createHash } from "crypto";
 //功能函数集
-import {  S3update, checkhash, hash,prisma } from "../utils/global.js";
+import { S3update, checkhash, hash, prisma } from "../utils/global.js";
 //数据库
 import geetestMiddleware from "../middleware/geetest.js";
 
@@ -44,8 +44,9 @@ router.post("/set/avatar", geetestMiddleware, async (req, res) => {
     res.status(200).send({ status: "ok", message: "修改成功" });
   });
 });
+
 //修改个人信息
-router.post("/set/userinfo", geetestMiddleware,async (req, res) => {
+router.post("/set/userinfo", geetestMiddleware, async (req, res) => {
   await prisma.ow_users.update({
     where: { id: res.locals.userid },
     data: {
@@ -57,11 +58,11 @@ router.post("/set/userinfo", geetestMiddleware,async (req, res) => {
   });
   res.locals["display_name"] = req.body["display_name"];
 
-  // res.cookie( "token", await I.generateJwt({ userid: res.locals["userid"], email: res.locals["email"], username: res.locals["username"], display_name: res.locals["display_name"], avatar: res.locals["avatar"], }), { maxAge: 604800000 } );
   res.status(200).send({ status: "个人信息修成成功" });
 });
-//修改个人信息
-router.post("/set/username", geetestMiddleware,async (req, res) => {
+
+//修改用户名
+router.post("/set/username", geetestMiddleware, async (req, res) => {
   await prisma.ow_users.update({
     where: { id: res.locals.userid },
     data: {
@@ -70,11 +71,11 @@ router.post("/set/username", geetestMiddleware,async (req, res) => {
   });
   res.locals["username"] = req.body["username"];
 
-  // res.cookie( "token", await I.generateJwt({ userid: res.locals["userid"], email: res.locals["email"], username: res.locals["username"], display_name: res.locals["display_name"], avatar: res.locals["avatar"], }), { maxAge: 604800000 } );
   res.status(200).send({ status: "用户名修成成功" });
 });
+
 //修改密码：动作
-router.post("/set/pw", geetestMiddleware,async (req, res) => {
+router.post("/set/pw", geetestMiddleware, async (req, res) => {
   const USER = await prisma.ow_users.findUnique({
     where: { id: res.locals.userid },
   });

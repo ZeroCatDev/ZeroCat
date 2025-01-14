@@ -1,14 +1,12 @@
 import logger from "../utils/logger.js";
 import configManager from "../utils/configManager.js";
 import axios from "axios";
-import { parse } from "url";
 import { createHmac } from "crypto";
 
 const GEE_CAPTCHA_ID = await configManager.getConfig("captcha.GEE_CAPTCHA_ID");
 const GEE_CAPTCHA_KEY = await configManager.getConfig("captcha.GEE_CAPTCHA_KEY");
-const GEE_API_SERVER = await configManager.getConfig("captcha.GEE_API_SERVER");
-const API_URL = `${GEE_API_SERVER}/validate?captcha_id=${GEE_CAPTCHA_ID}`;
-logger.debug(API_URL);
+const GEE_API_SERVER = "http://gcaptcha4.geetest.com/validate";
+logger.debug(GEE_API_SERVER);
 
 /**
  * 生成签名的函数，使用 HMAC-SHA256
@@ -27,14 +25,6 @@ function hmacSha256Encode(value, key) {
  * @param {Function} next - express的next函数
  */
 async function geetestMiddleware(req, res, next) {
-
-  // 如果是开发环境，直接放行
-  if (process.env.NODE_ENV === "development") {
-    logger.debug("In development environment, bypass geetest validation.");
-    next();
-    return;
-  }
-
   // 验证码信息
   let geetest = {};
 
@@ -49,36 +39,43 @@ async function geetestMiddleware(req, res, next) {
         geetest = req.body.captcha;
       }
     } else {
-      const queryCaptcha = parse(req.url.split("?")[1]).captcha;
-      geetest = queryCaptcha
-        ? JSON.parse(queryCaptcha)
-        : parse(req.url.split("?")[1]) || req.body;
+      geetest = req.query || req.body;
     }
   } catch (error) {
     logger.error("Captcha Parsing Error:", error);
-    res.status(400).send({ code: 400, msg: "Invalid captcha data" });
+    res.status(400).send({ code: 400, message: "Invalid captcha data" });
+    return;
+  }
+
+  if (!geetest.lot_number || !geetest.captcha_output || !geetest.captcha_id || !geetest.pass_token || !geetest.gen_time) {
+    logger.error("Captcha data missing");
+    res.status(400).send({ code: 400, message: "Captcha data missing" });
     return;
   }
 
   logger.debug(geetest);
 
   // 生成签名
-  const signToken = hmacSha256Encode(geetest.lot_number, GEE_CAPTCHA_KEY);
+  const sign_token = hmacSha256Encode(geetest.lot_number, GEE_CAPTCHA_KEY);
 
   // 准备请求参数
   const datas = {
     lot_number: geetest.lot_number,
     captcha_output: geetest.captcha_output,
+    captcha_id: geetest.captcha_id,
     pass_token: geetest.pass_token,
     gen_time: geetest.gen_time,
     sign_token,
   };
   logger.debug(datas);
+
   try {
     // 发送请求到极验服务
     logger.debug("Sending request to Geetest server...");
-    logger.debug(API_URL);
-    const result = await axios.post(API_URL, datas);
+    const result = await axios.post(GEE_API_SERVER, datas, {
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    });
+    logger.debug(result.data);
 
     if (result.data.result === "success") {
       next(); // 验证成功，继续处理请求
@@ -94,7 +91,7 @@ async function geetestMiddleware(req, res, next) {
     logger.error("Geetest server error:", error);
     next(); // 极验服务器出错时放行，避免阻塞业务逻辑
   }
-};
+}
 
 export default geetestMiddleware;
 

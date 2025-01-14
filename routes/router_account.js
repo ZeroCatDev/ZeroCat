@@ -34,7 +34,7 @@ router.all("*", function (req, res, next) {
 });
 
 import geetestMiddleware from "../middleware/geetest.js";
-router.post("/login", async function (req, res, next) {
+router.post("/login", geetestMiddleware,async function (req, res, next) {
   try {
     if (
       !req.body.pw ||
