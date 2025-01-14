@@ -134,3 +134,6 @@ dist
 
 .idea
 .vscode
+
+user-content/*
+!user-content/.gitkeep

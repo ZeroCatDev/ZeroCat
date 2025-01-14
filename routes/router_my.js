@@ -7,7 +7,7 @@ var router = Router();
 import {  createReadStream } from "fs";
 import { createHash } from "crypto";
 //功能函数集
-import {  S3update, checkhash, hash as _hash,prisma } from "../utils/global.js";
+import {  S3update, checkhash, hash,prisma } from "../utils/global.js";
 //数据库
 import geetestMiddleware from "../middleware/geetest.js";
 
@@ -21,9 +21,8 @@ router.all("*", function (req, res, next) {
   next();
 });
 
-
-router.post("/set/avatar", geetestMiddleware,async (req, res) => {
-  if (!req.files?.file) {
+router.post("/set/avatar", geetestMiddleware, async (req, res) => {
+  if (!req.files || !req.files.file) {
     return res.status(200).send({ status: "文件上传失败" });
   }
 
@@ -33,7 +32,7 @@ router.post("/set/avatar", geetestMiddleware,async (req, res) => {
   chunks.on("data", (chunk) => hash.update(chunk));
   chunks.on("end", async () => {
     const hashValue = hash.digest("hex");
-    await S3update(`user/${hashValue}`, file.path);
+    await S3update(`user/${hashValue}`, file);
     await prisma.ow_users.update({
       where: { id: res.locals.userid },
       data: { images: hashValue },
@@ -81,7 +80,7 @@ router.post("/set/pw", geetestMiddleware,async (req, res) => {
   if (checkhash(req.body["oldpw"], USER.password) == false) {
     return res.status(200).send({ status: "错误", message: "旧密码错误" });
   }
-  const newPW = _hash(req.body["newpw"]);
+  const newPW = hash(req.body["newpw"]);
   await prisma.ow_users.update({
     where: { id: res.locals.userid },
     data: { password: newPW },

@@ -6,7 +6,7 @@ import { Router } from "express";
 var router = Router();
 import { writeFile, exists,createReadStream } from "fs";
 import { createHash } from "crypto";
-import { prisma, S3update } from "../utils/global.js";
+import { prisma, S3updateFromPath } from "../utils/global.js";
 import { needlogin } from "../middleware/auth.js";
 import { getProjectFile,getProjectById } from "../controllers/projects.js";
 router.all("*", function (req, res, next) {
@@ -258,7 +258,7 @@ router.post("/thumbnail/:projectid", function (req, res, next) {
           return;
         }
         const content = Buffer.concat(_data);
-        await S3update(`scratch_slt/${req.params.projectid}`, content);
+        await S3updateFromPath(`scratch_slt/${req.params.projectid}`, content);
         res.status(200).send({ status: "ok" });
       } catch (err) {
         res.status(500).send({ status: "error", message: "上传失败" });
@@ -286,7 +286,7 @@ router.post("/assets/:filename", needlogin, function (req, res, next) {
       const ext = req.params.filename.split('.').pop();
       const newFilename = `${hashValue}.${ext}`;
       logger.debug(`File hash computed: ${hashValue}`);
-      await S3update(`material/asset/${newFilename}`, file.path);
+      await S3updateFromPath(`material/asset/${newFilename}`, file.path);
       logger.debug(`Uploaded to S3 at path: material/asset/${newFilename}`);
       res.status(200).send({ status: "ok" });
     });

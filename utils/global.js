@@ -26,9 +26,8 @@ logger.debug(s3config);
 
 const s3 = new S3Client(s3config);
 
-async function S3update(name, file) {
+async function S3update(name, fileContent) {
   try {
-    const fileContent = fs.readFileSync(file);
     const command = new PutObjectCommand({
       Bucket: await configManager.getConfig("s3.bucket"),
       Key: name,
@@ -40,6 +39,15 @@ async function S3update(name, file) {
     logger.debug(
       `成功上传了文件 ${await configManager.getConfig("s3.bucket")}/${name}`
     );
+  } catch (err) {
+    logger.error("S3 update Error:", err);
+  }
+}
+
+async function S3updateFromPath(name, path) {
+  try {
+    const fileContent = fs.readFileSync(path);
+    await S3update(name, fileContent);
   } catch (err) {
     logger.error("S3 update Error:", err);
   }
@@ -68,8 +76,6 @@ function emailTest(email) {
 function phoneTest(phone) {
   return /^1[3456789]\d{9}$/.test(phone);
 }
-
-const msg_fail = { status: "fail", msg: "请再试一次19" };
 
 function randomPassword(len = 12) {
   const chars = "ABCDEFGHJKMNPQRSTWXYZabcdefhijkmnprstwxyz2345678";
@@ -107,6 +113,7 @@ function isJSON(str) {
 
 export {
   prisma,
+  S3updateFromPath,
   S3update,
   md5,
   hash,
@@ -114,7 +121,6 @@ export {
   userpwTest,
   emailTest,
   phoneTest,
-  msg_fail,
   randomPassword,
   generateJwt,
   isJSON,
