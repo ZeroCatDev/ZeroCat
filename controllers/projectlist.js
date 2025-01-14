@@ -49,17 +49,14 @@ async function getProjectList(listid, userid) {
   if (!list) {
     return null;
   }
-  logger.info(list);
   if (list.state === "private" && list.authorid != userid) {
     return null;
   }
-  list.list = await prisma.ow_projects_stars.findMany({
+  var projects = await prisma.ow_projects_stars.findMany({
     where: { listid: Number(list.id), type: "list" },
+    select: { projectid: true },
   });
-  list.projects = await getProjectsAndUsersByProjectsList(
-    list.list.map((item) => item.projectid),
-    userid
-  );
+  list.projects = projects.map((item) => item.projectid);
   return list;
 }
 

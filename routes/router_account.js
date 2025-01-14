@@ -42,7 +42,7 @@ router.post("/login", async function (req, res, next) {
       !req.body.un ||
       !emailTest(req.body.un)
     ) {
-      res.status(200).send({ message: "账户或密码错误" });
+      res.status(200).send({ message: "账户或密码错误",status:"error" });
       return;
     }
 
@@ -51,17 +51,17 @@ router.post("/login", async function (req, res, next) {
     });
 
     if (!user) {
-      res.status(200).send({ message: "账户或密码错误" });
+      res.status(200).send({ message: "账户或密码错误",status:"error" });
       return;
     }
 
     if (!checkhash(req.body.pw, user.password)) {
-      res.status(200).send({ message: "账户或密码错误" });
+      res.status(200).send({ message: "账户或密码错误",status:"error" });
       return;
     }
 
     if (user.state == 2) {
-      res.status(200).send({ message: "您已经被封号，请联系管理员" });
+      res.status(200).send({ message: "您已经被封禁",status:"error" });
       return;
     }
 
@@ -98,8 +98,8 @@ router.post("/login", async function (req, res, next) {
     });
 
     res.status(200).send({
-      status: "OK",
-      message: "OK",
+      status: "success",
+      message: "登录成功",
       userid: parseInt(user.id),
       email: user.email,
       username: user.username,
@@ -134,7 +134,7 @@ router.post("/register", geetestMiddleware, async function (req, res, next) {
       where: { email: email },
     });
     if (existingUser) {
-      res.status(200).send({ message: "账户已存在" });
+      res.status(200).send({ message: "账户已存在",status:"error" });
       return;
     }
 
@@ -156,7 +156,7 @@ router.post("/register", geetestMiddleware, async function (req, res, next) {
       await registrationTemplate(email, randonpw)
     );
 
-    res.status(200).send({ message: "注册成功,请查看邮箱获取账户数据" });
+    res.status(200).send({ message: "注册成功,请查看邮箱获取账户数据",status:"success" });
   } catch (err) {
     next(err);
   }
@@ -165,7 +165,7 @@ router.post("/register", geetestMiddleware, async function (req, res, next) {
 router.post("/repw", geetestMiddleware, async function (req, res, next) {
   try {
     if (req.body.un == "" || req.body.un == null) {
-      res.status(200).send({ message: "账户格式错误" });
+      res.status(200).send({ message: "账户格式错误" ,status:"error"});
       return;
     }
     var email = req.body.un;
@@ -175,7 +175,7 @@ router.post("/repw", geetestMiddleware, async function (req, res, next) {
       },
     });
     if (!user) {
-      res.status(200).send({ message: "账户格式错误或不存在" });
+      res.status(200).send({ message: "账户格式错误或不存在" ,status:"error"});
       return;
     }
 
@@ -191,7 +191,7 @@ router.post("/repw", geetestMiddleware, async function (req, res, next) {
       await passwordResetTemplate(email, jwttoken)
     );
 
-    res.status(200).send({ message: "请查看邮箱" });
+    res.status(200).send({ message: "请查看邮箱",status:"success" });
   } catch (err) {
     next(err);
   }
@@ -207,7 +207,7 @@ router.post("/torepw", geetestMiddleware, async function (req, res, next) {
       await configManager.getConfig("security.jwttoken"),
       function (err, decoded) {
         if (err) {
-          res.status(200).send({ message: "token错误或过期" });
+          res.status(200).send({ message: "token错误或过期",status:"error" });
           return;
         }
         userid = decoded.userid;
@@ -225,7 +225,7 @@ router.post("/torepw", geetestMiddleware, async function (req, res, next) {
         id: userid,
       },
     });
-    res.status(200).send({ message: "您的密码已更新" });
+    res.status(200).send({ message: "您的密码已更新" ,status:"success"});
   } catch (err) {
     next(err);
   }

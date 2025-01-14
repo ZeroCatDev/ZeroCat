@@ -64,7 +64,7 @@ router.get("/checkstar", async (req, res, next) => {
 });
 router.get("/listid/:id", async (req, res, next) => {
   try {
-    logger.info(res.locals.userid);
+    logger.debug(res.locals.userid);
     const list = await getProjectList(req.params.id, res.locals.userid);
     if (!list) {
       res.status(200).send({ status: "0", msg: "列表不存在"});
