@@ -26,6 +26,9 @@ This repository contains the backend code for ZeroCat.
     - [Contributors](#contributors)
   - [License](#license)
 
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat-backend.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat-backend?ref=badge_large)
+
 ## Background
 
 `ZeroCat` was originally proposed by [@sunwuyuan](https://github.com/sunwuyuan) a long time ago. Our goal is to create a fully open-source programming community, and this project started from that vision. However, significant progress was made only when Sun Wuyuan was in the second year of middle school.
@@ -45,6 +48,7 @@ To see the community in action, please refer to [ZeroCat](https://zerocat.houlan
 
 ## Installation
 ![Developed with Node.js](public/Node.js.png)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat-backend.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat-backend?ref=badge_shield)
 
 This project uses [Node.js](http://nodejs.org), [npm](https://npmjs.com), and [Docker](https://docker.com). Please ensure that these are installed on your local machine.
 
