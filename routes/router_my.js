@@ -1,5 +1,6 @@
 import logger from "../utils/logger.js";
 import configManager from "../utils/configManager.js";
+import fs from "fs";
 
 //个人中心
 import { Router } from "express";
@@ -10,6 +11,9 @@ import { createHash } from "crypto";
 import { S3update, checkhash, hash, prisma } from "../utils/global.js";
 //数据库
 import geetestMiddleware from "../middleware/geetest.js";
+import multer from "multer";
+
+const upload = multer({ dest: "./usercontent" });
 
 router.all("*", function (req, res, next) {
   //限定访问该模块的权限：必须已登录
@@ -21,28 +25,48 @@ router.all("*", function (req, res, next) {
   next();
 });
 
-router.post("/set/avatar", geetestMiddleware, async (req, res) => {
-  if (!req.files || !req.files.file) {
-    return res.status(200).send({ status: " ", message: " " });
+router.post("/set/avatar", geetestMiddleware, upload.single('zcfile'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).send({ status: "error", message: "No file uploaded" });
   }
 
-  const file = req.files.file;
-  const hash = createHash("md5");
-  const chunks = createReadStream(file.path);
-  chunks.on("data", (chunk) => {
-    if (chunk != null) {
-      hash.update(chunk);
-    }
-  });
-  chunks.on("end", async () => {
-    const hashValue = hash.digest("hex");
-    await S3update(`user/${hashValue}`, file);
-    await prisma.ow_users.update({
-      where: { id: res.locals.userid },
-      data: { images: hashValue },
+  try {
+    const file = req.file;
+    const hash = createHash("md5");
+    const chunks = createReadStream(file.path);
+
+    chunks.on("data", (chunk) => {
+      if (chunk) hash.update(chunk);
     });
-    res.status(200).send({ status: "ok", message: "修改成功" });
-  });
+
+    chunks.on("end", async () => {
+      const hashValue = hash.digest("hex");
+      const fileBuffer = await fs.promises.readFile(file.path);
+      await S3update(`user/${hashValue}`, fileBuffer);
+      await prisma.ow_users.update({
+        where: { id: res.locals.userid },
+        data: { images: hashValue },
+      });
+      res.status(200).send({ status: "ok", message: "Avatar updated successfully" });
+    });
+
+    chunks.on("error", (err) => {
+      logger.error("Error processing file upload:", err);
+      res.status(500).send({ status: "error", message: "File processing error" });
+    });
+  } catch (err) {
+    logger.error("Unexpected error:", err);
+    res.status(500).send({ status: "error", message: "Internal server error" });
+  }
+});
+
+router.use((err, req, res, next) => {
+  if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+    logger.error("Unexpected end of form: ", err);
+    res.status(400).send({ status: "error", message: "表单意外结束" });
+  } else {
+    next(err);
+  }
 });
 
 //修改个人信息

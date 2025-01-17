@@ -10,7 +10,6 @@ import logger from "./utils/logger.js";
 import expressWinston from "express-winston";
 import cors from "cors";
 import bodyParser from "body-parser";
-import multipart from "connect-multiparty";
 import compress from "compression";
 
 const app = express();
@@ -45,7 +44,7 @@ app.use(bodyParser.text({ limit: "50mb" }));
 app.use(bodyParser.raw({ limit: "50mb" }));
 
 //文件上传模块
-app.use(multipart({ uploadDir: "./usercontent" }));
+// app.use(multipart({ uploadDir: "./usercontent" }));
 
 //压缩组件，需要位于 express.static 前面，否则不起作用
 app.use(compress());

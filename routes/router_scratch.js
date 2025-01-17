@@ -1,14 +1,18 @@
 import logger from "../utils/logger.js";
 import configManager from "../utils/configManager.js";
 import jsonwebtoken from "jsonwebtoken";
+import fs from "fs";
 
 import { Router } from "express";
 var router = Router();
 import { writeFile, exists,createReadStream } from "fs";
 import { createHash } from "crypto";
-import { prisma, S3updateFromPath } from "../utils/global.js";
+import { prisma, S3update } from "../utils/global.js";
 import { needlogin } from "../middleware/auth.js";
 import { getProjectFile,getProjectById } from "../controllers/projects.js";
+import multer from "multer";
+const upload = multer({ dest: "./usercontent" });
+
 router.all("*", function (req, res, next) {
   next();
 });
@@ -236,65 +240,78 @@ router.get("/project/:id", async (req, res, next) => {
   }
 });
 
-
-
-
-
-
 //保存作品：缩略图
-router.post("/thumbnail/:projectid", function (req, res, next) {
-  try {
-    const _data = [];
-    req.on("data", (chunk) => _data.push(chunk));
-    req.on("end", async () => {
-      try {
-        const project = await getProjectById(Number(req.params.projectid));
-        if (!project) {
-          res.status(404).send({ status: "0", code: "404", msg: "作品不存在" });
-          return;
-        }
-        if (project.authorid !== res.locals.userid) {
-          res.status(403).send({ status: "0",  code: "403", msg: "无权访问此项目" });
-          return;
-        }
-        const content = Buffer.concat(_data);
-        await S3updateFromPath(`scratch_slt/${req.params.projectid}`, content);
-        res.status(200).send({ status: "ok" });
-      } catch (err) {
-        res.status(500).send({ status: "error", message: "上传失败" });
-        logger.error("Error uploading project thumbnail:", err);
-      }
-    });
-  } catch (err) {
-    next(err);
+router.post("/thumbnail/:projectid", upload.single('file'), async (req, res, next) => {
+  if (!req.file) {
+    return res.status(400).send({ status: "error", message: "No file uploaded" });
   }
-});
-//新作品：保存作品素材
-router.post("/assets/:filename", needlogin, function (req, res, next) {
+
   try {
-    if (!req.files || !req.files.file) {
-      logger.debug("No file uploaded");
-      return res.status(400).send({ status: "error", message: "No file uploaded" });
+    const project = await getProjectById(Number(req.params.projectid));
+    if (!project) {
+      return res.status(404).send({ status: "0", code: "404", msg: "作品不存在" });
+    }
+    if (project.authorid !== res.locals.userid) {
+      return res.status(403).send({ status: "0", code: "403", msg: "无权访问此项目" });
     }
 
-    const file = req.files.file;
+    const file = req.file;
     const hash = createHash("md5");
     const chunks = createReadStream(file.path);
-    chunks.on("data", (chunk) => hash.update(chunk));
+
+    chunks.on("data", (chunk) => {
+      if (chunk) hash.update(chunk);
+    });
+
+    chunks.on("end", async () => {
+      const hashValue = hash.digest("hex");
+      const fileBuffer = await fs.promises.readFile(file.path);
+      await S3update(`scratch_slt/${req.params.projectid}`, fileBuffer);
+      res.status(200).send({ status: "ok" });
+    });
+
+    chunks.on("error", (err) => {
+      logger.error("Error processing file upload:", err);
+      res.status(500).send({ status: "error", message: "File processing error" });
+    });
+  } catch (err) {
+    logger.error("Unexpected error:", err);
+    res.status(500).send({ status: "error", message: "Internal server error" });
+  }
+});
+
+//新作品：保存作品素材
+router.post("/assets/:filename", needlogin, upload.single('file'), async (req, res, next) => {
+  if (!req.file) {
+    return res.status(400).send({ status: "error", message: "No file uploaded" });
+  }
+
+  try {
+    const file = req.file;
+    const hash = createHash("md5");
+    const chunks = createReadStream(file.path);
+
+    chunks.on("data", (chunk) => {
+      if (chunk) hash.update(chunk);
+    });
+
     chunks.on("end", async () => {
       const hashValue = hash.digest("hex");
       const ext = req.params.filename.split('.').pop();
       const newFilename = `${hashValue}.${ext}`;
-      logger.debug(`File hash computed: ${hashValue}`);
-      await S3updateFromPath(`material/asset/${newFilename}`, file.path);
-      logger.debug(`Uploaded to S3 at path: material/asset/${newFilename}`);
+      const fileBuffer = await fs.promises.readFile(file.path);
+      await S3update(`material/asset/${newFilename}`, fileBuffer);
       res.status(200).send({ status: "ok" });
     });
+
+    chunks.on("error", (err) => {
+      logger.error("Error processing file upload:", err);
+      res.status(500).send({ status: "error", message: "File processing error" });
+    });
   } catch (err) {
-    next(err);
+    logger.error("Unexpected error:", err);
+    res.status(500).send({ status: "error", message: "Internal server error" });
   }
 });
-
-
 
 export default router;

@@ -25,6 +25,9 @@ function hmacSha256Encode(value, key) {
  * @param {Function} next - express的next函数
  */
 async function geetestMiddleware(req, res, next) {
+  if (process.env.NODE_ENV === "development") {
+    return next(); // 开发环境下不验证验证码
+  }
   // 验证码信息
   let geetest = {};
 
