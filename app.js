@@ -159,6 +159,9 @@ app.get("/check", function (req, res, next) {
   });
 });
 
+app.get("/scratchtool", function (req, res, next) {
+  res.status(200).sendFile(process.cwd() + "/scratch-gui.js");
+});
 process.on("uncaughtException", function (err) {
   logger.error(err);
 });

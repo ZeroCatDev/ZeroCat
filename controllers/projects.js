@@ -101,7 +101,7 @@ function setProjectFile(source) {
   const sourcedata = isJson(source) ? JSON.stringify(source) : source;
   const sha256 = createHash("sha256").update(sourcedata).digest("hex");
   prisma.ow_projects_file
-    .create({ data: { sha256, source: sourcedata } })
+    .create({ data: { sha256, source: sourcedata }})
     .catch(logger.error);
   return sha256;
 }
