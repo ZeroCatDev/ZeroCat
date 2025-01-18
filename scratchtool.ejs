@@ -2,7 +2,7 @@
 var zcvm=vm
 var zcgui=gui
 
-const apiHost = localStorage.getItem("ZeroCat_Apihost") || "http://localhost:3000";
+const apiHost = localStorage.getItem("ZeroCat_Apihost") || "<%= global.config['urls.backend'] %>";
 
 window.apiHost = apiHost;
 window.apihost = apiHost;
