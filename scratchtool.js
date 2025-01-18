@@ -1,10 +1,11 @@
-const apiHost = localStorage.getItem("ZeroCat_Apihost") || "<%= process.env.APIHOST %>";
-const assetHost = "<%= process.env.ASSETSHOST %>";
+// Description: ZeroCat Scratch Tool
+var zcvm=vm
+var zcgui=gui
+
+const apiHost = localStorage.getItem("ZeroCat_Apihost") || "http://localhost:3000";
 
 window.apiHost = apiHost;
 window.apihost = apiHost;
-window.assetHost = assetHost;
-window.assethost = assetHost;
 
 let _pid = 0;
 let logText,
@@ -21,7 +22,11 @@ const buttons = [
     onclick: () => (zctab.open = true),
   },
   { id: "push-button", text: "推送", onclick: () => pushProject() },
-  { id: "save-button", text: "保存", onclick: () => saveproject({force:false}) },
+  {
+    id: "save-button",
+    text: "保存",
+    onclick: () => saveproject({ force: false }),
+  },
 ];
 
 function getQueryString(name) {
@@ -139,7 +144,7 @@ function loaduserinfo() {
 }
 
 function uploadAssets() {
-  $.each(vm.assets, function (index, asset) {
+  $.each(zcvm.assets, function (index, asset) {
     if (!asset.clean) {
       const formData = new FormData();
       formData.append(
@@ -187,7 +192,7 @@ function uploadProject() {
       data: JSON.stringify({
         title: "Scratch新作品",
         type: "scratch",
-        devsource: vm.toJSON(),
+        devsource: zcvm.toJSON(),
       }),
       contentType: "application/json",
       success: function (result) {
@@ -209,7 +214,7 @@ function uploadProject() {
         projectinfo.id
       }/source?token=${localStorage.getItem("token")}`,
       type: "put",
-      data: vm.toJSON(),
+      data: zcvm.toJSON(),
       contentType: "application/json",
       success: function (result) {
         console.log("作品保存成功");
@@ -311,11 +316,7 @@ window.onload = function () {
 
   // Ensure buttons are created before updating them
   loaduserinfo();
-  setButton(
-    "push-button",
-    _pid === 0 ? "新建并保存" : "推送",
-    _pid === 0 ? () => saveproject({force:false}) : () => pushProject()
-  );
+  setButton("push-button", "推送", () => pushProject());
   load();
 };
 
@@ -340,14 +341,17 @@ window.pushdialogopen = pushdialogopen;
 let isLoading = false;
 
 // 添加HTML创建提示框
-document.body.insertAdjacentHTML('beforeend', `
+document.body.insertAdjacentHTML(
+  "beforeend",
+  `
   <mdui-dialog
     headline="加载中"
     description="正在加载作品，请稍候..."
     close-on-overlay-click
     class="loading-dialog"
   ></mdui-dialog>
-`);
+`
+);
 
 const loadingDialog = document.querySelector(".loading-dialog");
 
@@ -384,7 +388,8 @@ function downloadAndLoadProject(pid) {
     data: { token: localStorage.getItem("token") },
     success: function (projectData) {
       console.log("Project data downloaded successfully.");
-      vm.loadProject(JSON.parse(projectData))
+      zcvm
+        .loadProject(JSON.parse(projectData))
         .then(() => {
           console.log("Project loaded into VM successfully.");
           loadingDialog.open = false;
@@ -412,7 +417,7 @@ function downloadAndLoadProject(pid) {
         onConfirm: () => console.log("confirmed"),
       });
       isLoading = false;
-    }
+    },
   });
 }
 
@@ -438,31 +443,31 @@ window.scratchConfig = {
   },
 };
 
-function saveproject({force = false} = {}) {
+function saveproject({ force = false } = {}) {
   setButton("save-button", "保存中", () => saveproject(force));
   uploadAssets();
   if (force == true) {
     snackbar("强制保存");
     uploadProject();
   }
-  if (vm.runtime.isRunning) {
-    vm.runtime.stopAll();
+  if (zcvm.runtime.isRunning) {
+    zcvm.runtime.stopAll();
   }
-  if (projectjson == vm.toJSON()) {
+  if (projectjson == zcvm.toJSON()) {
     snackbar("作品未修改");
-    setButton("save-button", "保存", () => saveproject({force:false}));
+    setButton("save-button", "保存", () => saveproject({ force: false }));
 
     return;
   }
   if (String(projectinfo.author.id) !== String(userinfo.userid)) {
     snackbar("无权限");
-    setButton("save-button", "无权限", () => saveproject({force:false}));
+    setButton("save-button", "无权限", () => saveproject({ force: false }));
     return;
   }
-  projectjson = vm.toJSON();
+  projectjson = zcvm.toJSON();
   uploadProject();
   snackbar("保存完成");
-  setButton("save-button", "保存完成", () => saveproject({force:false}));
+  setButton("save-button", "保存完成", () => saveproject({ force: false }));
 
   logText.innerText += `[${getTime()}]保存完成\n`;
   setButton("push-button", "推送", () => pushProject());
@@ -477,14 +482,16 @@ function setButton(id, text, onclick) {
 }
 
 function openBase64ImageInNewTab() {
-  vm.renderer.requestSnapshot(dataURI => {
-    const imgWindow = window.open('', '_blank');
+  if (!zcvm) return;
+  zcvm.renderer.requestSnapshot((dataURI) => {
+    const imgWindow = window.open("", "_blank");
     imgWindow.document.write('<img src="' + dataURI + '" />');
   });
 }
 
 function setProjectThumbnail() {
-  vm.renderer.requestSnapshot(async dataURI => {
+  if (!zcvm) return;
+  zcvm.renderer.requestSnapshot(async (dataURI) => {
     try {
       const blob = await (await fetch(dataURI)).blob();
       const formData = new FormData();
@@ -493,9 +500,9 @@ function setProjectThumbnail() {
       const response = await fetch(`${apiHost}/scratch/thumbnail/${_pid}`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
-        body: formData
+        body: formData,
       });
 
       if (response.ok) {
@@ -510,4 +517,8 @@ function setProjectThumbnail() {
   });
 }
 
-buttons.push({ id: "set-thumbnail-button", text: "设为封面", onclick: () => setProjectThumbnail() });
+buttons.push({
+  id: "set-thumbnail-button",
+  text: "设为封面",
+  onclick: () => setProjectThumbnail(),
+});
