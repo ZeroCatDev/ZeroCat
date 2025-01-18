@@ -1,5 +1,4 @@
-const apiHost =
-  localStorage.getItem("ZeroCat_Apihost") || "<%= process.env.APIHOST %>";
+const apiHost = localStorage.getItem("ZeroCat_Apihost") || "<%= process.env.APIHOST %>";
 const assetHost = "<%= process.env.ASSETSHOST %>";
 
 window.apiHost = apiHost;
@@ -16,13 +15,13 @@ let logText,
 window.projectinfo = projectinfo;
 
 const buttons = [
-  { id: "push-button", text: "", onclick: null },
   {
     id: "open-zerocat-tab",
-    text: "打开ZeroCat标签",
+    text: "信息",
     onclick: () => (zctab.open = true),
   },
-  { id: "save-button", text: "保存作品", onclick: () => saveproject(false) },
+  { id: "push-button", text: "推送", onclick: () => pushProject() },
+  { id: "save-button", text: "保存", onclick: () => saveproject({force:false}) },
 ];
 
 function getQueryString(name) {
@@ -217,10 +216,7 @@ function uploadProject() {
         console.log(result);
         snackbar("作品保存成功");
         // 允许一键推送
-        setButton("push-button", "推送", () => {
-          window.open(`/projects/${_pid}/push`);
-          setButton("push-button", "保存", () => saveproject(false));
-        });
+        setButton("push-button", "推送", () => pushProject());
       },
       error: function (err) {
         console.log(err);
@@ -232,6 +228,28 @@ function uploadProject() {
       },
     });
   }
+}
+
+function pushProject() {
+  setButton("push-button", "推送中", () => pushProject());
+  $.ajax({
+    url: `${window.apiHost}/project/${_pid}/push?token=${localStorage.getItem(
+      "token"
+    )}`,
+    type: "post",
+    success: function () {
+      snackbar("推送成功");
+      setButton("push-button", "推送完成", () => pushProject());
+    },
+    error: function (err) {
+      console.log(err);
+      mdui.alert({
+        headline: "推送作品出错",
+        description: JSON.stringify(err),
+        confirmText: "关闭",
+      });
+    },
+  });
 }
 
 function getprojectinfo() {
@@ -257,9 +275,7 @@ function getprojectinfo() {
           }`;
         }
 
-        if (String(result.author.id) === String(userinfo.userid)) {
-          setButton("push-button", "保存", () => saveproject(false));
-        } else {
+        if (String(result.author.id) !== String(userinfo.userid)) {
           setButton("push-button", "改编", () =>
             window.open(`/projects/${_pid}/fork`)
           );
@@ -298,9 +314,7 @@ window.onload = function () {
   setButton(
     "push-button",
     _pid === 0 ? "新建并保存" : "推送",
-    _pid === 0
-      ? () => saveproject(false)
-      : () => window.open(`/projects/${_pid}/push`)
+    _pid === 0 ? () => saveproject({force:false}) : () => pushProject()
   );
   load();
 };
@@ -323,39 +337,109 @@ window.forkdialogopen = forkdialogopen;
 window.setinfotabopen = setinfotabopen;
 window.pushdialogopen = pushdialogopen;
 
+let isLoading = false;
+
+// 添加HTML创建提示框
+document.body.insertAdjacentHTML('beforeend', `
+  <mdui-dialog
+    headline="加载中"
+    description="正在加载作品，请稍候..."
+    close-on-overlay-click
+    class="loading-dialog"
+  ></mdui-dialog>
+`);
+
+const loadingDialog = document.querySelector(".loading-dialog");
+
 function load() {
-  if (window.location.hash) {
-    _pid = Number(location.hash.match(/\d+/i)[0]);
+  if (isLoading) return;
+  isLoading = true;
+
+  console.log("Loading project...");
+  const queryId = getQueryString("id");
+  if (queryId) {
+    _pid = Number(queryId);
+    console.log(`Project ID from query: ${_pid}`);
+  }
+  if (_pid === 0) {
+    console.log("No project ID found, redirecting to new project page.");
+    window.location.href = `${apiHost}/newproject`;
+    return;
   }
   if (_pid !== 0) {
+    console.log(`Fetching project info for ID: ${_pid}`);
     getprojectinfo();
+    downloadAndLoadProject(_pid);
   }
-  setButton(
-    "push-button",
-    _pid === 0 ? "新建并保存" : "推送",
-    _pid === 0
-      ? () => saveproject(false)
-      : () => window.open(`/projects/${_pid}/push`)
-  );
+  setButton("push-button", "推送", () => pushProject());
+}
+
+function downloadAndLoadProject(pid) {
+  console.log(`Downloading project with ID: ${pid}`);
+  loadingDialog.open = true;
+
+  $.ajax({
+    url: `${apiHost}/project/${pid}/source`,
+    type: "GET",
+    data: { token: localStorage.getItem("token") },
+    success: function (projectData) {
+      console.log("Project data downloaded successfully.");
+      vm.loadProject(JSON.parse(projectData))
+        .then(() => {
+          console.log("Project loaded into VM successfully.");
+          loadingDialog.open = false;
+          isLoading = false;
+        })
+        .catch((err) => {
+          console.error("Error loading project into VM:", err);
+          loadingDialog.open = false;
+          mdui.alert({
+            headline: "加载失败",
+            description: `作品加载失败: ${err.message}`,
+            confirmText: "OK",
+            onConfirm: () => console.log("confirmed"),
+          });
+          isLoading = false;
+        });
+    },
+    error: function (err) {
+      console.error("Error downloading project data:", err);
+      loadingDialog.open = false;
+      mdui.alert({
+        headline: "加载失败",
+        description: `作品加载失败: ${err.responseText}`,
+        confirmText: "OK",
+        onConfirm: () => console.log("confirmed"),
+      });
+      isLoading = false;
+    }
+  });
 }
 
 window.scratchConfig = {
   handleProjectLoaded: load,
   handleDefaultProjectLoaded: () => {
-    if (window.location.hash) {
-      _pid = Number(location.hash.match(/\d+/i)[0]);
+    if (isLoading) return;
+    isLoading = true;
+
+    console.log("Default project loaded.");
+    const queryId = getQueryString("id");
+    if (queryId) {
+      _pid = Number(queryId);
+      console.log(`Project ID from query: ${_pid}`);
     }
-    setButton(
-      "push-button",
-      _pid === 0 ? "新建并保存" : "推送",
-      _pid === 0
-        ? () => saveproject(false)
-        : () => window.open(`/projects/${_pid}/push`)
-    );
+    if (_pid === 0) {
+      console.log("No project ID found, redirecting to new project page.");
+      window.location.href = `${apiHost}/newproject`;
+      return;
+    }
+    setButton("push-button", "推送", () => pushProject());
+    downloadAndLoadProject(_pid);
   },
 };
 
-function saveproject(force = false) {
+function saveproject({force = false} = {}) {
+  setButton("save-button", "保存中", () => saveproject(force));
   uploadAssets();
   if (force == true) {
     snackbar("强制保存");
@@ -365,17 +449,23 @@ function saveproject(force = false) {
     vm.runtime.stopAll();
   }
   if (projectjson == vm.toJSON()) {
-    snackbar("作品未修改1");
+    snackbar("作品未修改");
+    setButton("save-button", "保存", () => saveproject({force:false}));
+
     return;
   }
   if (String(projectinfo.author.id) !== String(userinfo.userid)) {
-    snackbar("你不是作者");
+    snackbar("无权限");
+    setButton("save-button", "无权限", () => saveproject({force:false}));
     return;
   }
   projectjson = vm.toJSON();
   uploadProject();
   snackbar("保存完成");
+  setButton("save-button", "保存完成", () => saveproject({force:false}));
+
   logText.innerText += `[${getTime()}]保存完成\n`;
+  setButton("push-button", "推送", () => pushProject());
 }
 
 function setButton(id, text, onclick) {
@@ -385,3 +475,39 @@ function setButton(id, text, onclick) {
     button.onclick = onclick;
   }
 }
+
+function openBase64ImageInNewTab() {
+  vm.renderer.requestSnapshot(dataURI => {
+    const imgWindow = window.open('', '_blank');
+    imgWindow.document.write('<img src="' + dataURI + '" />');
+  });
+}
+
+function setProjectThumbnail() {
+  vm.renderer.requestSnapshot(async dataURI => {
+    try {
+      const blob = await (await fetch(dataURI)).blob();
+      const formData = new FormData();
+      formData.append("file", blob, "thumbnail.png");
+
+      const response = await fetch(`${apiHost}/scratch/thumbnail/${_pid}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`
+        },
+        body: formData
+      });
+
+      if (response.ok) {
+        snackbar("封面设置成功");
+      } else {
+        snackbar("封面设置失败");
+      }
+    } catch (error) {
+      console.error("Error setting project thumbnail:", error);
+      snackbar("封面设置失败");
+    }
+  });
+}
+
+buttons.push({ id: "set-thumbnail-button", text: "设为封面", onclick: () => setProjectThumbnail() });
