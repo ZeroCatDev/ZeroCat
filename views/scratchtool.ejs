@@ -27,7 +27,8 @@ loadScript("<%= global.config['urls.frontend'] %>/scratchtool/jquery.3.7.1.js", 
 // Description: ZeroCat Scratch Tool
 let zcvm, zcgui;
 
-const ZCApiHost = localStorage.getItem("ZeroCat_ZCApiHost") ||  "<%= global.config['urls.backend'] %>";;
+const ZCApiHost = localStorage.getItem("ZeroCat_ZCApiHost") ||  "<%= global.config['urls.backend'] %>";
+const ZCFrontend = localStorage.getItem("ZeroCat_ZCFrontend") ||  "<%= global.config['urls.frontend'] %>";
 
 let _pid = 0;
 let logText,
@@ -303,7 +304,7 @@ function fetchProjectInfo() {
 
         if (String(result.author.id) !== String(userinfo.userid)) {
           setButton("push-button", "改编", () =>
-            window.open(`/projects/${_pid}/fork`)
+            window.open(`${ZCFrontend}/projects/${_pid}/fork`)
           );
         }
       },
@@ -338,8 +339,6 @@ function initialize() {
     ></mdui-dialog>
   `
   );
-
-  const loadingDialog = document.querySelector(".loading-dialog");
 
   if (typeof ClipCCExtension !== 'undefined') {
     zcvm = ClipCCExtension.api.getVmInstance();
