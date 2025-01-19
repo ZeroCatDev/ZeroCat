@@ -160,7 +160,9 @@ app.get("/check", function (req, res, next) {
 });
 
 app.get("/scratchtool", function (req, res, next) {
-  res.status(200).sendFile(process.cwd() + "/scratchtool.ejs");
+  //返回js
+  res.set("Content-Type", "application/javascript");
+  res.render("scratchtool.ejs");
 });
 process.on("uncaughtException", function (err) {
   logger.error(err);
