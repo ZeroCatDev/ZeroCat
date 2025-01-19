@@ -61,7 +61,7 @@ router.post("/:id/fork", async (req, res, next) => {
       });
       res.status(200).send({ status: "1", msg: "改编成功", id: result.id });
     } else {
-      res.status(403).send({ status: "0", msg: "改编失败" });
+      res.status(200).send({ status: "0", msg: "改编失败" });
     }
   } catch (err) {
     logger.error("Error forking project:", err);
@@ -72,7 +72,7 @@ router.post("/:id/fork", async (req, res, next) => {
 // 保存源代码
 router.put("/:id/source", async (req, res, next) => {
   if (!res.locals.userid) {
-    return res.status(403).send({ status: "error", message: "未登录",code:"AUTH_ERROR_LOGIN" });
+    return res.status(200).send({ status: "error", message: "未登录",code:"AUTH_ERROR_LOGIN" });
   }
 
   try {
@@ -80,7 +80,7 @@ router.put("/:id/source", async (req, res, next) => {
       where: { id: Number(req.params.id), authorid: Number(res.locals.userid) },
     })
     if(project==null){
-      return res.status(403).send({ status: "0", msg: "没有权限" });
+      return res.status(200).send({ status: "0", msg: "没有权限" });
     }
     //logger.logger.debug(req.body);
     var reqbody = req.body
@@ -113,7 +113,7 @@ router.put("/:id/source", async (req, res, next) => {
 // 更新作品信息
 router.put("/:id", async (req, res, next) => {
   if (!res.locals.userid) {
-    return res.status(403).send({ status: "error", message: "未登录",code:"AUTH_ERROR_LOGIN" });
+    return res.status(200).send({ status: "error", message: "未登录",code:"AUTH_ERROR_LOGIN" });
   }
 
   try {
@@ -137,7 +137,7 @@ router.put("/:id", async (req, res, next) => {
 // 推送作品
 router.post("/:id/push", async (req, res, next) => {
   if (!res.locals.userid) {
-    return res.status(403).send({ status: "error", message: "未登录",code:"AUTH_ERROR_LOGIN" });
+    return res.status(200).send({ status: "error", message: "未登录",code:"AUTH_ERROR_LOGIN" });
   }
 
   try {
@@ -147,7 +147,7 @@ router.post("/:id/push", async (req, res, next) => {
 
     if (project.devenv === 0 && req.body.force !== "true") {
       return res
-        .status(403)
+        .status(200)
         .send({ status: "0", msg: "未开启开发环境，无法推送" });
     }
 
@@ -246,7 +246,7 @@ router.get("/:id/source/:env?", async (req, res, next) => {
     if (projectFile?.source) {
       res.status(200).send(projectFile.source);
     } else {
-      res.status(403).send({ status: "0", msg: "无权访问此项目" });
+      res.status(200).send({ status: "error", message: "无权访问此项目",code:"AUTH_ERROR_LOGIN" });
     }
   } catch (err) {
     logger.error("Error fetching project source code:", err);

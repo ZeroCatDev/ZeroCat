@@ -201,19 +201,19 @@ router.get("/project/:id", async (req, res, next) => {
         logger.debug(project_token);
       } catch (err) {
         logger.debug("Error verifying project token:", err);
-        return res.status(403).send({ status: "0", msg: "无权访问此项目" });
+        return res.status(200).send({ status: "error", message: "无权访问此项目",code:"AUTH_ERROR_LOGIN" });
       }
       if (project_token.data.projectid != req.params.id) {
         logger.debug("1");
-        return res.status(403).send({ status: "0", msg: "无权访问此项目" });
+        return res.status(200).send({ status: "error", message: "无权访问此项目",code:"AUTH_ERROR_LOGIN" });
       }
       if (res.locals.userid && project_token.data.userid != res.locals.userid) {
         logger.debug("2");
-        return res.status(403).send({ status: "0", msg: "无权访问此项目" });
+        return res.status(200).send({ status: "error", message: "无权访问此项目",code:"AUTH_ERROR_LOGIN" });
       }
     } else {
       logger.debug("3");
-      return res.status(403).send({ status: "0", msg: "无权访问此项目" });
+      return res.status(200).send({ status: "error", message: "无权访问此项目",code:"AUTH_ERROR_LOGIN" });
     }
     const project = await prisma.ow_projects.findFirst({
       where: { id: Number(project_token.data.projectid) },
@@ -232,7 +232,7 @@ router.get("/project/:id", async (req, res, next) => {
     if (projectFile?.source) {
       res.status(200).send(projectFile.source);
     } else {
-      res.status(403).send({ status: "0", msg: "无权访问此项目" });
+      res.status(200).send({ status: "error", message: "无权访问此项目",code:"AUTH_ERROR_LOGIN" });
     }
   } catch (err) {
     logger.error("Error fetching project source code:", err);
@@ -252,7 +252,7 @@ router.post("/thumbnail/:projectid", upload.single('file'), async (req, res, nex
       return res.status(404).send({ status: "0", code: "404", msg: "作品不存在" });
     }
     if (project.authorid !== res.locals.userid) {
-      return res.status(403).send({ status: "0", code: "403", msg: "无权访问此项目" });
+      return res.status(200).send({ status: "error", message: "无权访问此项目",code:"AUTH_ERROR_LOGIN" });
     }
 
     const file = req.file;

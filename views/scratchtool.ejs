@@ -111,8 +111,17 @@ function jwtDecode(token) {
   }
 }
 
-function handleInvalidLogin() {
+function handleInvalidLogin(message) {
   localStorage.removeItem("token");
+  mdui.alert({
+    headline: "登录问题",
+    description: message,
+    confirmText: "打开用户页面",
+    cancelText: "取消",
+    onConfirm: () => {
+      window.location.href = `${ZCFrontend}/account/login`;
+    },
+  });
   showLoginButton();
 }
 
@@ -123,14 +132,14 @@ function loadUserInfo() {
       const decoded = jwtDecode(token);
       const currentTime = Math.floor(Date.now() / 1000);
       if (decoded.exp && decoded.exp < currentTime) {
-        handleInvalidLogin();
+        handleInvalidLogin("登录已过期，请重新登录。");
       } else {
         userinfo = decoded;
         localStorage.setItem("zc:id", String(decoded.userid));
         localStorage.setItem("zc:username", decoded.display_name);
       }
     } catch (error) {
-      handleInvalidLogin();
+      handleInvalidLogin("登录信息无效，请重新登录。");
     }
   } else {
     showLoginButton();
@@ -160,6 +169,14 @@ function renderButtons() {
   });
 }
 
+function setButton(id, text, onclick) {
+  const button = document.getElementById(id);
+  if (button) {
+    button.innerText = text;
+    button.onclick = onclick;
+  }
+}
+
 function uploadProjectAssets() {
   $.each(zcvm.assets, function (index, asset) {
     if (!asset.clean) {
@@ -183,7 +200,7 @@ function uploadProjectAssets() {
         },
         error: function (xhr, status, error) {
           if (xhr.responseJSON && xhr.responseJSON.code === 'AUTH_ERROR_LOGIN') {
-            handleInvalidLogin();
+            handleInvalidLogin(xhr.responseJSON.message);
           } else {
             logText.innerText += `[${getCurrentTime()}]文件上传失败${asset.assetId}.${asset.dataFormat}\nerror:${error}\n`;
           }
@@ -216,14 +233,15 @@ function uploadProject() {
         setButton("push-button", "推送", () => pushProject());
       }
     },
-    error: function (err) {
-      if (err.responseJSON && err.responseJSON.code === 'AUTH_ERROR_LOGIN') {
-        handleInvalidLogin();
+    error: function (xhr) {
+      const data = xhr.responseJSON;
+      if (data && data.code === 'AUTH_ERROR_LOGIN') {
+        handleInvalidLogin(data.message);
       } else {
-        console.log(err);
+        console.log(xhr);
         mdui.alert({
           headline: _pid === 0 ? "创建作品出错" : "保存作品出错",
-          description: JSON.stringify(err),
+          description: JSON.stringify(xhr),
           confirmText: "关闭",
         });
       }
@@ -236,18 +254,23 @@ function pushProject() {
   $.ajax({
     url: `${ZCApiHost}/project/${_pid}/push?token=${localStorage.getItem("token")}`,
     type: "post",
-    success: function () {
-      showSnackbar("推送成功");
-      setButton("push-button", "推送完成", () => pushProject());
-    },
-    error: function (err) {
-      if (err.responseJSON && err.responseJSON.code === 'AUTH_ERROR_LOGIN') {
-        handleInvalidLogin();
+    success: function (data) {
+      if (data.code === 'AUTH_ERROR_LOGIN') {
+        handleInvalidLogin(data.message);
       } else {
-        console.log(err);
+        showSnackbar("推送成功");
+        setButton("push-button", "推送完成", () => pushProject());
+      }
+    },
+    error: function (xhr) {
+      const data = xhr.responseJSON;
+      if (data && data.code === 'AUTH_ERROR_LOGIN') {
+        handleInvalidLogin(data.message);
+      } else {
+        console.log(xhr);
         mdui.alert({
           headline: "推送作品出错",
-          description: JSON.stringify(err),
+          description: JSON.stringify(xhr),
           confirmText: "关闭",
         });
       }
@@ -276,11 +299,12 @@ function fetchProjectInfo() {
           setButton("push-button", "改编", () => window.open(`${ZCFrontend}/projects/${_pid}/fork`));
         }
       },
-      error: function (err) {
-        if (err.responseJSON && err.responseJSON.code === 'AUTH_ERROR_LOGIN') {
-          handleInvalidLogin();
+      error: function (xhr) {
+        const data = xhr.responseJSON;
+        if (data && data.code === 'AUTH_ERROR_LOGIN') {
+          handleInvalidLogin(data.message);
         } else {
-          alert(err);
+          alert(xhr);
         }
       },
     });
@@ -422,16 +446,17 @@ function downloadAndLoadProject(pid) {
           });
         });
     },
-    error: function (err) {
-      if (err.responseJSON && err.responseJSON.code === 'AUTH_ERROR_LOGIN') {
-        handleInvalidLogin();
+    error: function (xhr) {
+      const data = xhr.responseJSON;
+      if (data && data.code === 'AUTH_ERROR_LOGIN') {
+        handleInvalidLogin(data.message);
       } else {
-        console.error("Error downloading project data:", err);
+        console.error("Error downloading project data:", xhr);
         loadingDialog.open = false;
         isLoading = false;
         mdui.alert({
           headline: "加载失败",
-          description: `作品加载失败: ${err.responseText}`,
+          description: `作品加载失败: ${xhr.responseText}`,
           confirmText: "重新加载",
           onConfirm: () => {
             window.location.reload();
@@ -471,14 +496,6 @@ function saveProject({ force = false } = {}) {
   setButton("push-button", "推送", () => pushProject());
 }
 
-function setButton(id, text, onclick) {
-  const button = document.getElementById(id);
-  if (button) {
-    button.innerText = text;
-    button.onclick = onclick;
-  }
-}
-
 function openBase64ImageInNewTab() {
   if (!zcvm) return;
   zcvm.renderer.requestSnapshot((dataURI) => {
@@ -503,7 +520,10 @@ function setProjectThumbnail() {
         body: formData,
       });
 
-      if (response.ok) {
+      const data = await response.json();
+      if (data.code === 'AUTH_ERROR_LOGIN') {
+        handleInvalidLogin(data.message);
+      } else if (response.ok) {
         showSnackbar("封面设置成功");
       } else {
         showSnackbar("封面设置失败");
