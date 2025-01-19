@@ -207,7 +207,7 @@ async function validateTotpToken(req, res, next) {
     logger.debug(token);
     if (!res.locals.login) {
       // 未登录，返回401 Unauthorized状态码
-      return res.status(401).send({ status: "0", msg: "请先登录以继续操作" });
+      return res.status(401).send({ status: "error", message: "未登录",code:"AUTH_ERROR_LOGIN" });
     }
     if (!token) {
       // If no token is provided, return a failure response

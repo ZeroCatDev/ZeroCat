@@ -14,7 +14,7 @@ router.all("*", (req, res, next) => next());
 // 创建新作品
 router.post("/", async (req, res, next) => {
   if (!res.locals.login) {
-    return res.status(404).send({ status: "0", msg: "请先登录" });
+    return res.status(404).send({ status: "error", message: "未登录",code:"AUTH_ERROR_LOGIN" });
   }
 
   try {
@@ -37,7 +37,7 @@ router.post("/", async (req, res, next) => {
 // Fork 作品
 router.post("/:id/fork", async (req, res, next) => {
   if (!res.locals.login) {
-    return res.status(404).send({ status: "0", msg: "请先登录" });
+    return res.status(404).send({ status: "error", message: "未登录",code:"AUTH_ERROR_LOGIN" });
   }
 
   try {
@@ -72,7 +72,7 @@ router.post("/:id/fork", async (req, res, next) => {
 // 保存源代码
 router.put("/:id/source", async (req, res, next) => {
   if (!res.locals.userid) {
-    return res.status(403).send({ status: "0", msg: "请先登录" });
+    return res.status(403).send({ status: "error", message: "未登录",code:"AUTH_ERROR_LOGIN" });
   }
 
   try {
@@ -113,7 +113,7 @@ router.put("/:id/source", async (req, res, next) => {
 // 更新作品信息
 router.put("/:id", async (req, res, next) => {
   if (!res.locals.userid) {
-    return res.status(403).send({ status: "0", msg: "请先登录" });
+    return res.status(403).send({ status: "error", message: "未登录",code:"AUTH_ERROR_LOGIN" });
   }
 
   try {
@@ -137,7 +137,7 @@ router.put("/:id", async (req, res, next) => {
 // 推送作品
 router.post("/:id/push", async (req, res, next) => {
   if (!res.locals.userid) {
-    return res.status(403).send({ status: "0", msg: "请先登录" });
+    return res.status(403).send({ status: "error", message: "未登录",code:"AUTH_ERROR_LOGIN" });
   }
 
   try {

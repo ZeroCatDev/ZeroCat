@@ -17,7 +17,7 @@ const handleError = (res, err, message) => {
 // 检查登录状态
 const checkLogin = (res) => {
   if (!res.locals.login) {
-    return res.status(404).send({ status: "0", msg: "请先登录" });
+    return res.status(404).send({ status: "error", message: "未登录",code:"AUTH_ERROR_LOGIN" });
   }
 };
 

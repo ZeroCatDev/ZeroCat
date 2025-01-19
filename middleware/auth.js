@@ -10,7 +10,7 @@ import configManager from "../utils/configManager.js";
 async function needlogin(req, res, next) {
   if (!res.locals.login) {
     logger.info(`[needlogin] - ${req.ip} - 未登录，返回401 Unauthorized状态码`);
-    return res.status(401).send({ status: "0", msg: "请先登录以继续操作" });
+    return res.status(401).send({ status: "error", message: "未登录",code:"AUTH_ERROR_LOGIN" });
   }
   next(); // 已登录，继续处理请求
 }
@@ -24,7 +24,7 @@ async function needlogin(req, res, next) {
 async function needadmin(req, res, next) {
   if (!res.locals.login) {
     logger.info(`[needadmin] - ${req.ip} - 未登录，返回401 Unauthorized状态码`);
-    return res.status(401).send({ status: "0", msg: "请先登录以继续操作" });
+    return res.status(401).send({ status: "error", message: "未登录",code:"AUTH_ERROR_LOGIN" });
   }
 
   const adminEmail = await configManager.getConfig("security.adminuser");

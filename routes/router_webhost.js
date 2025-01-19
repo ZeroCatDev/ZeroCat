@@ -102,7 +102,7 @@ function encodeHtmlInJson(jsonObj) {
 
 router.post("/update/:id", function (req, res) {
   if (!res.locals.userid) {
-    res.status(200).send({ status: "0", msg: "请先登录" });
+    res.status(200).send({ status: "error", message: "未登录",code:"AUTH_ERROR_LOGIN" });
     return;
   }
 
