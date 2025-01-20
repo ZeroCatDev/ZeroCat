@@ -86,8 +86,8 @@ async function geetestMiddleware(req, res, next) {
       logger.debug(`Validate fail: ${result.data.reason}`);
       res.status(500).send({
         code: 500,
-        msg: `请完成验证码/${result.data.reason}`,
-        status: `请完成验证码/${result.data.reason}`,
+        message: `请完成验证码/${result.data.reason}`,
+        status: "error",
       });
     }
   } catch (error) {

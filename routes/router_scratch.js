@@ -43,11 +43,11 @@ router.get("/projectinfo", async function (req, res, next) {
     });
 
     if (!project) {
-      res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
+      res.locals.tip = { opt: "flash", message: "项目不存在或未发布" };
       res.status(404).send({
         code: 404,
         status: "404",
-        msg: "项目不存在或未发布",
+        message: "项目不存在或未发布",
       });
       return;
     }
@@ -188,7 +188,7 @@ router.get("/projectinfo2", async function (req, res, next) {
 router.get("/project/:id", async (req, res, next) => {
   try {
     if (!req.params.id) {
-      return res.status(400).send({ status: "0", msg: "缺少项目ID" });
+      return res.status(400).send({ status: "error", message: "缺少项目ID" });
     }
     let project_token;
     if (req.query.token) {
@@ -220,7 +220,7 @@ router.get("/project/:id", async (req, res, next) => {
     });
 
     if (!project) {
-      return res.status(404).send({ status: "0", msg: "作品不存在或无权打开" });
+      return res.status(404).send({ status: "error", message: "作品不存在或无权打开" });
     }
 
     const source =
@@ -249,7 +249,7 @@ router.post("/thumbnail/:projectid", upload.single('file'), async (req, res, nex
   try {
     const project = await getProjectById(Number(req.params.projectid));
     if (!project) {
-      return res.status(404).send({ status: "0", code: "404", msg: "作品不存在" });
+      return res.status(404).send({ status: "error", code: "404", message: "作品不存在" });
     }
     if (project.authorid !== res.locals.userid) {
       return res.status(200).send({ status: "error", message: "无权访问此项目",code:"AUTH_ERROR_LOGIN" });
@@ -267,7 +267,7 @@ router.post("/thumbnail/:projectid", upload.single('file'), async (req, res, nex
       const hashValue = hash.digest("hex");
       const fileBuffer = await fs.promises.readFile(file.path);
       await S3update(`scratch_slt/${req.params.projectid}`, fileBuffer);
-      res.status(200).send({ status: "ok" });
+      res.status(200).send({ status: "success" });
     });
 
     chunks.on("error", (err) => {
@@ -301,7 +301,7 @@ router.post("/assets/:filename", needlogin, upload.single('file'), async (req, r
       const newFilename = `${hashValue}.${ext}`;
       const fileBuffer = await fs.promises.readFile(file.path);
       await S3update(`material/asset/${newFilename}`, fileBuffer);
-      res.status(200).send({ status: "ok" });
+      res.status(200).send({ status: "success" });
     });
 
     chunks.on("error", (err) => {

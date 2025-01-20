@@ -34,7 +34,7 @@ async function isTotpTokenValid(userId, token) {
 
     if (userTotps.length === 0) {
       return {
-        status: "0",
+        status: "error",
         message: "未找到验证器配置",
         valid: false,
       };
@@ -53,10 +53,10 @@ async function isTotpTokenValid(userId, token) {
       }
     }
 
-    return { status: "0", message: "无效的令牌", valid: false };
+    return { status: "error", message: "无效的令牌", valid: false };
   } catch (error) {
     return {
-      status: "0",
+      status: "error",
       message: "无法验证令牌",
       valid: false,
       error: error,
@@ -79,7 +79,7 @@ async function isTotpTokenValidById(userId, token, totp_id) {
 
     if (!userTotp) {
       return {
-        status: "0",
+        status: "error",
         message: "验证器不存在",
         valid: false,
       };
@@ -93,10 +93,10 @@ async function isTotpTokenValidById(userId, token, totp_id) {
     );
     return totp.validate({ token, window: 1 }) !== null
       ? { status: "success", message: "令牌有效", valid: true }
-      : { status: "0", message: "令牌无效", valid: false };
+      : { status: "error", message: "令牌无效", valid: false };
   } catch (error) {
     return {
-      status: "0",
+      status: "error",
       message: "无法验证令牌",
       valid: false,
       error: error,
@@ -129,7 +129,7 @@ async function createTotpTokenForUser(userId) {
     };
   } catch (error) {
     return {
-      status: "0",
+      status: "error",
       message: "无法创建验证器",
       secret: null,
       otpauth_url: null,
@@ -150,7 +150,7 @@ async function enableTotpToken(userId, totp_id, token) {
     const isValid = await isTotpTokenValidById(userId, token, totp_id);
 
     if (!isValid.valid) {
-      return { status: "0", message: "无法激活令牌：" + isValid.message };
+      return { status: "error", message: "无法激活令牌：" + isValid.message };
     }
     const needupdatedTotp = await prisma.ow_users_totp.findUnique({
       where: {
@@ -175,10 +175,10 @@ async function enableTotpToken(userId, totp_id, token) {
         totp: updatedTotp,
       };
     } else {
-      return { status: "0", message: "验证器已被激活或无效" };
+      return { status: "error", message: "验证器已被激活或无效" };
     }
   } catch (error) {
-    return { status: "0", message: "无法激活验证器", error };
+    return { status: "error", message: "无法激活验证器", error };
   }
 }
 
@@ -192,7 +192,7 @@ async function removeTotpToken(userId, totp_id) {
 
     return { status: "success", message: "验证器已删除", totp: result };
   } catch (error) {
-    return { status: "0", message: "无法删除验证器", error: error };
+    return { status: "error", message: "无法删除验证器", error: error };
   }
 }
 

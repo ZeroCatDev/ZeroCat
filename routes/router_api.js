@@ -19,7 +19,7 @@ router.get("/usertx", async function (req, res, next) {
       },
     });
     if (!USER) {
-      res.locals.tip = { opt: "flash", msg: "用户不存在" };
+      res.locals.tip = { opt: "flash", message: "用户不存在" };
       res.status(404).json({
         status: "error",
         code: "404",
@@ -69,7 +69,7 @@ router.get("/getuserinfo", async function (req, res, next) {
     });
     if (!user[0]) {
       logger.debug("用户不存在");
-      res.locals.tip = { opt: "flash", msg: "用户不存在" };
+      res.locals.tip = { opt: "flash", message: "用户不存在" };
       res.status(404).json({
         status: "error",
         code: "404",
@@ -77,7 +77,7 @@ router.get("/getuserinfo", async function (req, res, next) {
       });
     }
     res.send({
-      status: "ok",
+      status: "success",
       info: { user: user[0], count: { pythoncount, scratchcount } },
     });
   } catch (err) {
@@ -128,12 +128,12 @@ router.get("/projectinfo", async function (req, res, next) {
     if (!project) {
       res.locals.tip = {
         opt: "flash",
-        msg: "项目不存在或未发布",
+        message: "项目不存在或未发布",
       };
       res.send({
         code: 404,
         status: "404",
-        msg: "项目不存在或未发布",
+        message: "项目不存在或未发布",
       });
       return;
     }
@@ -222,7 +222,7 @@ router.get("/tuxiaochao", async function (req, res) {
     });
 
     if (!USER) {
-      res.locals.tip = { opt: "flash", msg: "用户不存在" };
+      res.locals.tip = { opt: "flash", message: "用户不存在" };
       res.status(404).json({
         status: "error",
         code: "404",

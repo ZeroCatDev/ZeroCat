@@ -127,7 +127,7 @@ async function getProjectFile(sha256) {
  */
 function handleError(res, err, msg) {
   logger.error(err);
-  res.status(500).send({ status: "0", msg, error: err });
+  res.status(500).send({ status: "error", msg, error: err });
 }
 
 /**

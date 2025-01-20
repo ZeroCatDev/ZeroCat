@@ -160,12 +160,12 @@ function renderButtons() {
   const zerocatool = document.getElementById("zerocatool");
   zerocatool.innerHTML = ''; // 清空现有按钮
   buttons.forEach((button) => {
-    const btnElement = zerocatool.cloneNode(true);
+    const btnElement = document.createElement('button'); // 修复按钮被加载两次的问题
     btnElement.id = button.id;
     btnElement.innerText = button.text;
     if (button.onclick) btnElement.onclick = button.onclick;
     btnElement.style.display = "inline-block";
-    zerocatool.parentNode.appendChild(btnElement);
+    zerocatool.appendChild(btnElement); // 修复按钮被加载两次的问题
   });
 }
 
@@ -429,7 +429,9 @@ function downloadAndLoadProject(pid) {
         .loadProject(JSON.parse(projectData))
         .then(() => {
           console.log("Project loaded into VM successfully.");
-          loadingDialog.open = false;
+          setTimeout(() => { // 延迟2秒关闭加载中弹框
+            loadingDialog.open = false;
+          }, 2000);
           isLoading = false;
         })
         .catch((err) => {

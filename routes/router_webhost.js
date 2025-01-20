@@ -9,7 +9,7 @@ import { prisma } from "./lib/global.js";
 
 router.all("*", function (req, res, next) {
   // 任何请求都返回404
-  res.status(404).send({ code: 404, status: "failed", msg: "Not Found" });
+  res.status(404).send({ code: 404, status: "failed", message: "Not Found" });
   //next();
 });
 //router.get('/', function (req, res) {})
@@ -23,7 +23,7 @@ router.get("/:id/*", function (req, res) {
     })
     .then((PROJECT) => {
       if (!PROJECT) {
-        res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
+        res.locals.tip = { opt: "flash", message: "项目不存在或未发布" };
         res.status(404).json({
           status: "error",
           code: "404",
@@ -59,7 +59,7 @@ router.get("/:id/*", function (req, res) {
 
         res.type("html").send(decode(filestr));
       } else {
-        res.status(404).send({ code: 404, status: "failed", msg: "文件不存在" });
+        res.status(404).send({ code: 404, status: "failed", message: "文件不存在" });
       }
 
       //浏览数+1
@@ -69,7 +69,7 @@ router.get("/:id/*", function (req, res) {
           data: { view_count: { increment: 1 } },
         })
         .catch((err) => {
-          res.locals.tip = { opt: "flash", msg: "项目不存在或未发布" };
+          res.locals.tip = { opt: "flash", message: "项目不存在或未发布" };
           res.status(404).json({
             status: "error",
             code: "404",
@@ -107,7 +107,7 @@ router.post("/update/:id", function (req, res) {
   }
 
   // 新作品
-  //if (req.body.id == '0'){ var INSERT =`INSERT INTO ow_projects (authorid, title,source) VALUES (${res.locals.userid}, ?, ?)`; var SET = [req.body.title,req.body.data] DB.qww(INSERT, SET, function (err, newPython) { if (err || newPython.affectedRows==0) { res.status(200).send({status: "0", msg: "保存失败" }); return; } res.status(200).send({status: "ok", msg: "保存成功", 'newid': newPython['insertId']}) }); return; }
+  //if (req.body.id == '0'){ var INSERT =`INSERT INTO ow_projects (authorid, title,source) VALUES (${res.locals.userid}, ?, ?)`; var SET = [req.body.title,req.body.data] DB.qww(INSERT, SET, function (err, newPython) { if (err || newPython.affectedRows==0) { res.status(200).send({status: "error", message: "保存失败" }); return; } res.status(200).send({status: "success", message: "保存成功", 'newid': newPython['insertId']}) }); return; }
   debug(req.body);
   debug(encodeHtmlInJson(req.body));
 
@@ -123,11 +123,11 @@ router.post("/update/:id", function (req, res) {
     })
     .then((u) => {
       if (u.count == 0) {
-        res.status(200).send({ status: "0", msg: "保存失败" });
+        res.status(200).send({ status: "error", message: "保存失败" });
         return;
       }
 
-      res.status(200).send({ status: "ok", msg: "保存成功" });
+      res.status(200).send({ status: "success", message: "保存成功" });
     })
     .catch((err) => {
       res.status(500).send({ status: "error", code: "500", message: "服务器内部错误" });

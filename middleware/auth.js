@@ -30,7 +30,7 @@ async function needadmin(req, res, next) {
   const adminEmail = await configManager.getConfig("security.adminuser");
   if (res.locals.email !== adminEmail) {
     logger.info(`[needadmin] - ${req.ip} - 权限不足，返回401 Unauthorized状态码`);
-    return res.status(401).send({ status: "0", msg: "权限不足" });
+    return res.status(401).send({ status: "error", message: "权限不足" });
   }
   next(); // 已登录，继续处理请求
 }

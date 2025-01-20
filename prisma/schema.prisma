@@ -59,10 +59,8 @@ model ow_projects {
   time        DateTime? @default(now()) @db.Timestamp(0)
   title       String?   @default("Scratch新项目") @db.VarChar(1000)
   description String?   @default("OurWorld上的Scratch项目") @db.VarChar(1000)
-  source      String?   @db.MediumText
   history     Boolean   @default(true)
   devenv      Boolean   @default(true)
-  devsource   String    @db.MediumText
   tags        String    @default("") @db.VarChar(100)
 }
 
@@ -77,7 +75,7 @@ model ow_users {
   loginTime    DateTime? @db.Timestamp(0)
   regTime      DateTime? @default(now()) @db.Timestamp(0)
   sex          Int?      @default(0) @db.TinyInt
-  birthday     DateTime? @default(dbgenerated("'2000-04-01 00:00:00'")) @db.Timestamp(0)
+  birthday     DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
   motto        String?   @default("OurWorld创作者") @db.VarChar(1000)
   images       String?   @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
   avatar       String?   @default("https://owcdn.190823.xyz/user/fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
@@ -90,8 +88,8 @@ model ow_users {
   weibo        String?   @db.VarChar(255)
   qq           String?   @db.VarChar(255)
   fa           String?   @map("2fa") @db.VarChar(255)
-  createdAt    DateTime? @default(dbgenerated("'2000-04-01 00:00:00'")) @db.Timestamp(0)
-  updatedAt    DateTime? @default(dbgenerated("'2000-04-01 00:00:00'")) @db.Timestamp(0)
+  createdAt    DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
+  updatedAt    DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
   label        String?   @db.VarChar(255)
 }
 
@@ -186,46 +184,13 @@ model ow_users_magiclink {
   expiresAt DateTime @db.DateTime(0)
 }
 
-/// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
-/// This view or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-view ow_projects_view {
-  id                  Int       @default(0) @db.UnsignedInt
-  type                String?   @default("text") @db.VarChar(32)
-  licence             String?   @db.VarChar(32)
-  authorid            Int
-  state               String?   @default("private") @db.VarChar(32)
-  view_count          Int?      @default(0) @db.UnsignedInt
-  time                DateTime? @db.Timestamp(0)
-  title               String?   @default("Scratch新项目") @db.VarChar(1000)
-  description         String?   @default("OurWorld上的Scratch项目") @db.VarChar(1000)
-  source              String?   @db.MediumText
-  tags                String    @default("") @db.VarChar(100)
-  author_id           Int       @default(0)
-  author_display_name String    @default("OurWorld创作者") @db.Char(20)
-  author_motto        String?   @default("OurWorld创作者") @db.VarChar(1000)
-  author_images       String?   @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
-
-  @@ignore
-}
-
-/// The underlying view does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
-/// This view or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-view ow_public_projects_view {
-  id                  Int       @default(0) @db.UnsignedInt
-  type                String?   @default("text") @db.VarChar(32)
-  licence             String?   @db.VarChar(32)
-  authorid            Int
-  state               String?   @default("private") @db.VarChar(32)
-  view_count          Int?      @default(0) @db.UnsignedInt
-  time                DateTime? @db.Timestamp(0)
-  title               String?   @default("Scratch新项目") @db.VarChar(1000)
-  description         String?   @default("OurWorld上的Scratch项目") @db.VarChar(1000)
-  source              String?   @db.MediumText
-  tags                String    @default("") @db.VarChar(100)
-  author_id           Int       @default(0)
-  author_display_name String    @default("OurWorld创作者") @db.Char(20)
-  author_motto        String?   @default("OurWorld创作者") @db.VarChar(1000)
-  author_images       String?   @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
-
-  @@ignore
+model ow_projects_commits {
+  id               String   @id @db.VarChar(256)
+  project_id       Int
+  author_id        Int
+  branch           String   @default("main") @db.VarChar(255)
+  parent_commit_id String?  @db.VarChar(256)
+  commit_message   String   @db.Text
+  commit_date      DateTime @db.DateTime(0)
+  commit_file      String   @db.VarChar(256)
 }

@@ -47,7 +47,7 @@ router.post("/set/avatar", geetestMiddleware, upload.single('zcfile'), async (re
         where: { id: res.locals.userid },
         data: { images: hashValue },
       });
-      res.status(200).send({ status: "ok", message: "Avatar updated successfully" });
+      res.status(200).send({ status: "success", message: "Avatar updated successfully" });
     });
 
     chunks.on("error", (err) => {
@@ -114,7 +114,7 @@ router.post("/set/pw", geetestMiddleware, async (req, res) => {
     where: { id: res.locals.userid },
     data: { password: newPW },
   });
-  res.status(200).send({ status: "ok", message: "密码修改成功" });
+  res.status(200).send({ status: "success", message: "密码修改成功" });
 });
 
 export default router;
