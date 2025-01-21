@@ -13,12 +13,8 @@ const loadStyle = (href) => {
   document.head.appendChild(link);
 };
 
-const ZCFrontend =
-  localStorage.getItem("ZeroCat_ZCFrontend") ||
-  "<%= global.config['urls.frontend'] %>";
-const ZCApiHost =
-  localStorage.getItem("ZeroCat_ZCApiHost") ||
-  "<%= global.config['urls.backend'] %>";
+const ZCFrontend = localStorage.getItem("ZeroCat_ZCFrontend") || "<%= global.config['urls.frontend'] %>";
+const ZCApiHost = localStorage.getItem("ZeroCat_ZCApiHost") || "<%= global.config['urls.backend'] %>";
 
 loadStyle(`${ZCFrontend}/scratchtool/mdui.css`);
 
@@ -33,16 +29,11 @@ loadScript(`${ZCFrontend}/scratchtool/jquery.3.7.1.js`, () => {
 
 // Description: ZeroCat Scratch Tool
 let zcvm, zcgui;
-
 let _pid = 0;
-let logText,
-  zctab,
-  userinfo = {},
-  projectjson = "null",
-  projectinfo = {};
-  commituser = {};
-  authorinfocard = {};
+let logText, zctab, userinfo = {}, projectjson = "null", projectinfo = {};
 let commitInfo = {};
+let commituser = {};
+let authorinfocard = {};
 const buttons = [
   { id: "open-zerocat-tab", text: "信息", onclick: () => updateZerocatTab() },
   { id: "save-button", text: "保存", onclick: () => openCommitDialog() },
@@ -109,17 +100,13 @@ function jwtDecode(token) {
   try {
     decoded = base64UrlDecode(part);
   } catch (e) {
-    throw new Error(
-      `Invalid token specified: invalid base64 for part #2 (${e.message})`
-    );
+    throw new Error(`Invalid token specified: invalid base64 for part #2 (${e.message})`);
   }
 
   try {
     return JSON.parse(decoded);
   } catch (e) {
-    throw new Error(
-      `Invalid token specified: invalid json for part #2 (${e.message})`
-    );
+    throw new Error(`Invalid token specified: invalid json for part #2 (${e.message})`);
   }
 }
 
@@ -130,7 +117,6 @@ function handleInvalidLogin(message) {
     description: message,
     confirmText: "打开用户页面",
     cancelText: "取消",
-
     onConfirm: () => {
       window.location.href = `${ZCFrontend}/account/login`;
     },
@@ -202,37 +188,26 @@ function uploadProjectAssets() {
       );
 
       $.ajax({
-        url: `${ZCApiHost}/scratch/assets/${asset.assetId}.${
-          asset.dataFormat
-        }?token=${localStorage.getItem("token")}`,
+        url: `${ZCApiHost}/scratch/assets/${asset.assetId}.${asset.dataFormat}?token=${localStorage.getItem("token")}`,
         type: "POST",
         data: formData,
         processData: false,
         contentType: false,
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         success: function () {
-          logText.innerText += `[${getCurrentTime()}]文件上传成功${
-            asset.assetId
-          }.${asset.dataFormat}\n`;
+          logText.innerText += `[${getCurrentTime()}]文件上传成功${asset.assetId}.${asset.dataFormat}\n`;
           asset.clean = true;
         },
         error: function (xhr, status, error) {
-          if (
-            xhr.responseJSON &&
-            xhr.responseJSON.code === "AUTH_ERROR_LOGIN"
-          ) {
+          if (xhr.responseJSON && xhr.responseJSON.code === "AUTH_ERROR_LOGIN") {
             handleInvalidLogin(xhr.responseJSON.message);
           } else {
-            logText.innerText += `[${getCurrentTime()}]文件上传失败${
-              asset.assetId
-            }.${asset.dataFormat}\nerror:${error}\n`;
+            logText.innerText += `[${getCurrentTime()}]文件上传失败${asset.assetId}.${asset.dataFormat}\nerror:${error}\n`;
           }
         },
       });
     } else {
-      logText.innerText += `[${getCurrentTime()}]文件未修改${asset.assetId}.${
-        asset.dataFormat
-      }\n`;
+      logText.innerText += `[${getCurrentTime()}]文件未修改${asset.assetId}.${asset.dataFormat}\n`;
     }
   });
   showSnackbar("媒体库保存完成");
@@ -252,23 +227,14 @@ function fetchProjectInfo() {
         projectinfo = result;
         authorinfocard.headline = result.author.username;
         authorinfocard.description = result.author.description;
-        authorinfocard.onclick = () =>
-          window.open(`${ZCFrontend}/user/${result.author.id}`);
+        authorinfocard.onclick = () => window.open(`${ZCFrontend}/user/${result.author.id}`);
         authorinfocard.style.cursor = "pointer";
-          zctab.headline = result.title;
-          zctab.description = `${
-            String(result.author.id) === String(userinfo.userid)
-              ? "是你的作品"
-              : "不是你的作品"
-          }`;
-
+        zctab.headline = `${result.title} #${result.id}`;
+        zctab.description = `${String(result.author.id) === String(userinfo.userid) ? "是你的作品" : "不是你的作品"}`;
 
         if (String(result.author.id) !== String(userinfo.userid)) {
-          setButton("push-button", "改编", () =>
-            window.open(`${ZCFrontend}/projects/${_pid}/fork`)
-          );
+          setButton("push-button", "改编", () => window.open(`${ZCFrontend}/projects/${_pid}/fork`));
         }
-
       },
       error: function (xhr) {
         const data = xhr.responseJSON;
@@ -283,10 +249,9 @@ function fetchProjectInfo() {
 }
 
 function updateZerocatTab() {
-
-
   zctab.open = true;
 }
+
 function getZerocatUserInfo(userid) {
   let result;
   $.ajax({
@@ -294,39 +259,38 @@ function getZerocatUserInfo(userid) {
     type: "GET",
     data: { token: localStorage.getItem("token") },
     async: false,
-
     success: function (data) {
       result = data.info.user;
-    },error: function (xhr) {
+    },
+    error: function (xhr) {
       const data = xhr.responseJSON;
       if (data && data.code === "AUTH_ERROR_LOGIN") {
         handleInvalidLogin(data.message);
       } else {
         alert(xhr);
       }
-    }
+    },
   });
-
   return result;
 }
+
 function initialize() {
   if (window.initialized) return; // 避免初始化两次
   window.initialized = true;
+
   const zerocatTabHTML = `
     <mdui-dialog headline="作品" description="加载中" close-on-overlay-click id="zerocat-tab">
       <mdui-list>
         <mdui-list-subheader>作者</mdui-list-subheader>
-
-  <mdui-list-item headline="作者信息" description="加载中" id="author-info" active rounded >
-  <mdui-avatar slot="icon" src="" id="commit-avatar"></mdui-avatar>
-  </mdui-list-item>
-  <mdui-list-subheader>当前提交</mdui-list-subheader>
-
-  <mdui-list-item headline="提交信息" description="Supporting text" id="commit-info" rounded >
-  <mdui-avatar slot="icon" src="" id="commit-avatar"></mdui-avatar>
-  </mdui-list-item>
-</mdui-list>
-<br/>
+        <mdui-list-item headline="作者信息" description="加载中" id="author-info" active rounded>
+          <mdui-avatar slot="icon" src="" id="commit-avatar"></mdui-avatar>
+        </mdui-list-item>
+        <mdui-list-subheader>当前提交</mdui-list-subheader>
+        <mdui-list-item headline="提交信息" description="Supporting text" id="commit-info" rounded>
+          <mdui-avatar slot="icon" src="" id="commit-avatar"></mdui-avatar>
+        </mdui-list-item>
+      </mdui-list>
+      <br/>
       <mdui-button id="savestatic" onclick="uploadProjectAssets()">保存媒体库</mdui-button>
       <mdui-button onclick="openCommitDialog()">保存作品</mdui-button>
       <mdui-button onclick="logText.innerText = ''">清空log</mdui-button>
@@ -334,6 +298,7 @@ function initialize() {
     </mdui-dialog>
   `;
   document.body.insertAdjacentHTML("beforeend", zerocatTabHTML);
+
   // 添加HTML创建提示框
   document.body.insertAdjacentHTML(
     "beforeend",
@@ -344,22 +309,14 @@ function initialize() {
       close-on-overlay-click
       class="loading-dialog"
     ></mdui-dialog>
-    <mdui-dialog headline="作品" description="加载中" close-on-overlay-click id="zerocat-tab">
-      <div id="commit-info"></div>
-      <mdui-button id="savestatic" onclick="uploadProjectAssets()">保存媒体库</mdui-button>
-      <mdui-button onclick="openCommitDialog()">保存作品</mdui-button>
-      <mdui-button onclick="logText.innerText = ''">清空log</mdui-button>
-      <div id="log-text"></div>
-    </mdui-dialog>
     <mdui-dialog headline="提交作品" description="请输入提交信息" close-on-overlay-click id="commit-dialog">
-      <div class="mdui-textfield">
-        <label class="mdui-textfield-label">分支名称</label>
-        <input class="mdui-textfield-input" type="text" id="branch-name" value="main" />
-      </div>
-      <div class="mdui-textfield">
-        <label class="mdui-textfield-label">提交信息</label>
-        <input class="mdui-textfield-input" type="text" id="commit-message" />
-      </div>
+    <mdui-text-field variant="outlined" label="提交信息" value="Update Project" id="commit-message"></mdui-text-field>
+    <mdui-text-field variant="outlined" label="更多信息" rows ></mdui-text-field>
+<mdui-radio-group value="main">
+  <mdui-radio value="main">直接提交给主要分支</mdui-radio>
+  <mdui-radio value="pr">为此提交创建一个新分支</mdui-radio>
+</mdui-radio-group>
+    <mdui-text-field variant="outlined" label="分支名称" value="main" id="branch-name"></mdui-text-field>
       <mdui-button onclick="commitProject()">提交</mdui-button>
     </mdui-dialog>
   `
@@ -386,7 +343,6 @@ function initialize() {
 
   zctab = document.querySelector("#zerocat-tab");
   authorinfocard = document.querySelector("#author-info");
-
   logText = document.querySelector("#log-text");
 
   loadUserInfo();
@@ -401,13 +357,14 @@ function zctabopen() {
 function forkdialogopen() {
   forkdialog.open = true;
 }
+
 function setinfotabopen() {
   setinfotab.open = true;
 }
+
 function pushdialogopen() {
   pushdialog.open = true;
 }
-
 
 let isLoading = false;
 
@@ -432,6 +389,7 @@ function load() {
     downloadAndLoadProject(_pid);
   }
 }
+
 function downloadAndLoadProject(pid) {
   console.log(`Downloading project with ID: ${pid}`);
   const loadingDialog = document.querySelector(".loading-dialog");
@@ -463,7 +421,7 @@ function downloadAndLoadProject(pid) {
       commitInfoList.headline = commitInfo.commit_message;
       const commitInfoAvatar = document.getElementById("commit-avatar");
       commituser = getZerocatUserInfo(commitInfo.author_id);
-      commitInfoAvatar.src = 'https://s4-1.wuyuan.1r.ink/user/'+commituser.images;
+      commitInfoAvatar.src = "https://s4-1.wuyuan.1r.ink/user/" + commituser.images;
       commitInfoList.description = `${commituser.display_name} 于 ${commitDate}`;
 
       $.ajax({
@@ -605,6 +563,24 @@ buttons.push({
 
 function openCommitDialog() {
   const commitDialog = document.getElementById("commit-dialog");
+  const branchNameInput = document.getElementById("branch-name");
+  const branchRadioGroup = document.querySelector('mdui-radio-group');
+
+  const currentBranch = getQueryStringParameter("branch") || "main";
+  branchNameInput.value = currentBranch;
+
+  branchRadioGroup.addEventListener('change', (event) => {
+    if (event.target.value === 'pr') {
+      const username = userinfo.username;
+      const timestamp = Date.now();
+      branchNameInput.value = `${username}-patch-${timestamp}`;
+      branchNameInput.disabled = false;
+    } else {
+      branchNameInput.value = currentBranch;
+      branchNameInput.disabled = true;
+    }
+  });
+
   commitDialog.open = true;
 }
 
@@ -666,9 +642,15 @@ function commitProject() {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         success: function (commitResponse) {
           showSnackbar("提交成功");
-          document.getElementById("commit-dialog").close();
+          document.getElementById("commit-dialog").open=false;
           setButton("save-button", "保存完成", () => openCommitDialog());
           logText.innerText += `[${getCurrentTime()}]保存完成\n`;
+
+          // 修改或添加 URL query 部分的 branch
+          const url = new URL(window.location.href);
+          url.searchParams.set('branch', branchName);
+          window.history.replaceState({}, '', url);
+
         },
         error: function (xhr) {
           const data = xhr.responseJSON;
