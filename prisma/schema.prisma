@@ -103,7 +103,7 @@ model ow_projects_file {
   sha256        String    @id @db.VarChar(64)
   source        String?   @db.MediumText
   create_time   DateTime? @default(now()) @db.DateTime(0)
-  caeate_userid Int?
+  create_userid Int?
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
