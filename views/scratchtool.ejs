@@ -1,3 +1,5 @@
+const isEmbed = true;
+
 // 加载外部资源
 const loadScript = (src, callback) => {
   const script = document.createElement("script");
@@ -16,16 +18,19 @@ const loadStyle = (href) => {
 const ZCFrontend = localStorage.getItem("ZeroCat_ZCFrontend") || "<%= global.config['urls.frontend'] %>";
 const ZCApiHost = localStorage.getItem("ZeroCat_ZCApiHost") || "<%= global.config['urls.backend'] %>";
 
-loadStyle(`${ZCFrontend}/scratchtool/mdui.css`);
+function loadResources() {
+  loadStyle(`${ZCFrontend}/scratchtool/mdui.css`);
 
-loadScript(`${ZCFrontend}/scratchtool/jquery.3.7.1.js`, () => {
-  loadScript(`${ZCFrontend}/scratchtool/mdui.global.js`, () => {
-    // 确保 $ 和 mdui 加载成功后执行初始化
-    $(document).ready(() => {
-      initialize();
+  loadScript(`${ZCFrontend}/scratchtool/jquery.3.7.1.js`, () => {
+    loadScript(`${ZCFrontend}/scratchtool/mdui.global.js`, () => {
+      // 确保 $ 和 mdui 加载成功后执行初始化
+      $(document).ready(() => {
+        initialize();
+      });
     });
   });
-});
+}
+loadResources();
 
 // Description: ZeroCat Scratch Tool
 let zcvm, zcgui;
@@ -125,24 +130,36 @@ function handleInvalidLogin(message) {
   showLoginButton();
 }
 
+// 定义一个函数用于加载用户信息
 function loadUserInfo() {
+  // 从localStorage中获取名为"token"的项
   const token = localStorage.getItem("token");
+  // 检查token是否存在
   if (token) {
     try {
+      // 使用jwtDecode函数解码token
       const decoded = jwtDecode(token);
+      // 获取当前时间的时间戳（秒）
       const currentTime = Math.floor(Date.now() / 1000);
+      // 检查解码后的token是否包含过期时间且是否已过期
       if (decoded.exp && decoded.exp < currentTime) {
+        // 如果token已过期，调用handleInvalidLogin函数处理
         handleInvalidLogin("登录已过期，请重新登录。");
       } else {
+        // 如果token未过期，将解码后的用户信息赋值给userinfo变量
         userinfo = decoded;
+        // 将用户ID存储到localStorage中，键名为"zc:id"
         localStorage.setItem("zc:id", String(decoded.userid));
+        // 将用户名存储到localStorage中，键名为"zc:username"
         localStorage.setItem("zc:username", decoded.display_name);
       }
     } catch (error) {
+      // 如果解码过程中发生错误，调用handleInvalidLogin函数处理
       handleInvalidLogin("登录信息无效，请重新登录。");
     }
   } else {
-    showLoginButton();
+    // 如果token不存在，显示登录按钮
+    if (!isEmbed) showLoginButton();
   }
 }
 
@@ -226,17 +243,20 @@ function fetchProjectInfo() {
           return;
         }
         projectinfo = result;
-        authorinfocard.headline = result.author.username;
-        authorinfocard.description = result.author.description;
-        authorinfocard.onclick = () => window.open(`${ZCFrontend}/user/${result.author.id}`);
-        authorinfocard.style.cursor = "pointer";
-        authorinfoavatar.src = "https://s4-1.wuyuan.1r.ink/user/" + result.author.profile.id;
-        zctab.headline = `${result.title} #${result.id}`;
-        zctab.description = `${String(result.author.id) === String(userinfo.userid) ? "是你的作品" : "不是你的作品"}`;
+        if (!isEmbed) {
+          authorinfocard.headline = result.author.username;
+          authorinfocard.description = result.author.description;
+          authorinfocard.onclick = () => window.open(`${ZCFrontend}/user/${result.author.id}`);
+          authorinfocard.style.cursor = "pointer";
+          authorinfoavatar.src = "https://s4-1.wuyuan.1r.ink/user/" + result.author.profile.id;
+          zctab.headline = `${result.title} #${result.id}`;
+          zctab.description = `${String(result.author.id) === String(userinfo.userid) ? "是你的作品" : "不是你的作品"}`;
 
-        if (String(result.author.id) !== String(userinfo.userid)) {
-          setButton("push-button", "改编", () => window.open(`${ZCFrontend}/projects/${_pid}/fork`));
+          if (String(result.author.id) !== String(userinfo.userid)) {
+            setButton("push-button", "改编", () => window.open(`${ZCFrontend}/projects/${_pid}/fork`));
+          }
         }
+
       },
       error: function (xhr) {
         const data = xhr.responseJSON;
@@ -276,61 +296,85 @@ function getZerocatUserInfo(userid) {
   return result;
 }
 
+
 function initialize() {
   if (window.initialized) return; // 避免初始化两次
   window.initialized = true;
 
-  const zerocatTabHTML = `
-    <mdui-dialog headline="作品" description="加载中" close-on-overlay-click id="zerocat-tab">
-      <mdui-list>
-        <mdui-list-subheader>作者</mdui-list-subheader>
-        <mdui-list-item headline="作者信息" description="加载中" id="author-info" active rounded>
-          <mdui-avatar slot="icon" src="" id="author-avatar"></mdui-avatar>
-        </mdui-list-item>
-        <mdui-list-subheader>当前提交</mdui-list-subheader>
-        <mdui-list-item headline="提交信息" description="Supporting text" id="commit-info" rounded>
-          <mdui-avatar slot="icon" src="" id="commit-avatar"></mdui-avatar>
-        </mdui-list-item>
-      </mdui-list>
-      <br/>
-      <mdui-button id="savestatic" onclick="uploadProjectAssets()">保存媒体库</mdui-button>
-      <mdui-button onclick="openCommitDialog()">保存作品</mdui-button>
-      <mdui-button onclick="logText.innerText = ''">清空log</mdui-button>
-      <div id="log-text"></div>
-    </mdui-dialog>
-  `;
-  document.body.insertAdjacentHTML("beforeend", zerocatTabHTML);
+  if (!isEmbed) {
+    const zerocatTabHTML = `
+      <mdui-dialog headline="作品" description="加载中" close-on-overlay-click id="zerocat-tab">
+        <mdui-list>
+          <mdui-list-subheader>作者</mdui-list-subheader>
+          <mdui-list-item headline="作者信息" description="加载中" id="author-info" active rounded>
+            <mdui-avatar slot="icon" src="" id="author-avatar"></mdui-avatar>
+          </mdui-list-item>
+          <mdui-list-subheader>当前提交</mdui-list-subheader>
+          <mdui-list-item headline="提交信息" description="Supporting text" id="commit-info" rounded>
+            <mdui-avatar slot="icon" src="" id="commit-avatar"></mdui-avatar>
+          </mdui-list-item>
+        </mdui-list>
+        <br/>
+        <mdui-button id="savestatic" onclick="uploadProjectAssets()">保存媒体库</mdui-button>
+        <mdui-button onclick="openCommitDialog()">保存作品</mdui-button>
+        <mdui-button onclick="logText.innerText = ''">清空log</mdui-button>
+        <div id="log-text"></div>
+      </mdui-dialog>
+    `;
+    document.body.insertAdjacentHTML("beforeend", zerocatTabHTML);
 
-  // 添加HTML创建提示框
-  document.body.insertAdjacentHTML(
-    "beforeend",
+    // 添加HTML创建提示框
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `
+      <mdui-dialog
+        headline="加载中"
+        description="正在加载作品，请稍候..."
+        close-on-overlay-click
+        class="loading-dialog"
+      ></mdui-dialog>
+      <mdui-dialog headline="提交作品" description="请输入提交信息" close-on-overlay-click id="commit-dialog">
+      <mdui-text-field variant="outlined" label="提交信息" value="Update Project" id="commit-message"></mdui-text-field>
+      <mdui-text-field variant="outlined" label="更多信息" rows ></mdui-text-field>
+  <mdui-radio-group value="main">
+    <mdui-radio value="main">提交给当前分支</mdui-radio>
+    <mdui-radio value="pr">为此提交创建一个新分支</mdui-radio>
+  </mdui-radio-group>
+      <mdui-text-field variant="outlined" label="分支名称" value="main" id="branch-name"></mdui-text-field>
+        <mdui-button onclick="commitProject()">提交</mdui-button>
+      </mdui-dialog>
     `
-    <mdui-dialog
-      headline="加载中"
-      description="正在加载作品，请稍候..."
-      close-on-overlay-click
-      class="loading-dialog"
-    ></mdui-dialog>
-    <mdui-dialog headline="提交作品" description="请输入提交信息" close-on-overlay-click id="commit-dialog">
-    <mdui-text-field variant="outlined" label="提交信息" value="Update Project" id="commit-message"></mdui-text-field>
-    <mdui-text-field variant="outlined" label="更多信息" rows ></mdui-text-field>
-<mdui-radio-group value="main">
-  <mdui-radio value="main">提交给当前分支</mdui-radio>
-  <mdui-radio value="pr">为此提交创建一个新分支</mdui-radio>
-</mdui-radio-group>
-    <mdui-text-field variant="outlined" label="分支名称" value="main" id="branch-name"></mdui-text-field>
-      <mdui-button onclick="commitProject()">提交</mdui-button>
-    </mdui-dialog>
-  `
-  );
+    );
+
+    zctab = document.querySelector("#zerocat-tab");
+    authorinfocard = document.querySelector("#author-info");
+    authorinfoavatar = document.querySelector("#author-avatar");
+    logText = document.querySelector("#log-text");
+
+    renderButtons();
+  } else {
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      `
+      <mdui-dialog
+        headline="加载中"
+        description="正在加载作品，请稍候..."
+        close-on-overlay-click
+        class="loading-dialog"
+        open
+      ></mdui-dialog>
+    `
+    );
+  }
 
   const loadingDialog = document.querySelector(".loading-dialog");
 
   if (typeof ClipCCExtension !== "undefined") {
     zcvm = ClipCCExtension.api.getVmInstance();
-    //zcgui = ClipCCExtension.api.getGuiInstance();
+    zcgui = ClipCCExtension.api.getGuiInstance();
   } else if (typeof window.vm !== "undefined") {
-    zcvm = vm;
+    zcvm = window.vm;
+    zcgui = window.gui;
   } else {
     setTimeout(initialize, 100);
     return;
@@ -342,14 +386,8 @@ function initialize() {
     if (msg == "401") alert("未登录");
   }
 
-  zctab = document.querySelector("#zerocat-tab");
-  authorinfocard = document.querySelector("#author-info");
-  authorinfoavatar = document.querySelector("#author-avatar");
-  logText = document.querySelector("#log-text");
-
   loadUserInfo();
-  renderButtons();
-  load();
+  loadProject();
 }
 
 window.onload = () => {
@@ -360,21 +398,9 @@ function zctabopen() {
   updateZerocatTab();
 }
 
-function forkdialogopen() {
-  forkdialog.open = true;
-}
-
-function setinfotabopen() {
-  setinfotab.open = true;
-}
-
-function pushdialogopen() {
-  pushdialog.open = true;
-}
-
 let isLoading = false;
 
-function load() {
+function loadProject() {
   if (isLoading) return;
   isLoading = true;
 
@@ -395,7 +421,7 @@ function load() {
     if (zcvm) {
       downloadAndLoadProject(_pid);
     } else {
-      setTimeout(load, 100);
+      setTimeout(loadProject, 100);
     }
   }
 }
@@ -423,9 +449,10 @@ function downloadAndLoadProject(pid) {
         isLoading = false;
         return;
       }
-
       const { commit, accessFileToken } = response;
       commitInfo = commit;
+
+      if (!isEmbed){
       const commitDate = new Date(commitInfo.commit_date).toLocaleString();
       const commitInfoList = document.getElementById("commit-info");
       commitInfoList.headline = commitInfo.commit_message;
@@ -433,7 +460,7 @@ function downloadAndLoadProject(pid) {
       commituser = getZerocatUserInfo(commitInfo.author_id);
       commitInfoAvatar.src = "https://s4-1.wuyuan.1r.ink/user/" + commituser.images;
       commitInfoList.description = `${commituser.display_name} 于 ${commitDate}`;
-
+    }
       $.ajax({
         url: `${ZCApiHost}/project/files/${commit.commit_file}`,
         type: "GET",

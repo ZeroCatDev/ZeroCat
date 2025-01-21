@@ -178,13 +178,6 @@ model ow_projects_stars {
   createTime DateTime? @default(now()) @db.Timestamp(0)
 }
 
-model ow_users_magiclink {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  token     String   @unique(map: "token") @db.VarChar(255)
-  expiresAt DateTime @db.DateTime(0)
-}
-
 model ow_projects_commits {
   id               String   @id @db.VarChar(256)
   project_id       Int
@@ -194,4 +187,11 @@ model ow_projects_commits {
   commit_message   String   @db.Text
   commit_date      DateTime @db.DateTime(0)
   commit_file      String   @db.VarChar(256)
+}
+
+model ow_users_magiclink {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  token     String   @unique(map: "token") @db.VarChar(255)
+  expiresAt DateTime @db.DateTime(0)
 }

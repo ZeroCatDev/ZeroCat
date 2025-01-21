@@ -1,9 +1,9 @@
-import { prisma } from "./utils/global.js";
+import { prisma } from "../utils/global.js";
 import { createHash } from "crypto";
-import configManager from "./utils/configManager.js";
+import configManager from "../utils/configManager.js";
 import jwt from "jsonwebtoken";
-import logger from "./utils/logger.js";
-import { generateFileAccessToken } from "./utils/tokenManager.js";
+import logger from "../utils/logger.js";
+import { generateFileAccessToken } from "../utils/tokenManager.js";
 
 async function createCommit(project, source, message, parent_commit_id = null) {
   const sha256 = source; // 直接使用传入的 source 作为 sha256
@@ -21,9 +21,6 @@ async function createCommit(project, source, message, parent_commit_id = null) {
       logger.error(err);
     }
   });
-
-  // 生成一个五分钟有效的jwt，记录用户有权访问此文件
-  const accessFileToken = await generateFileAccessToken(sha256, project.authorid);
 
   // 计算提交的哈希值作为 id
   const commitContent = JSON.stringify({
