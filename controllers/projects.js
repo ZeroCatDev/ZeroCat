@@ -146,7 +146,6 @@ function projectSelectionFields() {
     title: true,
     description: true,
     tags: true,
-    source: true,
   };
 }
 

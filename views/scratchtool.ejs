@@ -1,19 +1,24 @@
 // 加载外部资源
 const loadScript = (src, callback) => {
-  const script = document.createElement('script');
+  const script = document.createElement("script");
   script.src = src;
   script.onload = callback;
   document.head.appendChild(script);
 };
 
 const loadStyle = (href) => {
-  const link = document.createElement('link');
-  link.rel = 'stylesheet';
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
   link.href = href;
   document.head.appendChild(link);
 };
 
-const ZCFrontend = localStorage.getItem("ZeroCat_ZCFrontend") || "<%= global.config['urls.frontend'] %>";
+const ZCFrontend =
+  localStorage.getItem("ZeroCat_ZCFrontend") ||
+  "<%= global.config['urls.frontend'] %>";
+const ZCApiHost =
+  localStorage.getItem("ZeroCat_ZCApiHost") ||
+  "<%= global.config['urls.backend'] %>";
 
 loadStyle(`${ZCFrontend}/scratchtool/mdui.css`);
 
@@ -29,15 +34,18 @@ loadScript(`${ZCFrontend}/scratchtool/jquery.3.7.1.js`, () => {
 // Description: ZeroCat Scratch Tool
 let zcvm, zcgui;
 
-const ZCApiHost = localStorage.getItem("ZeroCat_ZCApiHost") || "<%= global.config['urls.backend'] %>";
-
 let _pid = 0;
-let logText, zctab, userinfo = {}, projectjson = "null", projectinfo = {};
-
+let logText,
+  zctab,
+  userinfo = {},
+  projectjson = "null",
+  projectinfo = {};
+  commituser = {};
+  authorinfocard = {};
+let commitInfo = {};
 const buttons = [
-  { id: "open-zerocat-tab", text: "信息", onclick: () => (zctab.open = true) },
-  { id: "push-button", text: "推送", onclick: () => pushProject() },
-  { id: "save-button", text: "保存", onclick: () => saveProject({ force: false }) },
+  { id: "open-zerocat-tab", text: "信息", onclick: () => updateZerocatTab() },
+  { id: "save-button", text: "保存", onclick: () => openCommitDialog() },
 ];
 
 function getQueryStringParameter(name) {
@@ -101,13 +109,17 @@ function jwtDecode(token) {
   try {
     decoded = base64UrlDecode(part);
   } catch (e) {
-    throw new Error(`Invalid token specified: invalid base64 for part #2 (${e.message})`);
+    throw new Error(
+      `Invalid token specified: invalid base64 for part #2 (${e.message})`
+    );
   }
 
   try {
     return JSON.parse(decoded);
   } catch (e) {
-    throw new Error(`Invalid token specified: invalid json for part #2 (${e.message})`);
+    throw new Error(
+      `Invalid token specified: invalid json for part #2 (${e.message})`
+    );
   }
 }
 
@@ -118,6 +130,7 @@ function handleInvalidLogin(message) {
     description: message,
     confirmText: "打开用户页面",
     cancelText: "取消",
+
     onConfirm: () => {
       window.location.href = `${ZCFrontend}/account/login`;
     },
@@ -151,22 +164,23 @@ function showLoginButton() {
   buttons.push({
     id: "login-button",
     text: "登录/注册",
-    onclick: () => window.location.href = `${ZCFrontend}/account/login`,
+    onclick: () => (window.location.href = `${ZCFrontend}/account/login`),
   });
   renderButtons();
 }
 
 function renderButtons() {
   const zerocatool = document.getElementById("zerocatool");
-  zerocatool.innerHTML = ''; // 清空现有按钮
+  zerocatool.innerHTML = ""; // 清空现有按钮
   buttons.forEach((button) => {
-    const btnElement = document.createElement('button'); // 修复按钮被加载两次的问题
-    btnElement.id = button.id;
-    btnElement.innerText = button.text;
-    if (button.onclick) btnElement.onclick = button.onclick;
-    btnElement.style.display = "inline-block";
-    zerocatool.appendChild(btnElement); // 修复按钮被加载两次的问题
+    const btnTemplate = zerocatool.cloneNode(true);
+    btnTemplate.id = button.id;
+    btnTemplate.innerHTML = button.text;
+    if (button.onclick) btnTemplate.onclick = button.onclick;
+    btnTemplate.style.display = "inline-block";
+    zerocatool.parentNode.appendChild(btnTemplate);
   });
+  zerocatool.style.display = "none";
 }
 
 function setButton(id, text, onclick) {
@@ -188,94 +202,40 @@ function uploadProjectAssets() {
       );
 
       $.ajax({
-        url: `${ZCApiHost}/scratch/assets/${asset.assetId}.${asset.dataFormat}?token=${localStorage.getItem("token")}`,
+        url: `${ZCApiHost}/scratch/assets/${asset.assetId}.${
+          asset.dataFormat
+        }?token=${localStorage.getItem("token")}`,
         type: "POST",
         data: formData,
         processData: false,
         contentType: false,
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         success: function () {
-          logText.innerText += `[${getCurrentTime()}]文件上传成功${asset.assetId}.${asset.dataFormat}\n`;
+          logText.innerText += `[${getCurrentTime()}]文件上传成功${
+            asset.assetId
+          }.${asset.dataFormat}\n`;
           asset.clean = true;
         },
         error: function (xhr, status, error) {
-          if (xhr.responseJSON && xhr.responseJSON.code === 'AUTH_ERROR_LOGIN') {
+          if (
+            xhr.responseJSON &&
+            xhr.responseJSON.code === "AUTH_ERROR_LOGIN"
+          ) {
             handleInvalidLogin(xhr.responseJSON.message);
           } else {
-            logText.innerText += `[${getCurrentTime()}]文件上传失败${asset.assetId}.${asset.dataFormat}\nerror:${error}\n`;
+            logText.innerText += `[${getCurrentTime()}]文件上传失败${
+              asset.assetId
+            }.${asset.dataFormat}\nerror:${error}\n`;
           }
         },
       });
     } else {
-      logText.innerText += `[${getCurrentTime()}]文件未修改${asset.assetId}.${asset.dataFormat}\n`;
+      logText.innerText += `[${getCurrentTime()}]文件未修改${asset.assetId}.${
+        asset.dataFormat
+      }\n`;
     }
   });
   showSnackbar("媒体库保存完成");
-}
-
-function uploadProject() {
-  const url = _pid === 0 ? `${ZCApiHost}/project?token=${localStorage.getItem("token")}` : `${ZCApiHost}/project/${projectinfo.id}/source?token=${localStorage.getItem("token")}`;
-  const type = _pid === 0 ? "post" : "put";
-  const data = _pid === 0 ? JSON.stringify({ title: "Scratch新作品", type: "scratch", devsource: zcvm.toJSON() }) : zcvm.toJSON();
-
-  $.ajax({
-    url,
-    type,
-    data,
-    contentType: "application/json",
-    success: function (result) {
-      if (_pid === 0) {
-        console.log("作品创建成功");
-        location.href = `${ZCFrontend}/editor.html#${result.id}`;
-      } else {
-        console.log("作品保存成功");
-        showSnackbar("作品保存成功");
-        setButton("push-button", "推送", () => pushProject());
-      }
-    },
-    error: function (xhr) {
-      const data = xhr.responseJSON;
-      if (data && data.code === 'AUTH_ERROR_LOGIN') {
-        handleInvalidLogin(data.message);
-      } else {
-        console.log(xhr);
-        mdui.alert({
-          headline: _pid === 0 ? "创建作品出错" : "保存作品出错",
-          description: JSON.stringify(xhr),
-          confirmText: "关闭",
-        });
-      }
-    },
-  });
-}
-
-function pushProject() {
-  setButton("push-button", "推送中", () => pushProject());
-  $.ajax({
-    url: `${ZCApiHost}/project/${_pid}/push?token=${localStorage.getItem("token")}`,
-    type: "post",
-    success: function (data) {
-      if (data.code === 'AUTH_ERROR_LOGIN') {
-        handleInvalidLogin(data.message);
-      } else {
-        showSnackbar("推送成功");
-        setButton("push-button", "推送完成", () => pushProject());
-      }
-    },
-    error: function (xhr) {
-      const data = xhr.responseJSON;
-      if (data && data.code === 'AUTH_ERROR_LOGIN') {
-        handleInvalidLogin(data.message);
-      } else {
-        console.log(xhr);
-        mdui.alert({
-          headline: "推送作品出错",
-          description: JSON.stringify(xhr),
-          confirmText: "关闭",
-        });
-      }
-    },
-  });
 }
 
 function fetchProjectInfo() {
@@ -290,18 +250,29 @@ function fetchProjectInfo() {
           return;
         }
         projectinfo = result;
-        if (zctab) {
+        authorinfocard.headline = result.author.username;
+        authorinfocard.description = result.author.description;
+        authorinfocard.onclick = () =>
+          window.open(`${ZCFrontend}/user/${result.author.id}`);
+        authorinfocard.style.cursor = "pointer";
           zctab.headline = result.title;
-          zctab.description = `用户ID：${result.author.id}，作品ID：${result.id} ，${String(result.author.id) === String(userinfo.userid) ? "是你的作品" : "不是你的作品"}`;
-        }
+          zctab.description = `${
+            String(result.author.id) === String(userinfo.userid)
+              ? "是你的作品"
+              : "不是你的作品"
+          }`;
+
 
         if (String(result.author.id) !== String(userinfo.userid)) {
-          setButton("push-button", "改编", () => window.open(`${ZCFrontend}/projects/${_pid}/fork`));
+          setButton("push-button", "改编", () =>
+            window.open(`${ZCFrontend}/projects/${_pid}/fork`)
+          );
         }
+
       },
       error: function (xhr) {
         const data = xhr.responseJSON;
-        if (data && data.code === 'AUTH_ERROR_LOGIN') {
+        if (data && data.code === "AUTH_ERROR_LOGIN") {
           handleInvalidLogin(data.message);
         } else {
           alert(xhr);
@@ -311,18 +282,58 @@ function fetchProjectInfo() {
   }
 }
 
+function updateZerocatTab() {
+
+
+  zctab.open = true;
+}
+function getZerocatUserInfo(userid) {
+  let result;
+  $.ajax({
+    url: `${ZCApiHost}/api/getuserinfo?id=${userid}`,
+    type: "GET",
+    data: { token: localStorage.getItem("token") },
+    async: false,
+
+    success: function (data) {
+      result = data.info.user;
+    },error: function (xhr) {
+      const data = xhr.responseJSON;
+      if (data && data.code === "AUTH_ERROR_LOGIN") {
+        handleInvalidLogin(data.message);
+      } else {
+        alert(xhr);
+      }
+    }
+  });
+
+  return result;
+}
 function initialize() {
-  // 创建对话框元素
-  const dialogHTML = `
+  if (window.initialized) return; // 避免初始化两次
+  window.initialized = true;
+  const zerocatTabHTML = `
     <mdui-dialog headline="作品" description="加载中" close-on-overlay-click id="zerocat-tab">
+      <mdui-list>
+        <mdui-list-subheader>作者</mdui-list-subheader>
+
+  <mdui-list-item headline="作者信息" description="加载中" id="author-info" active rounded >
+  <mdui-avatar slot="icon" src="" id="commit-avatar"></mdui-avatar>
+  </mdui-list-item>
+  <mdui-list-subheader>当前提交</mdui-list-subheader>
+
+  <mdui-list-item headline="提交信息" description="Supporting text" id="commit-info" rounded >
+  <mdui-avatar slot="icon" src="" id="commit-avatar"></mdui-avatar>
+  </mdui-list-item>
+</mdui-list>
+<br/>
       <mdui-button id="savestatic" onclick="uploadProjectAssets()">保存媒体库</mdui-button>
-      <mdui-button onclick="projectjson='null';saveProject()">强制保存作品</mdui-button>
+      <mdui-button onclick="openCommitDialog()">保存作品</mdui-button>
       <mdui-button onclick="logText.innerText = ''">清空log</mdui-button>
       <div id="log-text"></div>
     </mdui-dialog>
   `;
-  document.body.insertAdjacentHTML('beforeend', dialogHTML);
-
+  document.body.insertAdjacentHTML("beforeend", zerocatTabHTML);
   // 添加HTML创建提示框
   document.body.insertAdjacentHTML(
     "beforeend",
@@ -333,15 +344,33 @@ function initialize() {
       close-on-overlay-click
       class="loading-dialog"
     ></mdui-dialog>
+    <mdui-dialog headline="作品" description="加载中" close-on-overlay-click id="zerocat-tab">
+      <div id="commit-info"></div>
+      <mdui-button id="savestatic" onclick="uploadProjectAssets()">保存媒体库</mdui-button>
+      <mdui-button onclick="openCommitDialog()">保存作品</mdui-button>
+      <mdui-button onclick="logText.innerText = ''">清空log</mdui-button>
+      <div id="log-text"></div>
+    </mdui-dialog>
+    <mdui-dialog headline="提交作品" description="请输入提交信息" close-on-overlay-click id="commit-dialog">
+      <div class="mdui-textfield">
+        <label class="mdui-textfield-label">分支名称</label>
+        <input class="mdui-textfield-input" type="text" id="branch-name" value="main" />
+      </div>
+      <div class="mdui-textfield">
+        <label class="mdui-textfield-label">提交信息</label>
+        <input class="mdui-textfield-input" type="text" id="commit-message" />
+      </div>
+      <mdui-button onclick="commitProject()">提交</mdui-button>
+    </mdui-dialog>
   `
   );
 
   const loadingDialog = document.querySelector(".loading-dialog");
 
-  if (typeof ClipCCExtension !== 'undefined') {
+  if (typeof ClipCCExtension !== "undefined") {
     zcvm = ClipCCExtension.api.getVmInstance();
     zcgui = ClipCCExtension.api.getGuiInstance();
-  } else if (typeof window.vm !== 'undefined') {
+  } else if (typeof window.vm !== "undefined") {
     zcvm = window.vm;
     zcgui = window.gui;
   } else {
@@ -356,24 +385,19 @@ function initialize() {
   }
 
   zctab = document.querySelector("#zerocat-tab");
+  authorinfocard = document.querySelector("#author-info");
+
   logText = document.querySelector("#log-text");
 
   loadUserInfo();
   renderButtons();
-  setButton("push-button", "推送", () => pushProject());
   load();
 }
 
-window.onload = () => {
-  if (!window.initialized) {
-    window.initialized = true;
-    initialize();
-  }
-};
-
 function zctabopen() {
-  zctab.open = true;
+  updateZerocatTab();
 }
+
 function forkdialogopen() {
   forkdialog.open = true;
 }
@@ -384,10 +408,6 @@ function pushdialogopen() {
   pushdialog.open = true;
 }
 
-window.zctabopen = zctabopen;
-window.forkdialogopen = forkdialogopen;
-window.setinfotabopen = setinfotabopen;
-window.pushdialogopen = pushdialogopen;
 
 let isLoading = false;
 
@@ -403,7 +423,7 @@ function load() {
   }
   if (_pid === 0) {
     console.log("No project ID found, redirecting to new project page.");
-    window.location.href = `${ZCApiHost}/newproject`;
+    //window.location.href = `${ZCApiHost}/newproject`;
     return;
   }
   if (_pid !== 0) {
@@ -411,46 +431,87 @@ function load() {
     fetchProjectInfo();
     downloadAndLoadProject(_pid);
   }
-  setButton("push-button", "推送", () => pushProject());
 }
-
 function downloadAndLoadProject(pid) {
   console.log(`Downloading project with ID: ${pid}`);
   const loadingDialog = document.querySelector(".loading-dialog");
   loadingDialog.open = true;
 
+  const branch = getQueryStringParameter("branch") || "main";
+  const ref = getQueryStringParameter("ref") || "latest";
+
   $.ajax({
-    url: `${ZCApiHost}/project/${pid}/source`,
+    url: `${ZCApiHost}/project/${pid}/${branch}/${ref}`,
     type: "GET",
     data: { token: localStorage.getItem("token") },
-    success: function (projectData) {
-      console.log("Project data downloaded successfully.");
-      zcvm
-        .loadProject(JSON.parse(projectData))
-        .then(() => {
-          console.log("Project loaded into VM successfully.");
-          setTimeout(() => { // 延迟2秒关闭加载中弹框
-            loadingDialog.open = false;
-          }, 2000);
-          isLoading = false;
-        })
-        .catch((err) => {
-          console.error("Error loading project into VM:", err);
+    success: function (response) {
+      if (response.status === "error") {
+        mdui.alert({
+          headline: "加载失败",
+          description: response.message,
+          confirmText: "关闭",
+        });
+        loadingDialog.open = false;
+        isLoading = false;
+        return;
+      }
+
+      const { commit, accessFileToken } = response;
+      commitInfo = commit;
+      const commitDate = new Date(commitInfo.commit_date).toLocaleString();
+      const commitInfoList = document.getElementById("commit-info");
+      commitInfoList.headline = commitInfo.commit_message;
+      const commitInfoAvatar = document.getElementById("commit-avatar");
+      commituser = getZerocatUserInfo(commitInfo.author_id);
+      commitInfoAvatar.src = 'https://s4-1.wuyuan.1r.ink/user/'+commituser.images;
+      commitInfoList.description = `${commituser.display_name} 于 ${commitDate}`;
+
+      $.ajax({
+        url: `${ZCApiHost}/project/files/${commit.commit_file}`,
+        type: "GET",
+        data: { accessFileToken, token: localStorage.getItem("token") },
+        success: function (fileResponse) {
+          zcvm
+            .loadProject(JSON.parse(fileResponse.file.source))
+            .then(() => {
+              console.log("Project loaded into VM successfully.");
+              setTimeout(() => {
+                loadingDialog.open = false;
+              }, 2000);
+              isLoading = false;
+            })
+            .catch((err) => {
+              console.error("Error loading project into VM:", err);
+              loadingDialog.open = false;
+              isLoading = false;
+              mdui.alert({
+                headline: "加载失败",
+                description: `作品加载失败: ${err.message}`,
+                confirmText: "重新加载",
+                onConfirm: () => {
+                  window.location.reload();
+                },
+              });
+            });
+        },
+        error: function (xhr) {
+          console.error("Error fetching project file:", xhr);
           loadingDialog.open = false;
           isLoading = false;
           mdui.alert({
             headline: "加载失败",
-            description: `作品加载失败: ${err.message}`,
+            description: `作品加载失败: ${xhr.responseText}`,
             confirmText: "重新加载",
             onConfirm: () => {
               window.location.reload();
             },
           });
-        });
+        },
+      });
     },
     error: function (xhr) {
       const data = xhr.responseJSON;
-      if (data && data.code === 'AUTH_ERROR_LOGIN') {
+      if (data && data.code === "AUTH_ERROR_LOGIN") {
         handleInvalidLogin(data.message);
       } else {
         console.error("Error downloading project data:", xhr);
@@ -470,32 +531,31 @@ function downloadAndLoadProject(pid) {
 }
 
 function saveProject({ force = false } = {}) {
-  setButton("save-button", "保存中", () => saveProject(force));
+  setButton("save-button", "保存中", () => openCommitDialog());
   uploadProjectAssets();
   if (force) {
     showSnackbar("强制保存");
-    uploadProject();
+    commitProject();
   }
   if (zcvm.runtime.isRunning) {
     zcvm.runtime.stopAll();
   }
   if (projectjson == zcvm.toJSON()) {
     showSnackbar("作品未修改");
-    setButton("save-button", "保存", () => saveProject({ force: false }));
+    setButton("save-button", "保存", () => openCommitDialog());
     return;
   }
   if (String(projectinfo.author.id) !== String(userinfo.userid)) {
     showSnackbar("无权限");
-    setButton("save-button", "无权限", () => saveProject({ force: false }));
+    setButton("save-button", "无权限", () => openCommitDialog());
     return;
   }
   projectjson = zcvm.toJSON();
-  uploadProject();
+  commitProject();
   showSnackbar("保存完成");
-  setButton("save-button", "保存完成", () => saveProject({ force: false }));
+  setButton("save-button", "保存完成", () => openCommitDialog());
 
   logText.innerText += `[${getCurrentTime()}]保存完成\n`;
-  setButton("push-button", "推送", () => pushProject());
 }
 
 function openBase64ImageInNewTab() {
@@ -523,7 +583,7 @@ function setProjectThumbnail() {
       });
 
       const data = await response.json();
-      if (data.code === 'AUTH_ERROR_LOGIN') {
+      if (data.code === "AUTH_ERROR_LOGIN") {
         handleInvalidLogin(data.message);
       } else if (response.ok) {
         showSnackbar("封面设置成功");
@@ -542,3 +602,101 @@ buttons.push({
   text: "舞台截图设为封面",
   onclick: () => setProjectThumbnail(),
 });
+
+function openCommitDialog() {
+  const commitDialog = document.getElementById("commit-dialog");
+  commitDialog.open = true;
+}
+
+function commitProject() {
+  const branchName = document.getElementById("branch-name").value;
+  const commitMessage = document.getElementById("commit-message").value;
+
+  if (!commitMessage) {
+    mdui.alert({
+      headline: "提交信息不能为空",
+      confirmText: "关闭",
+    });
+    return;
+  }
+
+  setButton("save-button", "保存中", () => openCommitDialog());
+
+  uploadProjectAssets();
+
+  if (zcvm.runtime.isRunning) {
+    zcvm.runtime.stopAll();
+  }
+
+  if (projectjson == zcvm.toJSON()) {
+    showSnackbar("作品未修改");
+    setButton("save-button", "保存", () => openCommitDialog());
+    return;
+  }
+
+  if (String(projectinfo.author.id) !== String(userinfo.userid)) {
+    showSnackbar("无权限");
+    setButton("save-button", "无权限", () => openCommitDialog());
+    return;
+  }
+
+  projectjson = zcvm.toJSON();
+
+  // 先调用文件保存接口
+  $.ajax({
+    url: `${ZCApiHost}/project/savefile`,
+    type: "post",
+    data: projectjson,
+    contentType: "application/json",
+    headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+    success: function (saveResponse) {
+      const newAccessFileToken = saveResponse.accessFileToken;
+
+      // 然后调用提交接口
+      $.ajax({
+        url: `${ZCApiHost}/project/commit/${_pid}`,
+        type: "put",
+        data: JSON.stringify({
+          projectid: _pid,
+          branch: branchName,
+          accessFileToken: newAccessFileToken,
+          message: commitMessage,
+        }),
+        contentType: "application/json",
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        success: function (commitResponse) {
+          showSnackbar("提交成功");
+          document.getElementById("commit-dialog").close();
+          setButton("save-button", "保存完成", () => openCommitDialog());
+          logText.innerText += `[${getCurrentTime()}]保存完成\n`;
+        },
+        error: function (xhr) {
+          const data = xhr.responseJSON;
+          if (data && data.code === "AUTH_ERROR_LOGIN") {
+            handleInvalidLogin(data.message);
+          } else {
+            console.log(xhr);
+            mdui.alert({
+              headline: "提交作品出错",
+              description: JSON.stringify(xhr),
+              confirmText: "关闭",
+            });
+          }
+        },
+      });
+    },
+    error: function (xhr) {
+      const data = xhr.responseJSON;
+      if (data && data.code === "AUTH_ERROR_LOGIN") {
+        handleInvalidLogin(data.message);
+      } else {
+        console.log(xhr);
+        mdui.alert({
+          headline: "保存文件出错",
+          description: JSON.stringify(xhr),
+          confirmText: "关闭",
+        });
+      }
+    },
+  });
+}

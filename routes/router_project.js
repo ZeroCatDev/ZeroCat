@@ -17,9 +17,9 @@ import jwt from "jsonwebtoken";
 import {
   generateFileAccessToken,
   verifyFileAccessToken,
-
 } from "../utils/tokenManager.js";
 import { needlogin } from "../middleware/auth.js";
+import { hasProjectPermission } from "../utils/permissionManager.js";
 // 中间件，确保所有请求均经过该处理
 router.all("*", (req, res, next) => next());
 
@@ -39,7 +39,9 @@ router.post("/", async (req, res, next) => {
     outputJson.authorid = res.locals.userid;
 
     const result = await prisma.ow_projects.create({ data: outputJson });
-    res.status(200).send({ status: "success", message: "保存成功", id: result.id });
+    res
+      .status(200)
+      .send({ status: "success", message: "保存成功", id: result.id });
   } catch (err) {
     logger.error("Error creating new project:", err);
     next(err);
@@ -47,7 +49,7 @@ router.post("/", async (req, res, next) => {
 });
 
 // 保存源代码
-router.post("/savefile",needlogin, async (req, res, next) => {
+router.post("/savefile", needlogin, async (req, res, next) => {
   if (!res.locals.userid) {
     return res
       .status(200)
@@ -55,11 +57,30 @@ router.post("/savefile",needlogin, async (req, res, next) => {
   }
 
   try {
-    const { source } = req.body;
-    if (typeof source !== "string") {
+    let source;
+    if (req.is("multipart/form-data")) {
+      source = req.body.source;
+    } else if (req.is("application/json")) {
+      source = req.body;
+    } else if (req.is("application/x-www-form-urlencoded")) {
+      source = req.body.source;
+    } else {
       return res
         .status(400)
-        .send({ status: "error", message: "无效的源代码格式" });
+        .send({ status: "error", message: "无效的内容类型" });
+    }
+
+    if (typeof source === "object") {
+      try {
+        source = JSON.stringify(source);
+      } catch (err) {
+        logger.error("Error stringifying source code:", err);
+        return res
+          .status(400)
+          .send({ status: "error", message: "无效的源代码格式" });
+      }
+    } else if (typeof source !== "string") {
+      source = String(source);
     }
 
     const sha256 = createHash("sha256").update(source).digest("hex");
@@ -70,7 +91,7 @@ router.post("/savefile",needlogin, async (req, res, next) => {
         data: {
           sha256: sha256,
           source: source,
-          authorid: res.locals.userid,
+          caeate_userid: res.locals.userid,
         },
       })
       .catch((err) => {
@@ -124,9 +145,7 @@ router.put("/commit/:id", async (req, res, next) => {
       where: { id: Number(projectid) },
     });
     if (!project) {
-      return res
-        .status(403)
-        .send({ status: "error", message: "项目不存在" });
+      return res.status(403).send({ status: "error", message: "项目不存在" });
     }
 
     if (project.authorid !== res.locals.userid) {
@@ -162,15 +181,29 @@ router.put("/commit/:id", async (req, res, next) => {
       });
       parent_commit_id = latestCommit ? latestCommit.id : null;
     }
+    const timestamp = Date.now();
+    // 计算提交的哈希值作为 id
+    const commitContent = JSON.stringify({
+      userid: res.locals.userid,
+      project_id: Number(projectid),
+      project_branch: branch,
+      source_sha256: sha256,
+      commit_message: message,
+      parent_commit: parent_commit_id,
+      timestamp: timestamp,
+    });
+    const commitId = createHash("sha256").update(commitContent).digest("hex");
 
     const result = await prisma.ow_projects_commits.create({
       data: {
+        id: commitId,
         project_id: Number(projectid),
         author_id: res.locals.userid,
         branch: branch,
         commit_file: sha256,
         commit_message: message,
         parent_commit_id: parent_commit_id,
+        commit_date: new Date(timestamp),
       },
     });
 
@@ -210,7 +243,9 @@ router.post("/:id/fork", async (req, res, next) => {
           tags: original.tags,
         },
       });
-      res.status(200).send({ status: "success", message: "改编成功", id: result.id });
+      res
+        .status(200)
+        .send({ status: "success", message: "改编成功", id: result.id });
     } else {
       res.status(200).send({ status: "error", message: "改编失败" });
     }
@@ -249,17 +284,23 @@ router.put("/:id", async (req, res, next) => {
 // 获取项目信息
 router.get("/:id", async (req, res, next) => {
   try {
+    const userId = res.locals.userid || 0; // 未登录用户为匿名用户
+    const hasPermission = await hasProjectPermission(
+      req.params.id,
+      userId,
+      "read"
+    );
+
+    if (!hasPermission) {
+      return res
+        .status(200)
+        .send({ status: "error", message: "作品不存在或无权打开" });
+    }
+
     const project = await prisma.ow_projects.findFirst({
       where: { id: Number(req.params.id) },
       select: projectSelectionFields(),
     });
-
-    if (
-      !project ||
-      (project.state === "private" && project.authorid !== res.locals.userid)
-    ) {
-      return res.status(200).send({ status: "error", message: "作品不存在或无权打开" });
-    }
 
     const author = await prisma.ow_users.findFirst({
       where: { id: Number(project.authorid) },
@@ -286,14 +327,17 @@ router.get("/:id", async (req, res, next) => {
 router.get("/:id/:branch/:ref", async (req, res, next) => {
   try {
     const { id, branch, ref } = req.params;
-    const userid = res.locals.userid || 0; // 未登录用户为匿名用户
+    const userId = res.locals.userid || 0; // 未登录用户为匿名用户
+    const hasPermission = await hasProjectPermission(id, userId, "read");
 
-    // 验证项目权限
-    const project = await prisma.ow_projects.findFirst({
-      where: { id: Number(id) },
-    });
-    if (!project || (project.state === "private" && project.authorid !== userid)) {
-      return res.status(200).send({ status: "error", message: "项目不存在或无权访问",code:"404" });
+    if (!hasPermission) {
+      return res
+        .status(200)
+        .send({
+          status: "error",
+          message: "项目不存在或无权访问",
+          code: "404",
+        });
     }
 
     let commit;
@@ -309,14 +353,19 @@ router.get("/:id/:branch/:ref", async (req, res, next) => {
     }
 
     if (!commit) {
+      const project = await prisma.ow_projects.findFirst({
+        where: { id: Number(id) },
+      });
       const defaultSource = default_project[project.type];
       if (!defaultSource) {
-        return res.status(200).send({ status: "error", message: "默认作品不存在" });
+        return res
+          .status(200)
+          .send({ status: "error", message: "默认作品不存在" });
       }
 
       const accessFileToken = await generateFileAccessToken(
         defaultSource.sha256,
-        userid
+        userId
       );
 
       return res.status(200).send({
@@ -333,7 +382,7 @@ router.get("/:id/:branch/:ref", async (req, res, next) => {
 
     const accessFileToken = await generateFileAccessToken(
       commit.commit_file,
-      userid
+      userId
     );
 
     res.status(200).send({
@@ -353,13 +402,10 @@ router.get("/files/:sha256", async (req, res, next) => {
   try {
     const { sha256 } = req.params;
     const { accessFileToken } = req.query;
-    const userid = res.locals.userid || 0; // 未登录用户为匿名用户
+    const userId = res.locals.userid || 0; // 未登录用户为匿名用户
 
     try {
-      const sha256 = await verifyFileAccessToken(
-        accessFileToken,
-        userid
-      );
+      const sha256 = await verifyFileAccessToken(accessFileToken, userId);
     } catch (err) {
       return res
         .status(200)
@@ -416,12 +462,13 @@ router.post("/:id/init", needlogin, async (req, res, next) => {
 
   try {
     const { id } = req.params;
+    const hasPermission = await hasProjectPermission(
+      id,
+      res.locals.userid,
+      "write"
+    );
 
-    // 验证项目权限
-    const project = await prisma.ow_projects.findFirst({
-      where: { id: Number(id), authorid: res.locals.userid },
-    });
-    if (!project) {
+    if (!hasPermission) {
       return res
         .status(403)
         .send({ status: "error", message: "无权访问此项目" });
@@ -440,9 +487,10 @@ router.post("/:id/init", needlogin, async (req, res, next) => {
     // 获取默认作品
     const defaultSource = default_project[project.type];
     if (!defaultSource) {
-      return res.status(200).send({ status: "error", message: "默认作品不存在" });
+      return res
+        .status(200)
+        .send({ status: "error", message: "默认作品不存在" });
     }
-
 
     // 计算提交的哈希值作为 id
     const commitContent = JSON.stringify({
@@ -466,7 +514,7 @@ router.post("/:id/init", needlogin, async (req, res, next) => {
         commit_file: defaultSource,
         commit_message: "初始化提交",
         parent_commit_id: null,
-        commit_date: new Date(),
+        commit_date: new Date(), // 使用 Date 对象
       },
     });
 

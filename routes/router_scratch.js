@@ -136,6 +136,7 @@ router.get("/projectinfo2", async function (req, res, next) {
       author: {
         id: result.authorid,
         username: author.display_name,
+        description: author.motto,
         scratchteam: author.id == 1 ? true : false,
         history: {
           joined: author.createdAt,
