@@ -364,16 +364,16 @@ router.get("/:id/:branch/:ref", async (req, res, next) => {
       }
 
       const accessFileToken = await generateFileAccessToken(
-        defaultSource.sha256,
+        defaultSource,
         userId
       );
 
       return res.status(200).send({
-        status: "success",
-        message: "获取成功",
+        status: "error",
+        message: "未初始化的作品",
         commit: {
-          commit_file: defaultSource.sha256,
-          commit_message: "默认作品",
+          commit_file: defaultSource,
+          commit_message: "NoFirstCommit",
           commit_date: new Date(),
         },
         accessFileToken,
@@ -484,6 +484,9 @@ router.post("/:id/init", needlogin, async (req, res, next) => {
         .send({ status: "error", message: "项目已存在提交或不存在" });
     }
 
+    const project = await prisma.ow_projects.findFirst({
+      where: { id: Number(id) },
+    });
     // 获取默认作品
     const defaultSource = default_project[project.type];
     if (!defaultSource) {

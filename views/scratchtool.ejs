@@ -1,4 +1,3 @@
-const isEmbed = !document.getElementById("zerocattool");
 
 // 加载外部资源
 const loadScript = (src, callback) => {
@@ -174,17 +173,17 @@ function showLoginButton() {
 }
 
 function renderButtons() {
-  const zerocatool = document.getElementById("zerocatool");
-  zerocatool.innerHTML = ""; // 清空现有按钮
+  const zerocattool = document.getElementById("zerocattool");
+  zerocattool.innerHTML = ""; // 清空现有按钮
   buttons.forEach((button) => {
-    const btnTemplate = zerocatool.cloneNode(true);
+    const btnTemplate = zerocattool.cloneNode(true);
     btnTemplate.id = button.id;
     btnTemplate.innerHTML = button.text;
     if (button.onclick) btnTemplate.onclick = button.onclick;
     btnTemplate.style.display = "inline-block";
-    zerocatool.parentNode.appendChild(btnTemplate);
+    zerocattool.parentNode.appendChild(btnTemplate);
   });
-  zerocatool.style.display = "none";
+  zerocattool.style.display = "none";
 }
 
 function setButton(id, text, onclick) {
@@ -296,10 +295,11 @@ function getZerocatUserInfo(userid) {
   return result;
 }
 
-
+let isEmbed
 function initialize() {
   if (window.initialized) return; // 避免初始化两次
   window.initialized = true;
+  isEmbed = !document.getElementById("zerocattool");
 
   if (!isEmbed) {
     const zerocatTabHTML = `
@@ -440,6 +440,38 @@ function downloadAndLoadProject(pid) {
     data: { token: localStorage.getItem("token") },
     success: function (response) {
       if (response.status === "error") {
+
+        if (response.commit.commit_message === "NoFirstCommit") {
+          mdui.alert({
+            headline: "作品未初始化",
+            description: "你可以以Scratch模板初始化此作品",
+            confirmText: "继续",
+            onConfirm: () => {
+              $.ajax({
+                url: `${ZCApiHost}/project/${pid}/init`,
+                type: "POST",
+                data: { token: localStorage.getItem("token") },
+                success: function (response) {
+                  showSnackbar(response.message);
+                  downloadAndLoadProject(pid);
+                },
+                error: function (xhr) {
+                  console.error("Error initializing project:", xhr);
+                  mdui.alert({
+                    headline: "初始化失败",
+                    description: `作品初始化失败: ${xhr.responseText}`,
+                    confirmText: "重新加载",
+                    onConfirm: () => {
+                      window.location.reload();
+                    },
+                  });
+                },
+              });
+            },
+          })
+        }
+
+
         mdui.alert({
           headline: "加载失败",
           description: response.message,
@@ -678,7 +710,7 @@ function commitProject() {
         contentType: "application/json",
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         success: function (commitResponse) {
-          showSnackbar("提交成功");
+          showSnackbar(commitResponse.message);
           document.getElementById("commit-dialog").open=false;
           setButton("save-button", "保存完成", () => openCommitDialog());
           logText.innerText += `[${getCurrentTime()}]保存完成\n`;
