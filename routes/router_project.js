@@ -91,7 +91,7 @@ router.post("/savefile", needlogin, async (req, res, next) => {
         data: {
           sha256: sha256,
           source: source,
-          caeate_userid: res.locals.userid,
+          create_userid: res.locals.userid,
         },
       })
       .catch((err) => {
