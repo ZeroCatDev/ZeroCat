@@ -1,4 +1,3 @@
-
 // 加载外部资源
 const loadScript = (src, callback) => {
   const script = document.createElement("script");
@@ -29,7 +28,10 @@ function loadResources() {
     });
   });
 }
-loadResources();
+
+window.onload = () => {
+  loadResources();
+};
 
 // Description: ZeroCat Scratch Tool
 let zcvm, zcgui;
@@ -299,59 +301,65 @@ let isEmbed
 function initialize() {
   if (window.initialized) return; // 避免初始化两次
   window.initialized = true;
-  isEmbed = !document.getElementById("zerocattool");
+
+  const urlParams = new URLSearchParams(window.location.search);
+  isEmbed = urlParams.get('embed') === 'true';
 
   if (!isEmbed) {
-    const zerocatTabHTML = `
-      <mdui-dialog headline="作品" description="加载中" close-on-overlay-click id="zerocat-tab">
-        <mdui-list>
-          <mdui-list-subheader>作者</mdui-list-subheader>
-          <mdui-list-item headline="作者信息" description="加载中" id="author-info" active rounded>
-            <mdui-avatar slot="icon" src="" id="author-avatar"></mdui-avatar>
-          </mdui-list-item>
-          <mdui-list-subheader>当前提交</mdui-list-subheader>
-          <mdui-list-item headline="提交信息" description="Supporting text" id="commit-info" rounded>
-            <mdui-avatar slot="icon" src="" id="commit-avatar"></mdui-avatar>
-          </mdui-list-item>
-        </mdui-list>
-        <br/>
-        <mdui-button id="savestatic" onclick="uploadProjectAssets()">保存媒体库</mdui-button>
-        <mdui-button onclick="openCommitDialog()">保存作品</mdui-button>
-        <mdui-button onclick="logText.innerText = ''">清空log</mdui-button>
-        <div id="log-text"></div>
-      </mdui-dialog>
-    `;
-    document.body.insertAdjacentHTML("beforeend", zerocatTabHTML);
+    try {
+      const zerocatTabHTML = `
+        <mdui-dialog headline="作品" description="加载中" close-on-overlay-click id="zerocat-tab">
+          <mdui-list>
+            <mdui-list-subheader>作者</mdui-list-subheader>
+            <mdui-list-item headline="作者信息" description="加载中" id="author-info" active rounded>
+              <mdui-avatar slot="icon" src="" id="author-avatar"></mdui-avatar>
+            </mdui-list-item>
+            <mdui-list-subheader>当前提交</mdui-list-subheader>
+            <mdui-list-item headline="提交信息" description="Supporting text" id="commit-info" rounded>
+              <mdui-avatar slot="icon" src="" id="commit-avatar"></mdui-avatar>
+            </mdui-list-item>
+          </mdui-list>
+          <br/>
+          <mdui-button id="savestatic" onclick="uploadProjectAssets()">保存媒体库</mdui-button>
+          <mdui-button onclick="openCommitDialog()">保存作品</mdui-button>
+          <mdui-button onclick="logText.innerText = ''">清空log</mdui-button>
+          <div id="log-text"></div>
+        </mdui-dialog>
+      `;
+      document.body.insertAdjacentHTML("beforeend", zerocatTabHTML);
 
-    // 添加HTML创建提示框
-    document.body.insertAdjacentHTML(
-      "beforeend",
+      // 添加HTML创建提示框
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `
+        <mdui-dialog
+          headline="加载中"
+          description="正在加载作品，请稍候..."
+          close-on-overlay-click
+          class="loading-dialog"
+        ></mdui-dialog>
+        <mdui-dialog headline="提交作品" description="请输入提交信息" close-on-overlay-click id="commit-dialog">
+        <mdui-text-field variant="outlined" label="提交信息" value="Update Project" id="commit-message"></mdui-text-field>
+        <mdui-text-field variant="outlined" label="更多信息" rows ></mdui-text-field>
+    <mdui-radio-group value="main">
+      <mdui-radio value="main">提交给当前分支</mdui-radio>
+      <mdui-radio value="pr">为此提交创建一个新分支</mdui-radio>
+    </mdui-radio-group>
+        <mdui-text-field variant="outlined" label="分支名称" value="main" id="branch-name"></mdui-text-field>
+          <mdui-button onclick="commitProject()">提交</mdui-button>
+        </mdui-dialog>
       `
-      <mdui-dialog
-        headline="加载中"
-        description="正在加载作品，请稍候..."
-        close-on-overlay-click
-        class="loading-dialog"
-      ></mdui-dialog>
-      <mdui-dialog headline="提交作品" description="请输入提交信息" close-on-overlay-click id="commit-dialog">
-      <mdui-text-field variant="outlined" label="提交信息" value="Update Project" id="commit-message"></mdui-text-field>
-      <mdui-text-field variant="outlined" label="更多信息" rows ></mdui-text-field>
-  <mdui-radio-group value="main">
-    <mdui-radio value="main">提交给当前分支</mdui-radio>
-    <mdui-radio value="pr">为此提交创建一个新分支</mdui-radio>
-  </mdui-radio-group>
-      <mdui-text-field variant="outlined" label="分支名称" value="main" id="branch-name"></mdui-text-field>
-        <mdui-button onclick="commitProject()">提交</mdui-button>
-      </mdui-dialog>
-    `
-    );
+      );
 
-    zctab = document.querySelector("#zerocat-tab");
-    authorinfocard = document.querySelector("#author-info");
-    authorinfoavatar = document.querySelector("#author-avatar");
-    logText = document.querySelector("#log-text");
+      zctab = document.querySelector("#zerocat-tab");
+      authorinfocard = document.querySelector("#author-info");
+      authorinfoavatar = document.querySelector("#author-avatar");
+      logText = document.querySelector("#log-text");
 
-    renderButtons();
+      renderButtons();
+    } catch (error) {
+      console.error("Error initializing non-embed mode:", error);
+    }
   } else {
     document.body.insertAdjacentHTML(
       "beforeend",
@@ -389,10 +397,6 @@ function initialize() {
   loadUserInfo();
   loadProject();
 }
-
-window.onload = () => {
-  initialize();
-};
 
 function zctabopen() {
   updateZerocatTab();
