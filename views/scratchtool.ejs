@@ -13,8 +13,12 @@ const loadStyle = (href) => {
   document.head.appendChild(link);
 };
 
-const ZCFrontend = localStorage.getItem("ZeroCat_ZCFrontend") || "<%= global.config['urls.frontend'] %>";
-const ZCApiHost = localStorage.getItem("ZeroCat_ZCApiHost") || "<%= global.config['urls.backend'] %>";
+const ZCFrontend =
+  localStorage.getItem("ZeroCat_ZCFrontend") ||
+  "<%= global.config['urls.frontend'] %>";
+const ZCApiHost =
+  localStorage.getItem("ZeroCat_ZCApiHost") ||
+  "<%= global.config['urls.backend'] %>";
 
 function loadResources() {
   loadStyle(`${ZCFrontend}/scratchtool/mdui.css`);
@@ -36,7 +40,11 @@ window.onload = () => {
 // Description: ZeroCat Scratch Tool
 let zcvm, zcgui;
 let _pid = 0;
-let logText, zctab, userinfo = {}, projectjson = "null", projectinfo = {};
+let logText,
+  zctab,
+  userinfo = {},
+  projectjson = "null",
+  projectinfo = {};
 let commitInfo = {};
 let commituser = {};
 let authorinfocard = {};
@@ -107,13 +115,17 @@ function jwtDecode(token) {
   try {
     decoded = base64UrlDecode(part);
   } catch (e) {
-    throw new Error(`Invalid token specified: invalid base64 for part #2 (${e.message})`);
+    throw new Error(
+      `Invalid token specified: invalid base64 for part #2 (${e.message})`
+    );
   }
 
   try {
     return JSON.parse(decoded);
   } catch (e) {
-    throw new Error(`Invalid token specified: invalid json for part #2 (${e.message})`);
+    throw new Error(
+      `Invalid token specified: invalid json for part #2 (${e.message})`
+    );
   }
 }
 
@@ -187,7 +199,7 @@ function renderButtons() {
   });
   zerocattool.style.display = "none";
 }
-
+window.renderButtons = renderButtons;
 function setButton(id, text, onclick) {
   const button = document.getElementById(id);
   if (button) {
@@ -207,26 +219,37 @@ function uploadProjectAssets() {
       );
 
       $.ajax({
-        url: `${ZCApiHost}/scratch/assets/${asset.assetId}.${asset.dataFormat}?token=${localStorage.getItem("token")}`,
+        url: `${ZCApiHost}/scratch/assets/${asset.assetId}.${
+          asset.dataFormat
+        }?token=${localStorage.getItem("token")}`,
         type: "POST",
         data: formData,
         processData: false,
         contentType: false,
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         success: function () {
-          logText.innerText += `[${getCurrentTime()}]文件上传成功${asset.assetId}.${asset.dataFormat}\n`;
+          logText.innerText += `[${getCurrentTime()}]文件上传成功${
+            asset.assetId
+          }.${asset.dataFormat}\n`;
           asset.clean = true;
         },
         error: function (xhr, status, error) {
-          if (xhr.responseJSON && xhr.responseJSON.code === "AUTH_ERROR_LOGIN") {
+          if (
+            xhr.responseJSON &&
+            xhr.responseJSON.code === "AUTH_ERROR_LOGIN"
+          ) {
             handleInvalidLogin(xhr.responseJSON.message);
           } else {
-            logText.innerText += `[${getCurrentTime()}]文件上传失败${asset.assetId}.${asset.dataFormat}\nerror:${error}\n`;
+            logText.innerText += `[${getCurrentTime()}]文件上传失败${
+              asset.assetId
+            }.${asset.dataFormat}\nerror:${error}\n`;
           }
         },
       });
     } else {
-      logText.innerText += `[${getCurrentTime()}]文件未修改${asset.assetId}.${asset.dataFormat}\n`;
+      logText.innerText += `[${getCurrentTime()}]文件未修改${asset.assetId}.${
+        asset.dataFormat
+      }\n`;
     }
   });
   showSnackbar("媒体库保存完成");
@@ -247,17 +270,24 @@ function fetchProjectInfo() {
         if (!isEmbed) {
           authorinfocard.headline = result.author.username;
           authorinfocard.description = result.author.description;
-          authorinfocard.onclick = () => window.open(`${ZCFrontend}/user/${result.author.id}`);
+          authorinfocard.onclick = () =>
+            window.open(`${ZCFrontend}/user/${result.author.id}`);
           authorinfocard.style.cursor = "pointer";
-          authorinfoavatar.src = "https://s4-1.wuyuan.1r.ink/user/" + result.author.profile.id;
+          authorinfoavatar.src =
+            "https://s4-1.wuyuan.1r.ink/user/" + result.author.profile.id;
           zctab.headline = `${result.title} #${result.id}`;
-          zctab.description = `${String(result.author.id) === String(userinfo.userid) ? "是你的作品" : "不是你的作品"}`;
+          zctab.description = `${
+            String(result.author.id) === String(userinfo.userid)
+              ? "是你的作品"
+              : "不是你的作品"
+          }`;
 
           if (String(result.author.id) !== String(userinfo.userid)) {
-            setButton("push-button", "改编", () => window.open(`${ZCFrontend}/projects/${_pid}/fork`));
+            setButton("push-button", "改编", () =>
+              window.open(`${ZCFrontend}/projects/${_pid}/fork`)
+            );
           }
         }
-
       },
       error: function (xhr) {
         const data = xhr.responseJSON;
@@ -297,13 +327,13 @@ function getZerocatUserInfo(userid) {
   return result;
 }
 
-let isEmbed
+let isEmbed;
 function initialize() {
   if (window.initialized) return; // 避免初始化两次
   window.initialized = true;
 
   const urlParams = new URLSearchParams(window.location.search);
-  isEmbed = urlParams.get('embed') === 'true';
+  isEmbed = urlParams.get("embed") === "true";
 
   if (!isEmbed) {
     try {
@@ -444,7 +474,6 @@ function downloadAndLoadProject(pid) {
     data: { token: localStorage.getItem("token") },
     success: function (response) {
       if (response.status === "error") {
-
         if (response.commit.commit_message === "NoFirstCommit") {
           mdui.alert({
             headline: "作品未初始化",
@@ -472,9 +501,8 @@ function downloadAndLoadProject(pid) {
                 },
               });
             },
-          })
+          });
         }
-
 
         mdui.alert({
           headline: "加载失败",
@@ -488,15 +516,16 @@ function downloadAndLoadProject(pid) {
       const { commit, accessFileToken } = response;
       commitInfo = commit;
 
-      if (!isEmbed){
-      const commitDate = new Date(commitInfo.commit_date).toLocaleString();
-      const commitInfoList = document.getElementById("commit-info");
-      commitInfoList.headline = commitInfo.commit_message;
-      const commitInfoAvatar = document.getElementById("commit-avatar");
-      commituser = getZerocatUserInfo(commitInfo.author_id);
-      commitInfoAvatar.src = "https://s4-1.wuyuan.1r.ink/user/" + commituser.images;
-      commitInfoList.description = `${commituser.display_name} 于 ${commitDate}`;
-    }
+      if (!isEmbed) {
+        const commitDate = new Date(commitInfo.commit_date).toLocaleString();
+        const commitInfoList = document.getElementById("commit-info");
+        commitInfoList.headline = commitInfo.commit_message;
+        const commitInfoAvatar = document.getElementById("commit-avatar");
+        commituser = getZerocatUserInfo(commitInfo.author_id);
+        commitInfoAvatar.src =
+          "https://s4-1.wuyuan.1r.ink/user/" + commituser.images;
+        commitInfoList.description = `${commituser.display_name} 于 ${commitDate}`;
+      }
       $.ajax({
         url: `${ZCApiHost}/project/files/${commit.commit_file}`,
         type: "GET",
@@ -637,13 +666,13 @@ buttons.push({
 function openCommitDialog() {
   const commitDialog = document.getElementById("commit-dialog");
   const branchNameInput = document.getElementById("branch-name");
-  const branchRadioGroup = document.querySelector('mdui-radio-group');
+  const branchRadioGroup = document.querySelector("mdui-radio-group");
 
   const currentBranch = getQueryStringParameter("branch") || "main";
   branchNameInput.value = currentBranch;
 
-  branchRadioGroup.addEventListener('change', (event) => {
-    if (event.target.value === 'pr') {
+  branchRadioGroup.addEventListener("change", (event) => {
+    if (event.target.value === "pr") {
       const username = userinfo.username;
       const timestamp = Date.now();
       branchNameInput.value = `${username}-patch-${timestamp}`;
@@ -715,15 +744,14 @@ function commitProject() {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         success: function (commitResponse) {
           showSnackbar(commitResponse.message);
-          document.getElementById("commit-dialog").open=false;
+          document.getElementById("commit-dialog").open = false;
           setButton("save-button", "保存完成", () => openCommitDialog());
           logText.innerText += `[${getCurrentTime()}]保存完成\n`;
 
           // 修改或添加 URL query 部分的 branch
           const url = new URL(window.location.href);
-          url.searchParams.set('branch', branchName);
-          window.history.replaceState({}, '', url);
-
+          url.searchParams.set("branch", branchName);
+          window.history.replaceState({}, "", url);
         },
         error: function (xhr) {
           const data = xhr.responseJSON;
