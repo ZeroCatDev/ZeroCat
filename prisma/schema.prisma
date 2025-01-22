@@ -74,7 +74,7 @@ model ow_users {
   state        Int       @default(0) @db.TinyInt
   loginTime    DateTime? @db.Timestamp(0)
   regTime      DateTime? @default(now()) @db.Timestamp(0)
-  sex          Int?      @default(0) @db.TinyInt
+  sex          String?   @default("0") @db.VarChar(16)
   birthday     DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
   motto        String?   @default("OurWorld创作者") @db.VarChar(1000)
   images       String?   @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
