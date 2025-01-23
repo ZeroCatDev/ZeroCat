@@ -160,7 +160,7 @@ model ow_projects_lists {
   id          Int       @id @default(autoincrement())
   authorid    Int?
   title       String?   @default("收藏夹") @db.VarChar(1024)
-  description String?   @default("CURRENT_TIMESTAMP") @db.VarChar(1024)
+  description String?   @default("列表") @db.VarChar(1024)
   state       String?   @default("private") @db.VarChar(32)
   list        String?   @db.MediumText
   updateTime  DateTime? @db.Timestamp(0)
