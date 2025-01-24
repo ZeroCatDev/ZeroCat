@@ -163,4 +163,46 @@ router.post("/batch", async function (req, res, next) {
   }
 });
 
+// 获取用户自身信息
+router.get("/me", async function (req, res, next) {
+  if (!res.locals.userid) {
+    return res.status(200).send({
+      status: "error",
+      message: "未登录",
+      code: "AUTH_ERROR_LOGIN",
+    });
+  }
+
+  try {
+    const user = await prisma.ow_users.findFirst({
+      where: { id: res.locals.userid },
+      select: {
+        id: true,
+        display_name: true,
+        motto: true,
+        images: true,
+        regTime: true,
+        sex: true,
+        username: true,
+      },
+    });
+
+    if (!user) {
+      logger.debug("用户不存在");
+      return res.status(404).json({
+        status: "error",
+        code: "404",
+        message: "找不到页面",
+      });
+    }
+
+    res.send({
+      status: "success",
+      info: user,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;
