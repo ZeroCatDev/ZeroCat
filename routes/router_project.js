@@ -439,6 +439,45 @@ router.get("/community/:id", async (req, res, next) => {
     next(err);
   }
 });
+// 批量获取项目信息
+router.post("/batch", async (req, res, next) => {
+  try {
+    const { projectIds } = req.body;
+    if (!Array.isArray(projectIds) || projectIds.length === 0) {
+      return res
+        .status(400)
+        .send({ status: "error", message: "无效的项目ID数组" });
+    }
+
+    const userId = res.locals.userid || 0; // 未登录用户为匿名用户
+
+    // 获取所有项目
+    const projects = await prisma.ow_projects.findMany({
+      where: { id: { in: projectIds } },
+    });
+
+    // 并行化权限检查
+    const projectsWithPermission = await Promise.all(
+      projects.map(async (project) => {
+        const hasPermission = await hasProjectPermission(project.id, userId, "read");
+        return hasPermission ? project : null;
+      })
+    );
+
+    // 过滤掉没有权限的项目
+    const filteredProjects = projectsWithPermission.filter(project => project !== null);
+
+    res.status(200).send({
+      status: "success",
+      message: "获取成功",
+      data: filteredProjects,
+    });
+  } catch (err) {
+    logger.error("Error fetching batch project information:", err);
+    next(err);
+  }
+});
+
 // 删除作品
 router.delete("/:id", async (req, res, next) => {
   try {

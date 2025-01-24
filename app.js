@@ -152,6 +152,10 @@ app.use("/project", router_project);
 import router_comment from "./routes/router_comment.js";
 app.use("/comment", router_comment);
 
+// 用户
+import router_user from "./routes/router_user.js";
+app.use("/user", router_user);
+
 app.get("/check", function (req, res, next) {
   res.status(200).json({
     message: "success",

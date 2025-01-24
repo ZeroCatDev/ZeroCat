@@ -34,7 +34,7 @@ router.all("*", function (req, res, next) {
 });
 
 import geetestMiddleware from "../middleware/geetest.js";
-router.post("/login", geetestMiddleware,async function (req, res, next) {
+router.post("/login", geetestMiddleware, async function (req, res, next) {
   try {
     if (
       !req.body.pw ||
@@ -42,7 +42,7 @@ router.post("/login", geetestMiddleware,async function (req, res, next) {
       !req.body.un ||
       !emailTest(req.body.un)
     ) {
-      res.status(200).send({ message: "账户或密码错误",status:"error" });
+      res.status(200).send({ message: "账户或密码错误", status: "error" });
       return;
     }
 
@@ -51,17 +51,17 @@ router.post("/login", geetestMiddleware,async function (req, res, next) {
     });
 
     if (!user) {
-      res.status(200).send({ message: "账户或密码错误",status:"error" });
+      res.status(200).send({ message: "账户或密码错误", status: "error" });
       return;
     }
 
     if (!checkhash(req.body.pw, user.password)) {
-      res.status(200).send({ message: "账户或密码错误",status:"error" });
+      res.status(200).send({ message: "账户或密码错误", status: "error" });
       return;
     }
 
     if (user.state == 2) {
-      res.status(200).send({ message: "您已经被封禁",status:"error" });
+      res.status(200).send({ message: "您已经被封禁", status: "error" });
       return;
     }
 
@@ -134,7 +134,7 @@ router.post("/register", geetestMiddleware, async function (req, res, next) {
       where: { email: email },
     });
     if (existingUser) {
-      res.status(200).send({ message: "账户已存在",status:"error" });
+      res.status(200).send({ message: "账户已存在", status: "error" });
       return;
     }
 
@@ -156,46 +156,54 @@ router.post("/register", geetestMiddleware, async function (req, res, next) {
       await registrationTemplate(email, randonpw)
     );
 
-    res.status(200).send({ message: "注册成功,请查看邮箱获取账户数据",status:"success" });
+    res
+      .status(200)
+      .send({ message: "注册成功,请查看邮箱获取账户数据", status: "success" });
   } catch (err) {
     next(err);
   }
 });
 
-router.post("/retrievePassword", geetestMiddleware, async function (req, res, next) {
-  try {
-    if (req.body.un == "" || req.body.un == null) {
-      res.status(200).send({ message: "账户格式错误" ,status:"error"});
-      return;
-    }
-    var email = req.body.un;
-    let user = await prisma.ow_users.findFirst({
-      where: {
+router.post(
+  "/retrievePassword",
+  geetestMiddleware,
+  async function (req, res, next) {
+    try {
+      if (req.body.un == "" || req.body.un == null) {
+        res.status(200).send({ message: "账户格式错误", status: "error" });
+        return;
+      }
+      var email = req.body.un;
+      let user = await prisma.ow_users.findFirst({
+        where: {
+          email,
+        },
+      });
+      if (!user) {
+        res
+          .status(200)
+          .send({ message: "账户格式错误或不存在", status: "error" });
+        return;
+      }
+
+      const jwttoken = jsonwebtoken.sign(
+        { userid: user.id, email: user.email },
+        await configManager.getConfig("security.jwttoken"),
+        { expiresIn: 60 * 10 }
+      );
+
+      await sendEmail(
         email,
-      },
-    });
-    if (!user) {
-      res.status(200).send({ message: "账户格式错误或不存在" ,status:"error"});
-      return;
+        `密码重置消息`,
+        await passwordResetTemplate(email, jwttoken)
+      );
+
+      res.status(200).send({ message: "请查看邮箱", status: "success" });
+    } catch (err) {
+      next(err);
     }
-
-    const jwttoken = jsonwebtoken.sign(
-      { userid: user.id, email: user.email },
-      await configManager.getConfig("security.jwttoken"),
-      { expiresIn: 60 * 10 }
-    );
-
-    await sendEmail(
-      email,
-      `密码重置消息`,
-      await passwordResetTemplate(email, jwttoken)
-    );
-
-    res.status(200).send({ message: "请查看邮箱",status:"success" });
-  } catch (err) {
-    next(err);
   }
-});
+);
 
 router.post("/torepw", geetestMiddleware, async function (req, res, next) {
   let SET;
@@ -207,7 +215,7 @@ router.post("/torepw", geetestMiddleware, async function (req, res, next) {
       await configManager.getConfig("security.jwttoken"),
       function (err, decoded) {
         if (err) {
-          res.status(200).send({ message: "token错误或过期",status:"error" });
+          res.status(200).send({ message: "token错误或过期", status: "error" });
           return;
         }
         userid = decoded.userid;
@@ -225,7 +233,7 @@ router.post("/torepw", geetestMiddleware, async function (req, res, next) {
         id: userid,
       },
     });
-    res.status(200).send({ message: "您的密码已更新" ,status:"success"});
+    res.status(200).send({ message: "您的密码已更新", status: "success" });
   } catch (err) {
     next(err);
   }
