@@ -137,7 +137,7 @@ function handleInvalidLogin(message) {
     confirmText: "打开用户页面",
     cancelText: "取消",
     onConfirm: () => {
-      window.location.href = `${ZCFrontend}/account/login`;
+      window.location.href = `${ZCFrontend}/app/account/login`;
     },
   });
   showLoginButton();
@@ -181,7 +181,7 @@ function showLoginButton() {
   buttons.push({
     id: "login-button",
     text: "登录/注册",
-    onclick: () => (window.location.href = `${ZCFrontend}/account/login`),
+    onclick: () => (window.location.href = `${ZCFrontend}/app/account/login`),
   });
   renderButtons();
 }

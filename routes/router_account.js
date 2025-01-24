@@ -439,7 +439,7 @@ router.post("/magiclink/generate", geetestMiddleware, async (req, res) => {
 
     const magicLink = `${await configManager.getConfig(
       "urls.frontend"
-    )}/account/magiclink/validate?token=${token}`;
+    )}/app/account/magiclink/validate?token=${token}`;
     await sendEmail(
       email,
       "魔术链接登录",
