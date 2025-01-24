@@ -162,7 +162,7 @@ router.post("/register", geetestMiddleware, async function (req, res, next) {
   }
 });
 
-router.post("/repw", geetestMiddleware, async function (req, res, next) {
+router.post("/retrievePassword", geetestMiddleware, async function (req, res, next) {
   try {
     if (req.body.un == "" || req.body.un == null) {
       res.status(200).send({ message: "账户格式错误" ,status:"error"});

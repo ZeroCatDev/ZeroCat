@@ -25,7 +25,7 @@ router.all("*", function (req, res, next) {
   next();
 });
 
-router.post("/set/avatar", geetestMiddleware, upload.single('zcfile'), async (req, res) => {
+router.post("/set/avatar", upload.single('zcfile'), async (req, res) => {
   if (!req.file) {
     return res.status(400).send({ status: "error", message: "No file uploaded" });
   }
@@ -70,7 +70,7 @@ router.use((err, req, res, next) => {
 });
 
 //修改个人信息
-router.post("/set/userinfo", geetestMiddleware, async (req, res) => {
+router.post("/set/userinfo", async (req, res) => {
   await prisma.ow_users.update({
     where: { id: res.locals.userid },
     data: {
@@ -86,7 +86,7 @@ router.post("/set/userinfo", geetestMiddleware, async (req, res) => {
 });
 
 //修改用户名
-router.post("/set/username", geetestMiddleware, async (req, res) => {
+router.post("/set/username", async (req, res) => {
   await prisma.ow_users.update({
     where: { id: res.locals.userid },
     data: {
@@ -99,7 +99,7 @@ router.post("/set/username", geetestMiddleware, async (req, res) => {
 });
 
 //修改密码：动作
-router.post("/set/pw", geetestMiddleware, async (req, res) => {
+router.post("/set/pw", async (req, res) => {
   const USER = await prisma.ow_users.findUnique({
     where: { id: res.locals.userid },
   });

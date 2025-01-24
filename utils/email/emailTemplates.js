@@ -80,11 +80,11 @@ const passwordResetTemplate = async (email, token) => `
           style="display: flex;position: relative;border: 1px dashed #1289d82e;box-sizing: content-box;height: 0px;overflow: visible;width: 100%;">
         <a class="text-wrapper_2 flex-col"
           style="min-width: 106px;height: 38px;background: #1289d82e;border-radius: 32px;display: flex;align-items: center;justify-content: center;text-decoration: none;margin: auto;margin-top: 32px;"
-          href="https://${siteDomain}/account/retrievecallback?token=${token}"><span class="text_5"
+          href="https://${siteDomain}/app/account/retrievecallback?token=${token}"><span class="text_5"
             style="color: #068bf8;">重设密码</span></a>
         <p style="text-align:center; margin:20px auto 5px auto;font-size:12px;color:#999;">也可以复制以下链接</p>
         <p style="text-align:center; margin:0px auto 0px auto;font-size:12px;color:#999;word-break:break-all">
-          https://${siteDomain}/account/retrievecallback?token=${token}</p>
+          https://${siteDomain}/app/account/retrievecallback?token=${token}</p>
       </div>
       <table style="width:100%;font-weight:300;margin-bottom:10px;border-collapse:collapse">
         <tbody>
