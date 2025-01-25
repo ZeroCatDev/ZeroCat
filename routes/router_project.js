@@ -9,7 +9,6 @@ import {
   authorSelectionFields,
   handleTagsChange,
 } from "../controllers/projects.js";
-import { getProjectStars } from "../controllers/projectlist.js";
 import { createHash } from "crypto";
 import jwt from "jsonwebtoken";
 import {
@@ -500,20 +499,6 @@ router.get("/files/:sha256", async (req, res, next) => {
   }
 });
 
-// 获取项目信息
-router.get("/community/:id", async (req, res, next) => {
-  try {
-    const stars = await getProjectStars(req.params.id);
-    res.status(200).send({
-      status: "success",
-      message: "获取成功",
-      data: { stars },
-    });
-  } catch (err) {
-    logger.error("Error fetching project information:", err);
-    next(err);
-  }
-});
 
 // 删除作品
 router.delete("/edit/:id", async (req, res, next) => {

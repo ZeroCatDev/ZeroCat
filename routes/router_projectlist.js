@@ -42,14 +42,6 @@ router.post("/unstar", needlogin, async (req, res, next) => {
   }
 });
 
-router.get("/stars", async (req, res, next) => {
-  try {
-    const stars = await getProjectStars(req.query.id);
-    res.status(200).send({ status: "success", message: "获取成功", stars });
-  } catch (err) {
-    next(err);
-  }
-});
 
 router.get("/checkstar", async (req, res, next) => {
   try {
@@ -57,7 +49,8 @@ router.get("/checkstar", async (req, res, next) => {
       res.locals.userid,
       req.query.projectid
     );
-    res.status(200).send({ status: "success", message: "获取成功", star: status });
+    const count = await getProjectStars(req.query.projectid);
+    res.status(200).send({ status: "success", message: "获取成功", star: status ,count: count});
   } catch (err) {
     next(err);
   }
