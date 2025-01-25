@@ -45,7 +45,7 @@ async function getProjectsAndUsersByProjectsList(list, userid = null) {
 function extractProjectData(body) {
   const fields = [
     "type",
-    "licence",
+    "license",
     "state",
     "title",
     "description",
@@ -140,7 +140,7 @@ function projectSelectionFields() {
     id: true,
     name: true,
     type: true,
-    licence: true,
+    license: true,
     authorid: true,
     state: true,
     view_count: true,

@@ -33,7 +33,7 @@ model ow_projects {
   id          Int       @id @default(autoincrement()) @db.UnsignedInt
   name        String    @db.VarChar(128)
   type        String?   @default("text") @db.VarChar(32)
-  licence     String?   @db.VarChar(32)
+  license     String?   @db.VarChar(32)
   authorid    Int
   teacherid   Int?      @default(0) @db.UnsignedInt
   state       String?   @default("private") @db.VarChar(32)
@@ -101,7 +101,7 @@ model ow_projects_history {
   description String?  @default("commit") @db.VarChar(1000)
   source      String?  @db.MediumText
   state       String?  @default("private") @db.VarChar(32)
-  licence     String?  @db.VarChar(45)
+  license     String?  @db.VarChar(45)
   tags        String?  @db.VarChar(100)
 }
 

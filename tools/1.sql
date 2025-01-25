@@ -3,7 +3,7 @@ CREATE VIEW
 SELECT
     project.id,
     project.type,
-    project.licence,
+    project.license,
     project.authorid,
     project.state,
     project.view_count,

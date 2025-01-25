@@ -37,7 +37,7 @@ router.get("/projectinfo", async function (req, res, next) {
         title: true,
         state: true,
         description: true,
-        licence: true,
+        license: true,
         tags: true,
         name: true,
       },
@@ -95,7 +95,7 @@ router.get("/projectinfo2", async function (req, res, next) {
     var resulttype = {
       id: 50,
       type: "scratch",
-      licence: "no",
+      license: "no",
       authorid: 89,
       teacherid: 0,
       state: "public",

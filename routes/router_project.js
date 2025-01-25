@@ -23,22 +23,31 @@ const router = Router();
 
 // 中间件，确保所有请求均经过该处理
 router.all("*", (req, res, next) => next());
-
 // 创建新作品
-router.post("/", async (req, res, next) => {
-  if (!res.locals.login) {
-    return res.status(200).send({
-      status: "error",
-      message: "未登录",
-      code: "AUTH_ERROR_LOGIN",
-    });
-  }
-
+router.post("/", needlogin, async (req, res, next) => {
   try {
+    const existingProject = await prisma.ow_projects.findFirst({
+      where: {
+        authorid: res.locals.userid,
+        name: req.body.name,
+      },
+    });
+
+    if (existingProject) {
+      return res.status(200).send({
+        status: "error",
+        message: "作品名称被占用",
+      });
+    }
+
     const outputJson = {
-      ...extractProjectData(req.body),
       type: req.body.type || "scratch",
       authorid: res.locals.userid,
+      title: req.body.title || "新建作品",
+      name: req.body.name,
+      state: req.body.state || "public",
+      description: req.body.description || "",
+      license: req.body.license || "None",
     };
 
     const result = await prisma.ow_projects.create({ data: outputJson });
