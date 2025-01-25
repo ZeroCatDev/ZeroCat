@@ -3,6 +3,7 @@ import { prisma } from "../utils/global.js";
 
 import { createHash } from "crypto";
 import { getUsersByList } from "./users.js";
+import { name } from "ejs";
 
 async function getProjectsByList(list, userid = null) {
   const select = projectSelectionFields();
@@ -137,6 +138,7 @@ function handleError(res, err, msg) {
 function projectSelectionFields() {
   return {
     id: true,
+    name: true,
     type: true,
     licence: true,
     authorid: true,

@@ -122,6 +122,7 @@ router.get("/projectinfo", async function (req, res, next) {
         description: true,
         licence: true,
         tags: true,
+        name: true,
       },
     });
 

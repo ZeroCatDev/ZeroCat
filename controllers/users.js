@@ -1,7 +1,6 @@
 import logger from "../utils/logger.js";
 import { prisma } from "../utils/global.js";
 
-
 /**
  * Get users by list of IDs
  * @param {Array<number>} userIds - List of user IDs
@@ -27,6 +26,19 @@ async function getUsersByList(userIds) {
   });
 
   return users;
+}
+
+// 获取用户信息通过用户名
+export async function getUserByUsername(username) {
+  try {
+    const user = await prisma.ow_users.findFirst({
+      where: { username },
+    });
+    return user;
+  } catch (err) {
+    logger.error("Error fetching user by username:", err);
+    throw err;
+  }
 }
 
 export { getUsersByList };

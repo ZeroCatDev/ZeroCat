@@ -18,6 +18,7 @@ import {
 } from "../utils/tokenManager.js";
 import { needlogin } from "../middleware/auth.js";
 import { hasProjectPermission } from "../utils/permissionManager.js";
+import { getUserByUsername } from "../controllers/users.js";
 
 const router = Router();
 
@@ -55,14 +56,6 @@ router.post("/", async (req, res, next) => {
 
 // 保存源代码
 router.post("/savefile", needlogin, async (req, res, next) => {
-  if (!res.locals.userid) {
-    return res.status(200).send({
-      status: "error",
-      message: "未登录",
-      code: "AUTH_ERROR_LOGIN",
-    });
-  }
-
   try {
     let source;
     if (req.is("multipart/form-data")) {
@@ -95,21 +88,26 @@ router.post("/savefile", needlogin, async (req, res, next) => {
     const sha256 = createHash("sha256").update(source).digest("hex");
     logger.debug(sha256);
 
-    await prisma.ow_projects_file.create({
-      data: {
-        sha256,
-        source,
-        create_userid: res.locals.userid,
-      },
-    }).catch((err) => {
-      if (err.code === "P2002") {
-        logger.debug("File already exists, skipping.");
-      } else {
-        logger.error(err);
-      }
-    });
+    await prisma.ow_projects_file
+      .create({
+        data: {
+          sha256,
+          source,
+          create_userid: res.locals.userid,
+        },
+      })
+      .catch((err) => {
+        if (err.code === "P2002") {
+          logger.debug("File already exists, skipping.");
+        } else {
+          logger.error(err);
+        }
+      });
 
-    const accessFileToken = await generateFileAccessToken(sha256, res.locals.userid);
+    const accessFileToken = await generateFileAccessToken(
+      sha256,
+      res.locals.userid
+    );
     res.status(200).send({
       status: "success",
       message: "保存成功",
@@ -122,15 +120,7 @@ router.post("/savefile", needlogin, async (req, res, next) => {
 });
 
 // 提交代码
-router.put("/commit/:id", async (req, res, next) => {
-  if (!res.locals.userid) {
-    return res.status(200).send({
-      status: "error",
-      message: "未登录",
-      code: "AUTH_ERROR_LOGIN",
-    });
-  }
-
+router.put("/commit/id/:id", needlogin, async (req, res, next) => {
   try {
     const {
       branch = "main",
@@ -231,62 +221,92 @@ router.put("/commit/:id", async (req, res, next) => {
   }
 });
 
-// Fork 作品
-router.post("/:id/fork", async (req, res, next) => {
-  if (!res.locals.login) {
-    return res.status(200).send({
-      status: "error",
-      message: "未登录",
-      code: "AUTH_ERROR_LOGIN",
-    });
-  }
-
+// 批量获取项目信息
+router.post("/batch", async (req, res, next) => {
   try {
-    const original = await prisma.ow_projects.findFirst({
-      where: { id: Number(req.params.id) },
-    });
-
-    if (original?.state === "public") {
-      const result = await prisma.ow_projects.create({
-        data: {
-          authorid: res.locals.userid,
-          title: `${original.title}改编`,
-          description: original.description,
-          licence: original.licence,
-          state: "private",
-          type: original.type,
-          source: original.source,
-          devsource: original.source,
-          tags: original.tags,
-        },
-      });
-      res.status(200).send({
-        status: "success",
-        message: "改编成功",
-        id: result.id,
-      });
-    } else {
-      res.status(200).send({
+    const { projectIds } = req.body;
+    if (!Array.isArray(projectIds) || projectIds.length === 0) {
+      return res.status(400).send({
         status: "error",
-        message: "改编失败",
+        message: "无效的项目ID数组",
       });
     }
+
+    const userId = res.locals.userid || 0; // 未登录用户为匿名用户
+
+    // 获取所有项目
+    const projects = await prisma.ow_projects.findMany({
+      where: { id: { in: projectIds } },
+    });
+
+    // 并行化权限检查
+    const projectsWithPermission = await Promise.all(
+      projects.map(async (project) => {
+        const hasPermission = await hasProjectPermission(
+          project.id,
+          userId,
+          "read"
+        );
+        return hasPermission ? project : null;
+      })
+    );
+
+    // 过滤掉没有权限的项目
+    const filteredProjects = projectsWithPermission.filter(
+      (project) => project !== null
+    );
+
+    res.status(200).send({
+      status: "success",
+      message: "获取成功",
+      data: filteredProjects,
+    });
   } catch (err) {
-    logger.error("Error forking project:", err);
+    logger.error("Error fetching batch project information:", err);
     next(err);
   }
 });
 
-// 更新作品信息
-router.put("/:id", async (req, res, next) => {
-  if (!res.locals.userid) {
+// 获取项目信息
+router.get("/id/:id", async (req, res, next) => {
+  const userId = res.locals.userid || 0; // 未登录用户为匿名用户
+  const hasPermission = await hasProjectPermission(
+    req.params.id,
+    userId,
+    "read"
+  );
+
+  if (!hasPermission) {
     return res.status(200).send({
       status: "error",
-      message: "未登录",
-      code: "AUTH_ERROR_LOGIN",
+      message: "作品不存在或无权打开",
     });
   }
 
+  const project = await prisma.ow_projects.findFirst({
+    where: { id: Number(req.params.id) },
+    select: projectSelectionFields(),
+  });
+
+  const author = await prisma.ow_users.findFirst({
+    where: { id: Number(project.authorid) },
+    select: authorSelectionFields(),
+  });
+
+  const tags = await prisma.ow_projects_tags.findMany({
+    where: { projectid: Number(req.params.id) },
+    select: { name: true, id: true, created_at: true },
+  });
+
+  project.author = author;
+  project.tags = tags;
+  logger.debug(tags);
+  logger.debug(project);
+  res.status(200).send(project);
+});
+
+// 更新作品信息
+router.put("/id/:id", needlogin, async (req, res, next) => {
   try {
     const updatedData = extractProjectData(req.body);
     await prisma.ow_projects.update({
@@ -308,35 +328,50 @@ router.put("/:id", async (req, res, next) => {
   }
 });
 
-// 获取项目信息
-router.get("/:id", async (req, res, next) => {
+// 根据 authorname 和 projectname 获取项目
+router.get("/namespace/:authorname/:projectname", async (req, res, next) => {
   try {
+    const { authorname, projectname } = req.params;
     const userId = res.locals.userid || 0; // 未登录用户为匿名用户
+
+    const author = await getUserByUsername(authorname);
+    if (!author) {
+      return res.status(404).send({
+        status: "error",
+        message: "用户不存在",
+      });
+    }
+
+    const project = await prisma.ow_projects.findFirst({
+      where: {
+        authorid: author.id,
+        name: projectname,
+      },
+      select: projectSelectionFields(),
+    });
+
+    if (!project) {
+      return res.status(404).send({
+        status: "error",
+        message: "项目不存在",
+      });
+    }
+
     const hasPermission = await hasProjectPermission(
-      req.params.id,
+      project.id,
       userId,
       "read"
     );
 
     if (!hasPermission) {
-      return res.status(200).send({
+      return res.status(404).send({
         status: "error",
-        message: "作品不存在或无权打开",
+        message: "无权访问此项目",
       });
     }
 
-    const project = await prisma.ow_projects.findFirst({
-      where: { id: Number(req.params.id) },
-      select: projectSelectionFields(),
-    });
-
-    const author = await prisma.ow_users.findFirst({
-      where: { id: Number(project.authorid) },
-      select: authorSelectionFields(),
-    });
-
     const tags = await prisma.ow_projects_tags.findMany({
-      where: { projectid: Number(req.params.id) },
+      where: { projectid: project.id },
       select: { name: true, id: true, created_at: true },
     });
 
@@ -346,8 +381,11 @@ router.get("/:id", async (req, res, next) => {
     logger.debug(project);
     res.status(200).send(project);
   } catch (err) {
-    logger.error("Error fetching project information:", err);
-    next(err);
+    logger.error("Error fetching project by authorname and projectname:", err);
+    res.status(404).send({
+      status: "error",
+      message: "找不到页面",
+    });
   }
 });
 
@@ -477,54 +515,8 @@ router.get("/community/:id", async (req, res, next) => {
   }
 });
 
-// 批量获取项目信息
-router.post("/batch", async (req, res, next) => {
-  try {
-    const { projectIds } = req.body;
-    if (!Array.isArray(projectIds) || projectIds.length === 0) {
-      return res.status(400).send({
-        status: "error",
-        message: "无效的项目ID数组",
-      });
-    }
-
-    const userId = res.locals.userid || 0; // 未登录用户为匿名用户
-
-    // 获取所有项目
-    const projects = await prisma.ow_projects.findMany({
-      where: { id: { in: projectIds } },
-    });
-
-    // 并行化权限检查
-    const projectsWithPermission = await Promise.all(
-      projects.map(async (project) => {
-        const hasPermission = await hasProjectPermission(
-          project.id,
-          userId,
-          "read"
-        );
-        return hasPermission ? project : null;
-      })
-    );
-
-    // 过滤掉没有权限的项目
-    const filteredProjects = projectsWithPermission.filter(
-      (project) => project !== null
-    );
-
-    res.status(200).send({
-      status: "success",
-      message: "获取成功",
-      data: filteredProjects,
-    });
-  } catch (err) {
-    logger.error("Error fetching batch project information:", err);
-    next(err);
-  }
-});
-
 // 删除作品
-router.delete("/:id", async (req, res, next) => {
+router.delete("/edit/:id", async (req, res, next) => {
   try {
     await prisma.ow_projects.delete({
       where: { id: Number(req.params.id), authorid: res.locals.userid },
@@ -540,7 +532,7 @@ router.delete("/:id", async (req, res, next) => {
 });
 
 // 初始化项目
-router.post("/:id/init", needlogin, async (req, res, next) => {
+router.post("/edit/:id/init", needlogin, async (req, res, next) => {
   if (!res.locals.userid) {
     return res.status(200).send({
       status: "error",
@@ -624,57 +616,53 @@ router.post("/:id/init", needlogin, async (req, res, next) => {
   }
 });
 
-// 根据 authorid 和 projectname 获取项目
-router.get("/project/:authorid/:projectname", async (req, res, next) => {
+// 重命名项目
+router.put("/rename/:id", needlogin, async (req, res, next) => {
   try {
-    const { authorid, projectname } = req.params;
-    const userId = res.locals.userid || 0; // 未登录用户为匿名用户
+    const { id } = req.params;
+    const { newName } = req.body;
+
+    if (!newName) {
+      return res.status(400).send({
+        status: "error",
+        message: "缺少必要的参数",
+      });
+    }
 
     const project = await prisma.ow_projects.findFirst({
-      where: {
-        authorid: Number(authorid),
-        name: projectname,
-      },
-      select: projectSelectionFields(),
+      where: { id: Number(id), authorid: res.locals.userid },
     });
 
     if (!project) {
       return res.status(404).send({
         status: "error",
-        message: "项目不存在",
+        message: "项目不存在或无权访问",
       });
     }
 
-    const hasPermission = await hasProjectPermission(project.id, userId, "read");
+    const existingProject = await prisma.ow_projects.findFirst({
+      where: { name: newName, authorid: res.locals.userid },
+    });
 
-    if (!hasPermission) {
-      return res.status(404).send({
+    if (existingProject) {
+      return res.status(200).send({
         status: "error",
-        message: "无权访问此项目",
+        message: "项目名称已存在",
       });
     }
 
-    const author = await prisma.ow_users.findFirst({
-      where: { id: Number(project.authorid) },
-      select: authorSelectionFields(),
+    await prisma.ow_projects.update({
+      where: { id: Number(id) },
+      data: { name: newName },
     });
 
-    const tags = await prisma.ow_projects_tags.findMany({
-      where: { projectid: project.id },
-      select: { name: true, id: true, created_at: true },
+    res.status(200).send({
+      status: "success",
+      message: "重命名成功",
     });
-
-    project.author = author;
-    project.tags = tags;
-    logger.debug(tags);
-    logger.debug(project);
-    res.status(200).send(project);
   } catch (err) {
-    logger.error("Error fetching project by authorid and projectname:", err);
-    res.status(404).send({
-      status: "error",
-      message: "找不到页面",
-    });
+    logger.error("Error renaming project:", err);
+    next(err);
   }
 });
 

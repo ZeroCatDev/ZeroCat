@@ -308,12 +308,12 @@ function updateZerocatTab() {
 function getZerocatUserInfo(userid) {
   let result;
   $.ajax({
-    url: `${ZCApiHost}/api/getuserinfo?id=${userid}`,
+    url: `${ZCApiHost}/user/id/${userid}`,
     type: "GET",
     data: { token: localStorage.getItem("token") },
     async: false,
     success: function (data) {
-      result = data.info.user;
+      result = data.info;
     },
     error: function (xhr) {
       const data = xhr.responseJSON;
@@ -481,7 +481,7 @@ function downloadAndLoadProject(pid) {
             confirmText: "继续",
             onConfirm: () => {
               $.ajax({
-                url: `${ZCApiHost}/project/${pid}/init`,
+                url: `${ZCApiHost}/project/edit/${pid}/init`,
                 type: "POST",
                 data: { token: localStorage.getItem("token") },
                 success: function (response) {
@@ -732,7 +732,7 @@ function commitProject() {
 
       // 然后调用提交接口
       $.ajax({
-        url: `${ZCApiHost}/project/commit/${_pid}`,
+        url: `${ZCApiHost}/project/commit/id/${_pid}`,
         type: "put",
         data: JSON.stringify({
           projectid: _pid,
