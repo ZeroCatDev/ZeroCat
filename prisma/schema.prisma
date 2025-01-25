@@ -101,7 +101,7 @@ model ow_projects_history {
   description String?  @default("commit") @db.VarChar(1000)
   source      String?  @db.MediumText
   state       String?  @default("private") @db.VarChar(32)
-  license     String?  @db.VarChar(45)
+  licence     String?  @db.VarChar(45)
   tags        String?  @db.VarChar(100)
 }
 
