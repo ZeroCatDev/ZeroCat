@@ -130,7 +130,7 @@ router.get("/id/:id", async function (req, res, next) {
 });
 
 // 批量查询用户信息
-router.post("/batch", async function (req, res, next) {
+router.post("/batch/id", async function (req, res, next) {
   try {
     const { userIds } = req.body;
     if (!Array.isArray(userIds) || userIds.length === 0) {
@@ -163,6 +163,39 @@ router.post("/batch", async function (req, res, next) {
   }
 });
 
+// 批量查询用户信息
+router.post("/batch/name", async function (req, res, next) {
+  try {
+    const { userNames } = req.body;
+    if (!Array.isArray(userNames) || userNames.length === 0) {
+      return res
+        .status(400)
+        .send({ status: "error", message: "无效的用户名数组" });
+    }
+
+    const users = await prisma.ow_users.findMany({
+      where: {
+        name: { in: userNames.map(name => name) },
+      },
+      select: {
+        id: true,
+        display_name: true,
+        motto: true,
+        images: true,
+        regTime: true,
+        sex: true,
+        username: true,
+      },
+    });
+
+    res.send({
+      status: "success",
+      data: users,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 // 获取用户自身信息
 router.get("/me", async function (req, res, next) {
   if (!res.locals.userid) {

@@ -28,26 +28,10 @@ model ow_comment {
   page_key   String?   @db.VarChar(128)
 }
 
-model ow_counter {
-  id        Int       @id @default(autoincrement()) @db.UnsignedInt
-  time      Int?
-  reaction0 Int?
-  reaction1 Int?
-  reaction2 Int?
-  reaction3 Int?
-  reaction4 Int?
-  reaction5 Int?
-  reaction6 Int?
-  reaction7 Int?
-  reaction8 Int?
-  url       String    @default("") @db.VarChar(255)
-  createdAt DateTime? @default(now()) @db.Timestamp(0)
-  updatedAt DateTime? @default(now()) @db.Timestamp(0)
-}
-
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model ow_projects {
   id          Int       @id @default(autoincrement()) @db.UnsignedInt
+  name        String    @db.VarChar(128)
   type        String?   @default("text") @db.VarChar(32)
   licence     String?   @db.VarChar(32)
   authorid    Int

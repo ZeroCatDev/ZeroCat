@@ -624,4 +624,58 @@ router.post("/:id/init", needlogin, async (req, res, next) => {
   }
 });
 
+// 根据 authorid 和 projectname 获取项目
+router.get("/project/:authorid/:projectname", async (req, res, next) => {
+  try {
+    const { authorid, projectname } = req.params;
+    const userId = res.locals.userid || 0; // 未登录用户为匿名用户
+
+    const project = await prisma.ow_projects.findFirst({
+      where: {
+        authorid: Number(authorid),
+        name: projectname,
+      },
+      select: projectSelectionFields(),
+    });
+
+    if (!project) {
+      return res.status(404).send({
+        status: "error",
+        message: "项目不存在",
+      });
+    }
+
+    const hasPermission = await hasProjectPermission(project.id, userId, "read");
+
+    if (!hasPermission) {
+      return res.status(404).send({
+        status: "error",
+        message: "无权访问此项目",
+      });
+    }
+
+    const author = await prisma.ow_users.findFirst({
+      where: { id: Number(project.authorid) },
+      select: authorSelectionFields(),
+    });
+
+    const tags = await prisma.ow_projects_tags.findMany({
+      where: { projectid: project.id },
+      select: { name: true, id: true, created_at: true },
+    });
+
+    project.author = author;
+    project.tags = tags;
+    logger.debug(tags);
+    logger.debug(project);
+    res.status(200).send(project);
+  } catch (err) {
+    logger.error("Error fetching project by authorid and projectname:", err);
+    res.status(404).send({
+      status: "error",
+      message: "找不到页面",
+    });
+  }
+});
+
 export default router;
