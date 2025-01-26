@@ -233,7 +233,7 @@ router.put("/commit/id/:id", needlogin, async (req, res, next) => {
 router.post("/batch", async (req, res, next) => {
   try {
     const { projectIds } = req.body;
-    if (!Array.isArray(projectIds) || projectIds.length === 0) {
+    if (!Array.isArray(projectIds)) {
       return res.status(400).send({
         status: "error",
         message: "无效的项目ID数组",

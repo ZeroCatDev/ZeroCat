@@ -88,7 +88,7 @@ router.post("/batch/:type", async function (req, res, next) {
     }
 
     const { users } = req.body;
-    if (!Array.isArray(users) || users.length === 0) {
+    if (!Array.isArray(users)) {
       return res
         .status(400)
         .send({ status: "error", message: "无效的用户ID数组" });
