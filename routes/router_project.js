@@ -660,4 +660,38 @@ router.put("/rename/:id", needlogin, async (req, res, next) => {
   }
 });
 
+// 重命名项目
+router.put("/changevisibility/:id", needlogin, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { newState } = req.body;
+
+    if (!newState||(newState!=="public"&&newState!=="private")) {
+      return res.status(400).send({
+        status: "error",
+        message: "缺少必要的参数",
+      });
+    }
+
+    await prisma.ow_projects.update({
+      where: { id: Number(id) ,authorid: res.locals.userid},
+      data: { state: newState },
+    }).catch((err)=>{
+      return res.status(400).send({
+        status: "error",
+        message: "无权操作",
+      });
+    }).then((result)=>{
+      res.status(200).send({
+        status: "success",
+        message: "操作成功",
+      });
+    })
+
+  } catch (err) {
+    logger.error("Error renaming project:", err);
+    next(err);
+
+  }
+});
 export default router;
