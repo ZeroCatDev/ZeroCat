@@ -112,4 +112,4 @@ You are free to use the ZeroCat community under an open-source license, but you 
 
 For closed-source usage licenses, please contact QQ 1847261658.
 
-Thanks to the [scratch-cn/lite](https://gitee.com/scratch-cn/lite) project for inspiring this project, which is licensed under the MIT License.
+Thanks to the [scratch-cn/lite](https://gitee.com/scratch-cn/lite) project for inspiring this project.

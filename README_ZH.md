@@ -111,6 +111,4 @@ Copyright (C) 2020-2024  Sun Wuyuan.
 
 如需闭源使用授权，请联系 QQ1847261658。
 
-感谢 [scratch-cn/lite](https://gitee.com/scratch-cn/lite) 项目对本项目的启发，其遵循 MIT 协议。
-
-
+感谢 [scratch-cn/lite](https://gitee.com/scratch-cn/lite) 项目对本项目的启发。
