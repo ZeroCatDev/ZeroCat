@@ -4,7 +4,7 @@ import configManager from "../utils/configManager.js";
 import { Router } from "express";
 var router = Router();
 import { prisma } from "../utils/global.js";
-import { needadmin } from "../middleware/auth.js";
+import { needlogin } from "../middleware/auth.js";
 
 
 
@@ -121,7 +121,7 @@ router.post("/batch/:type", async function (req, res, next) {
   }
 });
 // 获取用户自身信息
-router.get("/me", needadmin,async function (req, res, next) {
+router.get("/me", needlogin,async function (req, res, next) {
   try {
     const user = await prisma.ow_users.findFirst({
       where: { id: res.locals.userid },
