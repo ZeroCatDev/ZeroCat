@@ -9,8 +9,9 @@ import configManager from "../utils/configManager.js";
  */
 async function needlogin(req, res, next) {
   if (!res.locals.login) {
-    logger.info(`[needlogin] - ${req.ip} - 未登录，返回401 Unauthorized状态码`);
-    return res.status(401).send({ status: "error", message: "未登录",code:"AUTH_ERROR_LOGIN" });
+    return res
+      .status(401)
+      .send({ status: "error", message: "未登录", code: "AUTH_ERROR_LOGIN" });
   }
   next(); // 已登录，继续处理请求
 }
@@ -23,20 +24,16 @@ async function needlogin(req, res, next) {
  */
 async function needadmin(req, res, next) {
   if (!res.locals.login) {
-    logger.info(`[needadmin] - ${req.ip} - 未登录，返回401 Unauthorized状态码`);
-    return res.status(401).send({ status: "error", message: "未登录",code:"AUTH_ERROR_LOGIN" });
+    return res
+      .status(401)
+      .send({ status: "error", message: "未登录", code: "AUTH_ERROR_LOGIN" });
   }
 
-  const adminEmail = await configManager.getConfig("security.adminuser");
-  if (res.locals.email !== adminEmail) {
-    logger.info(`[needadmin] - ${req.ip} - 权限不足，返回401 Unauthorized状态码`);
+  if (res.locals.userid !== 1) {
+    logger.info(`[needadmin] - ${req.ip} - 尝试访问管理路由，权限不足`);
     return res.status(401).send({ status: "error", message: "权限不足" });
   }
-  next(); // 已登录，继续处理请求
+  next();
 }
 
-export {
-  needlogin,
-  needadmin
-};
-
+export { needlogin, needadmin };

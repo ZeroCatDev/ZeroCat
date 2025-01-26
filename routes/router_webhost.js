@@ -23,7 +23,6 @@ router.get("/:id/*", function (req, res) {
     })
     .then((PROJECT) => {
       if (!PROJECT) {
-        res.locals.tip = { opt: "flash", message: "项目不存在或未发布" };
         res.status(404).json({
           status: "error",
           code: "404",
@@ -69,7 +68,6 @@ router.get("/:id/*", function (req, res) {
           data: { view_count: { increment: 1 } },
         })
         .catch((err) => {
-          res.locals.tip = { opt: "flash", message: "项目不存在或未发布" };
           res.status(404).json({
             status: "error",
             code: "404",

@@ -83,7 +83,6 @@ app.all("*", async function (req, res, next) {
           res.locals = {
             login: true,
             userid: decodedToken.userid,
-            email: decodedToken.email,
             username: decodedToken.username,
             display_name: decodedToken.display_name,
             avatar: decodedToken.avatar,
@@ -102,7 +101,6 @@ app.all("*", async function (req, res, next) {
     res.locals = {
       login: false,
       userid: "",
-      email: "",
       username: "",
       display_name: "",
       avatar: "",
@@ -184,7 +182,6 @@ app.use((err, req, res, next) => {
 
 //放在最后，友好的处理地址不存在的访问
 app.all("*", function (req, res, next) {
-  res.locals.tipType = "访问错误";
   res.status(404).json({
     status: "error",
     code: "404",

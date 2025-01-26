@@ -67,32 +67,17 @@ router.post("/login", geetestMiddleware, async function (req, res, next) {
 
     res.locals.userid = user.id;
     res.locals.username = user.username;
-    res.locals.email = user.email;
     res.locals.display_name = user.display_name;
 
-    res.locals.is_admin = 0;
-    if (
-      res.locals.email.indexOf(
-        await configManager.getConfig("security.adminuser")
-      ) == 0
-    ) {
-      if (
-        res.locals.email ===
-        (await configManager.getConfig("security.adminuser"))
-      ) {
-        res.locals.is_admin = 1;
-      } else {
-        let no = parseInt(res.locals.email.substring(8));
-        if (0 <= no && no < 100) {
-          res.locals.is_admin = 1;
-        }
-      }
+    if (res.locals.userid == 1) {
+      res.locals.is_admin = 1;
+    } else {
+      res.locals.is_admin = 0;
     }
 
     const token = await generateJwt({
       userid: user.id,
       username: user.username,
-      email: user.email,
       display_name: user.display_name,
       avatar: user.images,
     });
@@ -101,7 +86,6 @@ router.post("/login", geetestMiddleware, async function (req, res, next) {
       status: "success",
       message: "登录成功",
       userid: parseInt(user.id),
-      email: user.email,
       username: user.username,
       display_name: user.display_name,
       avatar: user.images,
@@ -113,8 +97,7 @@ router.post("/login", geetestMiddleware, async function (req, res, next) {
 });
 
 const logout = function (req, res) {
-  res.locals["userid"] = null;
-  res.locals["email"] = null;
+  res.locals.userid = null;
 
   // res.cookie("userid", "", { maxAge: 0, signed: true });
   // res.cookie("email", "", { maxAge: 0, signed: true });
@@ -209,7 +192,7 @@ router.post("/torepw", geetestMiddleware, async function (req, res, next) {
   let SET;
   let UPDATE;
   try {
-    let userid, email;
+    let userid;
     jsonwebtoken.verify(
       req.body.jwttoken,
       await configManager.getConfig("security.jwttoken"),
@@ -219,7 +202,6 @@ router.post("/torepw", geetestMiddleware, async function (req, res, next) {
           return;
         }
         userid = decoded.userid;
-        email = decoded.email;
       }
     );
     const newPW = hash(req.body.pw);
@@ -498,7 +480,6 @@ router.get("/magiclink/validate", async (req, res) => {
     const jwtToken = await generateJwt({
       userid: user.id,
       username: user.username,
-      email: user.email,
       display_name: user.display_name,
       avatar: user.images,
     });
@@ -507,7 +488,6 @@ router.get("/magiclink/validate", async (req, res) => {
       status: "success",
       message: "登录成功",
       userid: user.id,
-      email: user.email,
       username: user.username,
       display_name: user.display_name,
       avatar: user.images,

@@ -80,7 +80,7 @@ router.post("/set/userinfo", async (req, res) => {
       birthday: new Date(`2000-01-01 00:00:00`),
     },
   });
-  res.locals["display_name"] = req.body["display_name"];
+  res.locals.display_name = req.body.display_name;
 
   res.status(200).send({ status: "success", message: "个人信息修改成功" });
 });
@@ -93,7 +93,7 @@ router.post("/set/username", async (req, res) => {
       username: req.body.username,
     },
   });
-  res.locals["username"] = req.body["username"];
+  res.locals.username = req.body.username;
 
   res.status(200).send({ status: "success", message: "用户名修成成功" });
 });

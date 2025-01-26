@@ -28,7 +28,6 @@ router.get("/id/:id", async function (req, res, next) {
 
     if (!user[0]) {
       logger.debug("用户不存在");
-      res.locals.tip = { opt: "flash", message: "用户不存在" };
       res.status(404).json({
         status: "error",
         code: "404",
@@ -64,7 +63,6 @@ router.get("/username/:username", async function (req, res, next) {
 
     if (!user[0]) {
       logger.debug("用户不存在");
-      res.locals.tip = { opt: "flash", message: "用户不存在" };
       res.status(404).json({
         status: "error",
         code: "404",

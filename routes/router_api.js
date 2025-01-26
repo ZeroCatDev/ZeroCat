@@ -19,7 +19,6 @@ router.get("/usertx", async function (req, res, next) {
       },
     });
     if (!USER) {
-      res.locals.tip = { opt: "flash", message: "用户不存在" };
       res.status(404).json({
         status: "error",
         code: "404",
@@ -69,7 +68,6 @@ router.get("/getuserinfo", async function (req, res, next) {
     });
     if (!user[0]) {
       logger.debug("用户不存在");
-      res.locals.tip = { opt: "flash", message: "用户不存在" };
       res.status(404).json({
         status: "error",
         code: "404",
@@ -127,10 +125,7 @@ router.get("/projectinfo", async function (req, res, next) {
     });
 
     if (!project) {
-      res.locals.tip = {
-        opt: "flash",
-        message: "项目不存在或未发布",
-      };
+
       res.send({
         code: 404,
         status: "404",
@@ -201,8 +196,8 @@ router.get("/config/:key", async function (req, res, next) {
 });
 
 router.get("/tuxiaochao", async function (req, res) {
-  const userId = res.locals["userid"];
-  const displayName = res.locals["display_name"];
+  const userId = res.locals.userid;
+  const displayName = res.locals.display_name;
 
   // 获取配置
   const txcid = await configManager.getConfig("feedback.txcid");
@@ -223,7 +218,6 @@ router.get("/tuxiaochao", async function (req, res) {
     });
 
     if (!USER) {
-      res.locals.tip = { opt: "flash", message: "用户不存在" };
       res.status(404).json({
         status: "error",
         code: "404",

@@ -44,7 +44,6 @@ router.get("/projectinfo", async function (req, res, next) {
     });
 
     if (!project) {
-      res.locals.tip = { opt: "flash", message: "项目不存在或未发布" };
       res.status(404).send({
         code: 404,
         status: "404",
@@ -62,7 +61,7 @@ router.get("/projectinfo", async function (req, res, next) {
       },
     });
 
-    res.locals["is_author"] =
+    res.locals.is_author =
       project.authorid == res.locals.userid ? true : false;
 
     res.json({
@@ -89,7 +88,7 @@ router.get("/projectinfo2", async function (req, res, next) {
         id: result.authorid,
       },
     });
-    res.locals["is_author"] =
+    res.locals.is_author =
       result.authorid == res.locals.userid ? true : false;
     logger.debug(result);
     var resulttype = {
