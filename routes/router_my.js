@@ -47,23 +47,23 @@ router.post("/set/avatar", upload.single('zcfile'), async (req, res) => {
         where: { id: res.locals.userid },
         data: { images: hashValue },
       });
-      res.status(200).send({ status: "success", message: "Avatar updated successfully" });
+      res.status(200).send({ status: "success", message: "头像上传成功" });
     });
 
     chunks.on("error", (err) => {
       logger.error("Error processing file upload:", err);
-      res.status(500).send({ status: "error", message: "File processing error" });
+      res.status(500).send({ status: "error", message: "图片上传失败" });
     });
   } catch (err) {
     logger.error("Unexpected error:", err);
-    res.status(500).send({ status: "error", message: "Internal server error" });
+    res.status(500).send({ status: "error", message: "图片上传失败" });
   }
 });
 
 router.use((err, req, res, next) => {
   if (err.code === 'LIMIT_UNEXPECTED_FILE') {
     logger.error("Unexpected end of form: ", err);
-    res.status(400).send({ status: "error", message: "表单意外结束" });
+    res.status(400).send({ status: "error", message: "数据传输异常" });
   } else {
     next(err);
   }
@@ -82,7 +82,7 @@ router.post("/set/userinfo", async (req, res) => {
   });
   res.locals["display_name"] = req.body["display_name"];
 
-  res.status(200).send({ status: "个人信息修成成功" });
+  res.status(200).send({ status: "success", message: "个人信息修改成功" });
 });
 
 //修改用户名
@@ -95,7 +95,7 @@ router.post("/set/username", async (req, res) => {
   });
   res.locals["username"] = req.body["username"];
 
-  res.status(200).send({ status: "用户名修成成功" });
+  res.status(200).send({ status: "success", message: "用户名修成成功" });
 });
 
 //修改密码：动作
