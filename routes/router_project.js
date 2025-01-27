@@ -59,7 +59,10 @@ router.post("/", needlogin, async (req, res, next) => {
     });
   } catch (err) {
     logger.error("Error creating new project:", err);
-    next(err);
+    res.status(500).send({
+      status: "error",
+      message: "创建新作品时出错",
+    });
   }
 });
 
@@ -110,6 +113,10 @@ router.post("/savefile", needlogin, async (req, res, next) => {
           logger.debug("File already exists, skipping.");
         } else {
           logger.error(err);
+          return res.status(500).send({
+            status: "error",
+            message: "保存源代码时出错",
+          });
         }
       });
 
@@ -124,7 +131,10 @@ router.post("/savefile", needlogin, async (req, res, next) => {
     });
   } catch (err) {
     logger.error("Error saving source code:", err);
-    next(err);
+    res.status(500).send({
+      status: "error",
+      message: "保存源代码时出错",
+    });
   }
 });
 
@@ -240,7 +250,10 @@ router.put("/commit/id/:id", needlogin, async (req, res, next) => {
     });
   } catch (err) {
     logger.error("Error saving source code:", err);
-    next(err);
+    res.status(500).send({
+      status: "error",
+      message: "提交代码时出错",
+    });
   }
 });
 
@@ -286,15 +299,18 @@ router.post("/batch", async (req, res, next) => {
     });
   } catch (err) {
     logger.error("Error fetching batch project information:", err);
-    next(err);
+    res.status(500).send({
+      status: "error",
+      message: "批量获取项目信息时出错",
+    });
   }
 });
 
-router.get("/branches/:id", async (req, res, next) => {
+router.get("/branches", async (req, res, next) => {
   try {
-    const { id } = req.params;
+    const { projectid } = req.query;
     const hasPermission = await hasProjectPermission(
-      id,
+      projectid,
       res.locals.userid,
       "read"
     );
@@ -306,7 +322,7 @@ router.get("/branches/:id", async (req, res, next) => {
       });
     }
     const result = await prisma.ow_projects_branch.findMany({
-      where: { projectid: Number(id) },
+      where: { projectid: Number(projectid) },
     });
     res.status(200).send({
       status: "success",
@@ -733,20 +749,12 @@ router.get("/:id/:branch/:ref", async (req, res, next) => {
         });
       }
 
-      const accessFileToken = await generateFileAccessToken(
-        defaultSource,
-        userId
-      );
-
       return res.status(200).send({
         status: "error",
-        message: "未初始化的作品",
+        message: "无有效提交",
         commit: {
-          commit_file: defaultSource,
           commit_message: "NoFirstCommit",
-          commit_date: new Date(),
         },
-        accessFileToken,
       });
     }
 
