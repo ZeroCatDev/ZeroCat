@@ -111,6 +111,7 @@ router.get("/projectinfo", async function (req, res, next) {
         id: true,
         authorid: true,
         time: true,
+        default_branch: true,
         view_count: true,
         like_count: true,
         type: true,

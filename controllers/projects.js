@@ -139,6 +139,7 @@ function projectSelectionFields() {
   return {
     id: true,
     name: true,
+    default_branch: true,
     type: true,
     license: true,
     authorid: true,

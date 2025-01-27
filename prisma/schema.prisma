@@ -30,22 +30,23 @@ model ow_comment {
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model ow_projects {
-  id          Int       @id @default(autoincrement()) @db.UnsignedInt
-  name        String    @db.VarChar(128)
-  type        String?   @default("text") @db.VarChar(32)
-  license     String?   @db.VarChar(32)
-  authorid    Int
-  teacherid   Int?      @default(0) @db.UnsignedInt
-  state       String?   @default("private") @db.VarChar(32)
-  view_count  Int?      @default(0) @db.UnsignedInt
-  like_count  Int?      @default(0)
-  favo_count  Int?      @default(0)
-  time        DateTime? @default(now()) @db.Timestamp(0)
-  title       String?   @default("Scratch新项目") @db.VarChar(1000)
-  description String?   @default("OurWorld上的Scratch项目") @db.VarChar(1000)
-  history     Boolean   @default(true)
-  devenv      Boolean   @default(true)
-  tags        String    @default("") @db.VarChar(100)
+  id             Int       @id @default(autoincrement()) @db.UnsignedInt
+  name           String    @db.VarChar(128)
+  default_branch String    @default("main") @db.VarChar(128)
+  type           String?   @default("text") @db.VarChar(32)
+  license        String?   @db.VarChar(32)
+  authorid       Int
+  teacherid      Int?      @default(0) @db.UnsignedInt
+  state          String?   @default("private") @db.VarChar(32)
+  view_count     Int?      @default(0) @db.UnsignedInt
+  like_count     Int?      @default(0)
+  favo_count     Int?      @default(0)
+  time           DateTime? @default(now()) @db.Timestamp(0)
+  title          String?   @default("Scratch新项目") @db.VarChar(1000)
+  description    String?   @default("OurWorld上的Scratch项目") @db.VarChar(1000)
+  history        Boolean   @default(true)
+  devenv         Boolean   @default(true)
+  tags           String    @default("") @db.VarChar(100)
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -178,4 +179,12 @@ model ow_users_magiclink {
   userId    Int
   token     String   @unique(map: "token") @db.VarChar(255)
   expiresAt DateTime @db.DateTime(0)
+}
+
+model ow_projects_branch {
+  id        Int     @id @default(autoincrement())
+  name      String  @db.VarChar(128)
+  projectid Int
+  protected String? @default("false") @db.VarChar(45)
+  creator   Int?
 }

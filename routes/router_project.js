@@ -23,6 +23,7 @@ const router = Router();
 
 // 中间件，确保所有请求均经过该处理
 router.all("*", (req, res, next) => next());
+
 // 创建新作品
 router.post("/", needlogin, async (req, res, next) => {
   try {
@@ -182,13 +183,27 @@ router.put("/commit/id/:id", needlogin, async (req, res, next) => {
       });
     }
 
+    // 检查分支是否存在，不存在则创建
+    let branchRecord = await prisma.ow_projects_branch.findFirst({
+      where: { projectid: Number(projectid), name: branch },
+    });
+    if (!branchRecord) {
+      branchRecord = await prisma.ow_projects_branch.create({
+        data: {
+          projectid: Number(projectid),
+          name: branch,
+          creator: res.locals.userid,
+        },
+      });
+    }
+
     let parent_commit_id = null;
     if (/^[a-fA-F0-9]{64}$/.test(parent_commit)) {
       parent_commit_id = parent_commit;
     } else {
       const latestCommit = await prisma.ow_projects_commits.findFirst({
         where: { project_id: Number(projectid), author_id: res.locals.userid },
-        orderBy: { id: "desc" },
+        orderBy: { commit_date: "desc" },
       });
       parent_commit_id = latestCommit ? latestCommit.id : null;
     }
@@ -275,6 +290,62 @@ router.post("/batch", async (req, res, next) => {
   }
 });
 
+router.get("/branches/:id", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const hasPermission = await hasProjectPermission(
+      id,
+      res.locals.userid,
+      "read"
+    );
+
+    if (!hasPermission) {
+      return res.status(403).send({
+        status: "error",
+        message: "无权访问此项目",
+      });
+    }
+    const result = await prisma.ow_projects_branch.findMany({
+      where: { projectid: Number(id) },
+    });
+    res.status(200).send({
+      status: "success",
+      message: "获取成功",
+      data: result,
+    });
+  } catch (err) {
+    logger.error("Error getting project information:", err);
+    next(err);
+  }
+});
+router.get("/commits", async (req, res, next) => {
+  try {
+    const { projectid, branch } = req.query;
+    const hasPermission = await hasProjectPermission(
+      projectid,
+      res.locals.userid,
+      "read"
+    );
+    if (!hasPermission) {
+      return res.status(403).send({
+        status: "error",
+        message: "无权访问此项目",
+      });
+    }
+    const result = await prisma.ow_projects_commits.findMany({
+      where: { project_id: Number(projectid), branch },
+      orderBy: { commit_date: "desc" },
+    });
+    res.status(200).send({
+      status: "success",
+      message: "获取成功",
+      data: result,
+    });
+  } catch (err) {
+    logger.debug("Error getting project information:", err);
+    next(err);
+  }
+});
 // 获取项目信息
 router.get("/id/:id", async (req, res, next) => {
   const userId = res.locals.userid || 0; // 未登录用户为匿名用户
@@ -397,78 +468,6 @@ router.get("/namespace/:authorname/:projectname", async (req, res, next) => {
   }
 });
 
-// 获取项目文件
-router.get("/:id/:branch/:ref", async (req, res, next) => {
-  try {
-    const { id, branch, ref } = req.params;
-    const userId = res.locals.userid || 0; // 未登录用户为匿名用户
-    const hasPermission = await hasProjectPermission(id, userId, "read");
-
-    if (!hasPermission) {
-      return res.status(200).send({
-        status: "error",
-        message: "项目不存在或无权访问",
-        code: "404",
-      });
-    }
-
-    let commit;
-    if (ref === "latest") {
-      commit = await prisma.ow_projects_commits.findFirst({
-        where: { project_id: Number(id), branch },
-        orderBy: { commit_date: "desc" },
-      });
-    } else {
-      commit = await prisma.ow_projects_commits.findFirst({
-        where: { id: ref, project_id: Number(id), branch },
-      });
-    }
-
-    if (!commit) {
-      const project = await prisma.ow_projects.findFirst({
-        where: { id: Number(id) },
-      });
-      const defaultSource = default_project[project.type];
-      if (!defaultSource) {
-        return res.status(200).send({
-          status: "error",
-          message: "默认作品不存在",
-        });
-      }
-
-      const accessFileToken = await generateFileAccessToken(
-        defaultSource,
-        userId
-      );
-
-      return res.status(200).send({
-        status: "error",
-        message: "未初始化的作品",
-        commit: {
-          commit_file: defaultSource,
-          commit_message: "NoFirstCommit",
-          commit_date: new Date(),
-        },
-        accessFileToken,
-      });
-    }
-
-    const accessFileToken = await generateFileAccessToken(
-      commit.commit_file,
-      userId
-    );
-
-    res.status(200).send({
-      status: "success",
-      message: "获取成功",
-      commit,
-      accessFileToken,
-    });
-  } catch (err) {
-    logger.error("Error fetching project file:", err);
-    next(err);
-  }
-});
 
 // 根据文件哈希读取文件
 router.get("/files/:sha256", async (req, res, next) => {
@@ -478,7 +477,7 @@ router.get("/files/:sha256", async (req, res, next) => {
     const userId = res.locals.userid || 0; // 未登录用户为匿名用户
 
     try {
-      const sha256 = await verifyFileAccessToken(accessFileToken, userId);
+      await verifyFileAccessToken(accessFileToken, userId);
     } catch (err) {
       return res.status(200).send({
         status: "error",
@@ -507,7 +506,6 @@ router.get("/files/:sha256", async (req, res, next) => {
     next(err);
   }
 });
-
 
 // 删除作品
 router.delete("/edit/:id", async (req, res, next) => {
@@ -666,32 +664,106 @@ router.put("/changevisibility/:id", needlogin, async (req, res, next) => {
     const { id } = req.params;
     const { newState } = req.body;
 
-    if (!newState||(newState!=="public"&&newState!=="private")) {
+    if (!newState || (newState !== "public" && newState !== "private")) {
       return res.status(400).send({
         status: "error",
         message: "缺少必要的参数",
       });
     }
 
-    await prisma.ow_projects.update({
-      where: { id: Number(id) ,authorid: res.locals.userid},
-      data: { state: newState },
-    }).catch((err)=>{
-      return res.status(400).send({
-        status: "error",
-        message: "无权操作",
+    await prisma.ow_projects
+      .update({
+        where: { id: Number(id), authorid: res.locals.userid },
+        data: { state: newState },
+      })
+      .catch((err) => {
+        return res.status(400).send({
+          status: "error",
+          message: "无权操作",
+        });
+      })
+      .then((result) => {
+        res.status(200).send({
+          status: "success",
+          message: "操作成功",
+        });
       });
-    }).then((result)=>{
-      res.status(200).send({
-        status: "success",
-        message: "操作成功",
-      });
-    })
-
   } catch (err) {
     logger.error("Error renaming project:", err);
     next(err);
+  }
+});
 
+// 获取项目文件 放最后最后匹配免得冲突
+router.get("/:id/:branch/:ref", async (req, res, next) => {
+  try {
+    const { id, branch, ref } = req.params;
+    const userId = res.locals.userid || 0; // 未登录用户为匿名用户
+    const hasPermission = await hasProjectPermission(id, userId, "read");
+
+    if (!hasPermission) {
+      return res.status(200).send({
+        status: "error",
+        message: "项目不存在或无权访问",
+        code: "404",
+      });
+    }
+
+    let commit;
+    if (ref === "latest") {
+      commit = await prisma.ow_projects_commits.findFirst({
+        where: { project_id: Number(id), branch },
+        orderBy: { commit_date: "desc" },
+      });
+    } else {
+      commit = await prisma.ow_projects_commits.findFirst({
+        where: { id: ref, project_id: Number(id), branch },
+      });
+    }
+
+    if (!commit) {
+      const project = await prisma.ow_projects.findFirst({
+        where: { id: Number(id) },
+      });
+      const defaultSource = default_project[project.type];
+      if (!defaultSource) {
+        return res.status(200).send({
+          status: "error",
+          message: "默认作品不存在",
+        });
+      }
+
+      const accessFileToken = await generateFileAccessToken(
+        defaultSource,
+        userId
+      );
+
+      return res.status(200).send({
+        status: "error",
+        message: "未初始化的作品",
+        commit: {
+          commit_file: defaultSource,
+          commit_message: "NoFirstCommit",
+          commit_date: new Date(),
+        },
+        accessFileToken,
+      });
+    }
+
+    const accessFileToken = await generateFileAccessToken(
+      commit.commit_file,
+      userId
+    );
+
+    res.status(200).send({
+      status: "success",
+      message: "获取成功",
+      commit,
+      accessFileToken,
+    });
+  } catch (err) {
+    logger.error("Error fetching project file:", err);
+    next(err);
   }
 });
 export default router;
