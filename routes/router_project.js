@@ -540,7 +540,7 @@ router.delete("/edit/:id", async (req, res, next) => {
 });
 
 // 初始化项目
-router.post("/edit/:id/init", needlogin, async (req, res, next) => {
+router.post("/initlize", needlogin, async (req, res, next) => {
   if (!res.locals.userid) {
     return res.status(200).send({
       status: "error",
@@ -550,9 +550,9 @@ router.post("/edit/:id/init", needlogin, async (req, res, next) => {
   }
 
   try {
-    const { id } = req.params;
+    const { projectid } = req.query;
     const hasPermission = await hasProjectPermission(
-      id,
+      projectid,
       res.locals.userid,
       "write"
     );
@@ -566,7 +566,7 @@ router.post("/edit/:id/init", needlogin, async (req, res, next) => {
 
     // 检查项目是否在任何分支都没有任何提交
     const commitCount = await prisma.ow_projects_commits.count({
-      where: { project_id: Number(id) },
+      where: { project_id: Number(projectid) },
     });
     if (commitCount > 0) {
       return res.status(400).send({
@@ -576,7 +576,7 @@ router.post("/edit/:id/init", needlogin, async (req, res, next) => {
     }
 
     const project = await prisma.ow_projects.findFirst({
-      where: { id: Number(id) },
+      where: { id: Number(projectid) },
     });
     // 获取默认作品
     const defaultSource = default_project[project.type];
@@ -590,7 +590,7 @@ router.post("/edit/:id/init", needlogin, async (req, res, next) => {
     // 计算提交的哈希值作为 id
     const commitContent = JSON.stringify({
       userid: res.locals.userid,
-      project_id: Number(id),
+      project_id: Number(projectid),
       project_branch: "main",
       source_sha256: defaultSource,
       commit_message: "初始化提交",
@@ -603,7 +603,7 @@ router.post("/edit/:id/init", needlogin, async (req, res, next) => {
     const result = await prisma.ow_projects_commits.create({
       data: {
         id: commitId,
-        project_id: Number(id),
+        project_id: Number(projectid),
         author_id: res.locals.userid,
         branch: "main",
         commit_file: defaultSource,
@@ -753,7 +753,8 @@ router.get("/:id/:branch/:ref", async (req, res, next) => {
         status: "error",
         message: "无有效提交",
         commit: {
-          commit_message: "NoFirstCommit",
+          error_code: "NoFirstCommit",
+          commit_message: "仓库无有效提交",
         },
       });
     }
