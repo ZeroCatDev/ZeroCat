@@ -182,9 +182,10 @@ model ow_users_magiclink {
 }
 
 model ow_projects_branch {
-  id        Int     @id @default(autoincrement())
-  name      String  @db.VarChar(128)
-  projectid Int
-  protected String? @default("false") @db.VarChar(45)
-  creator   Int?
+  id          Int     @id @default(autoincrement())
+  name        String  @db.VarChar(128)
+  description String  @db.VarChar(128)
+  projectid   Int
+  protected   String? @default("false") @db.VarChar(45)
+  creator     Int?
 }

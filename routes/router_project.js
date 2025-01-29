@@ -24,6 +24,45 @@ const router = Router();
 // 中间件，确保所有请求均经过该处理
 router.all("*", (req, res, next) => next());
 
+// 抽离的函数
+async function checkProjectPermission(projectid, userid, permission) {
+  const hasPermission = await hasProjectPermission(projectid, userid, permission);
+  if (!hasPermission) {
+    throw new Error("无权访问此项目");
+  }
+}
+
+async function createBranchIfNotExists(projectid, branch, userid) {
+  let branchRecord = await prisma.ow_projects_branch.findFirst({
+    where: { projectid: Number(projectid), name: branch },
+  });
+  if (!branchRecord) {
+    branchRecord = await prisma.ow_projects_branch.create({
+      data: {
+        projectid: Number(projectid),
+        name: branch,
+        creator: userid,
+        description:"",
+      },
+    });
+  }
+  return branchRecord;
+}
+
+async function getCommitParentId(projectid, userid, parent_commit) {
+  let parent_commit_id = null;
+  if (/^[a-fA-F0-9]{64}$/.test(parent_commit)) {
+    parent_commit_id = parent_commit;
+  } else {
+    const latestCommit = await prisma.ow_projects_commits.findFirst({
+      where: { project_id: Number(projectid), author_id: userid },
+      orderBy: { commit_date: "desc" },
+    });
+    parent_commit_id = latestCommit ? latestCommit.id : null;
+  }
+  return parent_commit_id;
+}
+
 // 创建新作品
 router.post("/", needlogin, async (req, res, next) => {
   try {
@@ -194,29 +233,9 @@ router.put("/commit/id/:id", needlogin, async (req, res, next) => {
     }
 
     // 检查分支是否存在，不存在则创建
-    let branchRecord = await prisma.ow_projects_branch.findFirst({
-      where: { projectid: Number(projectid), name: branch },
-    });
-    if (!branchRecord) {
-      branchRecord = await prisma.ow_projects_branch.create({
-        data: {
-          projectid: Number(projectid),
-          name: branch,
-          creator: res.locals.userid,
-        },
-      });
-    }
+    await createBranchIfNotExists(projectid, branch, res.locals.userid);
 
-    let parent_commit_id = null;
-    if (/^[a-fA-F0-9]{64}$/.test(parent_commit)) {
-      parent_commit_id = parent_commit;
-    } else {
-      const latestCommit = await prisma.ow_projects_commits.findFirst({
-        where: { project_id: Number(projectid), author_id: res.locals.userid },
-        orderBy: { commit_date: "desc" },
-      });
-      parent_commit_id = latestCommit ? latestCommit.id : null;
-    }
+    const parent_commit_id = await getCommitParentId(projectid, res.locals.userid, parent_commit);
     const timestamp = Date.now();
     // 计算提交的哈希值作为 id
     const commitContent = JSON.stringify({
@@ -309,18 +328,8 @@ router.post("/batch", async (req, res, next) => {
 router.get("/branches", async (req, res, next) => {
   try {
     const { projectid } = req.query;
-    const hasPermission = await hasProjectPermission(
-      projectid,
-      res.locals.userid,
-      "read"
-    );
+    await checkProjectPermission(projectid, res.locals.userid, "read");
 
-    if (!hasPermission) {
-      return res.status(403).send({
-        status: "error",
-        message: "无权访问此项目",
-      });
-    }
     const result = await prisma.ow_projects_branch.findMany({
       where: { projectid: Number(projectid) },
     });
@@ -337,17 +346,8 @@ router.get("/branches", async (req, res, next) => {
 router.get("/commits", async (req, res, next) => {
   try {
     const { projectid, branch } = req.query;
-    const hasPermission = await hasProjectPermission(
-      projectid,
-      res.locals.userid,
-      "read"
-    );
-    if (!hasPermission) {
-      return res.status(403).send({
-        status: "error",
-        message: "无权访问此项目",
-      });
-    }
+    await checkProjectPermission(projectid, res.locals.userid, "read");
+
     const result = await prisma.ow_projects_commits.findMany({
       where: { project_id: Number(projectid), branch },
       orderBy: { commit_date: "desc" },
@@ -365,18 +365,7 @@ router.get("/commits", async (req, res, next) => {
 // 获取项目信息
 router.get("/id/:id", async (req, res, next) => {
   const userId = res.locals.userid || 0; // 未登录用户为匿名用户
-  const hasPermission = await hasProjectPermission(
-    req.params.id,
-    userId,
-    "read"
-  );
-
-  if (!hasPermission) {
-    return res.status(200).send({
-      status: "error",
-      message: "作品不存在或无权打开",
-    });
-  }
+  await checkProjectPermission(req.params.id, userId, "read");
 
   const project = await prisma.ow_projects.findFirst({
     where: { id: Number(req.params.id) },
@@ -452,18 +441,7 @@ router.get("/namespace/:authorname/:projectname", async (req, res, next) => {
       });
     }
 
-    const hasPermission = await hasProjectPermission(
-      project.id,
-      userId,
-      "read"
-    );
-
-    if (!hasPermission) {
-      return res.status(404).send({
-        status: "error",
-        message: "无权访问此项目",
-      });
-    }
+    await checkProjectPermission(project.id, userId, "read");
 
     const tags = await prisma.ow_projects_tags.findMany({
       where: { projectid: project.id },
@@ -483,7 +461,6 @@ router.get("/namespace/:authorname/:projectname", async (req, res, next) => {
     });
   }
 });
-
 
 // 根据文件哈希读取文件
 router.get("/files/:sha256", async (req, res, next) => {
@@ -551,18 +528,7 @@ router.post("/initlize", needlogin, async (req, res, next) => {
 
   try {
     const { projectid } = req.query;
-    const hasPermission = await hasProjectPermission(
-      projectid,
-      res.locals.userid,
-      "write"
-    );
-
-    if (!hasPermission) {
-      return res.status(403).send({
-        status: "error",
-        message: "无权访问此项目",
-      });
-    }
+    await checkProjectPermission(projectid, res.locals.userid, "write");
 
     // 检查项目是否在任何分支都没有任何提交
     const commitCount = await prisma.ow_projects_commits.count({
@@ -598,6 +564,16 @@ router.post("/initlize", needlogin, async (req, res, next) => {
       timestamp: Date.now(),
     });
     const commitId = createHash("sha256").update(commitContent).digest("hex");
+
+    // 创建分支记录
+    await prisma.ow_projects_branch.create({
+      data: {
+        projectid: Number(projectid),
+        name: "main",
+        creator: res.locals.userid,
+        description: "默认分支",
+      },
+    });
 
     // 创建提交记录
     const result = await prisma.ow_projects_commits.create({
@@ -706,6 +682,47 @@ router.put("/changevisibility/:id", needlogin, async (req, res, next) => {
       });
   } catch (err) {
     logger.error("Error renaming project:", err);
+    next(err);
+  }
+});
+
+// 修改分支简介
+router.post("/branches/description", needlogin, async (req, res, next) => {
+  try {
+    const { projectid, branch } = req.query;
+    const { description } = req.body;
+
+    if (!description) {
+      return res.status(400).send({
+        status: "error",
+        message: "缺少必要的参数",
+      });
+    }
+
+    await checkProjectPermission(projectid, res.locals.userid, "write");
+
+    const branchRecord = await prisma.ow_projects_branch.findFirst({
+      where: { projectid: Number(projectid), name: branch },
+    });
+
+    if (!branchRecord) {
+      return res.status(404).send({
+        status: "error",
+        message: "分支不存在",
+      });
+    }
+
+    await prisma.ow_projects_branch.update({
+      where: { id: branchRecord.id },
+      data: { description },
+    });
+
+    res.status(200).send({
+      status: "success",
+      message: "分支简介更新成功",
+    });
+  } catch (err) {
+    logger.error("Error updating branch description:", err);
     next(err);
   }
 });
