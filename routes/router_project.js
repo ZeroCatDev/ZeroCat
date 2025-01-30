@@ -26,7 +26,11 @@ router.all("*", (req, res, next) => next());
 
 // 抽离的函数
 async function checkProjectPermission(projectid, userid, permission) {
-  const hasPermission = await hasProjectPermission(projectid, userid, permission);
+  const hasPermission = await hasProjectPermission(
+    projectid,
+    userid,
+    permission
+  );
   if (!hasPermission) {
     throw new Error("无权访问此项目");
   }
@@ -42,7 +46,7 @@ async function createBranchIfNotExists(projectid, branch, userid) {
         projectid: Number(projectid),
         name: branch,
         creator: userid,
-        description:"",
+        description: "",
       },
     });
   }
@@ -61,6 +65,13 @@ async function getCommitParentId(projectid, userid, parent_commit) {
     parent_commit_id = latestCommit ? latestCommit.id : null;
   }
   return parent_commit_id;
+}
+
+async function updateBranchLatestCommit(projectid, branch, commitId) {
+  await prisma.ow_projects_branch.update({
+    where: { projectid: Number(projectid), name: branch },
+    data: { latest_commit_hash: commitId },
+  });
 }
 
 // 创建新作品
@@ -177,6 +188,55 @@ router.post("/savefile", needlogin, async (req, res, next) => {
   }
 });
 
+// 获取项目文件 放最后最后匹配免得冲突
+router.get("/commit", async (req, res, next) => {
+  try {
+    const { projectid,commitid } = req.query;
+    const userId = res.locals.userid || 0; // 未登录用户为匿名用户
+    const hasPermission = await hasProjectPermission(projectid, userId, "read");
+
+    if (!hasPermission) {
+      return res.status(200).send({
+        status: "error",
+        message: "项目不存在或无权访问",
+        code: "404",
+      });
+    }
+
+    let commit;
+
+      commit = await prisma.ow_projects_commits.findFirst({
+        where: { project_id: Number(projectid), id: commitid },
+      });
+
+
+    if (!commit) {
+      return res.status(200).send({
+        status: "error",
+        message: "获取失败",
+        commit: {
+          error_code: "no_commit",
+          commit_message: "No commit found",
+        },
+      });
+    }
+
+    const accessFileToken = await generateFileAccessToken(
+      commit.commit_file,
+      userId
+    );
+
+    res.status(200).send({
+      status: "success",
+      message: "获取成功",
+      commit,
+      accessFileToken,
+    });
+  } catch (err) {
+    logger.error("Error fetching project file:", err);
+    next(err);
+  }
+});
 // 提交代码
 router.put("/commit/id/:id", needlogin, async (req, res, next) => {
   try {
@@ -235,13 +295,16 @@ router.put("/commit/id/:id", needlogin, async (req, res, next) => {
     // 检查分支是否存在，不存在则创建
     await createBranchIfNotExists(projectid, branch, res.locals.userid);
 
-    const parent_commit_id = await getCommitParentId(projectid, res.locals.userid, parent_commit);
+    const parent_commit_id = await getCommitParentId(
+      projectid,
+      res.locals.userid,
+      parent_commit
+    );
     const timestamp = Date.now();
     // 计算提交的哈希值作为 id
     const commitContent = JSON.stringify({
       userid: res.locals.userid,
       project_id: Number(projectid),
-      project_branch: branch,
       source_sha256: sha256,
       commit_message: message,
       parent_commit: parent_commit_id,
@@ -261,6 +324,8 @@ router.put("/commit/id/:id", needlogin, async (req, res, next) => {
         commit_date: new Date(timestamp),
       },
     });
+
+    await updateBranchLatestCommit(projectid, branch, commitId);
 
     res.status(200).send({
       status: "success",
@@ -332,6 +397,12 @@ router.get("/branches", async (req, res, next) => {
 
     const result = await prisma.ow_projects_branch.findMany({
       where: { projectid: Number(projectid) },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        latest_commit_hash: true,
+      },
     });
     res.status(200).send({
       status: "success",
@@ -345,12 +416,80 @@ router.get("/branches", async (req, res, next) => {
 });
 router.get("/commits", async (req, res, next) => {
   try {
-    const { projectid, branch } = req.query;
+    const { projectid } = req.query;
     await checkProjectPermission(projectid, res.locals.userid, "read");
 
     const result = await prisma.ow_projects_commits.findMany({
+      where: { project_id: Number(projectid) },
+      orderBy: { commit_date: "desc" },
+    });
+    res.status(200).send({
+      status: "success",
+      message: "获取成功",
+      data: result,
+    });
+  } catch (err) {
+    logger.debug("Error getting project information:", err);
+    next(err);
+  }
+});
+
+router.post("/branches", async (req, res, next) => {
+  try {
+    const { name, branch, projectid } = req.body;
+    await checkProjectPermission(projectid, res.locals.userid, "read");
+    const result = await prisma.ow_projects_commits.findFirst({
       where: { project_id: Number(projectid), branch },
       orderBy: { commit_date: "desc" },
+    });
+    const timestamp = Date.now();
+    const commitContent = JSON.stringify({
+      userid: res.locals.userid,
+      project_id: Number(projectid),
+      source_sha256: result.commit_file,
+      commit_message: result.commit_message,
+      parent_commit: result.parent_commit_id,
+      timestamp: timestamp,
+    });
+    const commitId = createHash("sha256").update(commitContent).digest("hex");
+    await prisma.ow_projects_commits.create({
+      data: {
+        id: commitId,
+        project_id: Number(projectid),
+        author_id: res.locals.userid,
+        branch: name,
+        commit_file: result.commit_file,
+        commit_message: result.commit_message,
+        parent_commit_id: result.parent_commit_id,
+        commit_date: new Date(timestamp),
+      },
+    });
+    await prisma.ow_projects_branch.create({
+      data: {
+        projectid: Number(projectid),
+        name: name,
+        description: "",
+        latest_commit_hash: commitId,
+      },
+    });
+
+    res.status(200).send({
+      status: "success",
+      message: "创建成功",
+      data: result,
+    });
+  } catch (err) {
+    logger.error("Error getting project information:", err);
+    next(err);
+  }
+});
+router.get("/commits", async (req, res, next) => {
+  try {
+    const { projectid } = req.query;
+    await checkProjectPermission(projectid, res.locals.userid, "read");
+
+    const result = await prisma.ow_projects_commits.findMany({
+      where: { project_id: Number(projectid) },
     });
     res.status(200).send({
       status: "success",
@@ -552,7 +691,8 @@ router.post("/initlize", needlogin, async (req, res, next) => {
         message: "默认作品不存在",
       });
     }
-
+    //先创建时间戳
+    const timestamp = new Date();
     // 计算提交的哈希值作为 id
     const commitContent = JSON.stringify({
       userid: res.locals.userid,
@@ -561,7 +701,7 @@ router.post("/initlize", needlogin, async (req, res, next) => {
       source_sha256: defaultSource,
       commit_message: "初始化提交",
       parent_commit: null,
-      timestamp: Date.now(),
+      timestamp: timestamp,
     });
     const commitId = createHash("sha256").update(commitContent).digest("hex");
 
@@ -569,6 +709,7 @@ router.post("/initlize", needlogin, async (req, res, next) => {
     await prisma.ow_projects_branch.create({
       data: {
         projectid: Number(projectid),
+        latest_commit_hash: commitId,
         name: "main",
         creator: res.locals.userid,
         description: "默认分支",
@@ -585,7 +726,7 @@ router.post("/initlize", needlogin, async (req, res, next) => {
         commit_file: defaultSource,
         commit_message: "初始化提交",
         parent_commit_id: null,
-        commit_date: new Date(), // 使用 Date 对象
+        commit_date: new Date(timestamp), // 使用 Date 对象
       },
     });
 

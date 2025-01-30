@@ -164,7 +164,7 @@ model ow_projects_stars {
 }
 
 model ow_projects_commits {
-  id               String   @id @db.VarChar(256)
+  id               String   @db.VarChar(256)
   project_id       Int
   author_id        Int
   branch           String   @default("main") @db.VarChar(255)
@@ -172,6 +172,8 @@ model ow_projects_commits {
   commit_message   String   @db.Text
   commit_date      DateTime @db.DateTime(0)
   commit_file      String   @db.VarChar(256)
+
+  @@id([id, project_id])
 }
 
 model ow_users_magiclink {
@@ -182,10 +184,13 @@ model ow_users_magiclink {
 }
 
 model ow_projects_branch {
-  id          Int     @id @default(autoincrement())
-  name        String  @db.VarChar(128)
-  description String  @db.VarChar(128)
-  projectid   Int
-  protected   String? @default("false") @db.VarChar(45)
-  creator     Int?
+  id                 Int     @id @default(autoincrement())
+  name               String  @db.VarChar(128)
+  latest_commit_hash String  @db.VarChar(64)
+  description        String  @db.VarChar(128)
+  projectid          Int
+  protected          String? @default("false") @db.VarChar(45)
+  creator            Int?
+
+  @@unique([projectid, name], map: "unique_project_branch")
 }
