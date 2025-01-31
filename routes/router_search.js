@@ -4,7 +4,6 @@ import configManager from "../utils/configManager.js";
 import { Router } from "express";
 const router = Router();
 import { prisma } from "../utils/global.js"; // 功能函数集
-import { getUsersByList } from "../controllers/projects.js";
 
 // 搜索：Scratch项目列表：数据（只搜索标题）
 router.get("/", async (req, res, next) => {
@@ -38,7 +37,7 @@ router.get("/", async (req, res, next) => {
     // 处理排序
     const [orderbyField, orderDirection] = orderbyQuery.split("_");
     const orderbyMap = { view: "view_count", time: "time", id: "id" };
-    const orderDirectionMap = { up: "desc", down: "asc" };
+    const orderDirectionMap = { up: "asc", down: "desc" }; // 修正排序方向
     const orderBy = orderbyMap[orderbyField] || "time";
     const order = orderDirectionMap[orderDirection] || "desc";
 
