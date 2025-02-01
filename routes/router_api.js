@@ -204,11 +204,17 @@ router.get("/admin/config/all", needadmin, async function (req, res, next) {
 router.put("/admin/config/:id", needadmin, async function (req, res, next) {
   try {
     const { id } = req.params;
-    const { key, value } = req.body;
+    const { key, value, is_public } = req.body;
 
     const updatedConfig = await prisma.ow_config.update({
       where: { id: Number(id) },
-      data: { key, value },
+      data: {
+        key,
+        value,
+        is_public,
+        updated_at: new Date(),
+        user_id: res.locals.userid,
+      },
     });
 
     res.status(200).send({
@@ -242,7 +248,7 @@ router.post("/admin/config", needadmin, async function (req, res, next) {
     const { key, value } = req.body;
 
     const newConfig = await prisma.ow_config.create({
-      data: { key, value },
+      data: { key, value, user_id: res.locals.userid },
     });
 
     res.status(200).send({
