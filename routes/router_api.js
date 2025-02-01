@@ -28,9 +28,7 @@ router.get("/usertx", async function (req, res, next) {
     }
     res.redirect(
       302,
-      (await configManager.getConfig("s3.staticurl")) +
-        "/user/" +
-        USER.images
+      (await configManager.getConfig("s3.staticurl")) + "/user/" + USER.images
     );
   } catch (err) {
     next(err);
@@ -126,7 +124,6 @@ router.get("/projectinfo", async function (req, res, next) {
     });
 
     if (!project) {
-
       res.send({
         code: 404,
         status: "404",
@@ -196,6 +193,68 @@ router.get("/config/:key", async function (req, res, next) {
   });
 });
 
+router.get("/admin/config/all", needadmin, async function (req, res, next) {
+  const result = await prisma.ow_config.findMany();
+
+  res
+    .status(200)
+    .send({ status: "success", message: "获取成功", data: result });
+});
+
+router.put("/admin/config/:id", needadmin, async function (req, res, next) {
+  try {
+    const { id } = req.params;
+    const { key, value } = req.body;
+
+    const updatedConfig = await prisma.ow_config.update({
+      where: { id: Number(id) },
+      data: { key, value },
+    });
+
+    res.status(200).send({
+      status: "success",
+      message: "配置已更新",
+      data: updatedConfig,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/admin/config/:id", needadmin, async function (req, res, next) {
+  try {
+    const { id } = req.params;
+
+    await prisma.ow_config.delete({
+      where: { id: Number(id) },
+    });
+
+    res.status(200).send({
+      status: "success",
+      message: "配置已删除",
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+router.post("/admin/config", needadmin, async function (req, res, next) {
+  try {
+    const { key, value } = req.body;
+
+    const newConfig = await prisma.ow_config.create({
+      data: { key, value },
+    });
+
+    res.status(200).send({
+      status: "success",
+      message: "配置已创建",
+      data: newConfig,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get("/tuxiaochao", async function (req, res) {
   const userId = res.locals.userid;
   const displayName = res.locals.display_name;
@@ -207,7 +266,11 @@ router.get("/tuxiaochao", async function (req, res) {
 
   // 判断登录状态和配置
   if (!res.locals.login || !txcid || !txckey) {
-    res.redirect(txcid ? `https://support.qq.com/product/${txcid}` : "https://support.qq.com/product/597800");
+    res.redirect(
+      txcid
+        ? `https://support.qq.com/product/${txcid}`
+        : "https://support.qq.com/product/597800"
+    );
     return;
   }
 
@@ -234,7 +297,6 @@ router.get("/tuxiaochao", async function (req, res) {
     // 构建重定向链接
     const redirectUrl = `https://support.qq.com/product/${txcid}?openid=${userId}&nickname=${displayName}&avatar=${staticUrl}/user/${userImage}&user_signature=${cryptostr}`;
     res.redirect(redirectUrl);
-
   } catch (error) {
     // 错误处理
     console.error(error);
