@@ -245,10 +245,10 @@ router.delete("/admin/config/:id", needadmin, async function (req, res, next) {
 });
 router.post("/admin/config", needadmin, async function (req, res, next) {
   try {
-    const { key, value } = req.body;
+    const { key, value, is_public } = req.body;
 
     const newConfig = await prisma.ow_config.create({
-      data: { key, value, user_id: res.locals.userid },
+      data: { key, value, user_id: res.locals.userid, is_public },
     });
 
     res.status(200).send({
