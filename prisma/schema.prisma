@@ -47,6 +47,7 @@ model ow_projects {
   history        Boolean   @default(true)
   devenv         Boolean   @default(true)
   tags           String    @default("") @db.VarChar(100)
+  fork           Int?
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -193,4 +194,42 @@ model ow_projects_branch {
   creator            Int?
 
   @@unique([projectid, name], map: "unique_project_branch")
+}
+
+model scratchmirror_projects {
+  id                  BigInt                             @id
+  title               String                             @db.Text
+  description         String?                            @db.Text
+  instructions        String?                            @db.Text
+  visibility          scratchmirror_projects_visibility?
+  public              Boolean?
+  comments_allowed    Boolean?
+  is_published        Boolean?
+  history_created_at  DateTime?                          @db.DateTime(0)
+  history_modified_at DateTime?                          @db.DateTime(0)
+  history_shared_at   DateTime?                          @db.DateTime(0)
+  stats_views         Int?                               @default(0)
+  stats_loves         Int?                               @default(0)
+  stats_favorites     Int?                               @default(0)
+  stats_remixes       Int?                               @default(0)
+  image               String?                            @db.VarChar(255)
+  author_id           BigInt
+  remix_parent        Int?
+  remix_root          Int?
+}
+
+model scratchmirror_users {
+  id             Int       @id
+  username       String?   @db.VarChar(45)
+  scratchteam    Int?      @db.TinyInt
+  history_joined DateTime? @db.Timestamp(0)
+  profile_id     Int?
+  status         String?   @db.Text
+  bio            String?   @db.Text
+  country        String?   @db.Text
+}
+
+enum scratchmirror_projects_visibility {
+  visible
+  hidden
 }

@@ -33,6 +33,15 @@ export async function getUserByUsername(username) {
   try {
     const user = await prisma.ow_users.findFirst({
       where: { username },
+      select: {
+        id: true,
+        username: true,
+        display_name: true,
+        state: true,
+        regTime: true,
+        motto: true,
+        images: true,
+      }
     });
     return user;
   } catch (err) {

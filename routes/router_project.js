@@ -191,7 +191,7 @@ router.post("/savefile", needlogin, async (req, res, next) => {
 // 获取项目文件 放最后最后匹配免得冲突
 router.get("/commit", async (req, res, next) => {
   try {
-    const { projectid,commitid } = req.query;
+    const { projectid, commitid } = req.query;
     const userId = res.locals.userid || 0; // 未登录用户为匿名用户
     const hasPermission = await hasProjectPermission(projectid, userId, "read");
 
@@ -205,10 +205,9 @@ router.get("/commit", async (req, res, next) => {
 
     let commit;
 
-      commit = await prisma.ow_projects_commits.findFirst({
-        where: { project_id: Number(projectid), id: commitid },
-      });
-
+    commit = await prisma.ow_projects_commits.findFirst({
+      where: { project_id: Number(projectid), id: commitid },
+    });
 
     if (!commit) {
       return res.status(200).send({
@@ -931,6 +930,98 @@ router.get("/:id/:branch/:ref", async (req, res, next) => {
   } catch (err) {
     logger.error("Error fetching project file:", err);
     next(err);
+  }
+});
+router.post("/fork", needlogin, async (req, res, next) => {
+  const { projectid, branch, name } = req.body;
+
+  try {
+    await checkProjectPermission(projectid, res.locals.userid, "read");
+
+    const project = await prisma.ow_projects.findFirst({
+      where: { id: Number(projectid) },
+    });
+
+    if (!project) {
+      return res.status(404).send({
+        status: "error",
+        message: "项目不存在",
+      });
+    }
+
+    const existingProject = await prisma.ow_projects.findFirst({
+      where: {
+        authorid: res.locals.userid,
+        name: name,
+      },
+    });
+
+    if (existingProject) {
+      return res.status(200).send({
+        status: "error",
+        message: "同名项目已存在",
+      });
+    }
+
+    let branches;
+    if (branch == "all") {
+      branches = await prisma.ow_projects_branch.findMany({
+        where: { projectid: Number(projectid) },
+      });
+    } else {
+      branches = [
+        await prisma.ow_projects_branch.findFirst({
+          where: { projectid: Number(projectid), name: project.default_branch },
+        }),
+      ];
+      if (!branches[0]) {
+        return res.status(404).send({
+          status: "error",
+          message: "分支不存在",
+        });
+      }
+    }
+
+    const forkedProject = await prisma.ow_projects.create({
+      data: {
+        name: project.name,
+        type: project.type,
+        state: project.state,
+        license: project.license,
+        authorid: res.locals.userid,
+        title: project.title,
+        description: project.description,
+        fork: projectid,
+        default_branch: project.default_branch,
+      },
+    });
+
+    await Promise.all(
+      branches.map(branch =>
+        {
+        prisma.ow_projects_branch.create({
+          data: {
+            projectid: forkedProject.id,
+            name: branch.name,
+            creator: res.locals.userid,
+            latest_commit_hash: branch.latest_commit_hash,
+            description: branch.description,
+            protected: branch.protected,
+          },
+        })}
+      )
+    );
+
+    res.status(200).send({
+      status: "success",
+      message: "项目已成功分叉",
+    });
+  } catch (err) {
+    logger.error("Error forking project:", err);
+    res.status(500).send({
+      status: "error",
+      message: "服务器内部错误",
+    });
   }
 });
 export default router;
