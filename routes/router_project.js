@@ -949,7 +949,7 @@ router.post("/fork", needlogin, async (req, res, next) => {
       });
     }
 
-    const existingProject = await prisma.ow_projects.findFirst({
+    const existingProject = await prisma.ow_projects.findMany({
       where: {
         authorid: res.locals.userid,
         name: name,
@@ -974,14 +974,13 @@ router.post("/fork", needlogin, async (req, res, next) => {
           where: { projectid: Number(projectid), name: project.default_branch },
         }),
       ];
-      if (!branches[0]) {
-        return res.status(404).send({
-          status: "error",
-          message: "分支不存在",
-        });
-      }
     }
-
+    if (!branches[0]) {
+      return res.status(404).send({
+        status: "error",
+        message: "分支不存在",
+      });
+    }
     const forkedProject = await prisma.ow_projects.create({
       data: {
         name: project.name,
@@ -997,8 +996,7 @@ router.post("/fork", needlogin, async (req, res, next) => {
     });
 
     await Promise.all(
-      branches.map(branch =>
-        {
+      branches.map((branch) => {
         prisma.ow_projects_branch.create({
           data: {
             projectid: forkedProject.id,
@@ -1008,8 +1006,8 @@ router.post("/fork", needlogin, async (req, res, next) => {
             description: branch.description,
             protected: branch.protected,
           },
-        })}
-      )
+        });
+      })
     );
 
     res.status(200).send({
