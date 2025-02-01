@@ -166,14 +166,6 @@ router.get("/config", async function (req, res, next) {
   );
 });
 
-router.get("/config/reload", needadmin, async function (req, res, next) {
-  await configManager.loadConfigsFromDB();
-
-  res.status(200).send({
-    status: "success",
-    message: "配置已重新加载",
-  });
-});
 router.get("/config/:key", async function (req, res, next) {
   const result = await prisma.ow_config.findFirst({
     where: { is_public: true, key: req.params.key },
@@ -193,6 +185,14 @@ router.get("/config/:key", async function (req, res, next) {
   });
 });
 
+router.get("/admin/config/reload", needadmin, async function (req, res, next) {
+  await configManager.loadConfigsFromDB();
+
+  res.status(200).send({
+    status: "success",
+    message: "配置已重新加载",
+  });
+});
 router.get("/admin/config/all", needadmin, async function (req, res, next) {
   const result = await prisma.ow_config.findMany();
 
