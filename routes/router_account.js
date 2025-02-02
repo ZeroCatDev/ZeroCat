@@ -754,7 +754,14 @@ router.post("/verify-email", async function (req, res, next) {
       });
     }
 
-    await verifyContact(email, token);
+    const verified = await verifyContact(email, token);
+    
+    if (!verified) {
+      return res.status(200).json({
+        status: "error",
+        message: "验证失败，请检查验证码是否正确"
+      });
+    }
 
     res.status(200).json({
       status: "success",
@@ -764,116 +771,50 @@ router.post("/verify-email", async function (req, res, next) {
     logger.error(error);
     res.status(200).json({
       status: "error",
-      message: error.message
+      message: error.message || "验证失败"
     });
   }
 });
 
-// 添加新的路由处理绑定辅助邮箱
-router.post("/add-email", needlogin, async function (req, res, next) {
+// 发送验证码到指定邮箱
+router.post("/send-verification-code", needlogin, async function (req, res) {
   try {
+    const { email } = req.body;
     const userId = res.locals.userid;
 
-    // 检查用户是否有已验证的主邮箱
-    const primaryEmail = await prisma.ow_users_contacts.findFirst({
+    // 检查邮箱是否属于当前用户
+    const contact = await prisma.ow_users_contacts.findFirst({
       where: {
         user_id: userId,
+        contact_value: email,
         contact_type: 'email',
-        is_primary: true,
         verified: true
       }
     });
 
-    if (!primaryEmail) {
+    if (!contact) {
       return res.status(200).json({
         status: "error",
-        message: "请先验证主邮箱后再添加辅助邮箱"
+        message: "未找到此邮箱或邮箱未验证"
       });
     }
 
-    const { email } = req.body;
+    await sendVerificationEmail(email, contact.contact_hash);
 
-    if (!email || !emailTest(email)) {
-      return res.status(200).json({
-        status: "error",
-        message: "请提供有效的邮箱地址"
-      });
-    }
-
-    // 检查邮箱是否已被使用
-    const existingContact = await prisma.ow_users_contacts.findUnique({
-      where: { contact_value: email }
+    return res.status(200).json({
+      status: "success",
+      message: "验证码已发送"
     });
-
-    if (existingContact) {
-      return res.status(200).json({
-        status: "error",
-        message: "此邮箱已被使用"
-      });
-    }
-
-    // 获取用户当前的邮箱数量
-    const currentEmailCount = await prisma.ow_users_contacts.count({
-      where: {
-        user_id: userId,
-        contact_type: 'email'
-      }
-    });
-
-    if (currentEmailCount >= 5) {
-      return res.status(200).json({
-        status: "error",
-        message: "您最多只能绑定5个邮箱"
-      });
-    }
-
-    // 检查是否已有主要邮箱
-    const hasPrimaryEmail = await prisma.ow_users_contacts.findFirst({
-      where: {
-        user_id: userId,
-        contact_type: 'email',
-        is_primary: true
-      }
-    });
-
-    // 如果没有主要邮箱，将此邮箱设为主要邮箱
-    const isPrimary = !hasPrimaryEmail;
-
-    try {
-      // 添加新邮箱
-      const contact = await addUserContact(userId, email, 'email', isPrimary);
-
-      // 发送验证邮件
-      await sendVerificationEmail(email, contact.contact_hash);
-
-      return res.status(200).json({
-        status: "success",
-        message: "邮箱添加成功，请查收验证邮件",
-        data: {
-          email: contact.contact_value,
-          is_primary: contact.is_primary,
-          verified: contact.verified
-        }
-      });
-    } catch (error) {
-      if (error.code === 'P2002') {
-        return res.status(200).json({
-          status: "error",
-          message: "此邮箱已被使用"
-        });
-      }
-      throw error;
-    }
   } catch (error) {
-    logger.error("添加邮箱时出错:", error);
+    logger.error("发送验证码时出错:", error);
     return res.status(200).json({
       status: "error",
-      message: "添加邮箱失败"
+      message: error.message || "发送验证码失败"
     });
   }
 });
 
-// 获取用户的所有邮箱
+// 列出所有邮箱
 router.get("/emails", needlogin, async function (req, res) {
   try {
     const userId = res.locals.userid;
@@ -910,13 +851,128 @@ router.get("/emails", needlogin, async function (req, res) {
   }
 });
 
-// 删除辅助邮箱
-router.post("/remove-email", needlogin, async function (req, res) {
+// 添加新邮箱（需要主邮箱验证）
+router.post("/add-email", needlogin, async function (req, res) {
   try {
-    const { email } = req.body;
+    const { email, verificationCode } = req.body;
     const userId = res.locals.userid;
 
-    const contact = await prisma.ow_users_contacts.findFirst({
+    // 获取主邮箱
+    const primaryEmail = await prisma.ow_users_contacts.findFirst({
+      where: {
+        user_id: userId,
+        contact_type: 'email',
+        is_primary: true
+      }
+    });
+
+    if (!primaryEmail) {
+      return res.status(200).json({
+        status: "error",
+        message: "需要先设置主邮箱"
+      });
+    }
+
+    // 验证主邮箱的验证码
+    const isValid = await verifyContact(primaryEmail.contact_value, verificationCode);
+    if (!isValid) {
+      return res.status(200).json({
+        status: "error",
+        message: "验证码无效"
+      });
+    }
+
+    // 检查新邮箱格式
+    if (!email || !emailTest(email)) {
+      return res.status(200).json({
+        status: "error",
+        message: "请提供有效的邮箱地址"
+      });
+    }
+
+    // 检查邮箱是否已被使用
+    const existingContact = await prisma.ow_users_contacts.findFirst({
+      where: { contact_value: email }
+    });
+
+    if (existingContact) {
+      return res.status(200).json({
+        status: "error",
+        message: "此邮箱已被使用"
+      });
+    }
+
+    // 检查邮箱数量限制
+    const currentEmailCount = await prisma.ow_users_contacts.count({
+      where: {
+        user_id: userId,
+        contact_type: 'email'
+      }
+    });
+
+    if (currentEmailCount >= 5) {
+      return res.status(200).json({
+        status: "error",
+        message: "最多只能绑定5个邮箱"
+      });
+    }
+
+    // 添加新邮箱
+    const contact = await addUserContact(userId, email, 'email', false);
+    await sendVerificationEmail(email, contact.contact_hash);
+
+    return res.status(200).json({
+      status: "success",
+      message: "邮箱添加成功，请查收验证邮件",
+      data: {
+        contact_id: contact.contact_id,
+        contact_value: contact.contact_value,
+        is_primary: contact.is_primary,
+        verified: contact.verified
+      }
+    });
+  } catch (error) {
+    logger.error("添加邮箱时出错:", error);
+    return res.status(200).json({
+      status: "error",
+      message: error.message || "添加邮箱失败"
+    });
+  }
+});
+
+// 删除邮箱（需要主邮箱验证）
+router.post("/remove-email", needlogin, async function (req, res) {
+  try {
+    const { email, verificationCode } = req.body;
+    const userId = res.locals.userid;
+
+    // 获取主邮箱
+    const primaryEmail = await prisma.ow_users_contacts.findFirst({
+      where: {
+        user_id: userId,
+        contact_type: 'email',
+        is_primary: true
+      }
+    });
+
+    if (!primaryEmail) {
+      return res.status(200).json({
+        status: "error",
+        message: "需要先设置主邮箱"
+      });
+    }
+
+    // 验证主邮箱的验证码
+    const isValid = await verifyContact(primaryEmail.contact_value, verificationCode);
+    if (!isValid) {
+      return res.status(200).json({
+        status: "error",
+        message: "验证码无效"
+      });
+    }
+
+    // 查找要删除的邮箱
+    const contactToDelete = await prisma.ow_users_contacts.findFirst({
       where: {
         user_id: userId,
         contact_value: email,
@@ -924,23 +980,25 @@ router.post("/remove-email", needlogin, async function (req, res) {
       }
     });
 
-    if (!contact) {
+    if (!contactToDelete) {
       return res.status(200).json({
         status: "error",
         message: "未找到此邮箱"
       });
     }
 
-    if (contact.is_primary) {
+    // 禁止删除主邮箱
+    if (contactToDelete.is_primary) {
       return res.status(200).json({
         status: "error",
-        message: "不能删除主要邮箱"
+        message: "不能删除主邮箱"
       });
     }
 
+    // 删除邮箱
     await prisma.ow_users_contacts.delete({
       where: {
-        contact_id: contact.contact_id
+        contact_id: contactToDelete.contact_id
       }
     });
 
@@ -952,7 +1010,7 @@ router.post("/remove-email", needlogin, async function (req, res) {
     logger.error("删除邮箱时出错:", error);
     return res.status(200).json({
       status: "error",
-      message: "删除邮箱失败"
+      message: error.message || "删除邮箱失败"
     });
   }
 });

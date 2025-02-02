@@ -199,6 +199,20 @@ model ow_projects_branch {
   @@unique([projectid, name], map: "unique_project_branch")
 }
 
+model ow_users_contacts {
+  contact_id    Int                            @id @default(autoincrement())
+  user_id       Int
+  contact_value String                         @unique(map: "contact_value_UNIQUE") @db.VarChar(255)
+  contact_hash  String                         @db.VarChar(255)
+  contact_type  ow_users_contacts_contact_type
+  is_primary    Boolean?                       @default(false)
+  verified      Boolean?                       @default(false)
+  created_at    DateTime?                      @default(now()) @db.Timestamp(0)
+  updated_at    DateTime?                      @default(now()) @db.Timestamp(0)
+
+  @@unique([user_id, is_primary, contact_type], map: "unique_primary_contact")
+}
+
 model scratchmirror_projects {
   id                  BigInt                             @id
   title               String                             @db.Text
@@ -232,20 +246,6 @@ model scratchmirror_users {
   country        String?   @db.Text
 }
 
-model ow_users_contacts {
-  contact_id    Int                            @id @default(autoincrement())
-  user_id       Int
-  contact_value String                         @unique(map: "contact_value_UNIQUE") @db.VarChar(255)
-  contact_hash  String                         @db.VarChar(255)
-  contact_type  ow_users_contacts_contact_type
-  is_primary    Boolean?                       @default(false)
-  verified      Boolean?                       @default(false)
-  created_at    DateTime?                      @default(now()) @db.Timestamp(0)
-  updated_at    DateTime?                      @default(now()) @db.Timestamp(0)
-
-  @@unique([user_id, is_primary, contact_type], map: "unique_primary_contact")
-}
-
 model user_contacts {
   contact_id    Int                        @id @default(autoincrement())
   user_id       Int
@@ -260,16 +260,16 @@ model user_contacts {
   @@unique([user_id, is_primary, contact_type], map: "unique_primary_contact")
 }
 
-enum scratchmirror_projects_visibility {
-  visible
-  hidden
-}
-
 enum ow_users_contacts_contact_type {
   email
   phone
   qq
   other
+}
+
+enum scratchmirror_projects_visibility {
+  visible
+  hidden
 }
 
 enum user_contacts_contact_type {

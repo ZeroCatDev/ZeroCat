@@ -2,8 +2,39 @@ import crypto from 'crypto';
 import base32Encode from 'base32-encode';
 import { prisma } from "../utils/global.js";
 import { sendEmail } from "../utils/email/emailService.js";
-import totpUtils from "../utils/totp.js";
+import { TOTP } from "otpauth";
+import logger from '../utils/logger.js';
 import memoryCache from '../utils/memoryCache.js';
+
+// 创建TOTP实例的通用函数
+function createTotpInstance(secret) {
+  return new TOTP({
+    secret: secret,
+    algorithm: "SHA256",
+    digits: 6,
+    period: 300, // 5分钟有效期
+    issuer: "ZeroCat",
+    label: "邮箱验证"
+  });
+}
+
+// 生成验证码
+function generateEmailToken(secret) {
+  const totp = createTotpInstance(secret);
+  return totp.generate();
+}
+
+// 验证验证码
+function validateEmailToken(secret, token) {
+  try {
+    const totp = createTotpInstance(secret);
+    // window: 1 表示允许前后一个时间窗口的验证码
+    return totp.validate({ token, window: 1 }) !== null;
+  } catch (error) {
+    logger.error('验证码验证失败:', error);
+    return false;
+  }
+}
 
 // Generate a Base32 hash for TOTP
 const generateContactHash = () => {
@@ -54,7 +85,7 @@ const rateLimitEmailVerification = async (email) => {
 const sendVerificationEmail = async (contactValue, contactHash) => {
     await rateLimitEmailVerification(contactValue);
     
-    const token = totpUtils.generateTotpToken(contactHash);
+    const token = generateEmailToken(contactHash);
 
     const emailContent = `
     <h2>验证您的邮箱</h2>
@@ -74,13 +105,16 @@ const verifyContact = async (contactValue, token) => {
     });
 
     if (!contact) {
-        throw new Error('Contact not found');
+        logger.debug('未找到邮箱联系方式');
+        return false;
     }
 
-    const isValid = totpUtils.validateTotpToken(contact.contact_hash, token);
-
+    const isValid = validateEmailToken(contact.contact_hash, token);
+    logger.debug('验证结果:', isValid);
+    
     if (!isValid) {
-        throw new Error('Invalid verification code');
+        logger.debug('验证码错误');
+        return false;
     }
 
     await prisma.ow_users_contacts.update({
