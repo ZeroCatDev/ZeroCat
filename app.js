@@ -180,7 +180,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-//放在最后，友好的处理地址不存在的访问
 app.all("*", function (req, res, next) {
   res.status(404).json({
     status: "error",
