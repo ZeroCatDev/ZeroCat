@@ -13,6 +13,7 @@
     "@aws-sdk/client-s3": "^3.730.0",
     "@prisma/client": "^6.2.1",
     "axios": "^1.7.9",
+    "base32-encode": "^2.0.0",
     "body-parser": "^1.20.1",
     "compression": "^1.7.5",
     "connect-multiparty": "^2.2.0",

@@ -239,7 +239,12 @@ async function validateTotpToken(req, res, next) {
     });
   }
 }
+function generateTotpToken(secret) {
+  const totp = createTotpInstance(secret, "SHA256", 6, 30);
+  return totp.generate();
+}
 export default {
+  generateTotpToken,
   isTotpTokenValid,
   isTotpTokenValidById,
   createTotpTokenForUser,
