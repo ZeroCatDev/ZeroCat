@@ -41,6 +41,7 @@ router.get("/projectinfo", async function (req, res, next) {
         default_branch: true,
         tags: true,
         name: true,
+        star_count: true,
       },
     });
 
@@ -92,25 +93,6 @@ router.get("/projectinfo2", async function (req, res, next) {
     res.locals.is_author =
       result.authorid == res.locals.userid ? true : false;
     logger.debug(result);
-    var resulttype = {
-      id: 50,
-      type: "scratch",
-      license: "no",
-      authorid: 89,
-      teacherid: 0,
-      state: "public",
-      view_count: 119,
-      like_count: 0,
-      favo_count: 0,
-      time: "2024-06-22T10:32:42.000Z",
-      title: "title",
-      description: "description",
-      source: "source",
-      history: true,
-      devenv: true,
-      devsource: "devsource",
-      tags: "",
-    };
     var project_token = jsonwebtoken.sign(
       {
         exp: Math.floor(Date.now() / 1000) + 60 * 5,

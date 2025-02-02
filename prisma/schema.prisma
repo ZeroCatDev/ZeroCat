@@ -32,7 +32,7 @@ model ow_comment {
 model ow_projects {
   id             Int       @id @default(autoincrement()) @db.UnsignedInt
   name           String    @db.VarChar(128)
-  default_branch String    @default("main") @db.VarChar(128)
+  default_branch String?   @db.VarChar(128)
   type           String?   @default("text") @db.VarChar(32)
   license        String?   @db.VarChar(32)
   authorid       Int
@@ -48,6 +48,7 @@ model ow_projects {
   devenv         Boolean   @default(true)
   tags           String    @default("") @db.VarChar(100)
   fork           Int?
+  star_count     Int?      @default(0)
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments

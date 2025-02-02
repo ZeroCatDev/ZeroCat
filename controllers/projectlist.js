@@ -3,8 +3,8 @@ import { prisma } from "../utils/global.js";
 
 import { getProjectsAndUsersByProjectsList } from "./projects.js";
 
-function starProject(userid, projectid) {
-  return prisma.ow_projects_stars.create({
+async function starProject(userid, projectid) {
+  await prisma.ow_projects_stars.create({
     data: {
       projectid: Number(projectid),
       userid: Number(userid),
@@ -12,14 +12,30 @@ function starProject(userid, projectid) {
       value: 1,
     },
   });
+  await prisma.ow_projects.update({
+    where: { id: Number(projectid) },
+    data: {
+      star_count: {
+        increment: 1,
+      },
+    },
+  });
 }
-function unstarProject(userid, projectid) {
-  return prisma.ow_projects_stars.deleteMany({
+async function unstarProject(userid, projectid) {
+  await prisma.ow_projects_stars.deleteMany({
     where: {
       projectid: Number(projectid),
       userid: Number(userid),
       type: "star",
       value: 1,
+    },
+  });
+  await prisma.ow_projects.update({
+    where: { id: Number(projectid) },
+    data: {
+      star_count: {
+        decrement: 1,
+      },
     },
   });
 }
@@ -97,11 +113,12 @@ async function getUserListInfoAndCheak(userid, projectid) {
   return lists;
 }
 //创建一个新的列表
-async function createList(userid, name) {
+async function createList(userid, title, description) {
   return prisma.ow_projects_lists.create({
     data: {
       authorid: Number(userid),
-      name: name,
+      title: title,
+      description: description,
     },
   });
 }
@@ -174,4 +191,3 @@ export {
   getUserListInfoPublic,
   updateList,
 };
-

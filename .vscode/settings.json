@@ -1,5 +1,6 @@
 {
     "aide.convertLanguagePairs": {
         "javascript": "typescript"
-    }
+    },
+    "npm-scripts.showStartNotification": false
 }

@@ -149,6 +149,7 @@ function projectSelectionFields() {
     title: true,
     description: true,
     tags: true,
+    star_count: true,
   };
 }
 
