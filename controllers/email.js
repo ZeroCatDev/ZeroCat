@@ -5,6 +5,7 @@ import { sendEmail } from "../utils/email/emailService.js";
 import { TOTP } from "otpauth";
 import logger from '../utils/logger.js';
 import memoryCache from '../utils/memoryCache.js';
+import configManager from "../utils/configManager.js";
 
 // 创建TOTP实例的通用函数
 function createTotpInstance(secret) {
@@ -86,11 +87,15 @@ const sendVerificationEmail = async (contactValue, contactHash) => {
     await rateLimitEmailVerification(contactValue);
     
     const token = generateEmailToken(contactHash);
+    const verifyUrl = `${await configManager.getConfig("urls.frontend")}/app/account/email/verify?email=${encodeURIComponent(contactValue)}&token=${encodeURIComponent(token)}`;
 
     const emailContent = `
     <h2>验证您的邮箱</h2>
     <p>您的验证码是: ${token}</p>
     <p>此验证码将在5分钟内有效。</p>
+    <p>您也可以点击以下链接完成验证：</p>
+    <p><a href="${verifyUrl}">${verifyUrl}</a></p>
+    <p>如果这不是您的操作，请忽略此邮件。</p>
   `;
 
     await sendEmail(contactValue, '邮箱验证', emailContent);
