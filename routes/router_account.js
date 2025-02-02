@@ -64,20 +64,23 @@ router.post("/login", geetestMiddleware, async function (req, res, next) {
 
     let user = null;
 
-    // 先通过邮箱查找
+    // 修改通过邮箱查找的逻辑
     if (emailTest(loginId)) {
-      // 查找已验证的邮箱联系方式
-      const verifiedContact = await prisma.ow_users_contacts.findFirst({
+      // 查找主邮箱或已验证的邮箱联系方式
+      const contact = await prisma.ow_users_contacts.findFirst({
         where: {
           contact_value: loginId,
           contact_type: 'email',
-          verified: true
+          OR: [
+            { is_primary: true },  // 主邮箱
+            { verified: true }     // 或已验证的邮箱
+          ]
         }
       });
 
-      if (verifiedContact) {
+      if (contact) {
         user = await prisma.ow_users.findFirst({
-          where: { id: verifiedContact.user_id }
+          where: { id: contact.user_id }
         });
       }
     }
@@ -112,7 +115,6 @@ router.post("/login", geetestMiddleware, async function (req, res, next) {
         user_id: user.id,
         contact_type: 'email',
         is_primary: true,
-        verified: true
       }
     });
 
