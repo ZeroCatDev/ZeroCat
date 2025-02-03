@@ -128,6 +128,16 @@ ${verifyUrl}
 此验证码将在5分钟内有效。
 
 如果这不是您的操作，请忽略此邮件。
+  `,
+
+  // 登录验证模板
+  LOGIN: (code) => `
+登录验证
+
+您正在使用邮箱验证码登录，验证码是: ${code}
+此验证码将在5分钟内有效。
+
+如果这不是您的操作，请忽略此邮件并考虑修改您的密码。
   `
 };
 
@@ -136,7 +146,8 @@ const EMAIL_SUBJECTS = {
   VERIFY: '验证您的邮箱',
   RESET_PASSWORD: '重置密码验证',
   ADD_EMAIL: '验证新邮箱',
-  DEFAULT: '验证码'
+  DEFAULT: '验证码',
+  LOGIN: '登录验证码'
 };
 
 // Send verification email

@@ -1068,4 +1068,138 @@ router.post("/remove-email", needlogin, async function (req, res) {
   }
 });
 
+// 发送登录验证码
+router.post("/send-login-code", geetestMiddleware, async function (req, res) {
+  try {
+    const { email } = req.body;
+
+    if (!email || !emailTest(email)) {
+      return res.status(200).json({
+        status: "error",
+        message: "请提供有效的邮箱地址"
+      });
+    }
+
+    // 查找邮箱联系方式
+    const contact = await prisma.ow_users_contacts.findFirst({
+      where: {
+        contact_value: email,
+        contact_type: 'email',
+        OR: [
+          { is_primary: true },  // 主邮箱
+          { verified: true }     // 或已验证的邮箱
+        ]
+      }
+    });
+
+    if (!contact) {
+      return res.status(200).json({
+        status: "error",
+        message: "未找到此邮箱"
+      });
+    }
+
+    // 发送验证码
+    await sendVerificationEmail(email, contact.contact_hash, 'LOGIN');
+
+    return res.status(200).json({
+      status: "success",
+      message: "验证码已发送"
+    });
+  } catch (error) {
+    logger.error("发送登录验证码时出错:", error);
+    return res.status(200).json({
+      status: "error",
+      message: error.message || "发送验证码失败"
+    });
+  }
+});
+
+// 使用验证码登录
+router.post("/login-with-code", async function (req, res) {
+  try {
+    const { email, code } = req.body;
+
+    if (!email || !code) {
+      return res.status(200).json({
+        status: "error",
+        message: "邮箱和验证码都是必需的"
+      });
+    }
+
+    // 查找邮箱联系方式
+    const contact = await prisma.ow_users_contacts.findFirst({
+      where: {
+        contact_value: email,
+        contact_type: 'email',
+        OR: [
+          { is_primary: true },  // 主邮箱
+          { verified: true }     // 或已验证的邮箱
+        ]
+      }
+    });
+
+    if (!contact) {
+      return res.status(200).json({
+        status: "error",
+        message: "未找到此邮箱"
+      });
+    }
+
+    // 验证验证码
+    const isValid = await verifyContact(email, code);
+    if (!isValid) {
+      return res.status(200).json({
+        status: "error",
+        message: "验证码无效"
+      });
+    }
+
+    // 获取用户信息
+    const user = await prisma.ow_users.findUnique({
+      where: { id: contact.user_id }
+    });
+
+    if (!user) {
+      return res.status(200).json({
+        status: "error",
+        message: "用户不存在"
+      });
+    }
+
+    if (user.state == 2) {
+      return res.status(200).json({
+        status: "error",
+        message: "您已经被封禁"
+      });
+    }
+
+    // 生成 JWT token
+    const token = await generateJwt({
+      userid: user.id,
+      username: user.username,
+      display_name: user.display_name,
+      avatar: user.images,
+      email: email
+    });
+
+    return res.status(200).json({
+      status: "success",
+      message: "登录成功",
+      userid: parseInt(user.id),
+      username: user.username,
+      display_name: user.display_name,
+      avatar: user.images,
+      email: email,
+      token: token
+    });
+  } catch (error) {
+    logger.error("验证码登录时出错:", error);
+    return res.status(200).json({
+      status: "error",
+      message: error.message || "登录失败"
+    });
+  }
+});
+
 export default router;
