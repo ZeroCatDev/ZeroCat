@@ -3,6 +3,15 @@ import logger from '../utils/logger.js';
 import configManager from "../utils/configManager.js";
 import crypto from 'crypto';
 
+import base32Encode from 'base32-encode';
+
+// Generate a Base32 hash for TOTP
+const generateContactHash = () => {
+  // 生成16字节的随机数据
+  const buffer = crypto.randomBytes(16);
+  // 使用 base32-encode 库将随机字节转换为 Base32 格式
+  return base32Encode(buffer, 'RFC4648', { padding: false });
+};
 // OAuth 提供商基础配置
 export const OAUTH_PROVIDERS = {
   google: {
@@ -195,12 +204,12 @@ export async function handleOAuthCallback(provider, code) {
     let contact = await prisma.ow_users_contacts.findFirst({
       where: {
         contact_value: userInfo.id,
-        contact_type: OAUTH_PROVIDERS[provider].type
+        contact_type: "oauth_" + provider // Ensure this matches the enum value
       }
     });
 
     if (!contact) {
-      // 查找是否存在相同邮箱的用户
+      // Check if the email is already associated with another user
       const emailContact = await prisma.ow_users_contacts.findFirst({
         where: {
           contact_value: userInfo.email,
@@ -210,33 +219,33 @@ export async function handleOAuthCallback(provider, code) {
 
       let userId;
       if (emailContact) {
-        // 如果找到相同邮箱的用户，关联到该用户
+        // If found, associate with that user
         userId = emailContact.user_id;
         logger.info(`关联 OAuth 账号到现有用户: ${userId}`);
       } else {
-        // 生成唯一用户名
+        // Create a new user
         const username = await generateUniqueUsername(userInfo.name || 'user');
         
-        // 创建新用户
+        // Create a new user
         const newUser = await prisma.ow_users.create({
           data: {
             username: username,
-            password: null,  // OAuth 用户不需要密码
+            password: null,  // OAuth users do not need a password
             display_name: userInfo.name || username,
-            type: 'user',  // 设置为正式用户
-            state: 0,      // 正常状态
+            type: 'user',  // Set as a regular user
+            state: 0,      // Normal state
             regTime: new Date()
           }
         });
         userId = newUser.id;
         logger.info(`创建新用户: ${userId}, username: ${username}`);
 
-        // 创建邮箱联系方式
+        // Create email contact
         await prisma.ow_users_contacts.create({
           data: {
             user_id: userId,
             contact_value: userInfo.email,
-            contact_hash: '',  // OAuth 用户不需要验证邮箱
+            contact_hash: '',  // OAuth users do not need email verification
             contact_type: 'email',
             is_primary: true,
             verified: true
@@ -244,18 +253,18 @@ export async function handleOAuthCallback(provider, code) {
         });
       }
 
-      // 创建 OAuth 联系方式
+      // Create OAuth contact
       contact = await prisma.ow_users_contacts.create({
         data: {
           user_id: userId,
           contact_value: userInfo.id,
           contact_hash: accessToken,
-          contact_type: OAUTH_PROVIDERS[provider].type,
+          contact_type: "oauth_" + provider, // Ensure this matches the enum value
           verified: true
         }
       });
     } else {
-      // 更新访问令牌
+      // Update access token if contact already exists
       await prisma.ow_users_contacts.update({
         where: { contact_id: contact.contact_id },
         data: { contact_hash: accessToken }

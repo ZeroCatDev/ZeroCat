@@ -104,8 +104,8 @@ router.post("/login", geetestMiddleware, async function (req, res, next) {
 
     // 检查用户是否设置了密码
     if (!user.password) {
-      res.status(200).send({ 
-        message: "此账户未设置密码，请使用魔术链接登录", 
+      res.status(200).send({
+        message: "此账户未设置密码，请使用魔术链接登录",
         status: "error",
         code: "NO_PASSWORD"  // 添加特殊错误码
       });
@@ -1214,7 +1214,7 @@ router.get("/oauth/providers", function (req, res) {
       id: provider.id,
       name: provider.name
     }));
-  
+
   res.status(200).json({
     status: "success",
     data: providers
@@ -1252,7 +1252,7 @@ router.get("/oauth/:provider", function (req, res) {
 router.get("/oauth/:provider/callback", async function (req, res) {
   try {
     const { provider } = req.params;
-    const { code, state, action } = req.query; // Get action from query
+    const { code, state } = req.query; // Get action from query
 
     if (!code || !state) {
       return res.status(400).json({
@@ -1274,16 +1274,7 @@ router.get("/oauth/:provider/callback", async function (req, res) {
 
     const { user, contact } = await handleOAuthCallback(provider, code);
 
-    // Check if the action is for binding
-    if (action === 'bind') {
-      // Create a verification record for the user's email
-      await sendVerificationEmail(contact.contact_value, contact.contact_hash, 'BIND_OAUTH');
-
-      // Redirect to the OAuth page after binding
-      return res.redirect(await configManager.getConfig('urls.frontend')+'/app/account/oauth');
-    }
-
-    // Handle login case
+    // Handle login case only
     const token = await generateJwt({
       userid: user.id,
       username: user.username,
@@ -1302,7 +1293,6 @@ router.get("/oauth/:provider/callback", async function (req, res) {
     });
   }
 });
-
 
 // 验证验证码并解绑 OAuth 账号
 router.post("/confirm-unlink-oauth", async function (req, res) {
@@ -1328,7 +1318,7 @@ router.post("/confirm-unlink-oauth", async function (req, res) {
     // 查找 OAuth 联系方式
     const contact = await prisma.ow_users_contacts.findFirst({
       where: {
-        user_id:res.locals.userid,
+        user_id: res.locals.userid,
         contact_type: provider
       }
     });
@@ -1382,33 +1372,6 @@ router.post("/oauth/bound", needlogin, async function (req, res) {
     return res.status(500).json({
       status: "error",
       message: "获取绑定的 OAuth 账号失败"
-    });
-  }
-});
-
-// Modify the OAuth binding route to include a query parameter
-router.get("/oauth/bind/:provider", function (req, res) {
-  try {
-    const { provider } = req.params;
-    if (!OAUTH_PROVIDERS[provider]) {
-      return res.status(400).json({
-        status: "error",
-        message: "不支持的 OAuth 提供商"
-      });
-    }
-
-    const state = crypto.randomBytes(16).toString('hex');
-    const authUrl = generateAuthUrl(provider, state, { action: 'bind' }); // Pass action as bind
-    
-    // Store state for callback verification
-    memoryCache.set(`oauth_state:${state}`, true, 600); // 10 minutes validity
-
-    res.redirect(authUrl);
-  } catch (error) {
-    logger.error('OAuth bind error:', error);
-    res.status(500).json({
-      status: "error",
-      message: "绑定请求失败"
     });
   }
 });
