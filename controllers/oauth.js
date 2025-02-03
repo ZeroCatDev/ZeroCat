@@ -78,10 +78,18 @@ export async function initializeOAuthProviders() {
 }
 
 // 生成 OAuth 授权 URL
-export function generateAuthUrl(provider, state) {
+export async function generateAuthUrl(provider, state) {
   const config = OAUTH_PROVIDERS[provider];
   if (!config) throw new Error('不支持的 OAuth 提供商');
   if (!config.enabled) throw new Error('此 OAuth 提供商未启用');
+
+  // Check for Microsoft provider and adjust the auth URL if necessary
+  if (provider === 'microsoft') {
+    const userAudience = await configManager.getConfig(`oauth.${provider}.user_audience`);
+    if (userAudience === 'Consumer') {
+      throw new Error('Microsoft OAuth configuration is invalid. Please set userAudience to "All".');
+    }
+  }
 
   const params = new URLSearchParams({
     client_id: config.clientId,
