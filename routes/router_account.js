@@ -1208,10 +1208,12 @@ router.post("/login-with-code", async function (req, res) {
 
 // 获取支持的 OAuth 提供商列表
 router.get("/oauth/providers", function (req, res) {
-  const providers = Object.values(OAUTH_PROVIDERS).map(provider => ({
-    id: provider.id,
-    name: provider.name
-  }));
+  const providers = Object.values(OAUTH_PROVIDERS)
+    .filter(provider => provider.enabled)  // 只返回已启用的提供商
+    .map(provider => ({
+      id: provider.id,
+      name: provider.name
+    }));
   
   res.status(200).json({
     status: "success",
@@ -1250,7 +1252,7 @@ router.get("/oauth/:provider", function (req, res) {
 router.get("/oauth/:provider/callback", async function (req, res) {
   try {
     const { provider } = req.params;
-    const { code, state } = req.query;
+    const { code, state, action } = req.query; // Get action from query
 
     if (!code || !state) {
       return res.status(400).json({
@@ -1259,18 +1261,29 @@ router.get("/oauth/:provider/callback", async function (req, res) {
       });
     }
 
-    // 验证 state
+    // Verify state
     if (!memoryCache.get(`oauth_state:${state}`)) {
       return res.status(400).json({
         status: "error",
         message: "无效的 state"
       });
     }
+
+    // Clear the state from memory after verification
     memoryCache.delete(`oauth_state:${state}`);
 
     const { user, contact } = await handleOAuthCallback(provider, code);
 
-    // 生成 JWT token
+    // Check if the action is for binding
+    if (action === 'bind') {
+      // Create a verification record for the user's email
+      await sendVerificationEmail(contact.contact_value, contact.contact_hash, 'BIND_OAUTH');
+
+      // Redirect to the OAuth page after binding
+      return res.redirect(await configManager.getConfig('urls.frontend')+'/app/account/oauth');
+    }
+
+    // Handle login case
     const token = await generateJwt({
       userid: user.id,
       username: user.username,
@@ -1279,13 +1292,123 @@ router.get("/oauth/:provider/callback", async function (req, res) {
       email: contact.contact_value
     });
 
-    // 重定向到前端，带上 token
-    res.redirect(`${await configManager.getConfig('urls.frontend')}/app/account/callback?token=${token}`);
+    // Redirect to the callback with the token
+    return res.redirect(`${await configManager.getConfig('urls.frontend')}/app/account/callback?token=${token}`);
   } catch (error) {
     logger.error('OAuth callback error:', error);
     res.status(500).json({
       status: "error",
-      message: "OAuth 回调处理失败"
+      message: "OAuth 处理失败"
+    });
+  }
+});
+
+
+// 验证验证码并解绑 OAuth 账号
+router.post("/confirm-unlink-oauth", async function (req, res) {
+  try {
+    const { email, code, provider } = req.body;
+
+    if (!email || !code || !provider) {
+      return res.status(200).json({
+        status: "error",
+        message: "邮箱、验证码和 OAuth 提供商是必需的"
+      });
+    }
+
+    // 验证验证码
+    const isValid = await verifyContact(email, code);
+    if (!isValid) {
+      return res.status(200).json({
+        status: "error",
+        message: "验证码无效"
+      });
+    }
+
+    // 查找 OAuth 联系方式
+    const contact = await prisma.ow_users_contacts.findFirst({
+      where: {
+        user_id:res.locals.userid,
+        contact_type: provider
+      }
+    });
+
+    if (!contact) {
+      return res.status(200).json({
+        status: "error",
+        message: "未找到此 OAuth 联系方式"
+      });
+    }
+
+    // 删除 OAuth 联系方式
+    await prisma.ow_users_contacts.delete({
+      where: { contact_id: contact.contact_id }
+    });
+
+    return res.status(200).json({
+      status: "success",
+      message: "成功解绑 OAuth 账号"
+    });
+  } catch (error) {
+    logger.error("解绑 OAuth 账号时出错:", error);
+    return res.status(200).json({
+      status: "error",
+      message: error.message || "解绑失败"
+    });
+  }
+});
+
+// 获取用户绑定的 OAuth 账号
+router.post("/oauth/bound", needlogin, async function (req, res) {
+  try {
+    const userId = req.body.userid; // 假设用户 ID 存储在请求的用户信息中
+
+    // 查找用户的所有 OAuth 联系方式
+    const oauthContacts = await prisma.ow_users_contacts.findMany({
+      where: {
+        user_id: userId,
+        contact_type: {
+          in: ['oauth_google', 'oauth_microsoft', 'oauth_github'] // 只查找 OAuth 联系方式
+        }
+      }
+    });
+
+    return res.status(200).json({
+      status: "success",
+      data: oauthContacts
+    });
+  } catch (error) {
+    logger.error("获取绑定的 OAuth 账号时出错:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "获取绑定的 OAuth 账号失败"
+    });
+  }
+});
+
+// Modify the OAuth binding route to include a query parameter
+router.get("/oauth/bind/:provider", function (req, res) {
+  try {
+    const { provider } = req.params;
+    if (!OAUTH_PROVIDERS[provider]) {
+      return res.status(400).json({
+        status: "error",
+        message: "不支持的 OAuth 提供商"
+      });
+    }
+
+    const state = crypto.randomBytes(16).toString('hex');
+    const authUrl = generateAuthUrl(provider, state, { action: 'bind' }); // Pass action as bind
+    
+    // Store state for callback verification
+    memoryCache.set(`oauth_state:${state}`, true, 600); // 10 minutes validity
+
+    res.redirect(authUrl);
+  } catch (error) {
+    logger.error('OAuth bind error:', error);
+    res.status(500).json({
+      status: "error",
+      message: "绑定请求失败"
     });
   }
 });

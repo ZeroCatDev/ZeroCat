@@ -3,7 +3,7 @@ import logger from '../utils/logger.js';
 import configManager from "../utils/configManager.js";
 import crypto from 'crypto';
 
-// OAuth 提供商配置
+// OAuth 提供商基础配置
 export const OAUTH_PROVIDERS = {
   google: {
     id: 'google',
@@ -13,9 +13,10 @@ export const OAUTH_PROVIDERS = {
     tokenUrl: 'https://oauth2.googleapis.com/token',
     userInfoUrl: 'https://www.googleapis.com/oauth2/v3/userinfo',
     scope: 'openid email profile',
-    clientId: '709780297629-3neesubncsvauo7egmmn3i94fsupj24p.apps.googleusercontent.com',
-    clientSecret: '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',
-    redirectUri: 'http://zero.cat:3000/account/oauth/google/callback'
+    enabled: false,
+    clientId: null,
+    clientSecret: null,
+    redirectUri: null
   },
   microsoft: {
     id: 'microsoft',
@@ -25,9 +26,10 @@ export const OAUTH_PROVIDERS = {
     tokenUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
     userInfoUrl: 'https://graph.microsoft.com/v1.0/me',
     scope: 'openid email profile User.Read',
-    clientId: '2f98a6b0-9845-4544-8901-a6c7c7e2e2f0',
-    clientSecret: 'Aqr8Q~LXmJ5~PZN9X8KqXJ2JZYzQKvRzEFkTNcqH',
-    redirectUri: 'http://zero.cat:3000/account/oauth/microsoft/callback'
+    enabled: false,
+    clientId: null,
+    clientSecret: null,
+    redirectUri: null
   },
   github: {
     id: 'github',
@@ -37,22 +39,40 @@ export const OAUTH_PROVIDERS = {
     tokenUrl: 'https://github.com/login/oauth/access_token',
     userInfoUrl: 'https://api.github.com/user',
     scope: 'read:user user:email',
-    clientId: '1234567890abcdef1234',
-    clientSecret: 'abcdef1234567890abcdef1234567890abcdef12',
-    redirectUri: 'http://zero.cat:3000/account/oauth/github/callback'
+    enabled: false,
+    clientId: null,
+    clientSecret: null,
+    redirectUri: null
   }
 };
 
 // 初始化 OAuth 配置
 export async function initializeOAuthProviders() {
-  // 如果将来需要从配置中读取，可以在这里添加
-  logger.info('OAuth providers initialized');
+  try {
+    // 从数据库读取所有 OAuth 相关配置
+    for (const provider of Object.values(OAUTH_PROVIDERS)) {
+      const enabled = await configManager.getConfig(`oauth.${provider.id}.enabled`);
+      const clientId = await configManager.getConfig(`oauth.${provider.id}.client_id`);
+      const clientSecret = await configManager.getConfig(`oauth.${provider.id}.client_secret`);
+      const baseUrl = await configManager.getConfig('urls.backend');
+
+      provider.enabled = enabled === 'true';
+      provider.clientId = clientId;
+      provider.clientSecret = clientSecret;
+      provider.redirectUri = `${baseUrl}/account/oauth/${provider.id}/callback`;
+
+      logger.info(`OAuth provider ${provider.name} initialized, enabled: ${provider.enabled}`);
+    }
+  } catch (error) {
+    logger.error('Failed to initialize OAuth providers:', error);
+  }
 }
 
 // 生成 OAuth 授权 URL
 export function generateAuthUrl(provider, state) {
   const config = OAUTH_PROVIDERS[provider];
   if (!config) throw new Error('不支持的 OAuth 提供商');
+  if (!config.enabled) throw new Error('此 OAuth 提供商未启用');
 
   const params = new URLSearchParams({
     client_id: config.clientId,
