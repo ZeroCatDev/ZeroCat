@@ -43,15 +43,15 @@ router.all("*", function (req, res, next) {
 router.post("/login", geetestMiddleware, async function (req, res, next) {
   try {
     const loginId = req.body.un;
-    
+
     // 检查登录尝试次数
     const attemptKey = `login_attempts:${loginId}`;
     const attempts = memoryCache.get(attemptKey) || 0;
-    
+
     if (attempts >= 5) {
-      res.status(200).send({ 
-        message: "登录尝试次数过多，请15分钟后再试", 
-        status: "error" 
+      res.status(200).send({
+        message: "登录尝试次数过多，请15分钟后再试",
+        status: "error"
       });
       return;
     }
@@ -95,6 +95,16 @@ router.post("/login", geetestMiddleware, async function (req, res, next) {
     if (!user) {
       memoryCache.set(attemptKey, attempts + 1, 900); // 15分钟过期
       res.status(200).send({ message: "账户或密码错误", status: "error" });
+      return;
+    }
+
+    // 检查用户是否设置了密码
+    if (!user.password) {
+      res.status(200).send({ 
+        message: "此账户未设置密码，请使用魔术链接登录", 
+        status: "error",
+        code: "NO_PASSWORD"  // 添加特殊错误码
+      });
       return;
     }
 
@@ -178,9 +188,9 @@ router.post("/register", geetestMiddleware, async function (req, res, next) {
   try {
     const { email, username, password } = req.body;
 
-    if (!email || !username || !password) {
+    if (!email || !username) {
       res.status(200).send({
-        message: "邮箱、用户名和密码都是必需的",
+        message: "邮箱和用户名是必需的",
         status: "error"
       });
       return;
@@ -206,17 +216,18 @@ router.post("/register", geetestMiddleware, async function (req, res, next) {
       return;
     }
 
+    // 创建用户，如果有密码则设置密码
     const newUser = await prisma.ow_users.create({
       data: {
         username: username,
-        password: hash(password),
+        password: password ? hash(password) : null,  // 如果没有密码则设为 null
         display_name: username,
       },
     });
 
     try {
       const contact = await addUserContact(newUser.id, email, 'email', true);
-      await sendVerificationEmail(email, contact.contact_hash);
+      await sendVerificationEmail(email, contact.contact_hash, 'VERIFY');
     } catch (error) {
       // 如果添加联系方式失败，删除刚创建的用户
       await prisma.ow_users.delete({
@@ -240,7 +251,7 @@ router.post("/register", geetestMiddleware, async function (req, res, next) {
 
 router.post("/retrievePassword", geetestMiddleware, async function (req, res, next) {
   try {
-    const email = req.body.un;
+    const { email } = req.body;
     if (!email || !emailTest(email)) {
       res.status(200).send({
         message: "请提供有效的邮箱地址",
@@ -281,23 +292,11 @@ router.post("/retrievePassword", geetestMiddleware, async function (req, res, ne
       return;
     }
 
-    const jwttoken = jsonwebtoken.sign(
-      {
-        userid: user.id,
-        email: contact.contact_value
-      },
-      await configManager.getConfig("security.jwttoken"),
-      { expiresIn: 60 * 10 }
-    );
-
-    await sendEmail(
-      email,
-      `密码重置消息`,
-      await passwordResetTemplate(email, jwttoken)
-    );
+    // 发送验证码邮件
+    await sendVerificationEmail(email, contact.contact_hash, 'RESET_PASSWORD');
 
     res.status(200).send({
-      message: "请查看邮箱",
+      message: "验证码已发送到您的邮箱",
       status: "success"
     });
   } catch (err) {
@@ -305,6 +304,61 @@ router.post("/retrievePassword", geetestMiddleware, async function (req, res, ne
     res.status(200).send({
       message: "找回密码失败",
       status: "error"
+    });
+  }
+});
+
+// 重置密码的路由
+router.post("/reset-password", geetestMiddleware, async function (req, res, next) {
+  try {
+    const { email, verificationCode, newPassword } = req.body;
+
+    if (!email || !verificationCode || !newPassword) {
+      return res.status(200).json({
+        status: "error",
+        message: "邮箱、验证码和新密码都是必需的"
+      });
+    }
+
+    // 验证码验证
+    const isValid = await verifyContact(email, verificationCode);
+    if (!isValid) {
+      return res.status(200).json({
+        status: "error",
+        message: "验证码无效"
+      });
+    }
+
+    // 查找用户
+    const contact = await prisma.ow_users_contacts.findFirst({
+      where: {
+        contact_value: email,
+        contact_type: 'email'
+      }
+    });
+
+    if (!contact) {
+      return res.status(200).json({
+        status: "error",
+        message: "未找到用户"
+      });
+    }
+
+    // 更新密码
+    await prisma.ow_users.update({
+      where: { id: contact.user_id },
+      data: { password: hash(newPassword) }
+    });
+
+    return res.status(200).json({
+      status: "success",
+      message: "密码已重置"
+    });
+  } catch (error) {
+    logger.error("重置密码时出错:", error);
+    return res.status(200).json({
+      status: "error",
+      message: error.message || "重置密码失败"
     });
   }
 });
@@ -636,7 +690,7 @@ router.post("/magiclink/generate", geetestMiddleware, async (req, res) => {
 router.get("/magiclink/validate", async (req, res) => {
   try {
     const { token } = req.query;
-    
+
     // 检查token是否已被使用
     const usedKey = `used_magic_link:${token}`;
     if (memoryCache.get(usedKey)) {
@@ -755,7 +809,7 @@ router.post("/verify-email", async function (req, res, next) {
     }
 
     const verified = await verifyContact(email, token);
-    
+
     if (!verified) {
       return res.status(200).json({
         status: "error",
@@ -788,7 +842,6 @@ router.post("/send-verification-code", needlogin, async function (req, res) {
         user_id: userId,
         contact_value: email,
         contact_type: 'email',
-        verified: true
       }
     });
 
@@ -799,7 +852,7 @@ router.post("/send-verification-code", needlogin, async function (req, res) {
       });
     }
 
-    await sendVerificationEmail(email, contact.contact_hash);
+    await sendVerificationEmail(email, contact.contact_hash, 'ADD_EMAIL');
 
     return res.status(200).json({
       status: "success",
@@ -919,7 +972,7 @@ router.post("/add-email", needlogin, async function (req, res) {
 
     // 添加新邮箱
     const contact = await addUserContact(userId, email, 'email', false);
-    await sendVerificationEmail(email, contact.contact_hash);
+    await sendVerificationEmail(email, contact.contact_hash, 'ADD_EMAIL');
 
     return res.status(200).json({
       status: "success",

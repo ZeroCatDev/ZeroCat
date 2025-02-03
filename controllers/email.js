@@ -82,23 +82,78 @@ const rateLimitEmailVerification = async (email) => {
   memoryCache.set(key, count + 1, 3600); // 1小时过期
 };
 
+// 定义不同场景的邮件模板
+const EMAIL_TEMPLATES = {
+  // 验证邮箱模板
+  VERIFY: (code, verifyUrl) => `
+验证您的邮箱
+
+您的验证码是: ${code}
+此验证码将在5分钟内有效。
+
+您也可以点击以下链接完成验证：
+${verifyUrl}
+
+如果这不是您的操作，请忽略此邮件。
+  `,
+
+  // 重置密码模板
+  RESET_PASSWORD: (code, verifyUrl) => `
+重置密码验证
+
+您正在重置密码，验证码是: ${code}
+此验证码将在5分钟内有效。
+
+如果这不是您的操作，请忽略此邮件并考虑修改您的密码。
+  `,
+
+  // 添加邮箱模板
+  ADD_EMAIL: (code, verifyUrl) => `
+验证新邮箱
+
+您正在添加新的邮箱地址，验证码是: ${code}
+此验证码将在5分钟内有效。
+
+您也可以点击以下链接完成验证：
+${verifyUrl}
+
+如果这不是您的操作，请忽略此邮件。
+  `,
+
+  // 默认模板
+  DEFAULT: (code, verifyUrl) => `
+验证码
+
+您的验证码是: ${code}
+此验证码将在5分钟内有效。
+
+如果这不是您的操作，请忽略此邮件。
+  `
+};
+
+// 邮件主题映射
+const EMAIL_SUBJECTS = {
+  VERIFY: '验证您的邮箱',
+  RESET_PASSWORD: '重置密码验证',
+  ADD_EMAIL: '验证新邮箱',
+  DEFAULT: '验证码'
+};
+
 // Send verification email
-const sendVerificationEmail = async (contactValue, contactHash) => {
+const sendVerificationEmail = async (contactValue, contactHash, template = 'DEFAULT') => {
     await rateLimitEmailVerification(contactValue);
     
     const token = generateEmailToken(contactHash);
     const verifyUrl = `${await configManager.getConfig("urls.frontend")}/app/account/email/verify?email=${encodeURIComponent(contactValue)}&token=${encodeURIComponent(token)}`;
 
-    const emailContent = `
-    <h2>验证您的邮箱</h2>
-    <p>您的验证码是: ${token}</p>
-    <p>此验证码将在5分钟内有效。</p>
-    <p>您也可以点击以下链接完成验证：</p>
-    <p><a href="${verifyUrl}">${verifyUrl}</a></p>
-    <p>如果这不是您的操作，请忽略此邮件。</p>
-  `;
+    // 获取对应的邮件模板和主题
+    const emailTemplate = EMAIL_TEMPLATES[template] || EMAIL_TEMPLATES.DEFAULT;
+    const emailSubject = EMAIL_SUBJECTS[template] || EMAIL_SUBJECTS.DEFAULT;
 
-    await sendEmail(contactValue, '邮箱验证', emailContent);
+    // 生成邮件内容
+    const emailContent = emailTemplate(token, verifyUrl);
+
+    await sendEmail(contactValue, emailSubject, emailContent);
 };
 
 // Verify contact
