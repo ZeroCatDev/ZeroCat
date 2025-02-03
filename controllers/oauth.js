@@ -177,124 +177,176 @@ async function generateUniqueUsername(baseName) {
   const cleanName = baseName.replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
   let username = cleanName;
   let counter = 1;
-  
+
   // 检查用户名是否已存在，如果存在则添加数字
   while (true) {
     const existingUser = await prisma.ow_users.findUnique({
       where: { username }
     });
-    
+
     if (!existingUser) break;
     username = `${cleanName}_${counter++}`;
   }
-  
+
   return username;
 }
-
-// 处理 OAuth 回调
-export async function handleOAuthCallback(provider, code) {
+export async function handleOAuthCallback(provider, code, userIdToBind = null) {
+  logger.info(`handleOAuthCallback: ${provider}, ${code}, ${userIdToBind}`);
   try {
     const tokenData = await getAccessToken(provider, code);
     const accessToken = tokenData.access_token;
-    
+
     // 获取用户信息
     const userInfo = await getUserInfoFunctions[provider](accessToken);
-    
-    // 查找 OAuth 联系方式
-    let contact = await prisma.ow_users_contacts.findFirst({
-      where: {
-        contact_value: userInfo.id,
-        contact_type: "oauth_" + provider // Ensure this matches the enum value
-      }
-    });
 
-    if (!contact) {
-      // Check if the email is already associated with another user
-      const emailContact = await prisma.ow_users_contacts.findFirst({
+    if (userIdToBind) {
+      // 绑定操作
+      const user = await prisma.ow_users.findUnique({
+        where: { id: userIdToBind }
+      });
+
+      if (!user) {
+        return { success: false, message: "绑定的用户不存在" };
+      }
+
+      // 检查该 OAuth 账号是否已被其他用户绑定
+      const existingOAuthContact = await prisma.ow_users_contacts.findFirst({
         where: {
-          contact_value: userInfo.email,
-          contact_type: 'email'
+          contact_value: userInfo.id,
+          contact_type: "oauth_" + provider
         }
       });
 
-      let userId;
-      if (emailContact) {
-        // If found, associate with that user
-        userId = emailContact.user_id;
-        logger.info(`关联 OAuth 账号到现有用户: ${userId}`);
-      } else {
-        // Create a new user
-        const username = await generateUniqueUsername(userInfo.name || 'user');
-        
-        // Create a new user
-        const newUser = await prisma.ow_users.create({
-          data: {
-            username: username,
-            password: null,  // OAuth users do not need a password
-            display_name: userInfo.name || username,
-            type: 'user',  // Set as a regular user
-            state: 0,      // Normal state
-            regTime: new Date()
-          }
-        });
-        userId = newUser.id;
-        logger.info(`创建新用户: ${userId}, username: ${username}`);
-
-        // Create email contact
+      // 绑定 OAuth 账号到指定用户
+      try {
         await prisma.ow_users_contacts.create({
           data: {
-            user_id: userId,
-            contact_value: userInfo.email,
-            contact_hash: '',  // OAuth users do not need email verification
-            contact_type: 'email',
-            is_primary: true,
+            user_id: user.id,
+            contact_value: userInfo.id,
+            contact_hash: accessToken,
+            contact_type: "oauth_" + provider,
             verified: true
           }
         });
+      } catch (error) {
+        return { success: false, message: "绑定 OAuth 账号时出错" };
+        // 继续处理，不抛出异常
       }
 
-      // Create OAuth contact
-      contact = await prisma.ow_users_contacts.create({
-        data: {
-          user_id: userId,
+      try {
+        await prisma.ow_users_contacts.create({
+          data: {
+            user_id: user.id,
+            contact_value: userInfo.email,
+            contact_hash: generateContactHash(),
+            contact_type: 'email',
+            is_primary: false,
+            verified: false
+          }
+        });
+      } catch (error) {
+        logger.error('添加邮箱时出错:', error);
+        // 继续处理，不抛出异常
+      }
+
+      return { success: true };
+    } else {
+      // 登录操作（现有逻辑）
+      let contact = await prisma.ow_users_contacts.findFirst({
+        where: {
           contact_value: userInfo.id,
-          contact_hash: accessToken,
-          contact_type: "oauth_" + provider, // Ensure this matches the enum value
-          verified: true
+          contact_type: "oauth_" + provider
         }
       });
-    } else {
-      // Update access token if contact already exists
-      await prisma.ow_users_contacts.update({
-        where: { contact_id: contact.contact_id },
-        data: { contact_hash: accessToken }
-      });
-    }
 
-    // 获取用户信息
-    const user = await prisma.ow_users.findUnique({
-      where: { id: contact.user_id }
-    });
+      if (!contact) {
+        // Check if the email is already associated with another user
+        const emailContact = await prisma.ow_users_contacts.findFirst({
+          where: {
+            contact_value: userInfo.email,
+            contact_type: 'email'
+          }
+        });
 
-    if (!user) {
-      throw new Error('用户不存在');
-    }
+        let userId;
+        if (emailContact) {
+          // If found, associate with that user
+          userId = emailContact.user_id;
+          logger.info(`关联 OAuth 账号到现有用户: ${userId}`);
+        } else {
+          // Create a new user
+          const username = await generateUniqueUsername(userInfo.name || 'user');
 
-    // 获取用户主邮箱
-    const primaryEmail = await prisma.ow_users_contacts.findFirst({
-      where: {
-        user_id: user.id,
-        contact_type: 'email',
-        is_primary: true
+          // 创建新用户
+          const newUser = await prisma.ow_users.create({
+            data: {
+              username: username,
+              password: null,  // OAuth 用户不需要密码
+              display_name: userInfo.name || username,
+              type: 'user',  // 设置为普通用户
+              state: 0,      // 正常状态
+              regTime: new Date()
+            }
+          });
+          userId = newUser.id;
+          logger.info(`创建新用户: ${userId}, username: ${username}`);
+
+          // 创建 email 联系方式
+          await prisma.ow_users_contacts.create({
+            data: {
+              user_id: userId,
+              contact_value: userInfo.email,
+              contact_hash: '',  // OAuth 用户不需要邮箱验证
+              contact_type: 'email',
+              is_primary: true,
+              verified: true
+            }
+          });
+        }
+
+        // 创建 OAuth 联系方式
+        contact = await prisma.ow_users_contacts.create({
+          data: {
+            user_id: userId,
+            contact_value: userInfo.id,
+            contact_hash: accessToken,
+            contact_type: "oauth_" + provider,
+            verified: true
+          }
+        });
+      } else {
+        // 如果联系方式已存在，更新 access token
+        await prisma.ow_users_contacts.update({
+          where: { contact_id: contact.contact_id },
+          data: { contact_hash: accessToken }
+        });
       }
-    });
 
-    return { 
-      user,
-      contact: primaryEmail || contact  // 优先返回主邮箱联系方式
-    };
+      // 获取用户信息
+      const user = await prisma.ow_users.findUnique({
+        where: { id: contact.user_id }
+      });
+
+      if (!user) {
+        throw new Error('用户不存在');
+      }
+
+      // 获取用户主邮箱
+      const primaryEmail = await prisma.ow_users_contacts.findFirst({
+        where: {
+          user_id: user.id,
+          contact_type: 'email',
+          is_primary: true
+        }
+      });
+
+      return {
+        user,
+        contact: primaryEmail || contact  // 优先返回主邮箱联系方式
+      };
+    }
   } catch (error) {
     logger.error('OAuth callback error:', error);
     throw error;
   }
-}
+} 

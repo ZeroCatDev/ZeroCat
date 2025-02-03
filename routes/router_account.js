@@ -1206,6 +1206,32 @@ router.post("/login-with-code", async function (req, res) {
   }
 });
 
+// 新增绑定 OAuth 路由
+router.get("/oauth/bind/:provider", needlogin, function (req, res) {
+  try {
+    const { provider } = req.params;
+    if (!OAUTH_PROVIDERS[provider]) {
+      return res.status(400).json({
+        status: "error",
+        message: "不支持的 OAuth 提供商"
+      });
+    }
+
+    const state = crypto.randomBytes(16).toString('hex') + `:bind:${res.locals.userid}`;
+    const authUrl = generateAuthUrl(provider, state);
+
+    // 存储 state 与用户 ID 的映射，用于回调时识别绑定操作
+    memoryCache.set(`oauth_state:${state}`, { type: 'bind', userId: res.locals.userid }, 600); // 10分钟有效期
+
+    res.redirect(authUrl);
+  } catch (error) {
+    logger.error('OAuth 绑定请求错误:', error);
+    res.status(500).json({
+      status: "error",
+      message: "绑定请求失败"
+    });
+  }
+});
 // 获取支持的 OAuth 提供商列表
 router.get("/oauth/providers", function (req, res) {
   const providers = Object.values(OAUTH_PROVIDERS)
@@ -1234,7 +1260,7 @@ router.get("/oauth/:provider", function (req, res) {
 
     const state = crypto.randomBytes(16).toString('hex');
     const authUrl = generateAuthUrl(provider, state);
-    
+
     // 存储 state 用于验证回调
     memoryCache.set(`oauth_state:${state}`, true, 600); // 10分钟有效期
 
@@ -1248,11 +1274,11 @@ router.get("/oauth/:provider", function (req, res) {
   }
 });
 
-// OAuth 回调处理
+// 修改 OAuth 回调处理路由
 router.get("/oauth/:provider/callback", async function (req, res) {
   try {
     const { provider } = req.params;
-    const { code, state } = req.query; // Get action from query
+    const { code, state } = req.query;
 
     if (!code || !state) {
       return res.status(400).json({
@@ -1261,32 +1287,47 @@ router.get("/oauth/:provider/callback", async function (req, res) {
       });
     }
 
-    // Verify state
-    if (!memoryCache.get(`oauth_state:${state}`)) {
-      return res.status(400).json({
-        status: "error",
-        message: "无效的 state"
-      });
+    const cachedState = memoryCache.get(`oauth_state:${state}`);
+    if (!cachedState) {
+
+      return res.redirect(`${await configManager.getConfig('urls.frontend')}/app/account/oauth/bind/error?message=无效的state`);
     }
 
-    // Clear the state from memory after verification
-    memoryCache.delete(`oauth_state:${state}`);
+    // 根据 state 的类型处理不同的逻辑
+    if (cachedState.type === 'bind') {
+      const userIdToBind = cachedState.userId;
+      // 清除 state
+      memoryCache.delete(`oauth_state:${state}`);
 
-    const { user, contact } = await handleOAuthCallback(provider, code);
+      const bindingResult = await handleOAuthCallback(provider, code, userIdToBind);
 
-    // Handle login case only
-    const token = await generateJwt({
-      userid: user.id,
-      username: user.username,
-      display_name: user.display_name,
-      avatar: user.images,
-      email: contact.contact_value
-    });
+      // 处理绑定结果
+      if (bindingResult.success) {
+        return res.redirect(`${await configManager.getConfig('urls.frontend')}/app/account/oauth/bind/success`);
+      } else {
+        return res.redirect(`${await configManager.getConfig('urls.frontend')}/app/account/oauth/bind/error?message=${bindingResult.message}`);
+      }
+    } else {
+      // 默认为登录操作
+      memoryCache.delete(`oauth_state:${state}`);
+      const { user, contact } = await handleOAuthCallback(provider, code);
 
-    // Redirect to the callback with the token
-    return res.redirect(`${await configManager.getConfig('urls.frontend')}/app/account/callback?token=${token}`);
+      if (user && contact) {
+        const token = await generateJwt({
+          userid: user.id,
+          username: user.username,
+          display_name: user.display_name,
+          avatar: user.images,
+          email: contact.contact_value
+        });
+
+        return res.redirect(`${await configManager.getConfig('urls.frontend')}/app/account/callback?token=${token}`);
+      } else {
+        return res.redirect(`${await configManager.getConfig('urls.frontend')}/app/account/oauth/login/error?message=${contact.message}`);
+      }
+    }
   } catch (error) {
-    logger.error('OAuth callback error:', error);
+    logger.error('OAuth 回调错误:', error);
     res.status(500).json({
       status: "error",
       message: "OAuth 处理失败"
