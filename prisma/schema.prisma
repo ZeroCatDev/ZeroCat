@@ -56,7 +56,7 @@ model ow_users {
   id           Int       @unique(map: "id_UNIQUE") @default(autoincrement())
   username     String    @unique(map: "user_UNIQUE") @db.Char(20)
   email        String?   @db.Char(100)
-  password     String    @db.VarChar(255)
+  password     String?   @db.VarChar(255)
   display_name String    @default("OurWorld创作者") @db.Char(20)
   state        Int       @default(0) @db.TinyInt
   loginTime    DateTime? @db.Timestamp(0)
@@ -260,13 +260,6 @@ model user_contacts {
   @@unique([user_id, is_primary, contact_type], map: "unique_primary_contact")
 }
 
-enum ow_users_contacts_contact_type {
-  email
-  phone
-  qq
-  other
-}
-
 enum scratchmirror_projects_visibility {
   visible
   hidden
@@ -277,4 +270,14 @@ enum user_contacts_contact_type {
   phone
   qq
   other
+}
+
+enum ow_users_contacts_contact_type {
+  email
+  phone
+  qq
+  other
+  oauth_google
+  oauth_github
+  oauth_microsoft
 }

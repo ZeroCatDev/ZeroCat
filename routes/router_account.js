@@ -1,5 +1,6 @@
 import logger from "../utils/logger.js";
 import configManager from "../utils/configManager.js";
+import crypto from 'crypto';
 
 import { Router } from "express";
 var router = Router();
@@ -33,8 +34,11 @@ const {
 import geetestMiddleware from "../middleware/geetest.js";
 import { addUserContact, sendVerificationEmail, verifyContact } from "../controllers/email.js";
 
-
 import memoryCache from '../utils/memoryCache.js';
+import { OAUTH_PROVIDERS, generateAuthUrl, handleOAuthCallback, initializeOAuthProviders } from '../controllers/oauth.js';
+
+// 初始化 OAuth 配置
+initializeOAuthProviders();
 
 router.all("*", function (req, res, next) {
   next();
@@ -1198,6 +1202,90 @@ router.post("/login-with-code", async function (req, res) {
     return res.status(200).json({
       status: "error",
       message: error.message || "登录失败"
+    });
+  }
+});
+
+// 获取支持的 OAuth 提供商列表
+router.get("/oauth/providers", function (req, res) {
+  const providers = Object.values(OAUTH_PROVIDERS).map(provider => ({
+    id: provider.id,
+    name: provider.name
+  }));
+  
+  res.status(200).json({
+    status: "success",
+    data: providers
+  });
+});
+
+// OAuth 授权请求
+router.get("/oauth/:provider", function (req, res) {
+  try {
+    const { provider } = req.params;
+    if (!OAUTH_PROVIDERS[provider]) {
+      return res.status(400).json({
+        status: "error",
+        message: "不支持的 OAuth 提供商"
+      });
+    }
+
+    const state = crypto.randomBytes(16).toString('hex');
+    const authUrl = generateAuthUrl(provider, state);
+    
+    // 存储 state 用于验证回调
+    memoryCache.set(`oauth_state:${state}`, true, 600); // 10分钟有效期
+
+    res.redirect(authUrl);
+  } catch (error) {
+    logger.error('OAuth authorization error:', error);
+    res.status(500).json({
+      status: "error",
+      message: "授权请求失败"
+    });
+  }
+});
+
+// OAuth 回调处理
+router.get("/oauth/:provider/callback", async function (req, res) {
+  try {
+    const { provider } = req.params;
+    const { code, state } = req.query;
+
+    if (!code || !state) {
+      return res.status(400).json({
+        status: "error",
+        message: "无效的请求"
+      });
+    }
+
+    // 验证 state
+    if (!memoryCache.get(`oauth_state:${state}`)) {
+      return res.status(400).json({
+        status: "error",
+        message: "无效的 state"
+      });
+    }
+    memoryCache.delete(`oauth_state:${state}`);
+
+    const { user, contact } = await handleOAuthCallback(provider, code);
+
+    // 生成 JWT token
+    const token = await generateJwt({
+      userid: user.id,
+      username: user.username,
+      display_name: user.display_name,
+      avatar: user.images,
+      email: contact.contact_value
+    });
+
+    // 重定向到前端，带上 token
+    res.redirect(`${await configManager.getConfig('urls.frontend')}/app/account/callback?token=${token}`);
+  } catch (error) {
+    logger.error('OAuth callback error:', error);
+    res.status(500).json({
+      status: "error",
+      message: "OAuth 回调处理失败"
     });
   }
 });
