@@ -31,8 +31,8 @@ export const OAUTH_PROVIDERS = {
     id: 'microsoft',
     name: 'Microsoft',
     type: 'oauth_microsoft',
-    authUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize',
-    tokenUrl: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
+    authUrl: 'https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize',
+    tokenUrl: 'https://login.microsoftonline.com/consumers/oauth2/v2.0/token',
     userInfoUrl: 'https://graph.microsoft.com/v1.0/me',
     scope: 'openid email profile User.Read',
     enabled: false,
@@ -83,13 +83,6 @@ export async function generateAuthUrl(provider, state) {
   if (!config) throw new Error('不支持的 OAuth 提供商');
   if (!config.enabled) throw new Error('此 OAuth 提供商未启用');
 
-  // Check for Microsoft provider and adjust the auth URL if necessary
-  if (provider === 'microsoft') {
-    const userAudience = await configManager.getConfig(`oauth.${provider}.user_audience`);
-    if (userAudience === 'Consumer') {
-      throw new Error('Microsoft OAuth configuration is invalid. Please set userAudience to "All".');
-    }
-  }
 
   const params = new URLSearchParams({
     client_id: config.clientId,
@@ -231,7 +224,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
           data: {
             user_id: user.id,
             contact_value: userInfo.id,
-            contact_hash: accessToken,
+            contact_hash: generateContactHash(),
             contact_type: "oauth_" + provider,
             verified: true
           }
@@ -304,7 +297,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
             data: {
               user_id: userId,
               contact_value: userInfo.email,
-              contact_hash: '',  // OAuth 用户不需要邮箱验证
+              contact_hash: generateContactHash(),
               contact_type: 'email',
               is_primary: true,
               verified: true
@@ -317,16 +310,10 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
           data: {
             user_id: userId,
             contact_value: userInfo.id,
-            contact_hash: accessToken,
+            contact_hash: generateContactHash(),
             contact_type: "oauth_" + provider,
             verified: true
           }
-        });
-      } else {
-        // 如果联系方式已存在，更新 access token
-        await prisma.ow_users_contacts.update({
-          where: { contact_id: contact.contact_id },
-          data: { contact_hash: accessToken }
         });
       }
 

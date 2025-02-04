@@ -1248,10 +1248,11 @@ router.get("/oauth/providers", function (req, res) {
 });
 
 // OAuth 授权请求
-router.get("/oauth/:provider", function (req, res) {
+router.get("/oauth/:provider",async function (req, res) {
   try {
     const { provider } = req.params;
     if (!OAUTH_PROVIDERS[provider]) {
+      logger.error('不支持的 OAuth 提供商:', provider);
       return res.status(400).json({
         status: "error",
         message: "不支持的 OAuth 提供商"
@@ -1259,7 +1260,7 @@ router.get("/oauth/:provider", function (req, res) {
     }
 
     const state = crypto.randomBytes(16).toString('hex');
-    const authUrl = generateAuthUrl(provider, state);
+    const authUrl = await generateAuthUrl(provider, state);
 
     // 存储 state 用于验证回调
     memoryCache.set(`oauth_state:${state}`, true, 600); // 10分钟有效期
@@ -1316,9 +1317,6 @@ router.get("/oauth/:provider/callback", async function (req, res) {
         const token = await generateJwt({
           userid: user.id,
           username: user.username,
-          display_name: user.display_name,
-          avatar: user.images,
-          email: contact.contact_value
         });
 
         return res.redirect(`${await configManager.getConfig('urls.frontend')}/app/account/callback?token=${token}`);
