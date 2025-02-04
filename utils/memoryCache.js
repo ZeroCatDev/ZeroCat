@@ -39,5 +39,5 @@ export default new MemoryCache();
 
 // 每小时清理一次过期的缓存项
 setInterval(() => {
-  memoryCache.cleanup();
+  MemoryCache.cleanup();
 }, 3600000); 
