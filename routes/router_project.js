@@ -794,7 +794,12 @@ router.post("/initlize", needlogin, async (req, res, next) => {
         commit_date: new Date(timestamp), // 使用 Date 对象
       },
     });
-
+    await prisma.ow_projects.update({
+      where: { id: Number(projectid) },
+      data: {
+        default_branch: "main"
+      }
+    });
     res.status(200).send({
       status: "success",
       message: "初始化成功",

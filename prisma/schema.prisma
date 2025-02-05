@@ -213,6 +213,37 @@ model ow_users_contacts {
   @@unique([user_id, is_primary, contact_type], map: "unique_primary_contact")
 }
 
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model events {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  event_type  String   @db.VarChar(50)
+  actor_id    BigInt   @db.UnsignedBigInt
+  target_type String   @db.VarChar(50)
+  target_id   BigInt   @db.UnsignedBigInt
+  event_data  Json
+  created_at  DateTime @default(now()) @db.Timestamp(0)
+  public      Int      @default(0) @db.TinyInt
+
+  @@index([created_at], map: "idx_created")
+  @@index([target_type, target_id], map: "idx_target")
+  @@index([event_type, actor_id], map: "idx_type_actor")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model notifications {
+  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  event_id   BigInt    @db.UnsignedBigInt
+  user_id    BigInt    @db.UnsignedBigInt
+  is_read    Boolean   @default(false)
+  read_at    DateTime? @db.Timestamp(0)
+  created_at DateTime  @default(now()) @db.Timestamp(0)
+
+  @@index([is_read, created_at], map: "idx_cleanup")
+  @@index([event_id, user_id], map: "idx_event_user")
+  @@index([user_id, created_at], map: "idx_user_all")
+  @@index([user_id, is_read, created_at], map: "idx_user_unread")
+}
+
 model scratchmirror_projects {
   id                  BigInt                             @id
   title               String                             @db.Text
@@ -260,35 +291,14 @@ model user_contacts {
   @@unique([user_id, is_primary, contact_type], map: "unique_primary_contact")
 }
 
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model events {
-  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
-  event_type  String   @db.VarChar(50)
-  actor_id    BigInt   @db.UnsignedBigInt
-  target_type String   @db.VarChar(50)
-  target_id   BigInt   @db.UnsignedBigInt
-  event_data  Json
-  created_at  DateTime @default(now()) @db.Timestamp(0)
-  public      Int      @default(0) @db.TinyInt
-
-  @@index([created_at], map: "idx_created")
-  @@index([target_type, target_id], map: "idx_target")
-  @@index([event_type, actor_id], map: "idx_type_actor")
-}
-
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model notifications {
-  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
-  event_id   BigInt    @db.UnsignedBigInt
-  user_id    BigInt    @db.UnsignedBigInt
-  is_read    Boolean   @default(false)
-  read_at    DateTime? @db.Timestamp(0)
-  created_at DateTime  @default(now()) @db.Timestamp(0)
-
-  @@index([is_read, created_at], map: "idx_cleanup")
-  @@index([event_id, user_id], map: "idx_event_user")
-  @@index([user_id, created_at], map: "idx_user_all")
-  @@index([user_id, is_read, created_at], map: "idx_user_unread")
+enum ow_users_contacts_contact_type {
+  email
+  phone
+  qq
+  other
+  oauth_google
+  oauth_github
+  oauth_microsoft
 }
 
 enum scratchmirror_projects_visibility {
@@ -301,14 +311,4 @@ enum user_contacts_contact_type {
   phone
   qq
   other
-}
-
-enum ow_users_contacts_contact_type {
-  email
-  phone
-  qq
-  other
-  oauth_google
-  oauth_github
-  oauth_microsoft
 }
