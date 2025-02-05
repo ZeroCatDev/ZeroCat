@@ -11,7 +11,11 @@ async function createEvent(eventType, actorId, targetType, targetId, eventData, 
                 target_id: BigInt(targetId),
                 event_data: {
                     ...eventData,
-                    page: eventData.page || null
+                    page: {
+                        type: targetType,
+                        id: targetId,
+                        ...eventData.page
+                    }
                 },
                 public: isPublic,
                 created_at: eventTime || new Date()
@@ -47,10 +51,6 @@ async function updateTimeline() {
                     username: user.username,
                     display_name: user.display_name,
                     register_time: user.regTime,
-                    page: {
-                        type: 'user',
-                        id: user.id
-                    }
                 },
                 1,
                 user.regTime
@@ -85,10 +85,6 @@ async function updateTimeline() {
                     title: project.title,
                     publish_time: project.time,
                     state: project.state,
-                    page: {
-                        type: 'project',
-                        id: project.id
-                    }
                 },
                 project.state === 'private' ? 0 : 1,
                 project.time
@@ -125,10 +121,6 @@ async function updateTimeline() {
                     parent_id: comment.pid,
                     reply_id: comment.rid,
                     comment_time: comment.insertedAt,
-                    page: {
-                        type: comment.page_type,
-                        id: comment.page_id
-                    }
                 },
                 1,
                 comment.insertedAt
