@@ -237,8 +237,8 @@ router.get("/user/:userid", async (req, res) => {
 
         // 对于评论类型的事件，添加额外的定位信息到 page 中
         if (event.event_type === 'comment_create' && event.event_data) {
-          formattedEvent.target.id=event.event_data.page_id
-          formattedEvent.target.type=event.event_data.page_type
+          formattedEvent.target.id=event.event_data.page_id||event.event_data.page.id
+          formattedEvent.target.type=event.event_data.page_type||event.event_data.page.type
           formattedEvent.target.page = {
             page_type: event.event_data.page_type,
             page_id: event.event_data.page_id,
