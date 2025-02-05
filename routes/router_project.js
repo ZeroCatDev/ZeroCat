@@ -103,10 +103,12 @@ router.post("/", needlogin, async (req, res, next) => {
     };
 
     const result = await prisma.ow_projects.create({ data: outputJson });
-    
-    // Create project creation event
+
+    // 根据项目状态决定事件是否公开
+    const isPrivate = outputJson.state === 'private';
+
     await createEvent(
-      EventTypes.PROJECT_CREATE,
+      'project_create',
       res.locals.userid,
       TargetTypes.PROJECT,
       result.id,
@@ -114,7 +116,8 @@ router.post("/", needlogin, async (req, res, next) => {
         project_name: result.name,
         project_type: result.type,
         title: result.title
-      }
+      },
+      isPrivate // 传入是否强制私密
     );
 
     res.status(200).send({
@@ -1073,9 +1076,11 @@ router.post("/fork", needlogin, async (req, res, next) => {
       })
     );
 
-    // Create fork event
+    // 根据原项目和新项目的状态决定事件是否公开
+    const isPrivate = project.state === 'private' || forkedProject.state === 'private';
+
     await createEvent(
-      EventTypes.PROJECT_FORK,
+      'project_fork',
       res.locals.userid,
       TargetTypes.PROJECT,
       projectid,
@@ -1083,7 +1088,8 @@ router.post("/fork", needlogin, async (req, res, next) => {
         fork_id: forkedProject.id,
         fork_name: name,
         original_project: projectid
-      }
+      },
+      isPrivate
     );
 
     res.status(200).send({

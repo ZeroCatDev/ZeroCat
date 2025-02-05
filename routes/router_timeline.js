@@ -177,8 +177,6 @@ router.get("/user/:userid", async (req, res) => {
       take: Number(limit)
     });
 
-    logger.debug('Raw events:', events);
-
     // 获取总数
     const total = await prisma.events.count({ where });
 
@@ -197,77 +195,64 @@ router.get("/user/:userid", async (req, res) => {
       }
     });
 
-    logger.debug('Found actors:', actors);
-
     // 创建用户ID到用户信息的映射
     const actorMap = new Map(actors.map(actor => [actor.id, actor]));
 
     // 格式化事件数据
-    const formattedEvents = await Promise.all(
-      events.map(async (event) => {
-        try {
-          const actor = actorMap.get(Number(event.actor_id));
-          if (!actor) {
-            logger.warn(`Actor not found for event ${event.id}, actor_id: ${event.actor_id}`);
-            return null;
-          }
-
-          const target = await getTargetInfo(event.target_type, event.target_id);
-          if (!target) {
-            logger.warn(`Target not found for event ${event.id}, type: ${event.target_type}, id: ${event.target_id}`);
-            return null;
-          }
-
-          const eventConfig = EventTypes[event.event_type];
-          if (!eventConfig) {
-            logger.warn(`Event type config not found: ${event.event_type}`);
-            return null;
-          }
-
-          let displayText = eventConfig.displayFormat;
-          if (!displayText) {
-            logger.warn(`Display format not found for event type: ${event.event_type}`);
-            displayText = eventConfig.description || '未知事件';
-          }
-
-          // 替换模板中的变量
-          displayText = displayText.replace('{actor.name}', actor.display_name || actor.username || '未知用户');
-          displayText = displayText.replace('{target.name}', target.name || target.title || '未知目标');
-
-          const formattedEvent = {
-            id: event.id.toString(),
-            type: event.event_type,
-            description: eventConfig.description,
-            display_text: displayText,
-            actor: {
-              id: actor.id,
-              username: actor.username,
-              display_name: actor.display_name
-            },
-            target: {
-              id: target.id,
-              type: event.target_type,
-              name: target.name || target.title
-            },
-            created_at: event.created_at,
-            event_data: event.event_data
-          };
-
-          logger.debug('Formatted event:', formattedEvent);
-          return formattedEvent;
-        } catch (error) {
-          logger.error('Error formatting event:', {
-            error,
-            event_id: event.id,
-            event_type: event.event_type
-          });
+    const formattedEvents = events.map(event => {
+      try {
+        const actor = actorMap.get(Number(event.actor_id));
+        if (!actor) {
+          logger.warn(`Actor not found for event ${event.id}, actor_id: ${event.actor_id}`);
           return null;
         }
-      })
-    );
+
+        const eventConfig = EventTypes[event.event_type];
+        if (!eventConfig) {
+          logger.warn(`Event type config not found: ${event.event_type}`);
+          return null;
+        }
+
+        // 构建基本事件数据
+        const formattedEvent = {
+          id: event.id.toString(),
+          type: event.event_type,
+          actor: {
+            id: actor.id,
+            username: actor.username,
+            display_name: actor.display_name
+          },
+          target: {
+            id: Number(event.target_id),
+            type: event.target_type
+          },
+          created_at: event.created_at,
+          event_data: event.event_data,
+          public: event.public === 1
+        };
+
+        // 对于评论类型的事件，添加额外的定位信息
+        if (event.event_type === 'comment_create' && event.event_data) {
+          formattedEvent.target.context = {
+            page_type: event.event_data.page_type,
+            page_id: event.event_data.page_id,
+            parent_id: event.event_data.parent_id,
+            reply_id: event.event_data.reply_id
+          };
+        }
+
+        return formattedEvent;
+      } catch (error) {
+        logger.error('Error formatting event:', {
+          error,
+          event_id: event.id,
+          event_type: event.event_type
+        });
+        return null;
+      }
+    });
 
     const filteredEvents = formattedEvents.filter(e => e !== null);
-    logger.debug(`Formatted ${filteredEvents.length} valid events out of ${events.length} total events`);
 
     res.status(200).send({
       status: "success",
