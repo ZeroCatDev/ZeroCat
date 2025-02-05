@@ -18,6 +18,7 @@ import {
 import { needlogin } from "../middleware/auth.js";
 import { hasProjectPermission } from "../utils/permissionManager.js";
 import { getUserByUsername } from "../controllers/users.js";
+import { createEvent, EventTypes, TargetTypes } from "../controllers/events.js";
 
 const router = Router();
 
@@ -102,6 +103,20 @@ router.post("/", needlogin, async (req, res, next) => {
     };
 
     const result = await prisma.ow_projects.create({ data: outputJson });
+    
+    // Create project creation event
+    await createEvent(
+      EventTypes.PROJECT_CREATE,
+      res.locals.userid,
+      TargetTypes.PROJECT,
+      result.id,
+      {
+        project_name: result.name,
+        project_type: result.type,
+        title: result.title
+      }
+    );
+
     res.status(200).send({
       status: "success",
       message: "保存成功",
@@ -326,6 +341,20 @@ router.put("/commit/id/:id", needlogin, async (req, res, next) => {
 
     await updateBranchLatestCommit(projectid, branch, commitId);
 
+    // After successful commit creation, create an event
+    await createEvent(
+      EventTypes.PROJECT_COMMIT,
+      res.locals.userid,
+      TargetTypes.PROJECT,
+      projectid,
+      {
+        commit_id: commitId,
+        branch: branch,
+        message: message,
+        parent_commit_id: parent_commit_id
+      }
+    );
+
     res.status(200).send({
       status: "success",
       message: "保存成功",
@@ -535,6 +564,20 @@ router.put("/id/:id", needlogin, async (req, res, next) => {
       where: { id: Number(req.params.id), authorid: Number(res.locals.userid) },
       data: updatedData,
     });
+
+    // Create project update event
+    await createEvent(
+      EventTypes.PROJECT_UPDATE,
+      res.locals.userid,
+      TargetTypes.PROJECT,
+      Number(req.params.id),
+      {
+        updated_fields: Object.keys(updatedData),
+        title: updatedData.title,
+        description: updatedData.description
+      }
+    );
+
     // 处理标签
     if (req.body.tags) {
       await handleTagsChange(Number(req.params.id), req.body.tags);
@@ -639,11 +682,31 @@ router.get("/files/:sha256", async (req, res, next) => {
 });
 
 // 删除作品
-router.delete("/edit/:id", async (req, res, next) => {
+router.delete("/:id", async (req, res, next) => {
   try {
-    await prisma.ow_projects.delete({
+    const project = await prisma.ow_projects.findFirst({
       where: { id: Number(req.params.id), authorid: res.locals.userid },
     });
+
+    if (project) {
+      await prisma.ow_projects.delete({
+        where: { id: Number(req.params.id), authorid: res.locals.userid },
+      });
+
+      // Create project deletion event
+      await createEvent(
+        EventTypes.PROJECT_DELETE,
+        res.locals.userid,
+        TargetTypes.PROJECT,
+        Number(req.params.id),
+        {
+          project_name: project.name,
+          project_type: project.type,
+          title: project.title
+        }
+      );
+    }
+
     res.status(200).send({
       status: "success",
       message: "删除成功",
@@ -1008,6 +1071,19 @@ router.post("/fork", needlogin, async (req, res, next) => {
           },
         });
       })
+    );
+
+    // Create fork event
+    await createEvent(
+      EventTypes.PROJECT_FORK,
+      res.locals.userid,
+      TargetTypes.PROJECT,
+      projectid,
+      {
+        fork_id: forkedProject.id,
+        fork_name: name,
+        original_project: projectid
+      }
     );
 
     res.status(200).send({

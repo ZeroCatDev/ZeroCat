@@ -5,6 +5,7 @@ import { Router } from "express";
 const router = Router();
 import { prisma } from "../utils/global.js";
 import { getUsersByList } from "../controllers/users.js";
+import { createEvent, TargetTypes } from "../controllers/events.js";
 // 中间件，确保所有请求均经过该处理
 router.all("*", (req, res, next) => next());
 
@@ -150,6 +151,21 @@ router.post("/api/comment", async (req, res, next) => {
         rid: rid || null,
       },
     });
+
+    // 添加评论创建事件
+    await createEvent(
+      'COMMENT_CREATE',
+      userid,
+      TargetTypes.COMMENT,
+      newComment.id,
+      {
+        page_type: url.split("-")[0],
+        page_id: Number(url.split("-")[1]) || null,
+        parent_id: pid,
+        reply_id: rid,
+        comment_text: comment.substring(0, 100) // 只记录前100个字符
+      }
+    );
 
     res.status(200).send({
       errno: 0,

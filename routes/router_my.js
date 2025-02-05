@@ -12,6 +12,7 @@ import { S3update, checkhash, hash, prisma } from "../utils/global.js";
 //数据库
 import geetestMiddleware from "../middleware/geetest.js";
 import multer from "multer";
+import { createEvent, TargetTypes } from "../controllers/events.js";
 
 const upload = multer({ dest: "./usercontent" });
 
@@ -71,18 +72,34 @@ router.use((err, req, res, next) => {
 
 //修改个人信息
 router.post("/set/userinfo", async (req, res) => {
-  await prisma.ow_users.update({
-    where: { id: res.locals.userid },
-    data: {
-      display_name: req.body["display_name"],
-      motto: req.body["aboutme"],
-      sex: req.body["sex"],
-      birthday: new Date(`2000-01-01 00:00:00`),
-    },
-  });
-  res.locals.display_name = req.body.display_name;
+  try {
+    await prisma.ow_users.update({
+      where: { id: res.locals.userid },
+      data: {
+        display_name: req.body["display_name"],
+        motto: req.body["aboutme"],
+        sex: req.body["sex"],
+        birthday: new Date(`2000-01-01 00:00:00`),
+      },
+    });
+    
+    // 添加个人资料更新事件
+    await createEvent(
+      'USER_PROFILE_UPDATE',
+      res.locals.userid,
+      TargetTypes.USER,
+      res.locals.userid,
+      {
+        updated_fields: ['display_name', 'motto', 'sex', 'birthday'],
+        display_name: req.body["display_name"]
+      }
+    );
 
-  res.status(200).send({ status: "success", message: "个人信息修改成功" });
+    res.status(200).send({ status: "success", message: "个人信息修改成功" });
+  } catch (error) {
+    logger.error("Error updating user info:", error);
+    res.status(500).send({ status: "error", message: "修改个人信息失败" });
+  }
 });
 
 //修改用户名

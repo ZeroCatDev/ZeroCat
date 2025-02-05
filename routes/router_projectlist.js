@@ -21,13 +21,27 @@ import {
   updateList,
 } from "../controllers/projectlist.js";
 
+import { createEvent, TargetTypes } from "../controllers/events.js";
+
 // 中间件，确保所有请求均经过该处理
 router.all("*", (req, res, next) => next());
 
 router.post("/star", needlogin, async (req, res, next) => {
   try {
-    res.status(200).send({ status: "success", message: "收藏成功", star: 1 });
     await starProject(res.locals.userid, req.body.projectid);
+    
+    // 添加收藏事件
+    await createEvent(
+      'PROJECT_STAR',
+      res.locals.userid,
+      TargetTypes.PROJECT,
+      req.body.projectid,
+      {
+        action: 'star'
+      }
+    );
+
+    res.status(200).send({ status: "success", message: "收藏成功", star: 1 });
   } catch (err) {
     logger.error("Error starring project:", err);
     res.status(500).send({ status: "error", message: "收藏项目时出错" });

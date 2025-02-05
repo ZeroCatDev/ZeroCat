@@ -154,6 +154,10 @@ app.use("/comment", router_comment);
 import router_user from "./routes/router_user.js";
 app.use("/user", router_user);
 
+// 时间线
+import timelineRouter from "./routes/router_timeline.js";
+app.use("/timeline", timelineRouter);
+
 app.get("/check", function (req, res, next) {
   res.status(200).json({
     message: "success",

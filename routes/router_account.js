@@ -37,6 +37,8 @@ import { addUserContact, sendVerificationEmail, verifyContact } from "../control
 import memoryCache from '../utils/memoryCache.js';
 import { OAUTH_PROVIDERS, generateAuthUrl, handleOAuthCallback, initializeOAuthProviders } from '../controllers/oauth.js';
 
+import { createEvent, TargetTypes } from '../controllers/events.js';
+
 // 初始化 OAuth 配置
 initializeOAuthProviders();
 
@@ -158,6 +160,19 @@ router.post("/login", geetestMiddleware, async function (req, res, next) {
 
     // 登录成功后清除尝试记录
     memoryCache.delete(attemptKey);
+
+    // 添加登录事件（不记录到数据库）
+    await createEvent(
+      'USER_LOGIN',
+      user.id,
+      TargetTypes.USER,
+      user.id,
+      {
+        login_type: 'password',
+        ip: req.ip,
+        user_agent: req.headers['user-agent']
+      }
+    );
 
     res.status(200).send({
       status: "success",
