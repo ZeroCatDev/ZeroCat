@@ -70,8 +70,15 @@ async function getCommitParentId(projectid, userid, parent_commit) {
 
 async function updateBranchLatestCommit(projectid, branch, commitId) {
   await prisma.ow_projects_branch.update({
-    where: { projectid: Number(projectid), name: branch },
-    data: { latest_commit_hash: commitId },
+    where: {
+      projectid_name: {  // 使用复合唯一索引
+        projectid: Number(projectid),
+        name: branch
+      }
+    },
+    data: { 
+      latest_commit_hash: commitId 
+    },
   });
 }
 
