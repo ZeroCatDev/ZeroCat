@@ -47,10 +47,13 @@ async function formatEventDisplay(event, actor, target) {
         display_name: actor?.display_name
       },
       target: {
-        id: target?.id,
         type: event.target_type,
-        name: targetName,
-        state: target?.state
+        id: Number(event.target_id),
+        page: {
+          name: targetName,
+          state: target?.state,
+          ...target
+        }
       },
       created_at: event.created_at,
       event_data: event.event_data
@@ -223,17 +226,20 @@ router.get("/user/:userid", async (req, res) => {
             display_name: actor.display_name
           },
           target: {
+            type: event.target_type,
             id: Number(event.target_id),
-            type: event.target_type
+            page: {}
           },
           created_at: event.created_at,
           event_data: event.event_data,
           public: event.public === 1
         };
 
-        // 对于评论类型的事件，添加额外的定位信息
+        // 对于评论类型的事件，添加额外的定位信息到 page 中
         if (event.event_type === 'comment_create' && event.event_data) {
-          formattedEvent.target.context = {
+          formattedEvent.target.id=event.event_data.page_id
+          formattedEvent.target.type=event.event_data.page_type
+          formattedEvent.target.page = {
             page_type: event.event_data.page_type,
             page_id: event.event_data.page_id,
             parent_id: event.event_data.parent_id,

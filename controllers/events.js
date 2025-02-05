@@ -39,6 +39,12 @@ export const EventTypes = {
     dbFields: [],
     public: false // 删除操作设为不公开
   },
+  'project_publish': {  // 添加项目发布事件
+    type: 'project_publish',
+    logToDatabase: true,
+    dbFields: ['old_state', 'new_state'],
+    public: true
+  },
   'comment_create': {
     type: 'comment_create',
     logToDatabase: true,
@@ -56,6 +62,12 @@ export const EventTypes = {
     logToDatabase: true,
     dbFields: [],
     public: false // 登录操作设为不公开
+  },
+  'user_register': {  // 添加用户注册事件
+    type: 'user_register',
+    logToDatabase: true,
+    dbFields: ['username'],
+    public: true
   }
 };
 
