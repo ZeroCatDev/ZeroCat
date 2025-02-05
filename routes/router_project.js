@@ -351,9 +351,12 @@ router.put("/commit/id/:id", needlogin, async (req, res, next) => {
 
     await updateBranchLatestCommit(projectid, branch, commitId);
 
-    // After successful commit creation, create an event
+    // 根据项目状态决定事件是否公开
+    const isPrivate = project.state === 'private';
+
+    // 创建项目提交事件
     await createEvent(
-      EventTypes.PROJECT_COMMIT,
+      'project_commit',
       res.locals.userid,
       TargetTypes.PROJECT,
       projectid,
@@ -362,7 +365,8 @@ router.put("/commit/id/:id", needlogin, async (req, res, next) => {
         branch: branch,
         message: message,
         parent_commit_id: parent_commit_id
-      }
+      },
+      isPrivate // 传入是否强制私密
     );
 
     res.status(200).send({
