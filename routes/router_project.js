@@ -122,7 +122,9 @@ router.post("/", needlogin, async (req, res, next) => {
       {
         project_name: result.name,
         project_type: result.type,
-        title: result.title
+        project_title: result.title,
+        project_description: result.description,
+        project_state: result.state
       },
       isPrivate // 传入是否强制私密
     );
@@ -354,7 +356,7 @@ router.put("/commit/id/:id", needlogin, async (req, res, next) => {
     // 根据项目状态决定事件是否公开
     const isPrivate = project.state === 'private';
 
-    // 创建项目提交事件
+    // 创建提交事件，添加更多项目信息
     await createEvent(
       'project_commit',
       res.locals.userid,
@@ -362,9 +364,15 @@ router.put("/commit/id/:id", needlogin, async (req, res, next) => {
       projectid,
       {
         commit_id: commitId,
+        commit_message: message,
         branch: branch,
-        message: message,
-        parent_commit_id: parent_commit_id
+        commit_file: sha256,
+        // 添加项目相关信息
+        project_name: project.name,
+        project_title: project.title,
+        project_type: project.type,
+        project_description: project.description,
+        project_state: project.state
       },
       isPrivate // 传入是否强制私密
     );
@@ -573,29 +581,44 @@ router.get("/id/:id", async (req, res, next) => {
 // 更新作品信息
 router.put("/id/:id", needlogin, async (req, res, next) => {
   try {
+    const project = await prisma.ow_projects.findFirst({
+      where: { id: Number(req.params.id), authorid: res.locals.userid },
+    });
+
+    if (!project) {
+      return res.status(404).send({
+        status: "error",
+        message: "项目不存在或无权访问",
+      });
+    }
+
     const updatedData = extractProjectData(req.body);
     await prisma.ow_projects.update({
       where: { id: Number(req.params.id), authorid: Number(res.locals.userid) },
       data: updatedData,
     });
 
-    // Create project update event
+    // 处理标签
+    if (req.body.tags) {
+      await handleTagsChange(Number(req.params.id), req.body.tags);
+    }
+
+    // 创建项目信息更新事件
     await createEvent(
-      EventTypes.PROJECT_UPDATE,
+      'project_info_update',
       res.locals.userid,
       TargetTypes.PROJECT,
       Number(req.params.id),
       {
         updated_fields: Object.keys(updatedData),
-        title: updatedData.title,
-        description: updatedData.description
-      }
+        project_name: project.name,
+        project_title: updatedData.title || project.title,
+        project_type: project.type,
+        project_description: updatedData.description || project.description,
+        project_state: updatedData.state || project.state
+      },
+      project.state === 'private' // 根据项目状态决定是否私密
     );
-
-    // 处理标签
-    if (req.body.tags) {
-      await handleTagsChange(Number(req.params.id), req.body.tags);
-    }
 
     res.status(200).send({
       status: "success",
@@ -862,6 +885,22 @@ router.put("/rename/:id", needlogin, async (req, res, next) => {
       data: { name: newName },
     });
 
+    // 创建重命名事件
+    await createEvent(
+      'project_rename',
+      res.locals.userid,
+      TargetTypes.PROJECT,
+      id,
+      {
+        old_name: project.name,
+        new_name: newName,
+        project_title: project.title,
+        project_type: project.type,
+        project_state: project.state
+      },
+      project.state === 'private' // 根据项目状态决定是否私密
+    );
+
     res.status(200).send({
       status: "success",
       message: "重命名成功",
@@ -1120,4 +1159,132 @@ router.post("/fork", needlogin, async (req, res, next) => {
     });
   }
 });
+
+// 在项目创建时记录事件
+router.post("/create", needlogin, async (req, res) => {
+  try {
+    // ... 现有的项目创建代码 ...
+    const project = await prisma.ow_projects.create({
+      data: projectData
+    });
+
+    // 创建项目创建事件
+    await createEvent('project_create', res.locals.userid, 'project', project.id, {
+      project_type: project.type,
+      project_name: project.name,
+      project_title: project.title,
+      project_description: project.description,
+      project_state: project.state
+    });
+
+    // ... 其余代码 ...
+  } catch (error) {
+    // ... 错误处理 ...
+  }
+});
+
+// 在项目更新时记录事件
+router.post("/:id/update", needlogin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const oldProject = await prisma.ow_projects.findUnique({
+      where: { id: Number(id) }
+    });
+
+    // ... 现有的更新代码 ...
+
+    // 记录更新事件
+    if (req.body.title !== oldProject.title) {
+      await createEvent('project_update', res.locals.userid, 'project', id, {
+        update_type: 'title',
+        old_value: oldProject.title,
+        new_value: req.body.title
+      });
+    }
+
+    if (req.body.description !== oldProject.description) {
+      await createEvent('project_update', res.locals.userid, 'project', id, {
+        update_type: 'description',
+        old_value: oldProject.description,
+        new_value: req.body.description
+      });
+    }
+
+    // ... 其余代码 ...
+  } catch (error) {
+    // ... 错误处理 ...
+  }
+});
+
+// 在项目提交时记录事件
+router.post("/:id/commit", needlogin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { message, branch = 'main', file } = req.body;
+
+    // ... 现有的提交代码 ...
+
+    // 记录提交事件
+    await createEvent('project_commit', res.locals.userid, 'project', id, {
+      commit_id: commitId,
+      commit_message: message,
+      branch: branch,
+      commit_file: file
+    });
+
+    // ... 其余代码 ...
+  } catch (error) {
+    // ... 错误处理 ...
+  }
+});
+
+// 在项目发布状态改变时记录事件
+router.post("/:id/publish", needlogin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const project = await prisma.ow_projects.findUnique({
+      where: { id: Number(id) }
+    });
+
+    // ... 现有的发布代码 ...
+
+    // 记录发布事件
+    await createEvent('project_publish', res.locals.userid, 'project', id, {
+      old_state: project.state,
+      new_state: 'public',
+      project_title: project.title
+    });
+
+    // ... 其余代码 ...
+  } catch (error) {
+    // ... 错误处理 ...
+  }
+});
+
+// 在项目复刻时记录事件
+router.post("/:id/fork", needlogin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const sourceProject = await prisma.ow_projects.findUnique({
+      where: { id: Number(id) }
+    });
+
+    // ... 现有的复刻代码 ...
+    const newProject = await prisma.ow_projects.create({
+      data: forkData
+    });
+
+    // 记录复刻事件
+    await createEvent('project_fork', res.locals.userid, 'project', newProject.id, {
+      fork_id: Number(id),
+      project_name: newProject.name,
+      project_title: newProject.title
+    });
+
+    // ... 其余代码 ...
+  } catch (error) {
+    // ... 错误处理 ...
+  }
+});
+
 export default router;

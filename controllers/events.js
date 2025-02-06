@@ -6,69 +6,208 @@ export const EventTypes = {
   'project_commit': {
     type: 'project_commit',
     logToDatabase: true,
-    dbFields: ['commit_id'],
-    public: true
+    dbFields: [
+      'commit_id',          // 提交ID
+      'commit_message',     // 提交信息
+      'branch',            // 分支名称
+      'commit_file',       // 提交的文件标识
+      'project_name',      // 项目名称
+      'project_title',     // 项目标题
+      'project_type',      // 项目类型
+      'project_description', // 项目描述
+      'project_state'      // 项目状态
+    ],
+    public: true,
+    /* event_data 结构:
+    {
+      commit_id: string,        // 提交的唯一标识
+      commit_message: string,   // 提交信息
+      branch: string,          // 分支名称
+      commit_file: string,     // 提交的文件标识
+      project_name: string,    // 项目名称
+      project_title: string,   // 项目标题
+      project_type: string,    // 项目类型
+      project_description: string, // 项目描述
+      project_state: string    // 项目状态
+    }
+    */
   },
-  'project_share': {
-    type: 'project_share',
-    logToDatabase: true,
-    dbFields: ['share_platform'],
-    public: true
-  },
+
   'project_update': {
     type: 'project_update',
     logToDatabase: true,
-    dbFields: ['update_type'],
-    public: true
+    dbFields: [
+      'update_type',      // 更新类型(title/description/tags等)
+      'old_value',        // 更新前的值
+      'new_value'         // 更新后的值
+    ],
+    public: true,
+    /* event_data 结构:
+    {
+      update_type: string,     // 更新类型(如 'title', 'description', 'tags')
+      old_value: string,       // 更新前的值
+      new_value: string        // 更新后的值
+    }
+    */
   },
+
   'project_fork': {
     type: 'project_fork',
     logToDatabase: true,
-    dbFields: ['fork_id'],
-    public: true
+    dbFields: [
+      'fork_id',           // 对应 ow_projects.fork
+      'project_name',      // 新项目名称
+      'project_title'      // 新项目标题
+    ],
+    public: true,
+    /* event_data 结构:
+    {
+      fork_id: number,          // fork 来源项目的 ID
+      project_name: string,     // 新项目名称
+      project_title: string     // 新项目标题
+    }
+    */
   },
+
   'project_create': {
     type: 'project_create',
     logToDatabase: true,
-    dbFields: ['project_type'],
-    public: true
+    dbFields: [
+      'project_type',     // 对应 ow_projects.type
+      'project_name',     // 对应 ow_projects.name
+      'project_title',    // 对应 ow_projects.title
+      'project_description',      // 对应 ow_projects.description
+      'project_state'            // 对应 ow_projects.state
+    ],
+    public: true,
+    /* event_data 结构:
+    {
+      project_type: string,     // 项目类型
+      project_name: string,     // 项目名称
+      project_title: string,    // 项目标题
+      description: string,      // 项目描述
+      state: string            // 项目状态('private'/'public')
+    }
+    */
   },
-  'project_delete': {
-    type: 'project_delete',
-    logToDatabase: true,
-    dbFields: [],
-    public: false // 删除操作设为不公开
-  },
-  'project_publish': {  // 添加项目发布事件
+
+  'project_publish': {
     type: 'project_publish',
     logToDatabase: true,
-    dbFields: ['old_state', 'new_state'],
-    public: true
+    dbFields: [
+      'old_state',        // 发布前状态
+      'new_state',        // 发布后状态
+      'project_title'     // 项目标题
+    ],
+    public: true,
+    /* event_data 结构:
+    {
+      old_state: string,        // 发布前状态
+      new_state: string,        // 发布后状态
+      project_title: string     // 项目标题
+    }
+    */
   },
+
   'comment_create': {
     type: 'comment_create',
-    logToDatabase: true,
-    dbFields: ['page_type', 'page_id', 'parent_id', 'reply_id', 'comment_text'],
-    public: true
+    logToDatabase: false,
+    dbFields: [
+      'page_type',
+      'page_id',
+      'pid',
+      'rid',
+      'text'
+    ],
+    public: false,
+    /* event_data 结构:
+    {
+      page_type: string,
+      page_id: number,
+      pid: number,
+      rid: number,
+      text: string
+    }
+    */
   },
+
   'user_profile_update': {
     type: 'user_profile_update',
     logToDatabase: true,
-    dbFields: ['update_type'],
-    public: true
+    dbFields: [
+      'update_type',     // 更新字段(display_name/motto等)
+      'old_value',       // 更新前的值
+      'new_value'        // 更新后的值
+    ],
+    public: true,
+    /* event_data 结构:
+    {
+      update_type: string,    // 更新类型(如 'display_name', 'motto')
+      old_value: string,      // 更新前的值
+      new_value: string       // 更新后的值
+    }
+    */
   },
+
   'user_login': {
     type: 'user_login',
     logToDatabase: true,
     dbFields: [],
-    public: false // 登录操作设为不公开
+    public: false
   },
-  'user_register': {  // 添加用户注册事件
+
+  'user_register': {
     type: 'user_register',
     logToDatabase: true,
-    dbFields: ['username'],
+    dbFields: ['username'],  // 对应 ow_users.username
     public: true
-  }
+  },
+
+  'project_rename': {
+    type: 'project_rename',
+    logToDatabase: true,
+    dbFields: [
+      'old_name',         // 旧项目名称
+      'new_name',         // 新项目名称
+      'project_title',    // 项目标题
+      'project_type',     // 项目类型
+      'project_state'     // 项目状态
+    ],
+    public: true,
+    /* event_data 结构:
+    {
+      old_name: string,      // 旧项目名称
+      new_name: string,      // 新项目名称
+      project_title: string, // 项目标题
+      project_type: string,  // 项目类型
+      project_state: string  // 项目状态
+    }
+    */
+  },
+
+  'project_info_update': {
+    type: 'project_info_update',
+    logToDatabase: true,
+    dbFields: [
+      'updated_fields',    // 更新的字段列表
+      'project_name',      // 项目名称
+      'project_title',     // 项目标题
+      'project_type',      // 项目类型
+      'project_description', // 项目描述
+      'project_state'      // 项目状态
+    ],
+    public: true,
+    /* event_data 结构:
+    {
+      updated_fields: string[],  // 更新的字段列表
+      project_name: string,      // 项目名称
+      project_title: string,     // 项目标题
+      project_type: string,      // 项目类型
+      project_description: string, // 项目描述
+      project_state: string      // 项目状态
+    }
+    */
+  },
 };
 
 // Target types enum
@@ -109,7 +248,7 @@ export async function createEvent(eventType, actorId, targetType, targetId, even
   try {
     const normalizedEventType = String(eventType).toLowerCase();
     const eventConfig = EventTypes[normalizedEventType];
-    
+
     if (!eventConfig) {
       logger.warn(`Unknown event type: ${normalizedEventType}`);
       return null;
@@ -123,7 +262,7 @@ export async function createEvent(eventType, actorId, targetType, targetId, even
     const isPublic = forcePrivate ? false : eventConfig.public;
 
     const dbEventData = extractDbFields(eventConfig, eventData);
-    
+
     const event = await prisma.events.create({
       data: {
         event_type: normalizedEventType,
@@ -134,7 +273,7 @@ export async function createEvent(eventType, actorId, targetType, targetId, even
         public: isPublic ? 1 : 0
       },
     });
-    
+
     logger.debug(`Event created: ${event.id}`);
     return event;
   } catch (error) {
@@ -186,15 +325,15 @@ async function getTarget(targetType, targetId) {
 async function handleEventNotifications(event, eventConfig, handlerContext) {
   try {
     const notifyUsers = new Set();
-    
+
     for (const target of eventConfig.notifyTargets) {
       const users = await getNotificationTargets(target, event, handlerContext);
       users.forEach(userId => notifyUsers.add(userId));
     }
-    
+
     // Create notifications for all unique users
     await Promise.all(
-      Array.from(notifyUsers).map(userId => 
+      Array.from(notifyUsers).map(userId =>
         createNotification(event.id, userId)
       )
     );
@@ -213,13 +352,13 @@ async function getNotificationTargets(targetType, event, handlerContext) {
         where: { id: Number(event.target_id) }
       });
       return project ? [project.authorid] : [];
-      
+
     case 'project_followers':
       return await getProjectFollowers(event.target_id);
-      
+
     case 'user_followers':
       return await getUserFollowers(event.actor_id);
-      
+
     default:
       return [];
   }

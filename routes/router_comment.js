@@ -152,21 +152,6 @@ router.post("/api/comment", async (req, res, next) => {
       },
     });
 
-    // 添加评论创建事件
-    await createEvent(
-      'COMMENT_CREATE',
-      userid,
-      TargetTypes.COMMENT,
-      newComment.id,
-      {
-        page_type: url.split("-")[0],
-        page_id: Number(url.split("-")[1]) || null,
-        parent_id: pid,
-        reply_id: rid,
-        comment_text: comment.substring(0, 100) // 只记录前100个字符
-      }
-    );
-
     res.status(200).send({
       errno: 0,
       errmsg: "",

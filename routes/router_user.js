@@ -5,7 +5,7 @@ import { Router } from "express";
 var router = Router();
 import { prisma } from "../utils/global.js";
 import { needlogin } from "../middleware/auth.js";
-
+import { createEvent } from "../controllers/events.js";
 
 
 // 根据用户ID获取用户信息
@@ -149,6 +149,58 @@ router.get("/me", needlogin,async function (req, res, next) {
     });
   } catch (err) {
     next(err);
+  }
+});
+
+// 在用户资料更新时记录事件
+router.post("/profile/update", needlogin, async (req, res) => {
+  try {
+    const userId = res.locals.userid;
+    const oldUser = await prisma.ow_users.findUnique({
+      where: { id: userId }
+    });
+
+    // ... 现有的更新代码 ...
+
+    // 记录用户资料更新事件
+    if (req.body.display_name !== oldUser.display_name) {
+      await createEvent('user_profile_update', userId, 'user', userId, {
+        update_type: 'display_name',
+        old_value: oldUser.display_name,
+        new_value: req.body.display_name
+      });
+    }
+
+    if (req.body.motto !== oldUser.motto) {
+      await createEvent('user_profile_update', userId, 'user', userId, {
+        update_type: 'motto',
+        old_value: oldUser.motto,
+        new_value: req.body.motto
+      });
+    }
+
+    // ... 其余代码 ...
+  } catch (error) {
+    // ... 错误处理 ...
+  }
+});
+
+// 在用户注册时记录事件
+router.post("/register", async (req, res) => {
+  try {
+    // ... 现有的注册代码 ...
+    const user = await prisma.ow_users.create({
+      data: userData
+    });
+
+    // 记录注册事件
+    await createEvent('user_register', user.id, 'user', user.id, {
+      username: user.username
+    });
+
+    // ... 其余代码 ...
+  } catch (error) {
+    // ... 错误处理 ...
   }
 });
 
