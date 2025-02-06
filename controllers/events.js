@@ -190,6 +190,8 @@ export const EventTypes = {
     logToDatabase: true,
     dbFields: [
       'updated_fields',    // 更新的字段列表
+      'old_values',        // 更新前的值
+      'new_values',        // 更新后的值
       'project_name',      // 项目名称
       'project_title',     // 项目标题
       'project_type',      // 项目类型
@@ -200,6 +202,22 @@ export const EventTypes = {
     /* event_data 结构:
     {
       updated_fields: string[],  // 更新的字段列表
+      old_values: {             // 更新前的值
+        title?: string,
+        type?: string,
+        state?: string,
+        description?: string,
+        license?: string,
+        tags?: string[]
+      },
+      new_values: {             // 更新后的值
+        title?: string,
+        type?: string,
+        state?: string,
+        description?: string,
+        license?: string,
+        tags?: string[]
+      },
       project_name: string,      // 项目名称
       project_title: string,     // 项目标题
       project_type: string,      // 项目类型
