@@ -157,6 +157,53 @@ class UIManager {
     }
   }
 
+  static initializeDialogs() {
+    // 添加 ZeroCat Tab 对话框
+    const zerocatTabHTML = `
+      <mdui-dialog headline="作品" description="加载中" close-on-overlay-click id="zerocat-tab">
+        <mdui-list>
+          <mdui-list-subheader>作者</mdui-list-subheader>
+          <mdui-list-item headline="作者信息" description="加载中" id="author-info" active rounded>
+            <mdui-avatar slot="icon" src="" id="author-avatar"></mdui-avatar>
+          </mdui-list-item>
+          <mdui-list-subheader>当前提交</mdui-list-subheader>
+          <mdui-list-item headline="提交信息" description="Supporting text" id="commit-info" rounded>
+            <mdui-avatar slot="icon" src="" id="commit-avatar"></mdui-avatar>
+          </mdui-list-item>
+        </mdui-list>
+        <br/>
+        <mdui-button id="savestatic" onclick="uploadProjectAssets()">保存媒体库</mdui-button>
+        <mdui-button onclick="openCommitDialog()">保存作品</mdui-button>
+        <mdui-button onclick="logText.innerText = ''">清空log</mdui-button>
+        <div id="log-text"></div>
+      </mdui-dialog>
+    `;
+
+    // 添加加载对话框和提交对话框
+    const otherDialogsHTML = `
+      <mdui-dialog
+        headline="加载中"
+        description="正在加载作品，请稍候..."
+        close-on-overlay-click
+        class="loading-dialog"
+      ></mdui-dialog>
+      <mdui-dialog headline="提交作品" description="请输入提交信息" close-on-overlay-click id="commit-dialog">
+        <mdui-text-field variant="outlined" label="提交信息" value="Update Project" id="commit-message"></mdui-text-field>
+        <mdui-text-field variant="outlined" label="更多信息" rows ></mdui-text-field>
+        <mdui-radio-group value="main">
+          <mdui-radio value="main">提交给当前分支</mdui-radio>
+          <mdui-radio value="pr">为此提交创建一个新分支</mdui-radio>
+        </mdui-radio-group>
+        <mdui-text-field variant="outlined" label="分支名称" value="main" id="branch-name"></mdui-text-field>
+        <mdui-button onclick="commitProject()">提交</mdui-button>
+      </mdui-dialog>
+    `;
+
+    // 将对话框添加到 body
+    document.body.insertAdjacentHTML("beforeend", zerocatTabHTML);
+    document.body.insertAdjacentHTML("beforeend", otherDialogsHTML);
+  }
+
   static initializeElements() {
     this.elements = {
       zctab: document.querySelector("#zerocat-tab"),
@@ -173,7 +220,39 @@ class UIManager {
     mdui.snackbar({ message, closeable: true });
   }
 
-  // ... 其他 UI 相关方法
+  static renderButtons() {
+    const zerocattool = document.getElementById("zerocattool");
+    if (!zerocattool) return;
+    
+    zerocattool.innerHTML = ""; // 清空现有按钮
+    this.buttons.forEach((button) => {
+      const btnTemplate = zerocattool.cloneNode(true);
+      btnTemplate.id = button.id;
+      btnTemplate.innerHTML = button.text;
+      if (button.onclick) btnTemplate.onclick = button.onclick;
+      btnTemplate.style.display = "inline-block";
+      zerocattool.parentNode.appendChild(btnTemplate);
+    });
+    zerocattool.style.display = "none";
+  }
+
+  static showLoginButton() {
+    this.buttons.length = 0;
+    this.buttons.push({
+      id: "login-button",
+      text: "登录/注册",
+      onclick: () => (window.location.href = `${CONFIG.FRONTEND_URL}/app/account/login`),
+    });
+    this.renderButtons();
+  }
+
+  static setButton(id, text, onclick) {
+    const button = document.getElementById(id);
+    if (button) {
+      button.innerText = text;
+      button.onclick = onclick;
+    }
+  }
 }
 
 // 项目管理器
