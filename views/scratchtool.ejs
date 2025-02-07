@@ -1,3 +1,22 @@
+// Configuration management
+const ZCConfig = {
+  frontend: {
+    url: localStorage.getItem("ZeroCat_ZCFrontend") || "<%= global.config['urls.frontend'] %>",
+    getPath: function(path) {
+      return `${this.url}${path}`;
+    }
+  },
+  api: {
+    url: localStorage.getItem("ZeroCat_ZCApiHost") || "<%= global.config['urls.backend'] %>",
+    getPath: function(path) {
+      return `${this.url}${path}`;
+    }
+  },
+  s3: {
+    staticUrl: "<%= global.config['s3.staticurl'] %>"
+  }
+};
+
 // 加载外部资源
 const loadScript = (src, callback) => {
   const script = document.createElement("script");
@@ -21,10 +40,10 @@ const ZCApiHost =
   "<%= global.config['urls.backend'] %>";
 
 function loadResources() {
-  loadStyle(`${ZCFrontend}/scratchtool/mdui.css`);
+  loadStyle(ZCConfig.frontend.getPath('/scratchtool/mdui.css'));
 
-  loadScript(`${ZCFrontend}/scratchtool/jquery.3.7.1.js`, () => {
-    loadScript(`${ZCFrontend}/scratchtool/mdui.global.js`, () => {
+  loadScript(ZCConfig.frontend.getPath('/scratchtool/jquery.3.7.1.js'), () => {
+    loadScript(ZCConfig.frontend.getPath('/scratchtool/mdui.global.js'), () => {
       // 确保 $ 和 mdui 加载成功后执行初始化
       $(document).ready(() => {
         initialize();
@@ -137,7 +156,7 @@ function handleInvalidLogin(message) {
     confirmText: "打开用户页面",
     cancelText: "取消",
     onConfirm: () => {
-      window.location.href = `${ZCFrontend}/app/account/login`;
+      window.location.href = ZCConfig.frontend.getPath('/app/account/login');
     },
   });
   showLoginButton();
@@ -181,7 +200,7 @@ function showLoginButton() {
   buttons.push({
     id: "login-button",
     text: "登录/注册",
-    onclick: () => (window.location.href = `${ZCFrontend}/app/account/login`),
+    onclick: () => (window.location.href = ZCConfig.frontend.getPath('/app/account/login')),
   });
   renderButtons();
 }
@@ -219,9 +238,7 @@ function uploadProjectAssets() {
       );
 
       $.ajax({
-        url: `${ZCApiHost}/scratch/assets/${asset.assetId}.${
-          asset.dataFormat
-        }?token=${localStorage.getItem("token")}`,
+        url: `${ZCConfig.api.getPath('/scratch/assets/')}${asset.assetId}.${asset.dataFormat}?token=${localStorage.getItem("token")}`,
         type: "POST",
         data: formData,
         processData: false,
