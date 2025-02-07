@@ -1,40 +1,236 @@
-// 加载外部资源
-const loadScript = (src, callback) => {
-  const script = document.createElement("script");
-  script.src = src;
-  script.onload = callback;
-  document.head.appendChild(script);
+// 配置管理
+const CONFIG = {
+  FRONTEND_URL: localStorage.getItem("ZeroCat_ZCFrontend") || "<%= global.config['urls.frontend'] %>",
+  API_HOST: localStorage.getItem("ZeroCat_ZCApiHost") || "<%= global.config['urls.backend'] %>",
+  S3_STATIC_URL: "<%= global.config['s3.staticurl'] %>",
 };
 
-const loadStyle = (href) => {
-  const link = document.createElement("link");
-  link.rel = "stylesheet";
-  link.href = href;
-  document.head.appendChild(link);
-};
-
-const ZCFrontend =
-  localStorage.getItem("ZeroCat_ZCFrontend") ||
-  "<%= global.config['urls.frontend'] %>";
-const ZCApiHost =
-  localStorage.getItem("ZeroCat_ZCApiHost") ||
-  "<%= global.config['urls.backend'] %>";
-
-function loadResources() {
-  loadStyle(`${ZCFrontend}/scratchtool/mdui.css`);
-
-  loadScript(`${ZCFrontend}/scratchtool/jquery.3.7.1.js`, () => {
-    loadScript(`${ZCFrontend}/scratchtool/mdui.global.js`, () => {
-      // 确保 $ 和 mdui 加载成功后执行初始化
-      $(document).ready(() => {
-        initialize();
-      });
+// 资源加载器
+class ResourceLoader {
+  static loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = src;
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
     });
-  });
+  }
+
+  static loadStyle(href) {
+    return new Promise((resolve) => {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = href;
+      link.onload = resolve;
+      document.head.appendChild(link);
+    });
+  }
+
+  static async loadAllResources() {
+    try {
+      await this.loadStyle(`${CONFIG.FRONTEND_URL}/scratchtool/mdui.css`);
+      await this.loadScript(`${CONFIG.FRONTEND_URL}/scratchtool/jquery.3.7.1.js`);
+      await this.loadScript(`${CONFIG.FRONTEND_URL}/scratchtool/mdui.global.js`);
+      return true;
+    } catch (error) {
+      console.error('Failed to load resources:', error);
+      return false;
+    }
+  }
 }
 
+// API 服务
+class ApiService {
+  static getHeaders() {
+    const token = localStorage.getItem("token");
+    return {
+      Authorization: token ? `Bearer ${token}` : '',
+      'Content-Type': 'application/json'
+    };
+  }
+
+  static async request(url, options = {}) {
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          ...this.getHeaders(),
+          ...options.headers
+        }
+      });
+      
+      const data = await response.json();
+      
+      if (data.code === "AUTH_ERROR_LOGIN") {
+        AuthManager.handleInvalidLogin(data.message);
+        throw new Error('Authentication failed');
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('API request failed:', error);
+      throw error;
+    }
+  }
+
+  static async getProjectInfo(projectId) {
+    return this.request(`${CONFIG.API_HOST}/scratch/projectinfo2?id=${projectId}`);
+  }
+
+  static async uploadAsset(asset, assetId, dataFormat) {
+    const formData = new FormData();
+    formData.append(
+      "file",
+      new Blob([asset.data], { type: asset.assetType.contentType }),
+      `${assetId}.${dataFormat}`
+    );
+
+    return this.request(
+      `${CONFIG.API_HOST}/scratch/assets/${assetId}.${dataFormat}`,
+      {
+        method: 'POST',
+        body: formData,
+        headers: {} // Let browser set content-type for FormData
+      }
+    );
+  }
+}
+
+// 认证管理器
+class AuthManager {
+  static decodeJwt(token) {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      return JSON.parse(jsonPayload);
+    } catch (error) {
+      console.error('JWT decode failed:', error);
+      return null;
+    }
+  }
+
+  static handleInvalidLogin(message) {
+    localStorage.removeItem("token");
+    mdui.alert({
+      headline: "登录问题",
+      description: message,
+      confirmText: "打开用户页面",
+      cancelText: "取消",
+      onConfirm: () => {
+        window.location.href = `${CONFIG.FRONTEND_URL}/app/account/login`;
+      },
+    });
+    UIManager.showLoginButton();
+  }
+
+  static validateToken() {
+    const token = localStorage.getItem("token");
+    if (!token) return false;
+
+    const decoded = this.decodeJwt(token);
+    if (!decoded) return false;
+
+    const currentTime = Math.floor(Date.now() / 1000);
+    if (decoded.exp && decoded.exp < currentTime) {
+      this.handleInvalidLogin("登录已过期，请重新登录。");
+      return false;
+    }
+
+    return decoded;
+  }
+}
+
+// UI 管理器
+class UIManager {
+  static buttons = [];
+  static elements = {};
+
+  static initialize() {
+    if (!isEmbed) {
+      this.initializeDialogs();
+      this.initializeElements();
+      this.renderButtons();
+    }
+  }
+
+  static initializeElements() {
+    this.elements = {
+      zctab: document.querySelector("#zerocat-tab"),
+      authorInfoCard: document.querySelector("#author-info"),
+      authorInfoAvatar: document.querySelector("#author-avatar"),
+      logText: document.querySelector("#log-text"),
+      commitDialog: document.querySelector("#commit-dialog"),
+      branchNameInput: document.querySelector("#branch-name"),
+      commitMessageInput: document.querySelector("#commit-message")
+    };
+  }
+
+  static showSnackbar(message) {
+    mdui.snackbar({ message, closeable: true });
+  }
+
+  // ... 其他 UI 相关方法
+}
+
+// 项目管理器
+class ProjectManager {
+  static async loadProject(projectId) {
+    try {
+      const projectInfo = await ApiService.getProjectInfo(projectId);
+      // ... 加载项目逻辑
+    } catch (error) {
+      console.error('Failed to load project:', error);
+      UIManager.showSnackbar("加载项目失败");
+    }
+  }
+
+  static async saveProject() {
+    try {
+      // ... 保存项目逻辑
+    } catch (error) {
+      console.error('Failed to save project:', error);
+      UIManager.showSnackbar("保存项目失败");
+    }
+  }
+}
+
+// 主应用初始化
+class App {
+  static async initialize() {
+    if (window.initialized) return;
+    window.initialized = true;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    window.isEmbed = urlParams.get("embed") === "true";
+
+    await ResourceLoader.loadAllResources();
+    UIManager.initialize();
+    
+    const userInfo = AuthManager.validateToken();
+    if (userInfo) {
+      const projectId = this.getProjectIdFromUrl();
+      if (projectId) {
+        await ProjectManager.loadProject(projectId);
+      }
+    }
+  }
+
+  static getProjectIdFromUrl() {
+    const queryId = new URLSearchParams(window.location.search).get("id");
+    return queryId ? parseInt(queryId, 10) : null;
+  }
+}
+
+// 初始化应用
 window.onload = () => {
-  loadResources();
+  App.initialize().catch(error => {
+    console.error('Application initialization failed:', error);
+    UIManager.showSnackbar("应用初始化失败");
+  });
 };
 
 // Description: ZeroCat Scratch Tool
@@ -137,7 +333,7 @@ function handleInvalidLogin(message) {
     confirmText: "打开用户页面",
     cancelText: "取消",
     onConfirm: () => {
-      window.location.href = `${ZCFrontend}/app/account/login`;
+      window.location.href = `${CONFIG.FRONTEND_URL}/app/account/login`;
     },
   });
   showLoginButton();
@@ -181,7 +377,7 @@ function showLoginButton() {
   buttons.push({
     id: "login-button",
     text: "登录/注册",
-    onclick: () => (window.location.href = `${ZCFrontend}/app/account/login`),
+    onclick: () => (window.location.href = `${CONFIG.FRONTEND_URL}/app/account/login`),
   });
   renderButtons();
 }
@@ -219,7 +415,7 @@ function uploadProjectAssets() {
       );
 
       $.ajax({
-        url: `${ZCApiHost}/scratch/assets/${asset.assetId}.${
+        url: `${CONFIG.API_HOST}/scratch/assets/${asset.assetId}.${
           asset.dataFormat
         }?token=${localStorage.getItem("token")}`,
         type: "POST",
@@ -258,12 +454,12 @@ function uploadProjectAssets() {
 function fetchProjectInfo() {
   if (_pid !== 0 && Number.isInteger(_pid)) {
     $.ajax({
-      url: `${ZCApiHost}/scratch/projectinfo2?id=${_pid}`,
+      url: `${CONFIG.API_HOST}/scratch/projectinfo2?id=${_pid}`,
       type: "GET",
       data: { token: localStorage.getItem("token") },
       success: function (result) {
         if (result.status == "404") {
-          location.href = `${ZCFrontend}/editor.html?msg=404`;
+          location.href = `${CONFIG.FRONTEND_URL}/editor.html?msg=404`;
           return;
         }
         projectinfo = result;
@@ -271,10 +467,10 @@ function fetchProjectInfo() {
           authorinfocard.headline = result.author.username;
           authorinfocard.description = result.author.description;
           authorinfocard.onclick = () =>
-            window.open(`${ZCFrontend}/user/${result.author.id}`);
+            window.open(`${CONFIG.FRONTEND_URL}/user/${result.author.id}`);
           authorinfocard.style.cursor = "pointer";
           authorinfoavatar.src =
-            "<%= global.config['s3.staticurl'] %>/user/" + result.author.profile.id;
+            `${CONFIG.S3_STATIC_URL}/user/${result.author.profile.id}`;
           zctab.headline = `${result.title} #${result.id}`;
           zctab.description = `${
             String(result.author.id) === String(userinfo.userid)
@@ -284,7 +480,7 @@ function fetchProjectInfo() {
 
           if (String(result.author.id) !== String(userinfo.userid)) {
             setButton("push-button", "改编", () =>
-              window.open(`${ZCFrontend}/projects/${_pid}/fork`)
+              window.open(`${CONFIG.FRONTEND_URL}/projects/${_pid}/fork`)
             );
           }
         }
@@ -308,7 +504,7 @@ function updateZerocatTab() {
 function getZerocatUserInfo(userid) {
   let result;
   $.ajax({
-    url: `${ZCApiHost}/user/id/${userid}`,
+    url: `${CONFIG.API_HOST}/user/id/${userid}`,
     type: "GET",
     data: { token: localStorage.getItem("token") },
     async: false,
@@ -446,7 +642,7 @@ function loadProject() {
   }
   if (_pid === 0) {
     console.log("No project ID found, redirecting to new project page.");
-    //window.location.href = `${ZCApiHost}/newproject`;
+    //window.location.href = `${CONFIG.API_HOST}/newproject`;
     return;
   }
   if (_pid !== 0) {
@@ -469,7 +665,7 @@ function downloadAndLoadProject(pid) {
   const ref = getQueryStringParameter("ref") || "latest";
 
   $.ajax({
-    url: `${ZCApiHost}/project/${pid}/${branch}/${ref}`,
+    url: `${CONFIG.API_HOST}/project/${pid}/${branch}/${ref}`,
     type: "GET",
     data: { token: localStorage.getItem("token") },
     success: function (response) {
@@ -481,7 +677,7 @@ function downloadAndLoadProject(pid) {
             confirmText: "继续",
             onConfirm: () => {
               $.ajax({
-                url: `${ZCApiHost}/project/edit/${pid}/init`,
+                url: `${CONFIG.API_HOST}/project/edit/${pid}/init`,
                 type: "POST",
                 data: { token: localStorage.getItem("token") },
                 success: function (response) {
@@ -523,11 +719,11 @@ function downloadAndLoadProject(pid) {
         const commitInfoAvatar = document.getElementById("commit-avatar");
         commituser = getZerocatUserInfo(commitInfo.author_id);
         commitInfoAvatar.src =
-          "<%= global.config['s3.staticurl'] %>/" + commituser.images;
+          `${CONFIG.S3_STATIC_URL}/${commituser.images}`;
         commitInfoList.description = `${commituser.display_name} 于 ${commitDate}`;
       }
       $.ajax({
-        url: `${ZCApiHost}/project/files/${commit.commit_file}`,
+        url: `${CONFIG.API_HOST}/project/files/${commit.commit_file}`,
         type: "GET",
         data: { accessFileToken, token: localStorage.getItem("token") },
         success: function (fileResponse) {
@@ -634,7 +830,7 @@ function setProjectThumbnail() {
       const formData = new FormData();
       formData.append("file", blob, "thumbnail.png");
 
-      const response = await fetch(`${ZCApiHost}/scratch/thumbnail/${_pid}`, {
+      const response = await fetch(`${CONFIG.API_HOST}/scratch/thumbnail/${_pid}`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -722,7 +918,7 @@ function commitProject() {
 
   // 先调用文件保存接口
   $.ajax({
-    url: `${ZCApiHost}/project/savefile`,
+    url: `${CONFIG.API_HOST}/project/savefile`,
     type: "post",
     data: projectjson,
     contentType: "application/json",
@@ -732,7 +928,7 @@ function commitProject() {
 
       // 然后调用提交接口
       $.ajax({
-        url: `${ZCApiHost}/project/commit/id/${_pid}`,
+        url: `${CONFIG.API_HOST}/project/commit/id/${_pid}`,
         type: "put",
         data: JSON.stringify({
           projectid: _pid,
