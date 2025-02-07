@@ -36,7 +36,7 @@ router.get("/", async (req, res, next) => {
 
     // 处理排序
     const [orderbyField, orderDirection] = orderbyQuery.split("_");
-    const orderbyMap = { view: "view_count", time: "time", id: "id" };
+    const orderbyMap = { view: "view_count", time: "time", id: "id",star:"star_count" };
     const orderDirectionMap = { up: "asc", down: "desc" }; // 修正排序方向
     const orderBy = orderbyMap[orderbyField] || "time";
     const order = orderDirectionMap[orderDirection] || "desc";
