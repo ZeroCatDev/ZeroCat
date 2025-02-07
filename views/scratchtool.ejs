@@ -274,7 +274,7 @@ function fetchProjectInfo() {
             window.open(`${ZCFrontend}/user/${result.author.id}`);
           authorinfocard.style.cursor = "pointer";
           authorinfoavatar.src =
-            "https://s4-1.wuyuan.1r.ink/user/" + result.author.profile.id;
+            "<%= global.config['s3.staticurl'] %>/user/" + result.author.profile.id;
           zctab.headline = `${result.title} #${result.id}`;
           zctab.description = `${
             String(result.author.id) === String(userinfo.userid)
@@ -523,7 +523,7 @@ function downloadAndLoadProject(pid) {
         const commitInfoAvatar = document.getElementById("commit-avatar");
         commituser = getZerocatUserInfo(commitInfo.author_id);
         commitInfoAvatar.src =
-          "https://s4-1.wuyuan.1r.ink/user/" + commituser.images;
+          "<%= global.config['s3.staticurl'] %>/" + commituser.images;
         commitInfoList.description = `${commituser.display_name} 于 ${commitDate}`;
       }
       $.ajax({
