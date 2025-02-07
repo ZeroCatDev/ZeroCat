@@ -52,6 +52,20 @@ function loadResources() {
   });
 }
 
+// Application Management
+const App = {
+  initialize: async function() {
+    loadResources();
+    return Promise.resolve();
+  }
+};
+
+const UIManager = {
+  showSnackbar: function(message) {
+    mdui.snackbar({ message, closeable: true });
+  }
+};
+
 window.onload = () => {
   App.initialize().catch(error => {
     console.error('Application initialization failed:', error);
