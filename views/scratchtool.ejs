@@ -53,7 +53,10 @@ function loadResources() {
 }
 
 window.onload = () => {
-  loadResources();
+  App.initialize().catch(error => {
+    console.error('Application initialization failed:', error);
+    UIManager.showSnackbar("应用初始化失败");
+  });
 };
 
 // Description: ZeroCat Scratch Tool
@@ -275,12 +278,12 @@ function uploadProjectAssets() {
 function fetchProjectInfo() {
   if (_pid !== 0 && Number.isInteger(_pid)) {
     $.ajax({
-      url: `${ZCApiHost}/scratch/projectinfo2?id=${_pid}`,
+      url: `${ZCConfig.api.getPath('/scratch/projectinfo2')}?id=${_pid}`,
       type: "GET",
       data: { token: localStorage.getItem("token") },
       success: function (result) {
         if (result.status == "404") {
-          location.href = `${ZCFrontend}/editor.html?msg=404`;
+          location.href = `${ZCConfig.frontend.getPath('/editor.html')}?msg=404`;
           return;
         }
         projectinfo = result;
@@ -288,10 +291,10 @@ function fetchProjectInfo() {
           authorinfocard.headline = result.author.username;
           authorinfocard.description = result.author.description;
           authorinfocard.onclick = () =>
-            window.open(`${ZCFrontend}/user/${result.author.id}`);
+            window.open(`${ZCConfig.frontend.getPath('/user/')}${result.author.id}`);
           authorinfocard.style.cursor = "pointer";
           authorinfoavatar.src =
-            "<%= global.config['s3.staticurl'] %>/user/" + result.author.profile.id;
+            `${ZCConfig.s3.staticUrl}/user/${result.author.profile.id}`;
           zctab.headline = `${result.title} #${result.id}`;
           zctab.description = `${
             String(result.author.id) === String(userinfo.userid)
@@ -301,7 +304,7 @@ function fetchProjectInfo() {
 
           if (String(result.author.id) !== String(userinfo.userid)) {
             setButton("push-button", "改编", () =>
-              window.open(`${ZCFrontend}/projects/${_pid}/fork`)
+              window.open(`${ZCConfig.frontend.getPath('/projects/')}${_pid}/fork`)
             );
           }
         }
@@ -325,7 +328,7 @@ function updateZerocatTab() {
 function getZerocatUserInfo(userid) {
   let result;
   $.ajax({
-    url: `${ZCApiHost}/user/id/${userid}`,
+    url: `${ZCConfig.api.getPath('/user/id/')}${userid}`,
     type: "GET",
     data: { token: localStorage.getItem("token") },
     async: false,
@@ -463,7 +466,7 @@ function loadProject() {
   }
   if (_pid === 0) {
     console.log("No project ID found, redirecting to new project page.");
-    //window.location.href = `${ZCApiHost}/newproject`;
+    //window.location.href = `${CONFIG.API_HOST}/newproject`;
     return;
   }
   if (_pid !== 0) {
@@ -486,7 +489,7 @@ function downloadAndLoadProject(pid) {
   const ref = getQueryStringParameter("ref") || "latest";
 
   $.ajax({
-    url: `${ZCApiHost}/project/${pid}/${branch}/${ref}`,
+    url: `${ZCConfig.api.getPath('/project/')}${pid}/${branch}/${ref}`,
     type: "GET",
     data: { token: localStorage.getItem("token") },
     success: function (response) {
@@ -498,7 +501,7 @@ function downloadAndLoadProject(pid) {
             confirmText: "继续",
             onConfirm: () => {
               $.ajax({
-                url: `${ZCApiHost}/project/edit/${pid}/init`,
+                url: `${ZCConfig.api.getPath('/project/edit/')}${pid}/init`,
                 type: "POST",
                 data: { token: localStorage.getItem("token") },
                 success: function (response) {
@@ -540,11 +543,11 @@ function downloadAndLoadProject(pid) {
         const commitInfoAvatar = document.getElementById("commit-avatar");
         commituser = getZerocatUserInfo(commitInfo.author_id);
         commitInfoAvatar.src =
-          "<%= global.config['s3.staticurl'] %>/" + commituser.images;
+          `${ZCConfig.s3.staticUrl}/${commituser.images}`;
         commitInfoList.description = `${commituser.display_name} 于 ${commitDate}`;
       }
       $.ajax({
-        url: `${ZCApiHost}/project/files/${commit.commit_file}`,
+        url: `${ZCConfig.api.getPath('/project/files/')}${commit.commit_file}`,
         type: "GET",
         data: { accessFileToken, token: localStorage.getItem("token") },
         success: function (fileResponse) {
@@ -651,7 +654,7 @@ function setProjectThumbnail() {
       const formData = new FormData();
       formData.append("file", blob, "thumbnail.png");
 
-      const response = await fetch(`${ZCApiHost}/scratch/thumbnail/${_pid}`, {
+      const response = await fetch(`${ZCConfig.api.getPath('/scratch/thumbnail/')}${_pid}`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -706,6 +709,7 @@ function openCommitDialog() {
 function commitProject() {
   const branchName = document.getElementById("branch-name").value;
   const commitMessage = document.getElementById("commit-message").value;
+  const commitDescription = document.getElementById("commit-description").value;
 
   if (!commitMessage) {
     mdui.alert({
@@ -739,7 +743,7 @@ function commitProject() {
 
   // 先调用文件保存接口
   $.ajax({
-    url: `${ZCApiHost}/project/savefile`,
+    url: `${ZCConfig.api.getPath('/project/savefile')}`,
     type: "post",
     data: projectjson,
     contentType: "application/json",
@@ -749,13 +753,14 @@ function commitProject() {
 
       // 然后调用提交接口
       $.ajax({
-        url: `${ZCApiHost}/project/commit/id/${_pid}`,
+        url: `${ZCConfig.api.getPath('/project/commit/id/')}${_pid}`,
         type: "put",
         data: JSON.stringify({
           projectid: _pid,
           branch: branchName,
           accessFileToken: newAccessFileToken,
           message: commitMessage,
+          commit_description: commitDescription,
         }),
         contentType: "application/json",
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },

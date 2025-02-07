@@ -272,6 +272,7 @@ router.put("/commit/id/:id", needlogin, async (req, res, next) => {
       accessFileToken,
       message = "edit",
       parent_commit,
+      commit_description
     } = req.body;
 
     if (!projectid || !accessFileToken) {
@@ -334,6 +335,7 @@ router.put("/commit/id/:id", needlogin, async (req, res, next) => {
       source_sha256: sha256,
       commit_message: message,
       parent_commit: parent_commit_id,
+      commit_description:commit_description,
       timestamp,
     });
     const commitId = createHash("sha256").update(commitContent).digest("hex");
@@ -854,6 +856,7 @@ router.post("/initlize", needlogin, async (req, res, next) => {
         commit_message: "初始化提交",
         parent_commit_id: null,
         commit_date: new Date(timestamp), // 使用 Date 对象
+        commit_description: "# 初始化提交",
       },
     });
     await prisma.ow_projects.update({

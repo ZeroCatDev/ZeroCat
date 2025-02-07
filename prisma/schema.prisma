@@ -168,14 +168,15 @@ model ow_projects_stars {
 }
 
 model ow_projects_commits {
-  id               String   @db.VarChar(256)
-  project_id       Int
-  author_id        Int
-  branch           String   @default("main") @db.VarChar(255)
-  parent_commit_id String?  @db.VarChar(256)
-  commit_message   String   @db.Text
-  commit_date      DateTime @db.DateTime(0)
-  commit_file      String   @db.VarChar(256)
+  id                 String   @db.VarChar(256)
+  project_id         Int
+  author_id          Int
+  branch             String   @default("main") @db.VarChar(255)
+  parent_commit_id   String?  @db.VarChar(256)
+  commit_message     String   @db.Text
+  commit_date        DateTime @db.DateTime(0)
+  commit_file        String   @db.VarChar(256)
+  commit_description String?  @db.Text
 
   @@id([id, project_id])
 }
