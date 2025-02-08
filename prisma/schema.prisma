@@ -12,14 +12,14 @@ model ow_comment {
   id         Int       @id @default(autoincrement()) @db.UnsignedInt
   user_id    Int?
   type       String?   @default("comment") @db.VarChar(64)
-  text       String?   @db.Text
+  text       String?   @db.MediumText
   insertedAt DateTime? @default(now()) @db.Timestamp(0)
   user_ip    String?   @default("") @db.VarChar(100)
   link       String?   @db.VarChar(128)
   pid        Int?
   rid        Int?
   status     String    @default("") @db.VarChar(50)
-  user_ua    String?   @db.Text
+  user_ua    String?   @db.MediumText
   url        String?   @db.VarChar(255)
   page_type  String?   @db.VarChar(32)
   page_id    Int?
@@ -63,7 +63,7 @@ model ow_users {
   regTime      DateTime? @default(now()) @db.Timestamp(0)
   sex          String?   @default("0") @db.VarChar(16)
   birthday     DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
-  motto        String?   @default("OurWorld创作者") @db.VarChar(1000)
+  motto        String?   @db.LongText
   images       String?   @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
   avatar       String?   @default("https://owcdn.190823.xyz/user/fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
   type         String?   @default("guest") @db.VarChar(50)
