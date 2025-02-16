@@ -64,51 +64,53 @@ app.options("*", cors());
 
 const SecurityToken = await configManager.getConfig("security.jwttoken");
 
-app.all("*", async function (req, res, next) {
+app.all("*", function (req, res, next) {
   const tokenSources = [
     req.headers["authorization"]?.replace("Bearer ", ""),
     req.cookies?.token,
     req.body?.token,
-    req.headers?.["token"],
     req.query?.token,
+    req.headers?.["token"],
   ];
-  let token = null;
-
+  console.log(tokenSources)
+  
+  let foundValidToken = false;
   for (let source of tokenSources) {
     if (source) {
+      logger.debug(source)
       try {
         const decodedToken = jsonwebtoken.verify(source, SecurityToken);
         if (decodedToken?.userid) {
-          token = source;
           res.locals = {
             login: true,
             userid: decodedToken.userid,
             username: decodedToken.username,
-            display_name: decodedToken.display_name,
-            avatar: decodedToken.avatar,
-            is_admin: decodedToken.is_admin || 0,
-            usertoken: token,
+            is_admin: 0,
+            usertoken: source,
           };
+          logger.debug(res.locals)
+          foundValidToken = true;
           break;
         }
       } catch (err) {
+        logger.debug(err)
         continue;
       }
     }
   }
 
-  if (!token) {
+  if (foundValidToken===false) {
+    logger.debug('未找到登录信息')
     res.locals = {
       login: false,
       userid: "",
       username: "",
-      display_name: "",
-      avatar: "",
       is_admin: 0,
       usertoken: "",
     };
   }
-
+  
+  logger.debug(res.locals)
   next();
 });
 
