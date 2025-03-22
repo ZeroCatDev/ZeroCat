@@ -144,7 +144,19 @@ model ow_projects_tags {
   @@index([projectid], map: "idx_projectid")
 }
 
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// Project stars model - improved structure
+model ow_projects_stars {
+  id         Int       @id @default(autoincrement())
+  userid     Int
+  projectid  Int
+  createTime DateTime? @default(now()) @db.Timestamp(0)
+
+  @@unique([userid, projectid], map: "unique_user_project_star")
+  @@index([projectid], map: "idx_project_stars")
+  @@index([userid], map: "idx_user_stars")
+}
+
+/// Project lists model - improved structure
 model ow_projects_lists {
   id          Int       @id @default(autoincrement())
   authorid    Int?
@@ -154,17 +166,20 @@ model ow_projects_lists {
   list        String?   @db.MediumText
   updateTime  DateTime? @db.Timestamp(0)
   createTime  DateTime? @default(now()) @db.Timestamp(0)
+
+  @@index([authorid], map: "idx_author_lists")
 }
 
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model ow_projects_stars {
+/// Project list items - new model to store projects in lists
+model ow_projects_list_items {
   id         Int       @id @default(autoincrement())
-  userid     Int
+  listid     Int
   projectid  Int
-  type       String    @default("star") @db.VarChar(32)
-  value      Int       @default(1) @db.TinyInt
-  listid     Int?
   createTime DateTime? @default(now()) @db.Timestamp(0)
+
+  @@unique([listid, projectid], map: "unique_list_project")
+  @@index([listid], map: "idx_list_items")
+  @@index([projectid], map: "idx_project_in_lists")
 }
 
 model ow_projects_commits {
