@@ -11,6 +11,15 @@ const prisma = new PrismaClient();
  */
 export async function starProject(userId, projectId) {
   try {
+    // 检查项目是否存在
+    const project = await prisma.ow_projects.findUnique({
+      where: { id: parseInt(projectId) }
+    });
+
+    if (!project) {
+      throw new Error("项目不存在");
+    }
+
     // 检查是否已经收藏
     const existingStar = await prisma.$queryRaw`
       SELECT * FROM ow_projects_stars
@@ -50,7 +59,20 @@ export async function starProject(userId, projectId) {
  */
 export async function unstarProject(userId, projectId) {
   try {
-    // Delete the star
+    // 检查用户是否已收藏该项目
+    const existingStar = await prisma.ow_projects_stars.findFirst({
+      where: {
+        userid: parseInt(userId),
+        projectid: parseInt(projectId)
+      }
+    });
+
+    if (!existingStar) {
+      // 如果用户未收藏该项目，直接返回
+      return { count: 0 };
+    }
+
+    // 删除收藏记录
     const star = await prisma.ow_projects_stars.deleteMany({
       where: {
         userid: parseInt(userId),
@@ -58,15 +80,17 @@ export async function unstarProject(userId, projectId) {
       }
     });
 
-    // Update the star count for the project
-    await prisma.ow_projects.update({
-      where: { id: parseInt(projectId) },
-      data: {
-        star_count: {
-          decrement: 1
-        }
-      }
-    });
+    // 尝试更新项目的收藏数，但不要因为项目不存在而失败
+    try {
+      await prisma.$executeRaw`
+        UPDATE ow_projects
+        SET star_count = GREATEST(star_count - 1, 0)
+        WHERE id = ${parseInt(projectId)}
+      `;
+    } catch (updateError) {
+      // 如果更新失败，记录错误但不中断流程
+      logger.warn(`Failed to update star count for project ${projectId}: ${updateError.message}`);
+    }
 
     return star;
   } catch (error) {

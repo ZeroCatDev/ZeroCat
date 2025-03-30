@@ -76,8 +76,8 @@ async function updateBranchLatestCommit(projectid, branch, commitId) {
         name: branch
       }
     },
-    data: { 
-      latest_commit_hash: commitId 
+    data: {
+      latest_commit_hash: commitId
     },
   });
 }
@@ -335,7 +335,7 @@ router.put("/commit/id/:id", needlogin, async (req, res, next) => {
       source_sha256: sha256,
       commit_message: message,
       parent_commit: parent_commit_id,
-      commit_description:commit_description,
+      commit_description: commit_description,
       timestamp,
     });
     const commitId = createHash("sha256").update(commitContent).digest("hex");
@@ -716,7 +716,7 @@ router.get("/files/:sha256", async (req, res, next) => {
     const { sha256 } = req.params;
     const { accessFileToken } = req.query;
     const userId = res.locals.userid || 0; // 未登录用户为匿名用户
-
+    const content=req.query.content;
     try {
       await verifyFileAccessToken(accessFileToken, userId);
     } catch (err) {
@@ -736,12 +736,15 @@ router.get("/files/:sha256", async (req, res, next) => {
         message: "文件不存在",
       });
     }
-
-    res.status(200).send({
-      status: "success",
-      message: "获取成功",
-      file,
-    });
+    if(content=="true"){
+      res.status(200).send(file.source);
+    }else{
+      res.status(200).send({
+        status: "success",
+        message: "获取成功",
+        file,
+      });
+    }
   } catch (err) {
     logger.error("Error fetching file by hash:", err);
     next(err);
@@ -1019,71 +1022,6 @@ router.post("/branches/description", needlogin, async (req, res, next) => {
   }
 });
 
-// 获取项目文件 放最后最后匹配免得冲突
-router.get("/:id/:branch/:ref", async (req, res, next) => {
-  try {
-    const { id, branch, ref } = req.params;
-    const userId = res.locals.userid || 0; // 未登录用户为匿名用户
-    const hasPermission = await hasProjectPermission(id, userId, "read");
-
-    if (!hasPermission) {
-      return res.status(200).send({
-        status: "error",
-        message: "项目不存在或无权访问",
-        code: "404",
-      });
-    }
-
-    let commit;
-    if (ref === "latest") {
-      commit = await prisma.ow_projects_commits.findFirst({
-        where: { project_id: Number(id), branch },
-        orderBy: { commit_date: "desc" },
-      });
-    } else {
-      commit = await prisma.ow_projects_commits.findFirst({
-        where: { id: ref, project_id: Number(id), branch },
-      });
-    }
-
-    if (!commit) {
-      const project = await prisma.ow_projects.findFirst({
-        where: { id: Number(id) },
-      });
-      const defaultSource = default_project[project.type];
-      if (!defaultSource) {
-        return res.status(200).send({
-          status: "error",
-          message: "默认作品不存在",
-        });
-      }
-
-      return res.status(200).send({
-        status: "error",
-        message: "无有效提交",
-        commit: {
-          error_code: "NoFirstCommit",
-          commit_message: "仓库无有效提交",
-        },
-      });
-    }
-
-    const accessFileToken = await generateFileAccessToken(
-      commit.commit_file,
-      userId
-    );
-
-    res.status(200).send({
-      status: "success",
-      message: "获取成功",
-      commit,
-      accessFileToken,
-    });
-  } catch (err) {
-    logger.error("Error fetching project file:", err);
-    next(err);
-  }
-});
 router.post("/fork", needlogin, async (req, res, next) => {
   const { projectid, branch, name } = req.body;
 
@@ -1192,4 +1130,69 @@ router.post("/fork", needlogin, async (req, res, next) => {
 });
 
 
+// 获取项目文件 放最后最后匹配免得冲突
+router.get("/:id/:branch/:ref", async (req, res, next) => {
+  try {
+    const { id, branch, ref } = req.params;
+    const userId = res.locals.userid || 0; // 未登录用户为匿名用户
+    const hasPermission = await hasProjectPermission(id, userId, "read");
+
+    if (!hasPermission) {
+      return res.status(200).send({
+        status: "error",
+        message: "项目不存在或无权访问",
+        code: "404",
+      });
+    }
+
+    let commit;
+    if (ref === "latest") {
+      commit = await prisma.ow_projects_commits.findFirst({
+        where: { project_id: Number(id), branch },
+        orderBy: { commit_date: "desc" },
+      });
+    } else {
+      commit = await prisma.ow_projects_commits.findFirst({
+        where: { id: ref, project_id: Number(id), branch },
+      });
+    }
+
+    if (!commit) {
+      const project = await prisma.ow_projects.findFirst({
+        where: { id: Number(id) },
+      });
+      const defaultSource = default_project[project.type];
+      if (!defaultSource) {
+        return res.status(200).send({
+          status: "error",
+          message: "默认作品不存在",
+        });
+      }
+
+      return res.status(200).send({
+        status: "error",
+        message: "无有效提交",
+        commit: {
+          error_code: "NoFirstCommit",
+          commit_message: "仓库无有效提交",
+        },
+      });
+    }
+
+    const accessFileToken = await generateFileAccessToken(
+      commit.commit_file,
+      userId
+    );
+
+    res.status(200).send({
+      status: "success",
+      message: "获取成功",
+      commit,
+      accessFileToken,
+    });
+  } catch (err) {
+    logger.error("Error fetching project file:", err);
+    next(err);
+  }
+});
 export default router;

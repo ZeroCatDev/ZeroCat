@@ -150,10 +150,6 @@ model ow_projects_stars {
   userid     Int
   projectid  Int
   createTime DateTime? @default(now()) @db.Timestamp(0)
-
-  @@unique([userid, projectid], map: "unique_user_project_star")
-  @@index([projectid], map: "idx_project_stars")
-  @@index([userid], map: "idx_user_stars")
 }
 
 /// Project lists model - improved structure
@@ -168,18 +164,6 @@ model ow_projects_lists {
   createTime  DateTime? @default(now()) @db.Timestamp(0)
 
   @@index([authorid], map: "idx_author_lists")
-}
-
-/// Project list items - new model to store projects in lists
-model ow_projects_list_items {
-  id         Int       @id @default(autoincrement())
-  listid     Int
-  projectid  Int
-  createTime DateTime? @default(now()) @db.Timestamp(0)
-
-  @@unique([listid, projectid], map: "unique_list_project")
-  @@index([listid], map: "idx_list_items")
-  @@index([projectid], map: "idx_project_in_lists")
 }
 
 model ow_projects_commits {
@@ -258,6 +242,17 @@ model notifications {
   @@index([event_id, user_id], map: "idx_event_user")
   @@index([user_id, created_at], map: "idx_user_all")
   @@index([user_id, is_read, created_at], map: "idx_user_unread")
+}
+
+model ow_projects_list_items {
+  id         Int       @id @default(autoincrement())
+  listid     Int
+  projectid  Int
+  createTime DateTime? @default(now()) @db.Timestamp(0)
+
+  @@unique([listid, projectid], map: "unique_list_project")
+  @@index([listid], map: "idx_list_items")
+  @@index([projectid], map: "idx_project_in_lists")
 }
 
 model scratchmirror_projects {
