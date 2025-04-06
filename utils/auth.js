@@ -34,7 +34,7 @@ const createTokens = async (userId, userInfo, ipAddress, userAgent) => {
     // 设置访问令牌有效期为15分钟，刷新令牌默认30天
     const accessTokenExpiry = 15 * 60; // 15分钟
     const refreshTokenExpiry = await configManager.getConfig(
-      "security.refreshTokenExpiry",
+      "security.jwttoken",
       60 * 60 * 24 * 30 // 默认30天
     );
 
