@@ -6,6 +6,7 @@ import jsonwebtoken from "jsonwebtoken";
 import configManager from "./utils/configManager.js";
 import logger from "./utils/logger.js";
 import { parseToken } from "./middleware/auth.js";
+import authUtils from "./utils/auth.js";
 
 import expressWinston from "express-winston";
 import cors from "cors";
@@ -148,5 +149,15 @@ app.all("/{*path}", function (req, res, next) {
     message: "找不到页面",
   });
 });
+
+// 定时任务
+setInterval(async () => {
+  try {
+    // 清理过期的令牌
+    await authUtils.cleanupExpiredTokens();
+  } catch (error) {
+    logger.error("清理过期令牌出错:", error);
+  }
+}, 12 * 60 * 60 * 1000); // 每12小时执行一次
 
 export default app;

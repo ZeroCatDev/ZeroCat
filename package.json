@@ -34,6 +34,8 @@
     "nodemailer": "^6.10.0",
     "otpauth": "^9.4.0",
     "phpass": "^0.1.1",
+    "ua-parser-js": "^2.0.3",
+    "uuid": "^11.1.0",
     "winston": "^3.17.0",
     "winston-daily-rotate-file": "^5.0.0"
   },

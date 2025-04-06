@@ -53,31 +53,32 @@ model ow_projects {
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model ow_users {
-  id           Int       @unique(map: "id_UNIQUE") @default(autoincrement())
-  username     String    @unique(map: "user_UNIQUE") @db.Char(20)
-  email        String?   @db.Char(100)
-  password     String?   @db.VarChar(255)
-  display_name String    @default("OurWorld创作者") @db.Char(20)
-  state        Int       @default(0) @db.TinyInt
-  loginTime    DateTime? @db.Timestamp(0)
-  regTime      DateTime? @default(now()) @db.Timestamp(0)
-  sex          String?   @default("0") @db.VarChar(16)
-  birthday     DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
-  motto        String?   @db.LongText
-  images       String?   @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
-  avatar       String?   @default("https://owcdn.190823.xyz/user/fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
-  type         String?   @default("guest") @db.VarChar(50)
-  url          String?   @db.VarChar(255)
-  github       String?   @db.VarChar(255)
-  twitter      String?   @db.VarChar(255)
-  facebook     String?   @db.VarChar(255)
-  google       String?   @db.VarChar(255)
-  weibo        String?   @db.VarChar(255)
-  qq           String?   @db.VarChar(255)
-  fa           String?   @map("2fa") @db.VarChar(255)
-  createdAt    DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
-  updatedAt    DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
-  label        String?   @db.VarChar(255)
+  id           Int              @unique(map: "id_UNIQUE") @default(autoincrement())
+  username     String           @unique(map: "user_UNIQUE") @db.Char(20)
+  email        String?          @db.Char(100)
+  password     String?          @db.VarChar(255)
+  display_name String           @default("OurWorld创作者") @db.Char(20)
+  state        Int              @default(0) @db.TinyInt
+  loginTime    DateTime?        @db.Timestamp(0)
+  regTime      DateTime?        @default(now()) @db.Timestamp(0)
+  sex          String?          @default("0") @db.VarChar(16)
+  birthday     DateTime?        @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
+  motto        String?          @db.LongText
+  images       String?          @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
+  avatar       String?          @default("https://owcdn.190823.xyz/user/fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
+  type         String?          @default("guest") @db.VarChar(50)
+  url          String?          @db.VarChar(255)
+  github       String?          @db.VarChar(255)
+  twitter      String?          @db.VarChar(255)
+  facebook     String?          @db.VarChar(255)
+  google       String?          @db.VarChar(255)
+  weibo        String?          @db.VarChar(255)
+  qq           String?          @db.VarChar(255)
+  fa           String?          @map("2fa") @db.VarChar(255)
+  createdAt    DateTime?        @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
+  updatedAt    DateTime?        @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
+  label        String?          @db.VarChar(255)
+  auth_tokens  ow_auth_tokens[]
 
   @@id([id, username])
 }
@@ -300,6 +301,31 @@ model user_contacts {
   updated_at    DateTime?                  @default(now()) @db.Timestamp(0)
 
   @@unique([user_id, is_primary, contact_type], map: "unique_primary_contact")
+}
+
+model ow_auth_tokens {
+  id                 Int       @id @default(autoincrement())
+  user_id            Int
+  access_token       String    @unique(map: "idx_access_token") @db.VarChar(255)
+  refresh_token      String    @unique(map: "idx_refresh_token") @db.VarChar(255)
+  expires_at         DateTime  @db.DateTime(0)
+  refresh_expires_at DateTime  @db.DateTime(0)
+  created_at         DateTime  @default(now()) @db.DateTime(0)
+  updated_at         DateTime  @default(now()) @updatedAt @db.DateTime(0)
+  last_used_at       DateTime? @db.DateTime(0)
+  last_used_ip       String?   @db.VarChar(255)
+  activity_count     Int       @default(0)
+  extended_at        DateTime? @db.DateTime(0)
+  revoked            Boolean   @default(false)
+  revoked_at         DateTime? @db.DateTime(0)
+  ip_address         String?   @db.VarChar(100)
+  user_agent         String?   @db.Text
+  device_info        String?   @db.Text
+  user               ow_users  @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_tokens_users")
+
+  @@index([user_id], map: "idx_user_id")
+  @@index([last_used_at], map: "idx_tokens_last_used_at")
+  @@index([last_used_ip], map: "idx_tokens_last_used_ip")
 }
 
 enum ow_users_contacts_contact_type {
