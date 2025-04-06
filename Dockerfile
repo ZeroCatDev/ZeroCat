@@ -1,4 +1,4 @@
-FROM node:alpine
+FROM node:20.19.0
 LABEL author=wuyuan
 COPY . /
 RUN npm install
