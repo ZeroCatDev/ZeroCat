@@ -1,4 +1,5 @@
 import logger from "../utils/logger.js";
+import { needlogin, strictTokenCheck } from "../middleware/auth.js";
 import configManager from "../utils/configManager.js";
 
 import { Router } from "express";
@@ -13,13 +14,6 @@ router.all("/{*path}", (req, res, next) => next());
 const handleError = (res, err, message) => {
   logger.error(err);
   res.status(500).send({ errno: 1, errmsg: message, data: err });
-};
-
-// 检查登录状态
-const checkLogin = (res) => {
-  if (!res.locals.login) {
-    return res.status(404).send({ status: "error", message: "未登录",code:"AUTH_ERROR_LOGIN" });
-  }
 };
 
 // 获取排序条件
@@ -129,10 +123,8 @@ router.get("/api/comment", async (req, res, next) => {
 });
 
 // 创建评论
-router.post("/api/comment", async (req, res, next) => {
+router.post("/api/comment", needlogin, async (req, res, next) => {
   try {
-    checkLogin(res);
-
     const { url, comment, pid, rid } = req.body;
     const { userid, display_name } = res.locals;
     const user_ua = req.headers["user-agent"] || "";

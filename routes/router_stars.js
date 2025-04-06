@@ -2,11 +2,11 @@ import logger from "../utils/logger.js";
 import { Router } from "express";
 import { needlogin } from "../middleware/auth.js";
 import { createEvent, TargetTypes } from "../controllers/events.js";
-import { 
-  starProject, 
-  unstarProject, 
+import {
+  starProject,
+  unstarProject,
   getProjectStarStatus,
-  getProjectStars 
+  getProjectStars,
 } from "../controllers/stars.js";
 
 const router = Router();
@@ -14,20 +14,22 @@ const router = Router();
 router.post("/star", needlogin, async (req, res) => {
   try {
     const { projectid } = req.body;
-    
+
     if (!projectid) {
-      return res.status(400).send({ status: "error", message: "项目ID不能为空" });
+      return res
+        .status(400)
+        .send({ status: "error", message: "项目ID不能为空" });
     }
-    
+
     await starProject(res.locals.userid, projectid);
-    
+
     // Add star event
     await createEvent(
-      'PROJECT_STAR',
+      "PROJECT_STAR",
       res.locals.userid,
       TargetTypes.PROJECT,
       projectid,
-      { action: 'star' }
+      { action: "star" }
     );
 
     res.status(200).send({ status: "success", message: "收藏成功", star: 1 });
@@ -40,14 +42,18 @@ router.post("/star", needlogin, async (req, res) => {
 router.post("/unstar", needlogin, async (req, res) => {
   try {
     const { projectid } = req.body;
-    
+
     if (!projectid) {
-      return res.status(400).send({ status: "error", message: "项目ID不能为空" });
+      return res
+        .status(400)
+        .send({ status: "error", message: "项目ID不能为空" });
     }
-    
+
     await unstarProject(res.locals.userid, projectid);
-    
-    res.status(200).send({ status: "success", message: "取消收藏成功", star: 0 });
+
+    res
+      .status(200)
+      .send({ status: "success", message: "取消收藏成功", star: 0 });
   } catch (err) {
     logger.error("Error unstarring project:", err);
     res.status(500).send({ status: "error", message: "取消收藏项目时出错" });
@@ -57,11 +63,13 @@ router.post("/unstar", needlogin, async (req, res) => {
 router.get("/checkstar", async (req, res) => {
   try {
     const { projectid } = req.query;
-    
+
     if (!projectid) {
-      return res.status(400).send({ status: "error", message: "项目ID不能为空" });
+      return res
+        .status(400)
+        .send({ status: "error", message: "项目ID不能为空" });
     }
-    
+
     const status = await getProjectStarStatus(res.locals.userid, projectid);
     res.status(200).send({
       status: "success",
@@ -79,9 +87,9 @@ router.get("/project/:id/stars", async (req, res) => {
     const projectid = req.params.id;
     const stars = await getProjectStars(projectid);
     res.status(200).send({
-      status: "success", 
-      message: "获取成功", 
-      data: stars
+      status: "success",
+      message: "获取成功",
+      data: stars,
     });
   } catch (err) {
     logger.error("Error getting project stars:", err);
@@ -89,4 +97,4 @@ router.get("/project/:id/stars", async (req, res) => {
   }
 });
 
-export default router; 
+export default router;

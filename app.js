@@ -1,11 +1,11 @@
 import "dotenv/config";
 
-
 import express from "express";
 import jsonwebtoken from "jsonwebtoken";
 
 import configManager from "./utils/configManager.js";
 import logger from "./utils/logger.js";
+import { parseToken } from "./middleware/auth.js";
 
 import expressWinston from "express-winston";
 import cors from "cors";
@@ -35,7 +35,12 @@ const corsOptionsDelegate = (origin, callback) => {
     return callback(new Error("Not allowed by CORS"));
   }
 };
-app.use(cors({ credentials: true, origin: (origin, callback) => corsOptionsDelegate(origin, callback) }));
+app.use(
+  cors({
+    credentials: true,
+    origin: (origin, callback) => corsOptionsDelegate(origin, callback),
+  })
+);
 
 //express 的http请求体进行解析组件
 app.use(bodyParser.urlencoded({ limit: "50mb", extended: false }));
@@ -55,64 +60,14 @@ app.set("views", process.cwd() + "/views");
 
 app.set("view engine", "ejs");
 
-
 //http.createServer(app).listen(3000, "0.0.0.0", function () {
 //  console.log("Listening on http://localhost:3000");
 //});
 
-app.options("/{*path}", cors());
+app.options("*", cors());
 
-const SecurityToken = await configManager.getConfig("security.jwttoken");
-
-app.all("/{*path}", function (req, res, next) {
-  const tokenSources = [
-    req.headers["authorization"]?.replace("Bearer ", ""),
-    req.cookies?.token,
-    req.body?.token,
-    req.query?.token,
-    req.headers?.["token"],
-  ];
-  console.log(tokenSources)
-
-  let foundValidToken = false;
-  for (let source of tokenSources) {
-    if (source) {
-      logger.debug(source)
-      try {
-        const decodedToken = jsonwebtoken.verify(source, SecurityToken);
-        if (decodedToken?.userid) {
-          res.locals = {
-            login: true,
-            userid: decodedToken.userid,
-            username: decodedToken.username,
-            is_admin: 0,
-            usertoken: source,
-          };
-          logger.debug(res.locals)
-          foundValidToken = true;
-          break;
-        }
-      } catch (err) {
-        logger.debug(err)
-        continue;
-      }
-    }
-  }
-
-  if (foundValidToken===false) {
-    logger.debug('未找到登录信息')
-    res.locals = {
-      login: false,
-      userid: "",
-      username: "",
-      is_admin: 0,
-      usertoken: "",
-    };
-  }
-
-  logger.debug(res.locals)
-  next();
-});
+// 使用token解析中间件
+app.use(parseToken);
 
 //首页
 app.get("/", function (req, res) {
@@ -186,7 +141,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.all("/{*path}", function (req, res, next) {
+app.all("*", function (req, res, next) {
   res.status(404).json({
     status: "error",
     code: "404",
@@ -195,4 +150,3 @@ app.all("/{*path}", function (req, res, next) {
 });
 
 export default app;
-

@@ -15,7 +15,7 @@ import {
   generateFileAccessToken,
   verifyFileAccessToken,
 } from "../utils/tokenManager.js";
-import { needlogin } from "../middleware/auth.js";
+import { needlogin, strictTokenCheck, needadmin } from "../middleware/auth.js";
 import { hasProjectPermission } from "../utils/permissionManager.js";
 import { getUserByUsername } from "../controllers/users.js";
 import { createEvent, EventTypes, TargetTypes } from "../controllers/events.js";
@@ -71,13 +71,14 @@ async function getCommitParentId(projectid, userid, parent_commit) {
 async function updateBranchLatestCommit(projectid, branch, commitId) {
   await prisma.ow_projects_branch.update({
     where: {
-      projectid_name: {  // 使用复合唯一索引
+      projectid_name: {
+        // 使用复合唯一索引
         projectid: Number(projectid),
-        name: branch
-      }
+        name: branch,
+      },
     },
     data: {
-      latest_commit_hash: commitId
+      latest_commit_hash: commitId,
     },
   });
 }
@@ -112,10 +113,10 @@ router.post("/", needlogin, async (req, res, next) => {
     const result = await prisma.ow_projects.create({ data: outputJson });
 
     // 根据项目状态决定事件是否公开
-    const isPrivate = outputJson.state === 'private';
+    const isPrivate = outputJson.state === "private";
 
     await createEvent(
-      'project_create',
+      "project_create",
       res.locals.userid,
       TargetTypes.PROJECT,
       result.id,
@@ -124,7 +125,7 @@ router.post("/", needlogin, async (req, res, next) => {
         project_type: result.type,
         project_title: result.title,
         project_description: result.description,
-        project_state: result.state
+        project_state: result.state,
       },
       isPrivate // 传入是否强制私密
     );
@@ -272,7 +273,7 @@ router.put("/commit/id/:id", needlogin, async (req, res, next) => {
       accessFileToken,
       message = "edit",
       parent_commit,
-      commit_description
+      commit_description,
     } = req.body;
 
     if (!projectid || !accessFileToken) {
@@ -356,11 +357,11 @@ router.put("/commit/id/:id", needlogin, async (req, res, next) => {
     await updateBranchLatestCommit(projectid, branch, commitId);
 
     // 根据项目状态决定事件是否公开
-    const isPrivate = project.state === 'private';
+    const isPrivate = project.state === "private";
 
     // 创建提交事件，添加更多项目信息
     await createEvent(
-      'project_commit',
+      "project_commit",
       res.locals.userid,
       TargetTypes.PROJECT,
       projectid,
@@ -374,7 +375,7 @@ router.put("/commit/id/:id", needlogin, async (req, res, next) => {
         project_title: project.title,
         project_type: project.type,
         project_description: project.description,
-        project_state: project.state
+        project_state: project.state,
       },
       isPrivate // 传入是否强制私密
     );
@@ -609,11 +610,11 @@ router.put("/id/:id", needlogin, async (req, res, next) => {
     const changes = {
       updated_fields: [],
       old_values: {},
-      new_values: {}
+      new_values: {},
     };
 
     // 必须记录的字段
-    ['title', 'type', 'state'].forEach(field => {
+    ["title", "type", "state"].forEach((field) => {
       if (updatedData[field] !== undefined) {
         changes.updated_fields.push(field);
         changes.old_values[field] = project[field];
@@ -622,8 +623,11 @@ router.put("/id/:id", needlogin, async (req, res, next) => {
     });
 
     // 其他可能变更的字段
-    ['description', 'license', 'tags'].forEach(field => {
-      if (updatedData[field] !== undefined && updatedData[field] !== project[field]) {
+    ["description", "license", "tags"].forEach((field) => {
+      if (
+        updatedData[field] !== undefined &&
+        updatedData[field] !== project[field]
+      ) {
         changes.updated_fields.push(field);
         changes.old_values[field] = project[field];
         changes.new_values[field] = updatedData[field];
@@ -632,7 +636,7 @@ router.put("/id/:id", needlogin, async (req, res, next) => {
 
     // 创建项目信息更新事件
     await createEvent(
-      'project_info_update',
+      "project_info_update",
       res.locals.userid,
       TargetTypes.PROJECT,
       Number(req.params.id),
@@ -645,9 +649,9 @@ router.put("/id/:id", needlogin, async (req, res, next) => {
         project_title: updatedData.title || project.title,
         project_type: updatedData.type || project.type,
         project_description: updatedData.description || project.description,
-        project_state: updatedData.state || project.state
+        project_state: updatedData.state || project.state,
       },
-      project.state === 'private' // 根据项目状态决定是否私密
+      project.state === "private" // 根据项目状态决定是否私密
     );
 
     res.status(200).send({
@@ -716,7 +720,7 @@ router.get("/files/:sha256", async (req, res, next) => {
     const { sha256 } = req.params;
     const { accessFileToken } = req.query;
     const userId = res.locals.userid || 0; // 未登录用户为匿名用户
-    const content=req.query.content;
+    const content = req.query.content;
     try {
       await verifyFileAccessToken(accessFileToken, userId);
     } catch (err) {
@@ -736,9 +740,9 @@ router.get("/files/:sha256", async (req, res, next) => {
         message: "文件不存在",
       });
     }
-    if(content=="true"){
+    if (content == "true") {
       res.status(200).send(file.source);
-    }else{
+    } else {
       res.status(200).send({
         status: "success",
         message: "获取成功",
@@ -772,7 +776,7 @@ router.delete("/:id", async (req, res, next) => {
         {
           project_name: project.name,
           project_type: project.type,
-          title: project.title
+          title: project.title,
         }
       );
     }
@@ -865,8 +869,8 @@ router.post("/initlize", needlogin, async (req, res, next) => {
     await prisma.ow_projects.update({
       where: { id: Number(projectid) },
       data: {
-        default_branch: "main"
-      }
+        default_branch: "main",
+      },
     });
     res.status(200).send({
       status: "success",
@@ -921,7 +925,7 @@ router.put("/rename/:id", needlogin, async (req, res, next) => {
 
     // 创建重命名事件
     await createEvent(
-      'project_rename',
+      "project_rename",
       res.locals.userid,
       TargetTypes.PROJECT,
       id,
@@ -930,9 +934,9 @@ router.put("/rename/:id", needlogin, async (req, res, next) => {
         new_name: newName,
         project_title: project.title,
         project_type: project.type,
-        project_state: project.state
+        project_state: project.state,
       },
-      project.state === 'private' // 根据项目状态决定是否私密
+      project.state === "private" // 根据项目状态决定是否私密
     );
 
     res.status(200).send({
@@ -1101,17 +1105,18 @@ router.post("/fork", needlogin, async (req, res, next) => {
     );
 
     // 根据原项目和新项目的状态决定事件是否公开
-    const isPrivate = project.state === 'private' || forkedProject.state === 'private';
+    const isPrivate =
+      project.state === "private" || forkedProject.state === "private";
 
     await createEvent(
-      'project_fork',
+      "project_fork",
       res.locals.userid,
       TargetTypes.PROJECT,
       projectid,
       {
         fork_id: forkedProject.id,
         fork_name: name,
-        original_project: projectid
+        original_project: projectid,
       },
       isPrivate
     );
@@ -1128,7 +1133,6 @@ router.post("/fork", needlogin, async (req, res, next) => {
     });
   }
 });
-
 
 // 获取项目文件 放最后最后匹配免得冲突
 router.get("/:id/:branch/:ref", async (req, res, next) => {

@@ -1,4 +1,5 @@
 import logger from "../utils/logger.js";
+import { needlogin, strictTokenCheck } from "../middleware/auth.js";
 import configManager from "../utils/configManager.js";
 import fs from "fs";
 
@@ -16,19 +17,13 @@ import { createEvent, TargetTypes } from "../controllers/events.js";
 
 const upload = multer({ dest: "./usercontent" });
 
-router.all("/{*path}", function (req, res, next) {
-  //限定访问该模块的权限：必须已登录
-  if (!res.locals.login) {
-    //未登录时，跳转到登录界面
-    res.redirect("/account/login");
-    return;
-  }
-  next();
-});
+// Migrated to use the global parseToken middleware
 
-router.post("/set/avatar", upload.single('zcfile'), async (req, res) => {
+router.post("/set/avatar", upload.single("zcfile"), async (req, res) => {
   if (!req.file) {
-    return res.status(400).send({ status: "error", message: "No file uploaded" });
+    return res
+      .status(400)
+      .send({ status: "error", message: "No file uploaded" });
   }
 
   try {
@@ -62,7 +57,7 @@ router.post("/set/avatar", upload.single('zcfile'), async (req, res) => {
 });
 
 router.use((err, req, res, next) => {
-  if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+  if (err.code === "LIMIT_UNEXPECTED_FILE") {
     logger.error("Unexpected end of form: ", err);
     res.status(400).send({ status: "error", message: "数据传输异常" });
   } else {
@@ -85,13 +80,13 @@ router.post("/set/userinfo", async (req, res) => {
 
     // 添加个人资料更新事件
     await createEvent(
-      'USER_PROFILE_UPDATE',
+      "USER_PROFILE_UPDATE",
       res.locals.userid,
       TargetTypes.USER,
       res.locals.userid,
       {
-        updated_fields: ['display_name', 'motto', 'sex', 'birthday'],
-        display_name: req.body["display_name"]
+        updated_fields: ["display_name", "motto", "sex", "birthday"],
+        display_name: req.body["display_name"],
       }
     );
 

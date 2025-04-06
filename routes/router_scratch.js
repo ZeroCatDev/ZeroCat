@@ -5,19 +5,15 @@ import fs from "fs";
 
 import { Router } from "express";
 var router = Router();
-import { writeFile, exists,createReadStream } from "fs";
+import { writeFile, exists, createReadStream } from "fs";
 import { createHash } from "crypto";
 import { prisma, S3update } from "../utils/global.js";
-import { needlogin } from "../middleware/auth.js";
-import { getProjectFile,getProjectById } from "../controllers/projects.js";
+import { needlogin, strictTokenCheck, needadmin } from "../middleware/auth.js";
+import { getProjectFile, getProjectById } from "../controllers/projects.js";
 import multer from "multer";
 const upload = multer({ dest: "./usercontent" });
 
-router.all("/{*path}", function (req, res, next) {
-  next();
-});
-
-
+// Migrated to use the global parseToken middleware
 
 router.get("/projectinfo", async function (req, res, next) {
   try {
@@ -63,8 +59,7 @@ router.get("/projectinfo", async function (req, res, next) {
       },
     });
 
-    res.locals.is_author =
-      project.authorid == res.locals.userid ? true : false;
+    res.locals.is_author = project.authorid == res.locals.userid ? true : false;
 
     res.json({
       ...project,
@@ -76,7 +71,6 @@ router.get("/projectinfo", async function (req, res, next) {
     next(err);
   }
 });
-
 
 router.get("/projectinfo2", async function (req, res, next) {
   try {
@@ -90,8 +84,7 @@ router.get("/projectinfo2", async function (req, res, next) {
         id: result.authorid,
       },
     });
-    res.locals.is_author =
-      result.authorid == res.locals.userid ? true : false;
+    res.locals.is_author = result.authorid == res.locals.userid ? true : false;
     logger.debug(result);
     var project_token = jsonwebtoken.sign(
       {
@@ -185,26 +178,52 @@ router.get("/project/:id", async (req, res, next) => {
         logger.debug(project_token);
       } catch (err) {
         logger.debug("Error verifying project token:", err);
-        return res.status(200).send({ status: "error", message: "无权访问此项目",code:"AUTH_ERROR_LOGIN" });
+        return res
+          .status(200)
+          .send({
+            status: "error",
+            message: "无权访问此项目",
+            code: "AUTH_ERROR_LOGIN",
+          });
       }
       if (project_token.data.projectid != req.params.id) {
         logger.debug("1");
-        return res.status(200).send({ status: "error", message: "无权访问此项目",code:"AUTH_ERROR_LOGIN" });
+        return res
+          .status(200)
+          .send({
+            status: "error",
+            message: "无权访问此项目",
+            code: "AUTH_ERROR_LOGIN",
+          });
       }
       if (res.locals.userid && project_token.data.userid != res.locals.userid) {
         logger.debug("2");
-        return res.status(200).send({ status: "error", message: "无权访问此项目",code:"AUTH_ERROR_LOGIN" });
+        return res
+          .status(200)
+          .send({
+            status: "error",
+            message: "无权访问此项目",
+            code: "AUTH_ERROR_LOGIN",
+          });
       }
     } else {
       logger.debug("3");
-      return res.status(200).send({ status: "error", message: "无权访问此项目",code:"AUTH_ERROR_LOGIN" });
+      return res
+        .status(200)
+        .send({
+          status: "error",
+          message: "无权访问此项目",
+          code: "AUTH_ERROR_LOGIN",
+        });
     }
     const project = await prisma.ow_projects.findFirst({
       where: { id: Number(project_token.data.projectid) },
     });
 
     if (!project) {
-      return res.status(404).send({ status: "error", message: "作品不存在或无权打开" });
+      return res
+        .status(404)
+        .send({ status: "error", message: "作品不存在或无权打开" });
     }
 
     const source =
@@ -216,7 +235,13 @@ router.get("/project/:id", async (req, res, next) => {
     if (projectFile?.source) {
       res.status(200).send(projectFile.source);
     } else {
-      res.status(200).send({ status: "error", message: "无权访问此项目",code:"AUTH_ERROR_LOGIN" });
+      res
+        .status(200)
+        .send({
+          status: "error",
+          message: "无权访问此项目",
+          code: "AUTH_ERROR_LOGIN",
+        });
     }
   } catch (err) {
     logger.error("Error fetching project source code:", err);
@@ -225,77 +250,106 @@ router.get("/project/:id", async (req, res, next) => {
 });
 
 //保存作品：缩略图
-router.post("/thumbnail/:projectid", upload.single('file'), async (req, res, next) => {
-  if (!req.file) {
-    return res.status(400).send({ status: "error", message: "No file uploaded" });
-  }
-
-  try {
-    const project = await getProjectById(Number(req.params.projectid));
-    if (!project) {
-      return res.status(404).send({ status: "error", code: "404", message: "作品不存在" });
-    }
-    if (project.authorid !== res.locals.userid) {
-      return res.status(200).send({ status: "error", message: "无权访问此项目",code:"AUTH_ERROR_LOGIN" });
+router.post(
+  "/thumbnail/:projectid",
+  upload.single("file"),
+  async (req, res, next) => {
+    if (!req.file) {
+      return res
+        .status(400)
+        .send({ status: "error", message: "No file uploaded" });
     }
 
-    const file = req.file;
-    const hash = createHash("md5");
-    const chunks = createReadStream(file.path);
+    try {
+      const project = await getProjectById(Number(req.params.projectid));
+      if (!project) {
+        return res
+          .status(404)
+          .send({ status: "error", code: "404", message: "作品不存在" });
+      }
+      if (project.authorid !== res.locals.userid) {
+        return res
+          .status(200)
+          .send({
+            status: "error",
+            message: "无权访问此项目",
+            code: "AUTH_ERROR_LOGIN",
+          });
+      }
 
-    chunks.on("data", (chunk) => {
-      if (chunk) hash.update(chunk);
-    });
+      const file = req.file;
+      const hash = createHash("md5");
+      const chunks = createReadStream(file.path);
 
-    chunks.on("end", async () => {
-      const hashValue = hash.digest("hex");
-      const fileBuffer = await fs.promises.readFile(file.path);
-      await S3update(`scratch_slt/${req.params.projectid}`, fileBuffer);
-      res.status(200).send({ status: "success" });
-    });
+      chunks.on("data", (chunk) => {
+        if (chunk) hash.update(chunk);
+      });
 
-    chunks.on("error", (err) => {
-      logger.error("Error processing file upload:", err);
-      res.status(500).send({ status: "error", message: "File processing error" });
-    });
-  } catch (err) {
-    logger.error("Unexpected error:", err);
-    res.status(500).send({ status: "error", message: "Internal server error" });
+      chunks.on("end", async () => {
+        const hashValue = hash.digest("hex");
+        const fileBuffer = await fs.promises.readFile(file.path);
+        await S3update(`scratch_slt/${req.params.projectid}`, fileBuffer);
+        res.status(200).send({ status: "success" });
+      });
+
+      chunks.on("error", (err) => {
+        logger.error("Error processing file upload:", err);
+        res
+          .status(500)
+          .send({ status: "error", message: "File processing error" });
+      });
+    } catch (err) {
+      logger.error("Unexpected error:", err);
+      res
+        .status(500)
+        .send({ status: "error", message: "Internal server error" });
+    }
   }
-});
+);
 
 //新作品：保存作品素材
-router.post("/assets/:filename", needlogin, upload.single('file'), async (req, res, next) => {
-  if (!req.file) {
-    return res.status(400).send({ status: "error", message: "No file uploaded" });
+router.post(
+  "/assets/:filename",
+  needlogin,
+  upload.single("file"),
+  async (req, res, next) => {
+    if (!req.file) {
+      return res
+        .status(400)
+        .send({ status: "error", message: "No file uploaded" });
+    }
+
+    try {
+      const file = req.file;
+      const hash = createHash("md5");
+      const chunks = createReadStream(file.path);
+
+      chunks.on("data", (chunk) => {
+        if (chunk) hash.update(chunk);
+      });
+
+      chunks.on("end", async () => {
+        const hashValue = hash.digest("hex");
+        const ext = req.params.filename.split(".").pop();
+        const newFilename = `${hashValue}.${ext}`;
+        const fileBuffer = await fs.promises.readFile(file.path);
+        await S3update(`material/asset/${newFilename}`, fileBuffer);
+        res.status(200).send({ status: "success" });
+      });
+
+      chunks.on("error", (err) => {
+        logger.error("Error processing file upload:", err);
+        res
+          .status(500)
+          .send({ status: "error", message: "File processing error" });
+      });
+    } catch (err) {
+      logger.error("Unexpected error:", err);
+      res
+        .status(500)
+        .send({ status: "error", message: "Internal server error" });
+    }
   }
-
-  try {
-    const file = req.file;
-    const hash = createHash("md5");
-    const chunks = createReadStream(file.path);
-
-    chunks.on("data", (chunk) => {
-      if (chunk) hash.update(chunk);
-    });
-
-    chunks.on("end", async () => {
-      const hashValue = hash.digest("hex");
-      const ext = req.params.filename.split('.').pop();
-      const newFilename = `${hashValue}.${ext}`;
-      const fileBuffer = await fs.promises.readFile(file.path);
-      await S3update(`material/asset/${newFilename}`, fileBuffer);
-      res.status(200).send({ status: "success" });
-    });
-
-    chunks.on("error", (err) => {
-      logger.error("Error processing file upload:", err);
-      res.status(500).send({ status: "error", message: "File processing error" });
-    });
-  } catch (err) {
-    logger.error("Unexpected error:", err);
-    res.status(500).send({ status: "error", message: "Internal server error" });
-  }
-});
+);
 
 export default router;

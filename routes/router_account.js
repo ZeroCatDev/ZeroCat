@@ -1,6 +1,6 @@
 import logger from "../utils/logger.js";
 import configManager from "../utils/configManager.js";
-import crypto from 'crypto';
+import crypto from "crypto";
 
 import { Router } from "express";
 var router = Router();
@@ -19,7 +19,7 @@ import {
   registrationTemplate,
   passwordResetTemplate,
 } from "../utils/email/emailTemplates.js";
-import { needlogin } from "../middleware/auth.js";
+import { needlogin, strictTokenCheck, needadmin } from "../middleware/auth.js";
 
 import totpUtils from "../utils/totp.js";
 // { isTotpTokenValid, createTotpTokenForUser, enableTotpToken, removeTotpToken, validateTotpToken }
@@ -32,19 +32,26 @@ const {
 } = totpUtils;
 
 import geetestMiddleware from "../middleware/geetest.js";
-import { addUserContact, sendVerificationEmail, verifyContact } from "../controllers/email.js";
+import {
+  addUserContact,
+  sendVerificationEmail,
+  verifyContact,
+} from "../controllers/email.js";
 
-import memoryCache from '../utils/memoryCache.js';
-import { OAUTH_PROVIDERS, generateAuthUrl, handleOAuthCallback, initializeOAuthProviders } from '../controllers/oauth.js';
+import memoryCache from "../utils/memoryCache.js";
+import {
+  OAUTH_PROVIDERS,
+  generateAuthUrl,
+  handleOAuthCallback,
+  initializeOAuthProviders,
+} from "../controllers/oauth.js";
 
-import { createEvent, TargetTypes } from '../controllers/events.js';
+import { createEvent, TargetTypes } from "../controllers/events.js";
 
 // 初始化 OAuth 配置
 initializeOAuthProviders();
 
-router.all("/{*path}", function (req, res, next) {
-  next();
-});
+// Migrated to use the global parseToken middleware
 
 router.post("/login", geetestMiddleware, async function (req, res, next) {
   try {
@@ -57,7 +64,7 @@ router.post("/login", geetestMiddleware, async function (req, res, next) {
     if (attempts >= 5) {
       res.status(200).send({
         message: "登录尝试次数过多，请15分钟后再试",
-        status: "error"
+        status: "error",
       });
       return;
     }
@@ -76,17 +83,17 @@ router.post("/login", geetestMiddleware, async function (req, res, next) {
       const contact = await prisma.ow_users_contacts.findFirst({
         where: {
           contact_value: loginId,
-          contact_type: 'email',
+          contact_type: "email",
           OR: [
-            { is_primary: true },  // 主邮箱
-            { verified: true }     // 或已验证的邮箱
-          ]
-        }
+            { is_primary: true }, // 主邮箱
+            { verified: true }, // 或已验证的邮箱
+          ],
+        },
       });
 
       if (contact) {
         user = await prisma.ow_users.findFirst({
-          where: { id: contact.user_id }
+          where: { id: contact.user_id },
         });
       }
     }
@@ -94,7 +101,7 @@ router.post("/login", geetestMiddleware, async function (req, res, next) {
     // 如果通过邮箱没找到，尝试通过用户名查找
     if (!user) {
       user = await prisma.ow_users.findFirst({
-        where: { username: loginId }
+        where: { username: loginId },
       });
     }
 
@@ -109,7 +116,7 @@ router.post("/login", geetestMiddleware, async function (req, res, next) {
       res.status(200).send({
         message: "此账户未设置密码，请使用魔术链接登录",
         status: "error",
-        code: "NO_PASSWORD"  // 添加特殊错误码
+        code: "NO_PASSWORD", // 添加特殊错误码
       });
       return;
     }
@@ -129,50 +136,47 @@ router.post("/login", geetestMiddleware, async function (req, res, next) {
     const primaryEmail = await prisma.ow_users_contacts.findFirst({
       where: {
         user_id: user.id,
-        contact_type: 'email',
+        contact_type: "email",
         is_primary: true,
-      }
+      },
     });
 
     // 如果没有主要邮箱，获取任何已验证的邮箱
-    const verifiedEmail = !primaryEmail ? await prisma.ow_users_contacts.findFirst({
-      where: {
-        user_id: user.id,
-        contact_type: 'email',
-        verified: true
-      }
-    }) : null;
+    const verifiedEmail = !primaryEmail
+      ? await prisma.ow_users_contacts.findFirst({
+          where: {
+            user_id: user.id,
+            contact_type: "email",
+            verified: true,
+          },
+        })
+      : null;
 
     if (!primaryEmail && !verifiedEmail) {
       res.status(200).send({ message: "请先验证邮箱", status: "error" });
       return;
     }
 
-    const userEmail = primaryEmail?.contact_value || verifiedEmail?.contact_value;
+    const userEmail =
+      primaryEmail?.contact_value || verifiedEmail?.contact_value;
 
     const token = await generateJwt({
       userid: user.id,
       username: user.username,
       display_name: user.display_name,
       avatar: user.images,
-      email: userEmail
+      email: userEmail,
     });
 
     // 登录成功后清除尝试记录
     memoryCache.delete(attemptKey);
 
     // 添加登录事件（不记录到数据库）
-    await createEvent(
-      'USER_LOGIN',
-      user.id,
-      TargetTypes.USER,
-      user.id,
-      {
-        login_type: 'password',
-        ip: req.ip,
-        user_agent: req.headers['user-agent']
-      }
-    );
+    await createEvent("USER_LOGIN", user.id, TargetTypes.USER, user.id, {
+      login_type: "password",
+      ip: req.ip,
+      user_agent: req.headers["user-agent"],
+    });
 
     res.status(200).send({
       status: "success",
@@ -210,14 +214,14 @@ router.post("/register", geetestMiddleware, async function (req, res, next) {
     if (!email || !username) {
       res.status(200).send({
         message: "邮箱和用户名是必需的",
-        status: "error"
+        status: "error",
       });
       return;
     }
 
     // 检查邮箱是否已存在
     const existingContact = await prisma.ow_users_contacts.findUnique({
-      where: { contact_value: email }
+      where: { contact_value: email },
     });
 
     if (existingContact) {
@@ -227,7 +231,7 @@ router.post("/register", geetestMiddleware, async function (req, res, next) {
 
     // 检查用户名是否已存在
     const existingUser = await prisma.ow_users.findUnique({
-      where: { username }
+      where: { username },
     });
 
     if (existingUser) {
@@ -239,28 +243,28 @@ router.post("/register", geetestMiddleware, async function (req, res, next) {
     const newUser = await prisma.ow_users.create({
       data: {
         username: username,
-        password: password ? hash(password) : null,  // 如果没有密码则设为 null
+        password: password ? hash(password) : null, // 如果没有密码则设为 null
         display_name: username,
       },
     });
 
     try {
-      const contact = await addUserContact(newUser.id, email, 'email', true);
-      await sendVerificationEmail(email, contact.contact_hash, 'VERIFY');
+      const contact = await addUserContact(newUser.id, email, "email", true);
+      await sendVerificationEmail(email, contact.contact_hash, "VERIFY");
     } catch (error) {
       // 如果添加联系方式失败，删除刚创建的用户
       await prisma.ow_users.delete({
-        where: { id: newUser.id }
+        where: { id: newUser.id },
       });
       throw error;
     }
 
     res.status(200).send({
       message: "注册成功,请查看邮箱验证您的邮箱地址",
-      status: "success"
+      status: "success",
     });
   } catch (err) {
-    if (err.code === 'P2002') {
+    if (err.code === "P2002") {
       res.status(200).send({ message: "邮箱已被使用", status: "error" });
       return;
     }
@@ -268,119 +272,131 @@ router.post("/register", geetestMiddleware, async function (req, res, next) {
   }
 });
 
-router.post("/retrievePassword", geetestMiddleware, async function (req, res, next) {
-  try {
-    const { email } = req.body;
-    if (!email || !emailTest(email)) {
-      res.status(200).send({
-        message: "请提供有效的邮箱地址",
-        status: "error"
-      });
-      return;
-    }
-
-    // 查找邮箱联系方式
-    const contact = await prisma.ow_users_contacts.findFirst({
-      where: {
-        contact_value: email,
-        contact_type: 'email',
-        OR: [
-          { verified: true },  // 已验证的邮箱
-          { is_primary: true } // 或主邮箱
-        ]
+router.post(
+  "/retrievePassword",
+  geetestMiddleware,
+  async function (req, res, next) {
+    try {
+      const { email } = req.body;
+      if (!email || !emailTest(email)) {
+        res.status(200).send({
+          message: "请提供有效的邮箱地址",
+          status: "error",
+        });
+        return;
       }
-    });
 
-    if (!contact) {
-      res.status(200).send({
-        message: "此邮箱不可用于找回密码",
-        status: "error"
+      // 查找邮箱联系方式
+      const contact = await prisma.ow_users_contacts.findFirst({
+        where: {
+          contact_value: email,
+          contact_type: "email",
+          OR: [
+            { verified: true }, // 已验证的邮箱
+            { is_primary: true }, // 或主邮箱
+          ],
+        },
       });
-      return;
-    }
 
-    const user = await prisma.ow_users.findUnique({
-      where: { id: contact.user_id }
-    });
+      if (!contact) {
+        res.status(200).send({
+          message: "此邮箱不可用于找回密码",
+          status: "error",
+        });
+        return;
+      }
 
-    if (!user) {
-      res.status(200).send({
-        message: "用户不存在",
-        status: "error"
+      const user = await prisma.ow_users.findUnique({
+        where: { id: contact.user_id },
       });
-      return;
+
+      if (!user) {
+        res.status(200).send({
+          message: "用户不存在",
+          status: "error",
+        });
+        return;
+      }
+
+      // 发送验证码邮件
+      await sendVerificationEmail(
+        email,
+        contact.contact_hash,
+        "RESET_PASSWORD"
+      );
+
+      res.status(200).send({
+        message: "验证码已发送到您的邮箱",
+        status: "success",
+      });
+    } catch (err) {
+      logger.error("找回密码时出错:", err);
+      res.status(200).send({
+        message: "找回密码失败",
+        status: "error",
+      });
     }
-
-    // 发送验证码邮件
-    await sendVerificationEmail(email, contact.contact_hash, 'RESET_PASSWORD');
-
-    res.status(200).send({
-      message: "验证码已发送到您的邮箱",
-      status: "success"
-    });
-  } catch (err) {
-    logger.error("找回密码时出错:", err);
-    res.status(200).send({
-      message: "找回密码失败",
-      status: "error"
-    });
   }
-});
+);
 
 // 重置密码的路由
-router.post("/reset-password", geetestMiddleware, async function (req, res, next) {
-  try {
-    const { email, verificationCode, newPassword } = req.body;
+router.post(
+  "/reset-password",
+  geetestMiddleware,
+  async function (req, res, next) {
+    try {
+      const { email, verificationCode, newPassword } = req.body;
 
-    if (!email || !verificationCode || !newPassword) {
-      return res.status(200).json({
-        status: "error",
-        message: "邮箱、验证码和新密码都是必需的"
-      });
-    }
-
-    // 验证码验证
-    const isValid = await verifyContact(email, verificationCode);
-    if (!isValid) {
-      return res.status(200).json({
-        status: "error",
-        message: "验证码无效"
-      });
-    }
-
-    // 查找用户
-    const contact = await prisma.ow_users_contacts.findFirst({
-      where: {
-        contact_value: email,
-        contact_type: 'email'
+      if (!email || !verificationCode || !newPassword) {
+        return res.status(200).json({
+          status: "error",
+          message: "邮箱、验证码和新密码都是必需的",
+        });
       }
-    });
 
-    if (!contact) {
+      // 验证码验证
+      const isValid = await verifyContact(email, verificationCode);
+      if (!isValid) {
+        return res.status(200).json({
+          status: "error",
+          message: "验证码无效",
+        });
+      }
+
+      // 查找用户
+      const contact = await prisma.ow_users_contacts.findFirst({
+        where: {
+          contact_value: email,
+          contact_type: "email",
+        },
+      });
+
+      if (!contact) {
+        return res.status(200).json({
+          status: "error",
+          message: "未找到用户",
+        });
+      }
+
+      // 更新密码
+      await prisma.ow_users.update({
+        where: { id: contact.user_id },
+        data: { password: hash(newPassword) },
+      });
+
+      return res.status(200).json({
+        status: "success",
+        message: "密码已重置",
+      });
+    } catch (error) {
+      logger.error("重置密码时出错:", error);
       return res.status(200).json({
         status: "error",
-        message: "未找到用户"
+        message: error.message || "重置密码失败",
       });
     }
-
-    // 更新密码
-    await prisma.ow_users.update({
-      where: { id: contact.user_id },
-      data: { password: hash(newPassword) }
-    });
-
-    return res.status(200).json({
-      status: "success",
-      message: "密码已重置"
-    });
-  } catch (error) {
-    logger.error("重置密码时出错:", error);
-    return res.status(200).json({
-      status: "error",
-      message: error.message || "重置密码失败"
-    });
   }
-});
+);
 
 router.post("/torepw", geetestMiddleware, async function (req, res, next) {
   try {
@@ -393,7 +409,7 @@ router.post("/torepw", geetestMiddleware, async function (req, res, next) {
     } catch (err) {
       res.status(200).send({
         message: "token错误或过期",
-        status: "error"
+        status: "error",
       });
       return;
     }
@@ -403,30 +419,30 @@ router.post("/torepw", geetestMiddleware, async function (req, res, next) {
       where: {
         user_id: decoded.userid,
         contact_value: decoded.email,
-        contact_type: 'email',
+        contact_type: "email",
         OR: [
-          { verified: true },  // 已验证的邮箱
-          { is_primary: true } // 或主邮箱
-        ]
-      }
+          { verified: true }, // 已验证的邮箱
+          { is_primary: true }, // 或主邮箱
+        ],
+      },
     });
 
     if (!contact) {
       res.status(200).send({
         message: "无效的重置请求",
-        status: "error"
+        status: "error",
       });
       return;
     }
 
     const user = await prisma.ow_users.findUnique({
-      where: { id: decoded.userid }
+      where: { id: decoded.userid },
     });
 
     if (!user) {
       res.status(200).send({
         message: "用户不存在",
-        status: "error"
+        status: "error",
       });
       return;
     }
@@ -434,18 +450,18 @@ router.post("/torepw", geetestMiddleware, async function (req, res, next) {
     // 更新密码
     await prisma.ow_users.update({
       where: { id: decoded.userid },
-      data: { password: hash(req.body.pw) }
+      data: { password: hash(req.body.pw) },
     });
 
     res.status(200).send({
       message: "您的密码已更新",
-      status: "success"
+      status: "success",
     });
   } catch (err) {
     logger.error("重置密码时出错:", err);
     res.status(200).send({
       message: "重置密码失败",
-      status: "error"
+      status: "error",
     });
   }
 });
@@ -631,32 +647,32 @@ router.post("/magiclink/generate", geetestMiddleware, async (req, res) => {
     if (!email || !emailTest(email)) {
       return res.status(200).json({
         status: "error",
-        message: "无效的邮箱地址"
+        message: "无效的邮箱地址",
       });
     }
 
     // 查找邮箱联系方式
     const contact = await prisma.ow_users_contacts.findUnique({
       where: {
-        contact_value: email
-      }
+        contact_value: email,
+      },
     });
 
     if (!contact) {
       return res.status(200).json({
         status: "error",
-        message: "未找到此邮箱地址"
+        message: "未找到此邮箱地址",
       });
     }
 
     const user = await prisma.ow_users.findUnique({
-      where: { id: contact.user_id }
+      where: { id: contact.user_id },
     });
 
     if (!user) {
       return res.status(200).json({
         status: "error",
-        message: "用户不存在"
+        message: "用户不存在",
       });
     }
 
@@ -694,14 +710,14 @@ router.post("/magiclink/generate", geetestMiddleware, async (req, res) => {
 
     res.status(200).json({
       status: "success",
-      message: "魔术链接已发送到您的邮箱"
+      message: "魔术链接已发送到您的邮箱",
     });
     logger.debug(`Magic link sent to ${email}: ${magicLink}`);
   } catch (error) {
     logger.error("生成魔术链接时出错:", error);
     res.status(200).json({
       status: "error",
-      message: "生成魔术链接失败"
+      message: "生成魔术链接失败",
     });
   }
 });
@@ -715,14 +731,14 @@ router.get("/magiclink/validate", async (req, res) => {
     if (memoryCache.get(usedKey)) {
       return res.status(200).json({
         status: "error",
-        message: "此魔术链接已被使用"
+        message: "此魔术链接已被使用",
       });
     }
 
     if (!token) {
       return res.status(200).json({
         status: "error",
-        message: "无效的魔术链接"
+        message: "无效的魔术链接",
       });
     }
 
@@ -732,24 +748,24 @@ router.get("/magiclink/validate", async (req, res) => {
     );
 
     const magicLink = await prisma.ow_users_magiclink.findUnique({
-      where: { token }
+      where: { token },
     });
 
     if (!magicLink || magicLink.expiresAt < new Date()) {
       return res.status(200).json({
         status: "error",
-        message: "魔术链接已过期"
+        message: "魔术链接已过期",
       });
     }
 
     const user = await prisma.ow_users.findUnique({
-      where: { id: magicLink.userId }
+      where: { id: magicLink.userId },
     });
 
     if (!user) {
       return res.status(200).json({
         status: "error",
-        message: "用户不存在"
+        message: "用户不存在",
       });
     }
 
@@ -757,41 +773,44 @@ router.get("/magiclink/validate", async (req, res) => {
     const primaryEmail = await prisma.ow_users_contacts.findFirst({
       where: {
         user_id: user.id,
-        contact_type: 'email',
+        contact_type: "email",
         is_primary: true,
-        verified: true
-      }
+        verified: true,
+      },
     });
 
     // 如果没有已验证的主要邮箱，尝试获取任何已验证的邮箱
-    const verifiedEmail = !primaryEmail ? await prisma.ow_users_contacts.findFirst({
-      where: {
-        user_id: user.id,
-        contact_type: 'email',
-        verified: true
-      }
-    }) : null;
+    const verifiedEmail = !primaryEmail
+      ? await prisma.ow_users_contacts.findFirst({
+          where: {
+            user_id: user.id,
+            contact_type: "email",
+            verified: true,
+          },
+        })
+      : null;
 
     if (!primaryEmail && !verifiedEmail) {
       return res.status(200).json({
         status: "error",
-        message: "请先验证邮箱"
+        message: "请先验证邮箱",
       });
     }
 
-    const userEmail = primaryEmail?.contact_value || verifiedEmail?.contact_value;
+    const userEmail =
+      primaryEmail?.contact_value || verifiedEmail?.contact_value;
 
     const jwtToken = await generateJwt({
       userid: user.id,
       username: user.username,
       display_name: user.display_name,
       avatar: user.images,
-      email: userEmail
+      email: userEmail,
     });
 
     // 删除已使用的魔术链接
     await prisma.ow_users_magiclink.delete({
-      where: { token }
+      where: { token },
     });
 
     // 标记token为已使用
@@ -811,7 +830,7 @@ router.get("/magiclink/validate", async (req, res) => {
     logger.error("验证魔术链接时出错:", error);
     res.status(200).json({
       status: "error",
-      message: "验证魔术链接失败"
+      message: "验证魔术链接失败",
     });
   }
 });
@@ -823,7 +842,7 @@ router.post("/verify-email", async function (req, res, next) {
     if (!email || !token) {
       return res.status(400).json({
         status: "error",
-        message: "邮箱和验证码都是必需的"
+        message: "邮箱和验证码都是必需的",
       });
     }
 
@@ -832,19 +851,19 @@ router.post("/verify-email", async function (req, res, next) {
     if (!verified) {
       return res.status(200).json({
         status: "error",
-        message: "验证失败，请检查验证码是否正确"
+        message: "验证失败，请检查验证码是否正确",
       });
     }
 
     res.status(200).json({
       status: "success",
-      message: "邮箱验证成功"
+      message: "邮箱验证成功",
     });
   } catch (error) {
     logger.error(error);
     res.status(200).json({
       status: "error",
-      message: error.message || "验证失败"
+      message: error.message || "验证失败",
     });
   }
 });
@@ -860,28 +879,28 @@ router.post("/send-verification-code", needlogin, async function (req, res) {
       where: {
         user_id: userId,
         contact_value: email,
-        contact_type: 'email',
-      }
+        contact_type: "email",
+      },
     });
 
     if (!contact) {
       return res.status(200).json({
         status: "error",
-        message: "未找到此邮箱或邮箱未验证"
+        message: "未找到此邮箱或邮箱未验证",
       });
     }
 
-    await sendVerificationEmail(email, contact.contact_hash, 'ADD_EMAIL');
+    await sendVerificationEmail(email, contact.contact_hash, "ADD_EMAIL");
 
     return res.status(200).json({
       status: "success",
-      message: "验证码已发送"
+      message: "验证码已发送",
     });
   } catch (error) {
     logger.error("发送验证码时出错:", error);
     return res.status(200).json({
       status: "error",
-      message: error.message || "发送验证码失败"
+      message: error.message || "发送验证码失败",
     });
   }
 });
@@ -894,31 +913,28 @@ router.get("/emails", needlogin, async function (req, res) {
     const emails = await prisma.ow_users_contacts.findMany({
       where: {
         user_id: userId,
-        contact_type: 'email'
+        contact_type: "email",
       },
       select: {
         contact_id: true,
         contact_value: true,
         is_primary: true,
         verified: true,
-        created_at: true
+        created_at: true,
       },
-      orderBy: [
-        { is_primary: 'desc' },
-        { created_at: 'desc' }
-      ]
+      orderBy: [{ is_primary: "desc" }, { created_at: "desc" }],
     });
 
     return res.status(200).json({
       status: "success",
       message: "获取成功",
-      data: emails
+      data: emails,
     });
   } catch (error) {
     logger.error("获取邮箱列表时出错:", error);
     return res.status(200).json({
       status: "error",
-      message: "获取邮箱列表失败"
+      message: "获取邮箱列表失败",
     });
   }
 });
@@ -933,24 +949,27 @@ router.post("/add-email", needlogin, async function (req, res) {
     const primaryEmail = await prisma.ow_users_contacts.findFirst({
       where: {
         user_id: userId,
-        contact_type: 'email',
-        is_primary: true
-      }
+        contact_type: "email",
+        is_primary: true,
+      },
     });
 
     if (!primaryEmail) {
       return res.status(200).json({
         status: "error",
-        message: "需要先设置主邮箱"
+        message: "需要先设置主邮箱",
       });
     }
 
     // 验证主邮箱的验证码
-    const isValid = await verifyContact(primaryEmail.contact_value, verificationCode);
+    const isValid = await verifyContact(
+      primaryEmail.contact_value,
+      verificationCode
+    );
     if (!isValid) {
       return res.status(200).json({
         status: "error",
-        message: "验证码无效"
+        message: "验证码无效",
       });
     }
 
@@ -958,19 +977,19 @@ router.post("/add-email", needlogin, async function (req, res) {
     if (!email || !emailTest(email)) {
       return res.status(200).json({
         status: "error",
-        message: "请提供有效的邮箱地址"
+        message: "请提供有效的邮箱地址",
       });
     }
 
     // 检查邮箱是否已被使用
     const existingContact = await prisma.ow_users_contacts.findFirst({
-      where: { contact_value: email }
+      where: { contact_value: email },
     });
 
     if (existingContact) {
       return res.status(200).json({
         status: "error",
-        message: "此邮箱已被使用"
+        message: "此邮箱已被使用",
       });
     }
 
@@ -978,20 +997,20 @@ router.post("/add-email", needlogin, async function (req, res) {
     const currentEmailCount = await prisma.ow_users_contacts.count({
       where: {
         user_id: userId,
-        contact_type: 'email'
-      }
+        contact_type: "email",
+      },
     });
 
     if (currentEmailCount >= 5) {
       return res.status(200).json({
         status: "error",
-        message: "最多只能绑定5个邮箱"
+        message: "最多只能绑定5个邮箱",
       });
     }
 
     // 添加新邮箱
-    const contact = await addUserContact(userId, email, 'email', false);
-    await sendVerificationEmail(email, contact.contact_hash, 'ADD_EMAIL');
+    const contact = await addUserContact(userId, email, "email", false);
+    await sendVerificationEmail(email, contact.contact_hash, "ADD_EMAIL");
 
     return res.status(200).json({
       status: "success",
@@ -1000,14 +1019,14 @@ router.post("/add-email", needlogin, async function (req, res) {
         contact_id: contact.contact_id,
         contact_value: contact.contact_value,
         is_primary: contact.is_primary,
-        verified: contact.verified
-      }
+        verified: contact.verified,
+      },
     });
   } catch (error) {
     logger.error("添加邮箱时出错:", error);
     return res.status(200).json({
       status: "error",
-      message: error.message || "添加邮箱失败"
+      message: error.message || "添加邮箱失败",
     });
   }
 });
@@ -1022,24 +1041,27 @@ router.post("/remove-email", needlogin, async function (req, res) {
     const primaryEmail = await prisma.ow_users_contacts.findFirst({
       where: {
         user_id: userId,
-        contact_type: 'email',
-        is_primary: true
-      }
+        contact_type: "email",
+        is_primary: true,
+      },
     });
 
     if (!primaryEmail) {
       return res.status(200).json({
         status: "error",
-        message: "需要先设置主邮箱"
+        message: "需要先设置主邮箱",
       });
     }
 
     // 验证主邮箱的验证码
-    const isValid = await verifyContact(primaryEmail.contact_value, verificationCode);
+    const isValid = await verifyContact(
+      primaryEmail.contact_value,
+      verificationCode
+    );
     if (!isValid) {
       return res.status(200).json({
         status: "error",
-        message: "验证码无效"
+        message: "验证码无效",
       });
     }
 
@@ -1048,14 +1070,14 @@ router.post("/remove-email", needlogin, async function (req, res) {
       where: {
         user_id: userId,
         contact_value: email,
-        contact_type: 'email'
-      }
+        contact_type: "email",
+      },
     });
 
     if (!contactToDelete) {
       return res.status(200).json({
         status: "error",
-        message: "未找到此邮箱"
+        message: "未找到此邮箱",
       });
     }
 
@@ -1063,26 +1085,26 @@ router.post("/remove-email", needlogin, async function (req, res) {
     if (contactToDelete.is_primary) {
       return res.status(200).json({
         status: "error",
-        message: "不能删除主邮箱"
+        message: "不能删除主邮箱",
       });
     }
 
     // 删除邮箱
     await prisma.ow_users_contacts.delete({
       where: {
-        contact_id: contactToDelete.contact_id
-      }
+        contact_id: contactToDelete.contact_id,
+      },
     });
 
     return res.status(200).json({
       status: "success",
-      message: "邮箱删除成功"
+      message: "邮箱删除成功",
     });
   } catch (error) {
     logger.error("删除邮箱时出错:", error);
     return res.status(200).json({
       status: "error",
-      message: error.message || "删除邮箱失败"
+      message: error.message || "删除邮箱失败",
     });
   }
 });
@@ -1095,7 +1117,7 @@ router.post("/send-login-code", geetestMiddleware, async function (req, res) {
     if (!email || !emailTest(email)) {
       return res.status(200).json({
         status: "error",
-        message: "请提供有效的邮箱地址"
+        message: "请提供有效的邮箱地址",
       });
     }
 
@@ -1103,33 +1125,33 @@ router.post("/send-login-code", geetestMiddleware, async function (req, res) {
     const contact = await prisma.ow_users_contacts.findFirst({
       where: {
         contact_value: email,
-        contact_type: 'email',
+        contact_type: "email",
         OR: [
-          { is_primary: true },  // 主邮箱
-          { verified: true }     // 或已验证的邮箱
-        ]
-      }
+          { is_primary: true }, // 主邮箱
+          { verified: true }, // 或已验证的邮箱
+        ],
+      },
     });
 
     if (!contact) {
       return res.status(200).json({
         status: "error",
-        message: "未找到此邮箱"
+        message: "未找到此邮箱",
       });
     }
 
     // 发送验证码
-    await sendVerificationEmail(email, contact.contact_hash, 'LOGIN');
+    await sendVerificationEmail(email, contact.contact_hash, "LOGIN");
 
     return res.status(200).json({
       status: "success",
-      message: "验证码已发送"
+      message: "验证码已发送",
     });
   } catch (error) {
     logger.error("发送登录验证码时出错:", error);
     return res.status(200).json({
       status: "error",
-      message: error.message || "发送验证码失败"
+      message: error.message || "发送验证码失败",
     });
   }
 });
@@ -1142,7 +1164,7 @@ router.post("/login-with-code", async function (req, res) {
     if (!email || !code) {
       return res.status(200).json({
         status: "error",
-        message: "邮箱和验证码都是必需的"
+        message: "邮箱和验证码都是必需的",
       });
     }
 
@@ -1150,18 +1172,18 @@ router.post("/login-with-code", async function (req, res) {
     const contact = await prisma.ow_users_contacts.findFirst({
       where: {
         contact_value: email,
-        contact_type: 'email',
+        contact_type: "email",
         OR: [
-          { is_primary: true },  // 主邮箱
-          { verified: true }     // 或已验证的邮箱
-        ]
-      }
+          { is_primary: true }, // 主邮箱
+          { verified: true }, // 或已验证的邮箱
+        ],
+      },
     });
 
     if (!contact) {
       return res.status(200).json({
         status: "error",
-        message: "未找到此邮箱"
+        message: "未找到此邮箱",
       });
     }
 
@@ -1170,26 +1192,26 @@ router.post("/login-with-code", async function (req, res) {
     if (!isValid) {
       return res.status(200).json({
         status: "error",
-        message: "验证码无效"
+        message: "验证码无效",
       });
     }
 
     // 获取用户信息
     const user = await prisma.ow_users.findUnique({
-      where: { id: contact.user_id }
+      where: { id: contact.user_id },
     });
 
     if (!user) {
       return res.status(200).json({
         status: "error",
-        message: "用户不存在"
+        message: "用户不存在",
       });
     }
 
     if (user.state == 2) {
       return res.status(200).json({
         status: "error",
-        message: "您已经被封禁"
+        message: "您已经被封禁",
       });
     }
 
@@ -1199,7 +1221,7 @@ router.post("/login-with-code", async function (req, res) {
       username: user.username,
       display_name: user.display_name,
       avatar: user.images,
-      email: email
+      email: email,
     });
 
     return res.status(200).json({
@@ -1210,13 +1232,13 @@ router.post("/login-with-code", async function (req, res) {
       display_name: user.display_name,
       avatar: user.images,
       email: email,
-      token: token
+      token: token,
     });
   } catch (error) {
     logger.error("验证码登录时出错:", error);
     return res.status(200).json({
       status: "error",
-      message: error.message || "登录失败"
+      message: error.message || "登录失败",
     });
   }
 });
@@ -1228,53 +1250,58 @@ router.get("/oauth/bind/:provider", needlogin, function (req, res) {
     if (!OAUTH_PROVIDERS[provider]) {
       return res.status(400).json({
         status: "error",
-        message: "不支持的 OAuth 提供商"
+        message: "不支持的 OAuth 提供商",
       });
     }
 
-    const state = crypto.randomBytes(16).toString('hex') + `:bind:${res.locals.userid}`;
+    const state =
+      crypto.randomBytes(16).toString("hex") + `:bind:${res.locals.userid}`;
     const authUrl = generateAuthUrl(provider, state);
 
     // 存储 state 与用户 ID 的映射，用于回调时识别绑定操作
-    memoryCache.set(`oauth_state:${state}`, { type: 'bind', userId: res.locals.userid }, 600); // 10分钟有效期
+    memoryCache.set(
+      `oauth_state:${state}`,
+      { type: "bind", userId: res.locals.userid },
+      600
+    ); // 10分钟有效期
 
     res.redirect(authUrl);
   } catch (error) {
-    logger.error('OAuth 绑定请求错误:', error);
+    logger.error("OAuth 绑定请求错误:", error);
     res.status(500).json({
       status: "error",
-      message: "绑定请求失败"
+      message: "绑定请求失败",
     });
   }
 });
 // 获取支持的 OAuth 提供商列表
 router.get("/oauth/providers", function (req, res) {
   const providers = Object.values(OAUTH_PROVIDERS)
-    .filter(provider => provider.enabled)  // 只返回已启用的提供商
-    .map(provider => ({
+    .filter((provider) => provider.enabled) // 只返回已启用的提供商
+    .map((provider) => ({
       id: provider.id,
-      name: provider.name
+      name: provider.name,
     }));
 
   res.status(200).json({
     status: "success",
-    data: providers
+    data: providers,
   });
 });
 
 // OAuth 授权请求
-router.get("/oauth/:provider",async function (req, res) {
+router.get("/oauth/:provider", async function (req, res) {
   try {
     const { provider } = req.params;
     if (!OAUTH_PROVIDERS[provider]) {
-      logger.error('不支持的 OAuth 提供商:', provider);
+      logger.error("不支持的 OAuth 提供商:", provider);
       return res.status(400).json({
         status: "error",
-        message: "不支持的 OAuth 提供商"
+        message: "不支持的 OAuth 提供商",
       });
     }
 
-    const state = crypto.randomBytes(16).toString('hex');
+    const state = crypto.randomBytes(16).toString("hex");
     const authUrl = await generateAuthUrl(provider, state);
 
     // 存储 state 用于验证回调
@@ -1282,10 +1309,10 @@ router.get("/oauth/:provider",async function (req, res) {
 
     res.redirect(authUrl);
   } catch (error) {
-    logger.error('OAuth authorization error:', error);
+    logger.error("OAuth authorization error:", error);
     res.status(500).json({
       status: "error",
-      message: "授权请求失败"
+      message: "授权请求失败",
     });
   }
 });
@@ -1299,29 +1326,44 @@ router.get("/oauth/:provider/callback", async function (req, res) {
     if (!code || !state) {
       return res.status(400).json({
         status: "error",
-        message: "无效的请求"
+        message: "无效的请求",
       });
     }
 
     const cachedState = memoryCache.get(`oauth_state:${state}`);
     if (!cachedState) {
-
-      return res.redirect(`${await configManager.getConfig('urls.frontend')}/app/account/oauth/bind/error?message=无效的state`);
+      return res.redirect(
+        `${await configManager.getConfig(
+          "urls.frontend"
+        )}/app/account/oauth/bind/error?message=无效的state`
+      );
     }
 
     // 根据 state 的类型处理不同的逻辑
-    if (cachedState.type === 'bind') {
+    if (cachedState.type === "bind") {
       const userIdToBind = cachedState.userId;
       // 清除 state
       memoryCache.delete(`oauth_state:${state}`);
 
-      const bindingResult = await handleOAuthCallback(provider, code, userIdToBind);
+      const bindingResult = await handleOAuthCallback(
+        provider,
+        code,
+        userIdToBind
+      );
 
       // 处理绑定结果
       if (bindingResult.success) {
-        return res.redirect(`${await configManager.getConfig('urls.frontend')}/app/account/oauth/bind/success`);
+        return res.redirect(
+          `${await configManager.getConfig(
+            "urls.frontend"
+          )}/app/account/oauth/bind/success`
+        );
       } else {
-        return res.redirect(`${await configManager.getConfig('urls.frontend')}/app/account/oauth/bind/error?message=${bindingResult.message}`);
+        return res.redirect(
+          `${await configManager.getConfig(
+            "urls.frontend"
+          )}/app/account/oauth/bind/error?message=${bindingResult.message}`
+        );
       }
     } else {
       // 默认为登录操作
@@ -1334,16 +1376,24 @@ router.get("/oauth/:provider/callback", async function (req, res) {
           username: user.username,
         });
 
-        return res.redirect(`${await configManager.getConfig('urls.frontend')}/app/account/callback?token=${token}`);
+        return res.redirect(
+          `${await configManager.getConfig(
+            "urls.frontend"
+          )}/app/account/callback?token=${token}`
+        );
       } else {
-        return res.redirect(`${await configManager.getConfig('urls.frontend')}/app/account/oauth/login/error?message=${contact.message}`);
+        return res.redirect(
+          `${await configManager.getConfig(
+            "urls.frontend"
+          )}/app/account/oauth/login/error?message=${contact.message}`
+        );
       }
     }
   } catch (error) {
-    logger.error('OAuth 回调错误:', error);
+    logger.error("OAuth 回调错误:", error);
     res.status(500).json({
       status: "error",
-      message: "OAuth 处理失败"
+      message: "OAuth 处理失败",
     });
   }
 });
@@ -1356,7 +1406,7 @@ router.post("/confirm-unlink-oauth", async function (req, res) {
     if (!email || !code || !provider) {
       return res.status(200).json({
         status: "error",
-        message: "邮箱、验证码和 OAuth 提供商是必需的"
+        message: "邮箱、验证码和 OAuth 提供商是必需的",
       });
     }
 
@@ -1365,7 +1415,7 @@ router.post("/confirm-unlink-oauth", async function (req, res) {
     if (!isValid) {
       return res.status(200).json({
         status: "error",
-        message: "验证码无效"
+        message: "验证码无效",
       });
     }
 
@@ -1373,31 +1423,31 @@ router.post("/confirm-unlink-oauth", async function (req, res) {
     const contact = await prisma.ow_users_contacts.findFirst({
       where: {
         user_id: res.locals.userid,
-        contact_type: provider
-      }
+        contact_type: provider,
+      },
     });
 
     if (!contact) {
       return res.status(200).json({
         status: "error",
-        message: "未找到此 OAuth 联系方式"
+        message: "未找到此 OAuth 联系方式",
       });
     }
 
     // 删除 OAuth 联系方式
     await prisma.ow_users_contacts.delete({
-      where: { contact_id: contact.contact_id }
+      where: { contact_id: contact.contact_id },
     });
 
     return res.status(200).json({
       status: "success",
-      message: "成功解绑 OAuth 账号"
+      message: "成功解绑 OAuth 账号",
     });
   } catch (error) {
     logger.error("解绑 OAuth 账号时出错:", error);
     return res.status(200).json({
       status: "error",
-      message: error.message || "解绑失败"
+      message: error.message || "解绑失败",
     });
   }
 });
@@ -1412,20 +1462,20 @@ router.post("/oauth/bound", needlogin, async function (req, res) {
       where: {
         user_id: userId,
         contact_type: {
-          in: ['oauth_google', 'oauth_microsoft', 'oauth_github'] // 只查找 OAuth 联系方式
-        }
-      }
+          in: ["oauth_google", "oauth_microsoft", "oauth_github"], // 只查找 OAuth 联系方式
+        },
+      },
     });
 
     return res.status(200).json({
       status: "success",
-      data: oauthContacts
+      data: oauthContacts,
     });
   } catch (error) {
     logger.error("获取绑定的 OAuth 账号时出错:", error);
     return res.status(500).json({
       status: "error",
-      message: "获取绑定的 OAuth 账号失败"
+      message: "获取绑定的 OAuth 账号失败",
     });
   }
 });

@@ -6,7 +6,7 @@ var router = Router();
 import fs from "fs";
 import cryptojs from "crypto-js";
 import { prisma } from "../utils/global.js";
-import { needadmin } from "../middleware/auth.js";
+import { needlogin, strictTokenCheck, needadmin } from "../middleware/auth.js";
 
 router.get("/usertx", async function (req, res, next) {
   try {
