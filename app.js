@@ -43,10 +43,10 @@ app.use(
 );
 
 //express 的http请求体进行解析组件
-app.use(bodyParser.urlencoded({ limit: "50mb", extended: false }));
-app.use(bodyParser.json({ limit: "50mb" }));
-app.use(bodyParser.text({ limit: "50mb" }));
-app.use(bodyParser.raw({ limit: "50mb" }));
+app.use(bodyParser.urlencoded({ limit: "100mb", extended: false }));
+app.use(bodyParser.json({ limit: "100mb" }));
+app.use(bodyParser.text({ limit: "100mb" }));
+app.use(bodyParser.raw({ limit: "100mb" }));
 
 //文件上传模块
 // app.use(multipart({ uploadDir: "./usercontent" }));
