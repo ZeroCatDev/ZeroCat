@@ -38,6 +38,9 @@ const createTokens = async (userId, userInfo, ipAddress, userAgent) => {
       60 * 60 * 24 * 30 // 默认30天
     );
 
+    // 确保刷新令牌过期时间是数字
+    const refreshTokenExpirySeconds = parseInt(refreshTokenExpiry, 10) || 60 * 60 * 24 * 30; // 如果解析失败，使用默认值30天
+
     // 解析设备信息并序列化为JSON
     const deviceInfo = userAgent ? parseDeviceInfo(userAgent) : null;
     const deviceInfoJson = deviceInfo ? JSON.stringify(deviceInfo) : null;
@@ -51,7 +54,7 @@ const createTokens = async (userId, userInfo, ipAddress, userAgent) => {
       Date.now() + accessTokenExpiry * 1000
     );
     const refreshTokenExpiresAt = new Date(
-      Date.now() + refreshTokenExpiry * 1000
+      Date.now() + refreshTokenExpirySeconds * 1000
     );
 
     // 存储令牌信息
