@@ -1,4 +1,4 @@
-import logger  from "./logger.js";
+import logger from "./logger.js";
 
 import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient()
@@ -10,76 +10,85 @@ class ConfigManager {
       // Fetch all configurations from the database
       const configs = await prisma.ow_config.findMany();
 
-      // Internal configurations
+      // Reset configuration objects
       global.config = {};
-      configs.forEach(({ key, value }) => {
-        global.config[key] = value;
-      });
-
-      // Public configurations
       global.publicconfig = {};
-      configs.forEach(({ key, value, is_public }) => {
-        if (is_public == 1) {
-          global.publicconfig[key] = value;
-        }
-      });
+      global.configinfo = configs || [];
 
-      // Configuration information
-      global.configinfo = configs;
+      // Populate configuration objects
+      if (Array.isArray(configs)) {
+        configs.forEach(({ key, value, is_public }) => {
+          // Internal configurations
+          global.config[key] = value;
+
+          // Public configurations
+          if (is_public === 1) {
+            global.publicconfig[key] = value;
+          }
+        });
+      }
+
+      return true;
     } catch (error) {
       logger.error("Error loading configs from database:", error);
+      return false;
     }
   }
 
   async getConfig(key) {
-    // Check if the value is already cached
-    if (global.config && global.config[key] != null) {
-      return global.config[key];
-    }
-    const config = await prisma.ow_config.findFirst({where: {key: key}});
-    if (config == null) {
+    if (!key) {
+      logger.warn("Attempt to get config with null/undefined key");
       return null;
     }
-    return config.value;
 
-    // If not cached, fetch from the database
-    await this.loadConfigsFromDB();
-    // If not cached, fetch from the database
-    if (global.config && global.config[key]) {
+    // Check if the value is already cached
+    if (global.config && global.config[key] !== undefined) {
       return global.config[key];
     }
-    throw new Error(`Config key "${key}" not found.`);
+
+    try {
+      const config = await prisma.ow_config.findFirst({where: {key}});
+      const value = config?.value ?? null;
+
+      // Update cache
+      if (global.config && value !== null) {
+        global.config[key] = value;
+      }
+
+      return value;
+    } catch (error) {
+      logger.error(`Error retrieving config for key: ${key}`, error);
+      return null;
+    }
   }
 
   async getPublicConfigs(key) {
-    // Check if the value is already cached
-    if (global.publicconfig && global.publicconfig[key]) {
-      return global.publicconfig[key];
-    }
-    var config = await prisma.ow_config.findFirst({
-      where: { key: key, is_public: 1 },
-    });
-    if (config == null) {
+    if (!key) {
+      logger.warn("Attempt to get public config with null/undefined key");
       return null;
     }
-    return config.value;
-    // If not cached, fetch from the database
-    await this.loadConfigsFromDB();
 
-    if (global.publicconfig && global.publicconfig[key]) {
+    // Check if the value is already cached
+    if (global.publicconfig && global.publicconfig[key] !== undefined) {
       return global.publicconfig[key];
     }
-    throw new Error(`Config key "${key}" not found.`);
-  }
 
-  async getConfigFromDB(key) {
-    await this.loadConfigsFromDB();
+    try {
+      const config = await prisma.ow_config.findFirst({
+        where: { key, is_public: 1 },
+      });
+      const value = config?.value ?? null;
 
-    if (global.config && global.config[key]) {
-      return global.config[key];
+      // Update cache
+      if (global.publicconfig && value !== null) {
+        global.publicconfig[key] = value;
+      }
+
+      return value;
+    } catch (error) {
+      logger.error(`Error retrieving public config for key: ${key}`, error);
+      return null;
     }
-
-    throw new Error(`Config key "${key}" not found.`);
   }
 }
 

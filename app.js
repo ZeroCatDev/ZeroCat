@@ -60,11 +60,11 @@ app.set("view engine", "ejs");
 //  console.log("Listening on http://localhost:3000");
 //});
 
-app.options("*", cors());
+app.options("/{*path}", cors());
 
 const SecurityToken = await configManager.getConfig("security.jwttoken");
 
-app.all("*", function (req, res, next) {
+app.all("/{*path}", function (req, res, next) {
   const tokenSources = [
     req.headers["authorization"]?.replace("Bearer ", ""),
     req.cookies?.token,
@@ -73,7 +73,7 @@ app.all("*", function (req, res, next) {
     req.headers?.["token"],
   ];
   console.log(tokenSources)
-  
+
   let foundValidToken = false;
   for (let source of tokenSources) {
     if (source) {
@@ -109,7 +109,7 @@ app.all("*", function (req, res, next) {
       usertoken: "",
     };
   }
-  
+
   logger.debug(res.locals)
   next();
 });
@@ -186,7 +186,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.all("*", function (req, res, next) {
+app.all("/{*path}", function (req, res, next) {
   res.status(404).json({
     status: "error",
     code: "404",

@@ -13,7 +13,7 @@ import { getProjectFile,getProjectById } from "../controllers/projects.js";
 import multer from "multer";
 const upload = multer({ dest: "./usercontent" });
 
-router.all("*", function (req, res, next) {
+router.all("/{*path}", function (req, res, next) {
   next();
 });
 

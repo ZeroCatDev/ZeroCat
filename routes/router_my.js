@@ -16,7 +16,7 @@ import { createEvent, TargetTypes } from "../controllers/events.js";
 
 const upload = multer({ dest: "./usercontent" });
 
-router.all("*", function (req, res, next) {
+router.all("/{*path}", function (req, res, next) {
   //限定访问该模块的权限：必须已登录
   if (!res.locals.login) {
     //未登录时，跳转到登录界面
@@ -82,7 +82,7 @@ router.post("/set/userinfo", async (req, res) => {
         birthday: new Date(`2000-01-01 00:00:00`),
       },
     });
-    
+
     // 添加个人资料更新事件
     await createEvent(
       'USER_PROFILE_UPDATE',

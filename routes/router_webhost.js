@@ -7,7 +7,7 @@ import { encode, decode } from "html-entities";
 
 import { prisma } from "./lib/global.js";
 
-router.all("*", function (req, res, next) {
+router.all("/{*path}", function (req, res, next) {
   // 任何请求都返回404
   res.status(404).send({ code: 404, status: "failed", message: "Not Found" });
   //next();

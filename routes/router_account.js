@@ -42,7 +42,7 @@ import { createEvent, TargetTypes } from '../controllers/events.js';
 // 初始化 OAuth 配置
 initializeOAuthProviders();
 
-router.all("*", function (req, res, next) {
+router.all("/{*path}", function (req, res, next) {
   next();
 });
 

@@ -7,7 +7,7 @@ import { prisma } from "../utils/global.js";
 import { getUsersByList } from "../controllers/users.js";
 import { createEvent, TargetTypes } from "../controllers/events.js";
 // 中间件，确保所有请求均经过该处理
-router.all("*", (req, res, next) => next());
+router.all("/{*path}", (req, res, next) => next());
 
 // 统一的错误处理函数
 const handleError = (res, err, message) => {
