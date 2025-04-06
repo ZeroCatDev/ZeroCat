@@ -64,7 +64,7 @@ app.set("view engine", "ejs");
 //  console.log("Listening on http://localhost:3000");
 //});
 
-app.options("*", cors());
+app.options("/{*path}", cors());
 
 // 使用token解析中间件
 app.use(parseToken);
