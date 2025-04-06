@@ -141,7 +141,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.all("*", function (req, res, next) {
+app.all("/{*path}", function (req, res, next) {
   res.status(404).json({
     status: "error",
     code: "404",

@@ -23,7 +23,6 @@ import { createEvent, EventTypes, TargetTypes } from "../controllers/events.js";
 const router = Router();
 
 // 中间件，确保所有请求均经过该处理
-router.all("/{*path}", (req, res, next) => next());
 
 // 抽离的函数
 async function checkProjectPermission(projectid, userid, permission) {
