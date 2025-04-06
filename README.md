@@ -27,7 +27,7 @@ This repository contains the backend code for ZeroCat.
   - [License](#license)
 
 
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat-backend.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat-backend?ref=badge_large)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat?ref=badge_large)
 
 ## Background
 
@@ -48,7 +48,7 @@ To see the community in action, please refer to [ZeroCat](https://zerocat.houlan
 
 ## Installation
 ![Developed with Node.js](public/Node.js.png)
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat-backend.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat-backend?ref=badge_shield)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat?ref=badge_shield)
 
 This project uses [Node.js](http://nodejs.org), [npm](https://npmjs.com), and [Docker](https://docker.com). Please ensure that these are installed on your local machine.
 
