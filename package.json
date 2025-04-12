@@ -8,7 +8,7 @@
     "prisma": "prisma generate",
     "prisma:pull": "prisma db pull && prisma generate",
     "dev": "NODE_ENV=development nodemon server.js"
-  },
+    },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.782.0",
     "@maxmind/geoip2-node": "^4.2.0",
