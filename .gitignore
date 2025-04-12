@@ -137,3 +137,6 @@ dist
 
 usercontent/*
 !usercontent/.gitkeep
+
+# MaxMind GeoIP database files
+data/*.mmdb

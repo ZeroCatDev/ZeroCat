@@ -1,163 +1,119 @@
 import "dotenv/config";
-
 import express from "express";
-import jsonwebtoken from "jsonwebtoken";
-
-import configManager from "./utils/configManager.js";
+import path from 'path';
+import { fileURLToPath } from 'url';
 import logger from "./utils/logger.js";
-import { parseToken } from "./middleware/auth.js";
-import authUtils from "./utils/auth.js";
 
-import expressWinston from "express-winston";
-import cors from "cors";
-import bodyParser from "body-parser";
-import compress from "compression";
+// 导入配置模块
+import { configureMiddleware } from "./config/middleware.js";
+import { configureRoutes } from "./config/routes.js";
 
-const app = express();
+// 导入服务
+import geoIpService from "./services/geoIp/geoIpService.js";
+import schedulerService from "./services/scheduler.js";
+import errorHandlerService from "./services/errorHandler.js";
 
-app.use(
-  expressWinston.logger({
-    winstonInstance: logger,
-    meta: true,
-    msg: "HTTP {{req.method}} {{res.statusCode}} {{res.responseTime}}ms {{req.url}} {{req.ip}}",
-    colorize: false,
-    ignoreRoute: (req, res) => false,
-    level: "info",
-  })
-);
+// 全局初始化标志，防止重复初始化
+global.appInitialized = global.appInitialized || false;
 
-// CORS 配置
-const corslist = (await configManager.getConfig("cors")).split(",");
-const corsOptionsDelegate = (origin, callback) => {
-  if (!origin || corslist.includes(new URL(origin).hostname)) {
-    return callback(null, true);
-  } else {
-    logger.error("Not allowed by CORS");
-    return callback(new Error("Not allowed by CORS"));
+/**
+ * 应用程序主类
+ */
+class Application {
+  constructor() {
+    this.app = express();
+    this._initPromise = this.configureApp();
   }
-};
-app.use(
-  cors({
-    credentials: true,
-    origin: (origin, callback) => corsOptionsDelegate(origin, callback),
-  })
-);
 
-//express 的http请求体进行解析组件
-app.use(bodyParser.urlencoded({ limit: "100mb", extended: false }));
-app.use(bodyParser.json({ limit: "100mb" }));
-app.use(bodyParser.text({ limit: "100mb" }));
-app.use(bodyParser.raw({ limit: "100mb" }));
-
-//文件上传模块
-// app.use(multipart({ uploadDir: "./usercontent" }));
-
-//压缩组件，需要位于 express.static 前面，否则不起作用
-app.use(compress());
-
-app.set("env", process.cwd());
-app.set("data", process.cwd() + "/data");
-app.set("views", process.cwd() + "/views");
-
-app.set("view engine", "ejs");
-
-//http.createServer(app).listen(3000, "0.0.0.0", function () {
-//  console.log("Listening on http://localhost:3000");
-//});
-
-//app.options("/{*path}", cors());
-
-// 使用token解析中间件
-app.use(parseToken);
-
-//首页
-app.get("/", function (req, res) {
-  res.render("index.ejs");
-});
-
-//放在最后，确保路由时能先执行app.all=====================
-//注册、登录等功能路由
-import router_register from "./routes/router_account.js";
-app.use("/account", router_register);
-
-//个人中心
-import router_admin from "./routes/router_my.js";
-app.use("/my", router_admin);
-
-//搜索api
-import router_search from "./routes/router_search.js";
-app.use("/searchapi", router_search);
-
-//scratch路由
-import router_scratch from "./routes/router_scratch.js";
-app.use("/scratch", router_scratch);
-
-//api路由
-import router_api from "./routes/router_api.js";
-app.use("/api", router_api);
-
-// 项目列表
-import router_projectlist from "./routes/router_projectlist.js";
-app.use("/projectlist", router_projectlist);
-
-// 项目
-import router_project from "./routes/router_project.js";
-app.use("/project", router_project);
-
-// 评论
-import router_comment from "./routes/router_comment.js";
-app.use("/comment", router_comment);
-
-// 用户
-import router_user from "./routes/router_user.js";
-app.use("/user", router_user);
-
-// 时间线
-import timelineRouter from "./routes/router_timeline.js";
-app.use("/timeline", timelineRouter);
-
-app.get("/check", function (req, res, next) {
-  res.status(200).json({
-    message: "success",
-    code: 200,
-  });
-});
-
-app.get("/scratchtool", function (req, res, next) {
-  //返回js
-  res.set("Content-Type", "application/javascript");
-  res.render("scratchtool.ejs");
-});
-process.on("uncaughtException", function (err) {
-  logger.error(err);
-});
-
-// Centralized error-handling middleware function
-app.use((err, req, res, next) => {
-  logger.error(err);
-  res.status(500).send({
-    status: "error",
-    message: "Something went wrong!",
-    error: err.message,
-  });
-});
-
-app.all("/{*path}", function (req, res, next) {
-  res.status(404).json({
-    status: "error",
-    code: "404",
-    message: "找不到页面",
-  });
-});
-
-// 定时任务
-setInterval(async () => {
-  try {
-    // 清理过期的令牌
-    await authUtils.cleanupExpiredTokens();
-  } catch (error) {
-    logger.error("清理过期令牌出错:", error);
+  /**
+   * 获取初始化完成的Promise
+   * @returns {Promise} 初始化Promise
+   */
+  get initialized() {
+    return this._initPromise;
   }
-}, 12 * 60 * 60 * 1000); // 每12小时执行一次
 
-export default app;
+  /**
+   * 配置应用程序
+   */
+  async configureApp() {
+    try {
+      // 配置中间件
+      await configureMiddleware(this.app);
+
+      // 配置路由
+      await configureRoutes(this.app);
+
+      // 添加全局错误处理中间件
+      this.app.use(errorHandlerService.createExpressErrorHandler());
+
+      // 设置未捕获异常处理
+      this.setupExceptionHandling();
+
+      logger.info('应用程序配置完成');
+    } catch (error) {
+      logger.error('应用配置失败:', error);
+      process.exit(1);
+    }
+  }
+
+  /**
+   * 设置全局异常处理
+   */
+  setupExceptionHandling() {
+    // 使用错误处理服务注册全局处理器
+    errorHandlerService.registerGlobalHandlers();
+  }
+
+  /**
+   * 初始化服务
+   */
+  async initializeServices() {
+    try {
+      // 防止重复初始化服务
+      if (global.appInitialized) {
+        logger.debug('服务已经初始化过，跳过重复初始化');
+        return;
+      }
+
+      logger.info('开始初始化服务...');
+
+      // 初始化GeoIP服务
+      await geoIpService.initialize().catch(error => {
+        logger.error('初始化MaxMind GeoIP失败:', error);
+      });
+
+      // 初始化调度服务
+      schedulerService.initialize();
+
+      logger.info('所有服务初始化完成');
+
+      // 标记应用已初始化
+      global.appInitialized = true;
+    } catch (error) {
+      logger.error('服务初始化失败:', error);
+    }
+  }
+
+  /**
+   * 启动应用
+   * @returns {express.Application} Express应用实例
+   */
+  getApp() {
+    return this.app;
+  }
+}
+
+// 创建应用实例
+const application = new Application();
+
+// 初始化服务
+Promise.all([
+  application.initialized,
+  application.initializeServices()
+]).catch(error => {
+  logger.error('初始化失败:', error);
+});
+
+// 导出Express应用实例
+export default application.getApp();

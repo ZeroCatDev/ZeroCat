@@ -7,6 +7,9 @@ import { join } from "path";
 const logLevel = process.env.LOG_LEVEL || "info";
 const logDirectory = process.env.LOG_DIR || "logs";
 
+// 使用单例模式，确保只有一个logger实例
+let loggerInstance = null;
+
 // 自定义日志格式化方式
 const logFormat = printf(({ level, message, timestamp, stack }) => {
   // 确保 message 是一个字符串类型，如果是对象，则使用 JSON.stringify()
@@ -20,58 +23,56 @@ const logFormat = printf(({ level, message, timestamp, stack }) => {
   return logMessage;
 });
 
-// 创建logger
-const logger = createLogger({
-  level: logLevel,
-  format: combine(
-    timestamp({ format: "YYYY-MM-DD HH:mm:ss" }), // 自定义时间格式
-    errors({ stack: true }), // 捕获错误堆栈信息
-    logFormat // 自定义日志格式
-  ),
-  transports: [
-    new transports.Console({
-      format: combine(
-        colorize(), // 控制台输出颜色
+// 创建logger单例
+const createLoggerInstance = () => {
+  if (loggerInstance) {
+    return loggerInstance;
+  }
 
-        logFormat // 输出格式
-      ),
-    }),
+  // 确定控制台日志级别 - 开发环境使用debug，生产环境使用配置的级别
+  const consoleLogLevel = process.env.NODE_ENV === "development" ? "debug" : logLevel;
 
-    // 错误日志文件：每天生成一个错误日志文件
-    new DailyRotateFile({
-      level: "error",
-      filename: join(logDirectory, "error-%DATE%.log"),
-      datePattern: "YYYY-MM-DD",
-      zippedArchive: true,
-      maxSize: "20m",
-      maxFiles: "14d",
-    }),
+  loggerInstance = createLogger({
+    level: logLevel,
+    format: combine(
+      timestamp({ format: "YYYY-MM-DD HH:mm:ss" }), // 自定义时间格式
+      errors({ stack: true }), // 捕获错误堆栈信息
+      logFormat // 自定义日志格式
+    ),
+    transports: [
+      // 控制台输出 - 根据环境配置级别
+      new transports.Console({
+        level: consoleLogLevel,
+        format: combine(
+          colorize(), // 控制台输出颜色
+          logFormat // 输出格式
+        ),
+      }),
 
-    // 综合日志文件：记录所有日志
-    new DailyRotateFile({
-      level: logLevel,
-      filename: join(logDirectory, "combined-%DATE%.log"),
-      datePattern: "YYYY-MM-DD",
-      zippedArchive: true,
-      maxSize: "20m",
-      maxFiles: "14d",
-    }),
-  ],
-});
+      // 错误日志文件：每天生成一个错误日志文件
+      new DailyRotateFile({
+        level: "error",
+        filename: join(logDirectory, "error-%DATE%.log"),
+        datePattern: "YYYY-MM-DD",
+        zippedArchive: true,
+        maxSize: "20m",
+        maxFiles: "14d",
+      }),
 
-// 在开发环境中输出详细调试信息
-if (process.env.NODE_ENV === "development") {
-  logger.add(
-    new transports.Console({
-      level: "debug",
-      format: combine(
-        colorize(),
-        timestamp(),
-        logFormat
-      ),
-    })
-  );
-}
+      // 综合日志文件：记录所有日志
+      new DailyRotateFile({
+        level: logLevel,
+        filename: join(logDirectory, "combined-%DATE%.log"),
+        datePattern: "YYYY-MM-DD",
+        zippedArchive: true,
+        maxSize: "20m",
+        maxFiles: "14d",
+      }),
+    ],
+  });
 
-// 导出logger
-export default logger;
+  return loggerInstance;
+};
+
+// 导出logger单例
+export default createLoggerInstance();

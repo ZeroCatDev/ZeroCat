@@ -3,14 +3,15 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "echo \"No test specified\" && exit 0",
-    "start": "node .bin/www",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js",
     "prisma": "prisma generate",
     "prisma:pull": "prisma db pull && prisma generate",
-    "dev": "NODE_ENV=development nodemon node .bin/www"
+    "dev": "NODE_ENV=development nodemon server.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.782.0",
+    "@maxmind/geoip2-node": "^4.2.0",
     "@prisma/client": "^6.5.0",
     "axios": "^1.8.4",
     "base32-encode": "^2.0.0",
@@ -34,6 +35,7 @@
     "nodemailer": "^6.10.0",
     "otpauth": "^9.4.0",
     "phpass": "^0.1.1",
+    "tar": "^6.2.1",
     "ua-parser-js": "^2.0.3",
     "uuid": "^11.1.0",
     "winston": "^3.17.0",

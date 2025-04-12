@@ -3,10 +3,24 @@ import configManager from "../utils/configManager.js";
 import axios from "axios";
 import { createHmac } from "crypto";
 
-const GEE_CAPTCHA_ID = await configManager.getConfig("captcha.GEE_CAPTCHA_ID");
-const GEE_CAPTCHA_KEY = await configManager.getConfig("captcha.GEE_CAPTCHA_KEY");
-const GEE_API_SERVER = "http://gcaptcha4.geetest.com/validate";
-logger.debug(GEE_API_SERVER);
+// Get configuration values
+let GEE_CAPTCHA_ID = '';
+let GEE_CAPTCHA_KEY = '';
+let GEE_API_SERVER = "http://gcaptcha4.geetest.com/validate";
+
+// Initialize configuration async
+async function initConfig() {
+  try {
+    GEE_CAPTCHA_ID = await configManager.getConfig("captcha.GEE_CAPTCHA_ID", "");
+    GEE_CAPTCHA_KEY = await configManager.getConfig("captcha.GEE_CAPTCHA_KEY", "");
+    logger.debug("Geetest config loaded");
+  } catch (err) {
+    logger.error("Failed to load Geetest config:", err);
+  }
+}
+
+// Initialize config
+initConfig();
 
 /**
  * 生成签名的函数，使用 HMAC-SHA256
@@ -25,9 +39,18 @@ function hmacSha256Encode(value, key) {
  * @param {Function} next - express的next函数
  */
 async function geetestMiddleware(req, res, next) {
+  // 开发环境下跳过验证码检查
   if (process.env.NODE_ENV === "development") {
-    return next(); // 开发环境下不验证验证码
+    logger.debug("Development mode: Bypassing captcha validation");
+    return next();
   }
+
+  // 如果未正确配置验证码，也跳过检查
+  if (!GEE_CAPTCHA_ID || !GEE_CAPTCHA_KEY) {
+    logger.warn("Geetest is not configured properly, bypassing captcha validation");
+    return next();
+  }
+
   // 验证码信息
   let geetest = {};
 
@@ -46,14 +69,20 @@ async function geetestMiddleware(req, res, next) {
     }
   } catch (error) {
     logger.error("Captcha Parsing Error:", error);
-    res.status(400).send({ code: 400, message: "Invalid captcha data" });
-    return;
+    return res.status(400).json({
+      status: "error",
+      code: 400,
+      message: "验证码数据无效"
+    });
   }
 
   if (!geetest.lot_number || !geetest.captcha_output || !geetest.captcha_id || !geetest.pass_token || !geetest.gen_time) {
     logger.error("Captcha data missing");
-    res.status(400).send({ code: 400, message: "Captcha data missing" });
-    return;
+    return res.status(400).json({
+      status: "error",
+      code: 400,
+      message: "验证码数据不完整"
+    });
   }
 
   logger.debug(geetest);
@@ -84,15 +113,16 @@ async function geetestMiddleware(req, res, next) {
       next(); // 验证成功，继续处理请求
     } else {
       logger.debug(`Validate fail: ${result.data.reason}`);
-      res.status(500).send({
-        code: 500,
-        message: `请完成验证码/${result.data.reason}`,
+      return res.status(400).json({
         status: "error",
+        code: 400,
+        message: `请完成验证码/${result.data.reason}`,
       });
     }
   } catch (error) {
     logger.error("Geetest server error:", error);
-    next(); // 极验服务器出错时放行，避免阻塞业务逻辑
+    // 极验服务器出错时放行，避免阻塞业务逻辑
+    next();
   }
 }
 

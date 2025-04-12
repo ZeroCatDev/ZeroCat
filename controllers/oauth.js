@@ -70,7 +70,7 @@ export async function initializeOAuthProviders() {
       provider.clientSecret = clientSecret;
       provider.redirectUri = `${baseUrl}/account/oauth/${provider.id}/callback`;
 
-      logger.info(`OAuth provider ${provider.name} initialized, enabled: ${provider.enabled}`);
+      logger.debug(`OAuth provider ${provider.name} initialized, enabled: ${provider.enabled}`);
     }
   } catch (error) {
     logger.error('Failed to initialize OAuth providers:', error);
@@ -344,4 +344,4 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
     logger.error('OAuth callback error:', error);
     throw error;
   }
-} 
+}

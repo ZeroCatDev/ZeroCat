@@ -9,7 +9,7 @@ const siteName = await configManager.getConfig("site.name");
 const mailFrom = await configManager.getConfig("mail.from");
 const from = `${siteName} <${mailFrom}>`;
 
-  logger.info("Initializing email transporter:", service, user);
+  logger.debug("Initializing email transporter:", service, user);
   logger.debug({
     service,
     secure: true,
