@@ -1,12 +1,17 @@
 import express from 'express';
 import logger from '../utils/logger.js';
 import paths from './constants/paths.js';
+import configManager from '../utils/configManager.js';
 
 /**
  * 配置应用路由
  * @param {express.Application} app Express应用实例
  */
 export async function configureRoutes(app) {
+  // 加载配置信息到全局
+  await configManager.loadConfigsFromDB();
+  logger.info('配置信息已加载到全局');
+
   // 设置视图目录和引擎
   app.set("env", process.cwd());
   app.set("data", paths.DATA_DIR);

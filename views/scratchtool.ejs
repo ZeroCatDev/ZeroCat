@@ -1,19 +1,19 @@
 // Configuration management
 const ZCConfig = {
   frontend: {
-    url: localStorage.getItem("ZeroCat_ZCFrontend") || "<%= global.config['urls.frontend'] %>",
+    url: localStorage.getItem("ZeroCat_ZCFrontend") || "<%= (global.publicconfig && global.publicconfig['urls.frontend']) || 'http://localhost:3000' %>",
     getPath: function(path) {
       return `${this.url}${path}`;
     }
   },
   api: {
-    url: localStorage.getItem("ZeroCat_ZCApiHost") || "<%= global.config['urls.backend'] %>",
+    url: localStorage.getItem("ZeroCat_ZCApiHost") || "<%= (global.publicconfig && global.publicconfig['urls.backend']) || 'http://localhost:3001' %>",
     getPath: function(path) {
       return `${this.url}${path}`;
     }
   },
   s3: {
-    staticUrl: "<%= global.config['s3.staticurl'] %>"
+    staticUrl: "<%= (global.publicconfig && global.publicconfig['s3.staticurl']) || '' %>"
   }
 };
 
@@ -34,10 +34,10 @@ const loadStyle = (href) => {
 
 const ZCFrontend =
   localStorage.getItem("ZeroCat_ZCFrontend") ||
-  "<%= global.config['urls.frontend'] %>";
+  "<%= (global.publicconfig && global.publicconfig['urls.frontend']) || 'http://localhost:3000' %>";
 const ZCApiHost =
   localStorage.getItem("ZeroCat_ZCApiHost") ||
-  "<%= global.config['urls.backend'] %>";
+  "<%= (global.publicconfig && global.publicconfig['urls.backend']) || 'http://localhost:3001' %>";
 
 function loadResources() {
   loadStyle(ZCConfig.frontend.getPath('/scratchtool/mdui.css'));
