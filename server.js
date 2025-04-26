@@ -33,7 +33,7 @@ async function main() {
 function printBanner() {
   const banner = `
 =============================================================
-|                 ZeroCat Backend Server                    |
+|                 ZeroCat Backend Server
 |
 |  Version: ${process.env.npm_package_version || '1.0.0'}
 |  Environment: ${process.env.NODE_ENV}
