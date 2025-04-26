@@ -138,10 +138,11 @@ export const loginWithPassword = async (req, res, next) => {
     memoryCache.delete(attemptKey);
 
     // 添加登录事件（不记录到数据库）
-    await createEvent("USER_LOGIN", user.id, TargetTypes.USER, user.id, {
-      login_type: "password",
-      ip: req.ip,
-      user_agent: req.headers["user-agent"],
+    await createEvent("user_login", user.id, TargetTypes.USER, user.id, {
+      event_type: "user_login",
+      actor_id: user.id,
+      target_type: TargetTypes.USER,
+      target_id: user.id
     });
 
     res.status(200).send({
@@ -289,10 +290,11 @@ export const loginWithCode = async (req, res) => {
     );
 
     // 记录登录事件
-    await createEvent("USER_LOGIN", user.id, TargetTypes.USER, user.id, {
-      login_type: "verification_code",
-      ip: req.ip,
-      user_agent: req.headers["user-agent"],
+    await createEvent("user_login", user.id, TargetTypes.USER, user.id, {
+      event_type: "user_login",
+      actor_id: user.id,
+      target_type: TargetTypes.USER,
+      target_id: user.id
     });
 
     return res.status(200).json({
@@ -507,10 +509,11 @@ export const validateMagicLink = async (req, res) => {
     memoryCache.set(usedKey, true, 86400); // 24小时过期
 
     // 记录登录事件
-    await createEvent("USER_LOGIN", user.id, TargetTypes.USER, user.id, {
-      login_type: "magic_link",
-      ip: req.ip,
-      user_agent: req.headers["user-agent"],
+    await createEvent("user_login", user.id, TargetTypes.USER, user.id, {
+      event_type: "user_login",
+      actor_id: user.id,
+      target_type: TargetTypes.USER,
+      target_id: user.id
     });
 
     res.status(200).json({

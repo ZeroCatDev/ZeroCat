@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { prisma } from "../utils/global.js";
 import logger from "../utils/logger.js";
-import { EventTypes } from "../controllers/events.js";
-import { needlogin, strictTokenCheck, needadmin } from "../middleware/auth.js";
+import { EventTypes, EventConfig } from "../controllers/events.js";
+import { needLogin, strictTokenCheck, needadmin } from "../middleware/auth.js";
 
 const router = Router();
 
@@ -19,7 +19,7 @@ async function formatEvents(events, actorMap) {
           return null;
         }
 
-        const eventConfig = EventTypes[event.event_type];
+        const eventConfig = EventConfig[event.event_type];
         if (!eventConfig) {
           logger.warn(`Event type config not found: ${event.event_type}`);
           return null;
@@ -133,7 +133,7 @@ router.get("/user/:userid", async (req, res) => {
 });
 
 // 获取关注的用户的时间线（只显示公开事件）
-router.get("/following", needlogin, async (req, res) => {
+router.get("/following", needLogin, async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
 

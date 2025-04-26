@@ -6,7 +6,9 @@ var router = Router();
 import fs from "fs";
 import cryptojs from "crypto-js";
 import { prisma } from "../utils/global.js";
-import { needlogin, strictTokenCheck, needadmin } from "../middleware/auth.js";
+import { needLogin, strictTokenCheck, needadmin } from "../middleware/auth.js";
+import notificationsRoutes from "./notifications.js";
+import followsRoutes from "./follows.js";
 
 router.get("/usertx", async function (req, res, next) {
   try {
@@ -313,4 +315,11 @@ router.get("/tuxiaochao", async function (req, res) {
     });
   }
 });
+
+// Mount notifications routes
+router.use('/notifications', notificationsRoutes);
+
+// Mount follows routes
+router.use('/follows', followsRoutes);
+
 export default router;

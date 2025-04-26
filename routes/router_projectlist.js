@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { needlogin, strictTokenCheck } from "../middleware/auth.js";
+import { needLogin, strictTokenCheck } from "../middleware/auth.js";
 import starsRouter from "./router_stars.js";
 import listsRouter from "./router_lists.js";
 

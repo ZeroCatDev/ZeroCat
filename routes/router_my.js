@@ -1,5 +1,5 @@
 import logger from "../utils/logger.js";
-import { needlogin, strictTokenCheck } from "../middleware/auth.js";
+import { needLogin, strictTokenCheck } from "../middleware/auth.js";
 import configManager from "../utils/configManager.js";
 import fs from "fs";
 
@@ -80,13 +80,23 @@ router.post("/set/userinfo", async (req, res) => {
 
     // 添加个人资料更新事件
     await createEvent(
-      "USER_PROFILE_UPDATE",
+      "user_profile_update",
       res.locals.userid,
       TargetTypes.USER,
       res.locals.userid,
       {
+        event_type: "user_profile_update",
+        actor_id: res.locals.userid,
+        target_type: TargetTypes.USER,
+        target_id: res.locals.userid,
+        update_type: "profile_update",
         updated_fields: ["display_name", "motto", "sex", "birthday"],
-        display_name: req.body["display_name"],
+        old_value: null,
+        new_value: JSON.stringify({
+          display_name: req.body["display_name"],
+          motto: req.body["aboutme"],
+          sex: req.body["sex"]
+        })
       }
     );
 

@@ -32,9 +32,6 @@ const loadStyle = (href) => {
   document.head.appendChild(link);
 };
 
-const ZCFrontend = "<%= global.config['urls.frontend'] %>";
-const ZCApiHost = "<%= global.config['urls.backend']%>";
-
 function loadResources() {
   loadStyle(ZCConfig.frontend.getPath('/scratchtool/mdui.css'));
 

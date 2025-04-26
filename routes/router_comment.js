@@ -1,5 +1,5 @@
 import logger from "../utils/logger.js";
-import { needlogin, strictTokenCheck } from "../middleware/auth.js";
+import { needLogin, strictTokenCheck } from "../middleware/auth.js";
 import configManager from "../utils/configManager.js";
 
 import { Router } from "express";
@@ -122,7 +122,7 @@ router.get("/api/comment", async (req, res, next) => {
 });
 
 // 创建评论
-router.post("/api/comment", needlogin, async (req, res, next) => {
+router.post("/api/comment", needLogin, async (req, res, next) => {
   try {
     const { url, comment, pid, rid } = req.body;
     const { userid, display_name } = res.locals;

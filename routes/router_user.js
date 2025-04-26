@@ -4,7 +4,7 @@ import configManager from "../utils/configManager.js";
 import { Router } from "express";
 var router = Router();
 import { prisma } from "../utils/global.js";
-import { needlogin, strictTokenCheck, needadmin } from "../middleware/auth.js";
+import { needLogin, strictTokenCheck, needadmin } from "../middleware/auth.js";
 import { createEvent } from "../controllers/events.js";
 
 // 根据用户ID获取用户信息
@@ -120,7 +120,7 @@ router.post("/batch/:type", async function (req, res, next) {
   }
 });
 // 获取用户自身信息
-router.get("/me", needlogin, async function (req, res, next) {
+router.get("/me", needLogin, async function (req, res, next) {
   try {
     const user = await prisma.ow_users.findFirst({
       where: { id: res.locals.userid },
@@ -154,7 +154,7 @@ router.get("/me", needlogin, async function (req, res, next) {
 });
 
 // 在用户资料更新时记录事件
-router.post("/profile/update", needlogin, async (req, res) => {
+router.post("/profile/update", needLogin, async (req, res) => {
   try {
     const userId = res.locals.userid;
     const oldUser = await prisma.ow_users.findUnique({
@@ -166,6 +166,10 @@ router.post("/profile/update", needlogin, async (req, res) => {
     // 记录用户资料更新事件
     if (req.body.display_name !== oldUser.display_name) {
       await createEvent("user_profile_update", userId, "user", userId, {
+        event_type: "user_profile_update",
+        actor_id: userId,
+        target_type: "user",
+        target_id: userId,
         update_type: "display_name",
         old_value: oldUser.display_name,
         new_value: req.body.display_name,
@@ -174,6 +178,10 @@ router.post("/profile/update", needlogin, async (req, res) => {
 
     if (req.body.motto !== oldUser.motto) {
       await createEvent("user_profile_update", userId, "user", userId, {
+        event_type: "user_profile_update",
+        actor_id: userId,
+        target_type: "user",
+        target_id: userId,
         update_type: "motto",
         old_value: oldUser.motto,
         new_value: req.body.motto,
@@ -196,6 +204,10 @@ router.post("/register", async (req, res) => {
 
     // 记录注册事件
     await createEvent("user_register", user.id, "user", user.id, {
+      event_type: "user_register",
+      actor_id: user.id,
+      target_type: "user",
+      target_id: user.id,
       username: user.username,
     });
 

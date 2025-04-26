@@ -1,0 +1,148 @@
+{
+  "baseEventFields": {
+    "event_type": "字符串，事件类型，如 project_create, user_login 等",
+    "actor_id": "数字，执行动作的用户ID",
+    "target_type": "字符串，目标类型，如 project, user, comment 等",
+    "target_id": "数字，目标对象的ID",
+    "metadata": "可选，额外信息，键值对对象"
+  },
+  "eventTypes": {
+    "project_commit": {
+      "description": "项目提交代码事件",
+      "fields": {
+        "commit_id": "字符串，提交的唯一标识符",
+        "commit_message": "字符串，提交信息",
+        "branch": "字符串，分支名称",
+        "commit_file": "字符串，提交的文件路径",
+        "project_name": "字符串，项目名称",
+        "project_title": "字符串，项目标题",
+        "project_type": "字符串，项目类型",
+        "project_description": "字符串，可选，项目描述",
+        "project_state": "字符串，项目状态"
+      },
+      "notification": ["项目所有者", "项目关注者"]
+    },
+    "project_update": {
+      "description": "项目更新事件",
+      "fields": {
+        "update_type": "字符串，更新类型",
+        "old_value": "字符串，可选，旧值",
+        "new_value": "字符串，可选，新值"
+      },
+      "notification": ["项目所有者"]
+    },
+    "project_fork": {
+      "description": "项目分支（复刻）事件",
+      "fields": {
+        "fork_id": "数字，分支项目ID",
+        "project_name": "字符串，项目名称",
+        "project_title": "字符串，项目标题"
+      },
+      "notification": ["项目所有者"]
+    },
+    "project_create": {
+      "description": "创建新项目事件",
+      "fields": {
+        "project_type": "字符串，项目类型",
+        "project_name": "字符串，项目名称",
+        "project_title": "字符串，项目标题",
+        "project_description": "字符串，可选，项目描述",
+        "project_state": "字符串，项目状态"
+      },
+      "notification": ["用户关注者"]
+    },
+    "project_publish": {
+      "description": "发布项目事件",
+      "fields": {
+        "old_state": "字符串，旧状态",
+        "new_state": "字符串，新状态",
+        "project_title": "字符串，项目标题"
+      },
+      "notification": ["用户关注者"]
+    },
+    "comment_create": {
+      "description": "创建评论事件",
+      "fields": {
+        "page_type": "字符串，页面类型",
+        "page_id": "数字，页面ID",
+        "pid": "数字，可选，父评论ID",
+        "rid": "数字，可选，回复ID",
+        "text": "字符串，评论内容，限制为100个字符"
+      },
+      "notification": ["页面所有者", "对话参与者"]
+    },
+    "user_profile_update": {
+      "description": "用户资料更新事件",
+      "fields": {
+        "update_type": "字符串，更新类型",
+        "old_value": "字符串，可选，旧值",
+        "new_value": "字符串，可选，新值"
+      },
+      "notification": ["用户关注者"]
+    },
+    "user_login": {
+      "description": "用户登录事件",
+      "fields": {},
+      "notification": []
+    },
+    "user_register": {
+      "description": "用户注册事件",
+      "fields": {
+        "username": "字符串，用户名"
+      },
+      "notification": []
+    },
+    "project_rename": {
+      "description": "项目重命名事件",
+      "fields": {
+        "old_name": "字符串，旧项目名",
+        "new_name": "字符串，新项目名",
+        "project_title": "字符串，项目标题",
+        "project_type": "字符串，项目类型",
+        "project_state": "字符串，项目状态"
+      },
+      "notification": ["项目关注者"]
+    },
+    "project_info_update": {
+      "description": "项目信息更新事件",
+      "fields": {
+        "updated_fields": "字符串数组，更新的字段名",
+        "old_values": "对象，包含更新字段的旧值",
+        "new_values": "对象，包含更新字段的新值",
+        "project_name": "字符串，项目名称",
+        "project_title": "字符串，项目标题",
+        "project_type": "字符串，项目类型",
+        "project_description": "字符串，可选，项目描述",
+        "project_state": "字符串，项目状态"
+      },
+      "notification": ["项目关注者"]
+    }
+  },
+  "targetTypes": {
+    "project": "项目",
+    "user": "用户",
+    "comment": "评论"
+  },
+  "usage": {
+    "description": "此文档仅供人类阅读，用于了解事件系统中的各种事件格式。在代码中请使用实际的事件模型和验证器。",
+    "example": {
+      "创建项目事件": {
+        "event_type": "project_create",
+        "actor_id": 123,
+        "target_type": "project",
+        "target_id": 456,
+        "project_type": "scratch",
+        "project_name": "my_project",
+        "project_title": "My Awesome Project",
+        "project_description": "This is a cool project",
+        "project_state": "draft"
+      },
+      "用户登录事件": {
+        "event_type": "user_login",
+        "actor_id": 123,
+        "target_type": "user",
+        "target_id": 123
+      }
+    }
+  }
+}

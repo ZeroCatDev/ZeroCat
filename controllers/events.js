@@ -1,307 +1,123 @@
 import { prisma } from "../utils/global.js";
 import logger from "../utils/logger.js";
+import { EventConfig, TargetTypes } from "../models/events.js";
+import * as eventService from "../services/eventService.js";
 
-// 定义事件配置类型
+// Re-export TargetTypes and EventConfig for use in other files
+export { TargetTypes, EventConfig };
+
+// Define a compatibility layer for old EventTypes structure
+// This maps the old EventTypes constants to the new event type strings
+// Required for backward compatibility with existing code
 export const EventTypes = {
-  'project_commit': {
-    type: 'project_commit',
-    logToDatabase: true,
-    dbFields: [
-      'commit_id',          // 提交ID
-      'commit_message',     // 提交信息
-      'branch',            // 分支名称
-      'commit_file',       // 提交的文件标识
-      'project_name',      // 项目名称
-      'project_title',     // 项目标题
-      'project_type',      // 项目类型
-      'project_description', // 项目描述
-      'project_state'      // 项目状态
-    ],
-    public: true,
-    /* event_data 结构:
-    {
-      commit_id: string,        // 提交的唯一标识
-      commit_message: string,   // 提交信息
-      branch: string,          // 分支名称
-      commit_file: string,     // 提交的文件标识
-      project_name: string,    // 项目名称
-      project_title: string,   // 项目标题
-      project_type: string,    // 项目类型
-      project_description: string, // 项目描述
-      project_state: string    // 项目状态
-    }
-    */
-  },
+  // Map the old structure to the new one
+  'project_commit': 'project_commit',
+  'project_update': 'project_update',
+  'project_fork': 'project_fork',
+  'project_create': 'project_create',
+  'project_publish': 'project_publish',
+  'comment_create': 'comment_create',
+  'user_profile_update': 'user_profile_update',
+  'user_login': 'user_login',
+  'user_register': 'user_register',
+  'project_rename': 'project_rename',
+  'project_info_update': 'project_info_update',
 
-  'project_update': {
-    type: 'project_update',
-    logToDatabase: true,
-    dbFields: [
-      'update_type',      // 更新类型(title/description/tags等)
-      'old_value',        // 更新前的值
-      'new_value'         // 更新后的值
-    ],
-    public: true,
-    /* event_data 结构:
-    {
-      update_type: string,     // 更新类型(如 'title', 'description', 'tags')
-      old_value: string,       // 更新前的值
-      new_value: string        // 更新后的值
-    }
-    */
-  },
+  // Common event constants as uppercase for use in code
+  // This is for code using EventTypes.CONSTANT format
+  PROJECT_CREATE: 'project_create',
+  PROJECT_UPDATE: 'project_update',
+  PROJECT_FORK: 'project_fork',
+  PROJECT_PUBLISH: 'project_publish',
+  PROJECT_DELETE: 'project_delete',
+  PROJECT_RENAME: 'project_rename',
+  USER_PROFILE_UPDATE: 'user_profile_update',
+  USER_REGISTER: 'user_register',
+  PROJECT_INFO_UPDATE: 'project_info_update',
+  COMMENT_CREATE: 'comment_create',
+  USER_LOGIN: 'user_login',
 
-  'project_fork': {
-    type: 'project_fork',
-    logToDatabase: true,
-    dbFields: [
-      'fork_id',           // 对应 ow_projects.fork
-      'project_name',      // 新项目名称
-      'project_title'      // 新项目标题
-    ],
-    public: true,
-    /* event_data 结构:
-    {
-      fork_id: number,          // fork 来源项目的 ID
-      project_name: string,     // 新项目名称
-      project_title: string     // 新项目标题
-    }
-    */
-  },
-
-  'project_create': {
-    type: 'project_create',
-    logToDatabase: true,
-    dbFields: [
-      'project_type',     // 对应 ow_projects.type
-      'project_name',     // 对应 ow_projects.name
-      'project_title',    // 对应 ow_projects.title
-      'project_description',      // 对应 ow_projects.description
-      'project_state'            // 对应 ow_projects.state
-    ],
-    public: true,
-    /* event_data 结构:
-    {
-      project_type: string,     // 项目类型
-      project_name: string,     // 项目名称
-      project_title: string,    // 项目标题
-      description: string,      // 项目描述
-      state: string            // 项目状态('private'/'public')
-    }
-    */
-  },
-
-  'project_publish': {
-    type: 'project_publish',
-    logToDatabase: true,
-    dbFields: [
-      'old_state',        // 发布前状态
-      'new_state',        // 发布后状态
-      'project_title'     // 项目标题
-    ],
-    public: true,
-    /* event_data 结构:
-    {
-      old_state: string,        // 发布前状态
-      new_state: string,        // 发布后状态
-      project_title: string     // 项目标题
-    }
-    */
-  },
-
-  'comment_create': {
-    type: 'comment_create',
-    logToDatabase: false,
-    dbFields: [
-      'page_type',
-      'page_id',
-      'pid',
-      'rid',
-      'text'
-    ],
-    public: false,
-    /* event_data 结构:
-    {
-      page_type: string,
-      page_id: number,
-      pid: number,
-      rid: number,
-      text: string
-    }
-    */
-  },
-
-  'user_profile_update': {
-    type: 'user_profile_update',
-    logToDatabase: true,
-    dbFields: [
-      'update_type',     // 更新字段(display_name/motto等)
-      'old_value',       // 更新前的值
-      'new_value'        // 更新后的值
-    ],
-    public: true,
-    /* event_data 结构:
-    {
-      update_type: string,    // 更新类型(如 'display_name', 'motto')
-      old_value: string,      // 更新前的值
-      new_value: string       // 更新后的值
-    }
-    */
-  },
-
-  'user_login': {
-    type: 'user_login',
-    logToDatabase: true,
-    dbFields: [],
-    public: false
-  },
-
-  'user_register': {
-    type: 'user_register',
-    logToDatabase: true,
-    dbFields: ['username'],  // 对应 ow_users.username
-    public: true
-  },
-
-  'project_rename': {
-    type: 'project_rename',
-    logToDatabase: true,
-    dbFields: [
-      'old_name',         // 旧项目名称
-      'new_name',         // 新项目名称
-      'project_title',    // 项目标题
-      'project_type',     // 项目类型
-      'project_state'     // 项目状态
-    ],
-    public: true,
-    /* event_data 结构:
-    {
-      old_name: string,      // 旧项目名称
-      new_name: string,      // 新项目名称
-      project_title: string, // 项目标题
-      project_type: string,  // 项目类型
-      project_state: string  // 项目状态
-    }
-    */
-  },
-
-  'project_info_update': {
-    type: 'project_info_update',
-    logToDatabase: true,
-    dbFields: [
-      'updated_fields',    // 更新的字段列表
-      'old_values',        // 更新前的值
-      'new_values',        // 更新后的值
-      'project_name',      // 项目名称
-      'project_title',     // 项目标题
-      'project_type',      // 项目类型
-      'project_description', // 项目描述
-      'project_state'      // 项目状态
-    ],
-    public: true,
-    /* event_data 结构:
-    {
-      updated_fields: string[],  // 更新的字段列表
-      old_values: {             // 更新前的值
-        title?: string,
-        type?: string,
-        state?: string,
-        description?: string,
-        license?: string,
-        tags?: string[]
-      },
-      new_values: {             // 更新后的值
-        title?: string,
-        type?: string,
-        state?: string,
-        description?: string,
-        license?: string,
-        tags?: string[]
-      },
-      project_name: string,      // 项目名称
-      project_title: string,     // 项目标题
-      project_type: string,      // 项目类型
-      project_description: string, // 项目描述
-      project_state: string      // 项目状态
-    }
-    */
-  },
-};
-
-// Target types enum
-export const TargetTypes = {
-  PROJECT: 'project',
-  USER: 'user',
-  COMMENT: 'comment'
-};
-
-/**
- * 从完整数据中提取需要存储到数据库的字段
- */
-function extractDbFields(eventConfig, eventData) {
-  const dbData = {};
-  for (const field of eventConfig.dbFields) {
-    if (eventData[field] !== undefined) {
-      // 评论内容只存储前100个字符
-      if (field === 'comment_text') {
-        dbData[field] = eventData[field].substring(0, 100);
-      } else {
-        dbData[field] = eventData[field];
-      }
-    }
+  // Add a mapping function to get event config
+  getConfig(eventType) {
+    const type = typeof eventType === 'string' ? eventType : String(eventType);
+    return EventConfig[type.toLowerCase()];
   }
-  return dbData;
-}
+};
 
 /**
- * 创建新事件
- * @param {string} eventType 事件类型
- * @param {number} actorId 操作者ID
- * @param {string} targetType 目标类型
- * @param {number} targetId 目标ID
- * @param {object} eventData 事件数据
- * @param {boolean} [forcePrivate] 强制设为不公开
+ * Create a new event
+ * @param {string} eventType - Type of event
+ * @param {number} actorId - ID of the actor (user) performing the action
+ * @param {string} targetType - Type of the target (project, user, etc.)
+ * @param {number} targetId - ID of the target
+ * @param {object} eventData - Data specific to the event
+ * @param {boolean} [forcePrivate=false] - Force the event to be private
  */
 export async function createEvent(eventType, actorId, targetType, targetId, eventData, forcePrivate = false) {
   try {
-    const normalizedEventType = String(eventType).toLowerCase();
-    const eventConfig = EventTypes[normalizedEventType];
+    // Handle case where eventType is from the old EventTypes object
+    const normalizedEventType = (typeof eventType === 'string' && eventType.toLowerCase()) ||
+                               (EventTypes[eventType] ? EventTypes[eventType].toLowerCase() : null);
 
-    if (!eventConfig) {
-      logger.warn(`Unknown event type: ${normalizedEventType}`);
+    if (!normalizedEventType) {
+      logger.warn(`Invalid event type: ${eventType}`);
       return null;
     }
 
-    if (!eventConfig.logToDatabase) {
-      return null;
-    }
+    // Prepare the event data with actor and target information
+    const fullEventData = {
+      ...eventData,
+      event_type: normalizedEventType,
+      actor_id: actorId,
+      target_type: targetType,
+      target_id: targetId
+    };
 
-    // 优先使用 forcePrivate 参数，其次检查项目状态
-    const isPublic = forcePrivate ? false : eventConfig.public;
-
-    const dbEventData = extractDbFields(eventConfig, eventData);
-
-    const event = await prisma.events.create({
-      data: {
-        event_type: normalizedEventType,
-        actor_id: BigInt(actorId),
-        target_type: targetType,
-        target_id: BigInt(targetId),
-        event_data: dbEventData,
-        public: isPublic ? 1 : 0
-      },
-    });
-
-    logger.debug(`Event created: ${event.id}`);
-    return event;
+    // Use the service to create the event
+    return await eventService.createEvent(normalizedEventType, fullEventData, forcePrivate);
   } catch (error) {
-    logger.error('Error creating event:', error);
+    logger.error('Error in createEvent controller:', error);
     throw error;
   }
 }
 
 /**
- * 获取事件触发者信息
+ * Get events for a specific target
+ * @param {string} targetType - Type of the target
+ * @param {number} targetId - ID of the target
+ * @param {number} [limit=10] - Maximum number of events to return
+ * @param {number} [offset=0] - Pagination offset
+ * @param {boolean} [includePrivate=false] - Whether to include private events
+ */
+export async function getTargetEvents(targetType, targetId, limit = 10, offset = 0, includePrivate = false) {
+  try {
+    return await eventService.getTargetEvents(targetType, targetId, limit, offset, includePrivate);
+  } catch (error) {
+    logger.error('Error in getTargetEvents controller:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get events for a specific actor
+ * @param {number} actorId - ID of the actor
+ * @param {number} [limit=10] - Maximum number of events to return
+ * @param {number} [offset=0] - Pagination offset
+ * @param {boolean} [includePrivate=false] - Whether to include private events
+ */
+export async function getActorEvents(actorId, limit = 10, offset = 0, includePrivate = false) {
+  try {
+    return await eventService.getActorEvents(actorId, limit, offset, includePrivate);
+  } catch (error) {
+    logger.error('Error in getActorEvents controller:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get actor information
+ * @param {number} actorId - The actor ID
+ * @returns {Promise<object|null>} - Actor information
  */
 async function getActor(actorId) {
   return await prisma.ow_users.findUnique({
@@ -316,7 +132,10 @@ async function getActor(actorId) {
 }
 
 /**
- * 获取事件目标对象信息
+ * Get target information
+ * @param {string} targetType - Type of the target
+ * @param {number} targetId - ID of the target
+ * @returns {Promise<object|null>} - Target information
  */
 async function getTarget(targetType, targetId) {
   switch (targetType) {
@@ -401,7 +220,7 @@ async function createNotification(eventId, userId) {
 }
 */
 
-// Event handlers with full context
+// Event handler functions remain as they were, now they can be simplified to use the new service
 async function handleProjectCommit(context) {
   const { event, actor, target, fullData } = context;
   logger.debug('Handling project commit', { actor, target, fullData });
@@ -409,60 +228,58 @@ async function handleProjectCommit(context) {
 }
 
 async function handleProjectShare(context) {
-  // 实现分享逻辑
+  // Implementation...
 }
 
 async function handleProjectUpdate(context) {
-  // 实现更新逻辑
+  // Implementation...
 }
 
 async function handleProjectFork(context) {
-  // 实现复刻逻辑
+  // Implementation...
 }
 
 async function handleProjectCreate(context) {
-  // 实现创建逻辑
+  // Implementation...
 }
 
 async function handleProjectDelete(context) {
-  // 实现删除逻辑
+  // Implementation...
 }
 
 async function handleProjectVisibilityChange(context) {
-  // 实现可见性变更逻辑
+  // Implementation...
 }
 
 async function handleProjectStar(context) {
-  // 实现收藏逻辑
+  // Implementation...
 }
 
 async function handleProfileUpdate(context) {
-  // 实现个人资料更新逻辑
+  // Implementation...
 }
 
 async function handleUserLogin(context) {
-  // 实现用户登录逻辑
+  // Implementation...
 }
 
 async function handleUserProfileUpdate(context) {
   const { event, actor, target, fullData } = context;
   logger.debug('Handling profile update', { actor, target, fullData });
-  // 实现用户资料更新逻辑
+  // Implementation...
 }
 
 async function handleCommentCreate(context) {
   const { event, actor, target, fullData } = context;
   logger.debug('Handling comment create', { actor, target, fullData });
-  // 实现评论创建逻辑
+  // Implementation...
 }
 
 // Helper functions
 async function getProjectFollowers(projectId) {
-  // 这里实现获取项目关注者的逻辑
-  return [];
+  return await eventService.getProjectFollowers(projectId);
 }
 
 async function getUserFollowers(userId) {
-  // 这里实现获取用户关注者的逻辑
-  return [];
-} 
+  return await eventService.getUserFollowers(userId);
+}

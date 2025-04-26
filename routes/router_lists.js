@@ -1,6 +1,6 @@
 import logger from "../utils/logger.js";
 import { Router } from "express";
-import { needlogin } from "../middleware/auth.js";
+import { needLogin } from "../middleware/auth.js";
 import {
   getProjectList,
   getUserListInfoAndCheak,
@@ -86,7 +86,7 @@ router.get("/check", async (req, res) => {
 });
 
 // Create a new list
-router.post("/create", needlogin, async (req, res) => {
+router.post("/create", needLogin, async (req, res) => {
   try {
     const { title, description } = req.body;
 
@@ -105,7 +105,7 @@ router.post("/create", needlogin, async (req, res) => {
 });
 
 // Delete a list
-router.post("/delete", needlogin, async (req, res) => {
+router.post("/delete", needLogin, async (req, res) => {
   try {
     const { id } = req.body;
 
@@ -126,7 +126,7 @@ router.post("/delete", needlogin, async (req, res) => {
 });
 
 // Add a project to a list
-router.post("/add", needlogin, async (req, res) => {
+router.post("/add", needLogin, async (req, res) => {
   try {
     const { listid, projectid } = req.body;
 
@@ -147,7 +147,7 @@ router.post("/add", needlogin, async (req, res) => {
 });
 
 // Remove a project from a list
-router.post("/remove", needlogin, async (req, res) => {
+router.post("/remove", needLogin, async (req, res) => {
   try {
     const { listid, projectid } = req.body;
 
@@ -174,7 +174,7 @@ router.post("/remove", needlogin, async (req, res) => {
 });
 
 // Update list details
-router.post("/update/:id", needlogin, async (req, res) => {
+router.post("/update/:id", needLogin, async (req, res) => {
   try {
     const list = await updateList(res.locals.userid, req.params.id, req.body);
     res

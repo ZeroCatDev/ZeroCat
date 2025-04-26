@@ -3,9 +3,9 @@ import expressWinston from 'express-winston';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import compress from 'compression';
-import { parseToken } from '../middleware/auth.js';
-import logger from '../utils/logger.js';
-import configManager from '../utils/configManager.js';
+import { parseToken } from '../../middleware/auth.js';
+import logger from '../../utils/logger.js';
+import configManager from '../../utils/configManager.js';
 
 /**
  * 配置Express应用的中间件

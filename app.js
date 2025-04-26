@@ -5,8 +5,8 @@ import { fileURLToPath } from 'url';
 import logger from "./utils/logger.js";
 
 // 导入配置模块
-import { configureMiddleware } from "./config/middleware.js";
-import { configureRoutes } from "./config/routes.js";
+import { configureMiddleware } from "./src/config/index.js";
+import { configureRoutes } from "./src/routes/index.js";
 
 // 导入服务
 import geoIpService from "./services/geoIp/geoIpService.js";

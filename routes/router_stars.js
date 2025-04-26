@@ -1,6 +1,6 @@
 import logger from "../utils/logger.js";
 import { Router } from "express";
-import { needlogin } from "../middleware/auth.js";
+import { needLogin } from "../middleware/auth.js";
 import { createEvent, TargetTypes } from "../controllers/events.js";
 import {
   starProject,
@@ -11,7 +11,7 @@ import {
 
 const router = Router();
 
-router.post("/star", needlogin, async (req, res) => {
+router.post("/star", needLogin, async (req, res) => {
   try {
     const { projectid } = req.body;
 
@@ -25,11 +25,17 @@ router.post("/star", needlogin, async (req, res) => {
 
     // Add star event
     await createEvent(
-      "PROJECT_STAR",
+      "project_star",
       res.locals.userid,
       TargetTypes.PROJECT,
       projectid,
-      { action: "star" }
+      {
+        event_type: "project_star",
+        actor_id: res.locals.userid,
+        target_type: TargetTypes.PROJECT,
+        target_id: projectid,
+        action: "star"
+      }
     );
 
     res.status(200).send({ status: "success", message: "收藏成功", star: 1 });
@@ -39,7 +45,7 @@ router.post("/star", needlogin, async (req, res) => {
   }
 });
 
-router.post("/unstar", needlogin, async (req, res) => {
+router.post("/unstar", needLogin, async (req, res) => {
   try {
     const { projectid } = req.body;
 

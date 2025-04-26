@@ -2,7 +2,7 @@ import logger from "../utils/logger.js";
 import configManager from "../utils/configManager.js";
 import { Router } from "express";
 import { prisma } from "../utils/global.js";
-import default_project from "../config/default_project.js";
+import default_project from "../src/config/default_project.js";
 import {
   extractProjectData,
   projectSelectionFields,
@@ -15,7 +15,7 @@ import {
   generateFileAccessToken,
   verifyFileAccessToken,
 } from "../utils/tokenManager.js";
-import { needlogin, strictTokenCheck, needadmin } from "../middleware/auth.js";
+import { needLogin, strictTokenCheck, needadmin } from "../middleware/auth.js";
 import { hasProjectPermission } from "../utils/permissionManager.js";
 import { getUserByUsername } from "../controllers/users.js";
 import { createEvent, EventTypes, TargetTypes } from "../controllers/events.js";
@@ -83,7 +83,7 @@ async function updateBranchLatestCommit(projectid, branch, commitId) {
 }
 
 // 创建新作品
-router.post("/", needlogin, async (req, res, next) => {
+router.post("/", needLogin, async (req, res, next) => {
   try {
     const existingProject = await prisma.ow_projects.findFirst({
       where: {
@@ -120,6 +120,10 @@ router.post("/", needlogin, async (req, res, next) => {
       TargetTypes.PROJECT,
       result.id,
       {
+        event_type: "project_create",
+        actor_id: res.locals.userid,
+        target_type: TargetTypes.PROJECT,
+        target_id: Number(result.id),
         project_name: result.name,
         project_type: result.type,
         project_title: result.title,
@@ -144,7 +148,7 @@ router.post("/", needlogin, async (req, res, next) => {
 });
 
 // 保存源代码
-router.post("/savefile", needlogin, async (req, res, next) => {
+router.post("/savefile", needLogin, async (req, res, next) => {
   try {
     let source;
     if (req.is("multipart/form-data")) {
@@ -264,7 +268,7 @@ router.get("/commit", async (req, res, next) => {
   }
 });
 // 提交代码
-router.put("/commit/id/:id", needlogin, async (req, res, next) => {
+router.put("/commit/id/:id", needLogin, async (req, res, next) => {
   try {
     const {
       branch = "main",
@@ -363,8 +367,12 @@ router.put("/commit/id/:id", needlogin, async (req, res, next) => {
       "project_commit",
       res.locals.userid,
       TargetTypes.PROJECT,
-      projectid,
+      Number(projectid),
       {
+        event_type: "project_commit",
+        actor_id: res.locals.userid,
+        target_type: TargetTypes.PROJECT,
+        target_id: Number(projectid),
         commit_id: commitId,
         commit_message: message,
         branch: branch,
@@ -581,7 +589,7 @@ router.get("/id/:id", async (req, res, next) => {
 });
 
 // 更新作品信息
-router.put("/id/:id", needlogin, async (req, res, next) => {
+router.put("/id/:id", needLogin, async (req, res, next) => {
   try {
     const project = await prisma.ow_projects.findFirst({
       where: { id: Number(req.params.id), authorid: res.locals.userid },
@@ -768,14 +776,18 @@ router.delete("/:id", async (req, res, next) => {
 
       // Create project deletion event
       await createEvent(
-        EventTypes.PROJECT_DELETE,
+        "project_delete",
         res.locals.userid,
         TargetTypes.PROJECT,
         Number(req.params.id),
         {
+          event_type: "project_delete",
+          actor_id: res.locals.userid,
+          target_type: TargetTypes.PROJECT,
+          target_id: Number(req.params.id),
           project_name: project.name,
           project_type: project.type,
-          title: project.title,
+          project_title: project.title,
         }
       );
     }
@@ -791,7 +803,7 @@ router.delete("/:id", async (req, res, next) => {
 });
 
 // 初始化项目
-router.post("/initlize", needlogin, async (req, res, next) => {
+router.post("/initlize", needLogin, async (req, res, next) => {
   if (!res.locals.userid) {
     return res.status(200).send({
       status: "error",
@@ -883,7 +895,7 @@ router.post("/initlize", needlogin, async (req, res, next) => {
 });
 
 // 重命名项目
-router.put("/rename/:id", needlogin, async (req, res, next) => {
+router.put("/rename/:id", needLogin, async (req, res, next) => {
   try {
     const { id } = req.params;
     const { newName } = req.body;
@@ -927,8 +939,12 @@ router.put("/rename/:id", needlogin, async (req, res, next) => {
       "project_rename",
       res.locals.userid,
       TargetTypes.PROJECT,
-      id,
+      Number(id),
       {
+        event_type: "project_rename",
+        actor_id: res.locals.userid,
+        target_type: TargetTypes.PROJECT,
+        target_id: Number(id),
         old_name: project.name,
         new_name: newName,
         project_title: project.title,
@@ -949,7 +965,7 @@ router.put("/rename/:id", needlogin, async (req, res, next) => {
 });
 
 // 重命名项目
-router.put("/changevisibility/:id", needlogin, async (req, res, next) => {
+router.put("/changevisibility/:id", needLogin, async (req, res, next) => {
   try {
     const { id } = req.params;
     const { newState } = req.body;
@@ -985,7 +1001,7 @@ router.put("/changevisibility/:id", needlogin, async (req, res, next) => {
 });
 
 // 修改分支简介
-router.post("/branches/description", needlogin, async (req, res, next) => {
+router.post("/branches/description", needLogin, async (req, res, next) => {
   try {
     const { projectid, branch } = req.query;
     const { description } = req.body;
@@ -1025,7 +1041,7 @@ router.post("/branches/description", needlogin, async (req, res, next) => {
   }
 });
 
-router.post("/fork", needlogin, async (req, res, next) => {
+router.post("/fork", needLogin, async (req, res, next) => {
   const { projectid, branch, name } = req.body;
 
   try {
@@ -1111,11 +1127,15 @@ router.post("/fork", needlogin, async (req, res, next) => {
       "project_fork",
       res.locals.userid,
       TargetTypes.PROJECT,
-      projectid,
+      Number(projectid),
       {
+        event_type: "project_fork",
+        actor_id: res.locals.userid,
+        target_type: TargetTypes.PROJECT,
+        target_id: Number(projectid),
         fork_id: forkedProject.id,
-        fork_name: name,
-        original_project: projectid,
+        project_name: name,
+        project_title: project.title,
       },
       isPrivate
     );

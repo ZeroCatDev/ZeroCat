@@ -3,12 +3,12 @@ import configManager from "../utils/configManager.js";
 
 import { Router } from "express";
 import { prisma } from "../utils/global.js";
-import { needlogin, strictTokenCheck, needadmin } from "../middleware/auth.js";
+import { needLogin, strictTokenCheck, needadmin } from "../middleware/auth.js";
 
 const router = Router();
 
 // 使用基本登录验证的路由
-router.get("/user-info", needlogin, async function (req, res, next) {
+router.get("/user-info", needLogin, async function (req, res, next) {
   try {
     const user = await prisma.ow_users.findUnique({
       where: { id: res.locals.userid },
@@ -31,7 +31,7 @@ router.get("/user-info", needlogin, async function (req, res, next) {
 });
 
 // 使用严格token验证的路由（敏感操作）
-router.post("/change-password", strictTokenCheck, needlogin, async function (req, res, next) {
+router.post("/change-password", strictTokenCheck, needLogin, async function (req, res, next) {
   try {
     // 处理密码更改逻辑
     res.status(200).json({

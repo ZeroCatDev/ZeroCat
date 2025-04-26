@@ -349,3 +349,43 @@ enum user_contacts_contact_type {
   qq
   other
 }
+
+model ow_notifications {
+  id                   BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id              Int
+  notification_type    Int
+  read                 Boolean   @default(false)
+  high_priority        Boolean   @default(false)
+  created_at           DateTime  @default(now()) @db.Timestamp(0)
+  read_at              DateTime? @db.Timestamp(0)
+  actor_id             Int?
+  target_type          String?   @db.VarChar(50)
+  target_id            Int?
+  related_type         String?   @db.VarChar(50)
+  related_id           Int?
+  data                 Json?
+
+  @@index([user_id, read, created_at], map: "idx_user_unread")
+  @@index([user_id, created_at], map: "idx_user_all")
+}
+
+model user_relationships {
+  id               Int                    @id @default(autoincrement())
+  source_user_id   Int
+  target_user_id   Int
+  relationship_type user_relationship_type
+  created_at       DateTime               @default(now()) @db.Timestamp(0)
+  updated_at       DateTime?              @updatedAt @db.Timestamp(0)
+  metadata         Json?
+
+  @@unique([source_user_id, target_user_id, relationship_type], name: "unique_user_relationship")
+  @@index([source_user_id, relationship_type], name: "idx_source_user_relationships")
+  @@index([target_user_id, relationship_type], name: "idx_target_user_relationships")
+}
+
+enum user_relationship_type {
+  follow
+  block
+  mute
+  favorite
+}

@@ -10,6 +10,10 @@ async function createEvent(eventType, actorId, targetType, targetId, eventData, 
                 target_type: targetType,
                 target_id: BigInt(targetId),
                 event_data: {
+                    event_type: eventType,
+                    actor_id: actorId,
+                    target_type: targetType,
+                    target_id: targetId,
                     ...eventData,
                     page: {
                         type: targetType,
@@ -37,7 +41,7 @@ async function updateTimeline() {
                 }
             }
         });
-        
+
         console.log(`找到 ${users.length} 个用户记录`);
         let userCount = 0;
 
@@ -70,7 +74,7 @@ async function updateTimeline() {
                 }
             }
         });
-        
+
         console.log(`找到 ${projects.length} 个作品记录`);
         let projectCount = 0;
 
@@ -85,6 +89,9 @@ async function updateTimeline() {
                     title: project.title,
                     publish_time: project.time,
                     state: project.state,
+                    old_state: 'draft',
+                    new_state: project.state,
+                    project_title: project.title
                 },
                 project.state === 'private' ? 0 : 1,
                 project.time
@@ -104,7 +111,7 @@ async function updateTimeline() {
                 }
             }
         });
-        
+
         console.log(`找到 ${comments.length} 条评论记录`);
         let commentCount = 0;
 
@@ -117,9 +124,11 @@ async function updateTimeline() {
                 'comment',
                 comment.id,
                 {
-                    comment_text: comment.text?.substring(0, 100),
-                    parent_id: comment.pid,
-                    reply_id: comment.rid,
+                    text: comment.text?.substring(0, 100),
+                    page_type: comment.page_type || 'project',
+                    page_id: comment.page_id || 0,
+                    pid: comment.pid,
+                    rid: comment.rid,
                     comment_time: comment.insertedAt,
                 },
                 1,

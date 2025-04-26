@@ -2,7 +2,7 @@ import fs from 'fs';
 import logger from '../../utils/logger.js';
 import ipLocation from '../../utils/ipLocation.js';
 import configManager from '../../utils/configManager.js';
-import paths from '../../config/constants/paths.js';
+import paths from '../../src/config/constants/paths.js';
 
 /**
  * GeoIP服务 - 负责管理MaxMind GeoIP数据库

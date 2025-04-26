@@ -1,7 +1,11 @@
 import { PrismaClient } from "@prisma/client";
 import logger from "../utils/logger.js";
+import { prisma } from "../utils/global.js";
+import notificationController from "./notifications.js";
+import { NotificationTypes } from "./notifications.js";
+import notificationUtils from "../utils/notificationUtils.js";
 
-const prisma = new PrismaClient();
+const prismaClient = new PrismaClient();
 
 /**
  * Star a project for a user
@@ -12,7 +16,7 @@ const prisma = new PrismaClient();
 export async function starProject(userId, projectId) {
   try {
     // 检查项目是否存在
-    const project = await prisma.ow_projects.findUnique({
+    const project = await prismaClient.ow_projects.findUnique({
       where: { id: parseInt(projectId) }
     });
 
@@ -21,7 +25,7 @@ export async function starProject(userId, projectId) {
     }
 
     // 检查是否已经收藏
-    const existingStar = await prisma.$queryRaw`
+    const existingStar = await prismaClient.$queryRaw`
       SELECT * FROM ow_projects_stars
       WHERE userid = ${parseInt(userId)} AND projectid = ${parseInt(projectId)}
       LIMIT 1
@@ -32,17 +36,45 @@ export async function starProject(userId, projectId) {
     }
 
     // 创建收藏
-    const star = await prisma.$executeRaw`
+    const star = await prismaClient.$executeRaw`
       INSERT INTO ow_projects_stars (userid, projectid, createTime)
       VALUES (${parseInt(userId)}, ${parseInt(projectId)}, NOW())
     `;
 
     // 更新项目收藏数
-    await prisma.$executeRaw`
+    await prismaClient.$executeRaw`
       UPDATE ow_projects
       SET star_count = star_count + 1
       WHERE id = ${parseInt(projectId)}
     `;
+
+    // 如果项目不是用户自己的，创建通知
+    if (project.authorid !== userId) {
+      // 获取用户信息作为通知行为者
+      const actorInfo = await notificationUtils.getActorInfo(userId);
+
+      // 创建通知数据
+      if (actorInfo) {
+        const notificationData = notificationUtils.formatNotificationData({
+          notificationType: NotificationTypes.PROJECT_STAR,
+          userId: project.authorid,
+          actorId: userId,
+          targetType: 'project',
+          targetId: projectId,
+          data: {
+            project_id: projectId,
+            project_title: project.title,
+            star_count: (project.star_count || 0) + 1,
+            acting_user_name: actorInfo.display_name,
+            acting_user_avatar_template: actorInfo.acting_user_avatar_template
+          }
+        });
+
+        // 创建通知
+        await notificationController.createNotification(notificationData);
+        logger.debug(`Created star notification for user ${project.authorid}`);
+      }
+    }
 
     return { userid: parseInt(userId), projectid: parseInt(projectId) };
   } catch (error) {
@@ -60,7 +92,7 @@ export async function starProject(userId, projectId) {
 export async function unstarProject(userId, projectId) {
   try {
     // 检查用户是否已收藏该项目
-    const existingStar = await prisma.ow_projects_stars.findFirst({
+    const existingStar = await prismaClient.ow_projects_stars.findFirst({
       where: {
         userid: parseInt(userId),
         projectid: parseInt(projectId)
@@ -73,7 +105,7 @@ export async function unstarProject(userId, projectId) {
     }
 
     // 删除收藏记录
-    const star = await prisma.ow_projects_stars.deleteMany({
+    const star = await prismaClient.ow_projects_stars.deleteMany({
       where: {
         userid: parseInt(userId),
         projectid: parseInt(projectId)
@@ -82,7 +114,7 @@ export async function unstarProject(userId, projectId) {
 
     // 尝试更新项目的收藏数，但不要因为项目不存在而失败
     try {
-      await prisma.$executeRaw`
+      await prismaClient.$executeRaw`
         UPDATE ow_projects
         SET star_count = GREATEST(star_count - 1, 0)
         WHERE id = ${parseInt(projectId)}
@@ -111,7 +143,7 @@ export async function getProjectStarStatus(userId, projectId) {
       return false;
     }
 
-    const star = await prisma.ow_projects_stars.findFirst({
+    const star = await prismaClient.ow_projects_stars.findFirst({
       where: {
         userid: parseInt(userId),
         projectid: parseInt(projectId)
@@ -132,7 +164,7 @@ export async function getProjectStarStatus(userId, projectId) {
  */
 export async function getProjectStars(projectId) {
   try {
-    const count = await prisma.ow_projects_stars.count({
+    const count = await prismaClient.ow_projects_stars.count({
       where: {
         projectid: parseInt(projectId)
       }
@@ -143,4 +175,83 @@ export async function getProjectStars(projectId) {
     logger.error("Error in getProjectStars:", error);
     throw error;
   }
-} 
+}
+
+/**
+ * 处理用户收藏
+ */
+export async function addStar(userId, projectId) {
+  try {
+    // 检查项目是否存在
+    const project = await prismaClient.ow_projects.findUnique({
+      where: { id: projectId },
+    });
+
+    if (!project) {
+      throw new Error("项目不存在");
+    }
+
+    // 检查是否已经收藏
+    const existingStar = await prismaClient.ow_projects_stars.findFirst({
+      where: {
+        userid: userId,
+        projectid: projectId,
+      },
+    });
+
+    if (existingStar) {
+      throw new Error("项目已收藏");
+    }
+
+    // 增加星标
+    const star = await prismaClient.ow_projects_stars.create({
+      data: {
+        userid: userId,
+        projectid: projectId,
+      },
+    });
+
+    // 更新项目星标计数
+    await prismaClient.ow_projects.update({
+      where: { id: projectId },
+      data: {
+        star_count: {
+          increment: 1,
+        },
+      },
+    });
+
+    // 如果项目不是用户自己的，创建通知
+    if (project.authorid !== userId) {
+      // 获取用户信息作为通知行为者
+      const actorInfo = await notificationUtils.getActorInfo(userId);
+
+      // 创建通知数据
+      if (actorInfo) {
+        const notificationData = notificationUtils.formatNotificationData({
+          notificationType: NotificationTypes.PROJECT_STAR,
+          userId: project.authorid,
+          actorId: userId,
+          targetType: 'project',
+          targetId: projectId,
+          data: {
+            project_id: projectId,
+            project_title: project.title,
+            star_count: (project.star_count || 0) + 1,
+            acting_user_name: actorInfo.display_name,
+            acting_user_avatar_template: actorInfo.acting_user_avatar_template
+          }
+        });
+
+        // 创建通知
+        await notificationController.createNotification(notificationData);
+        logger.debug(`Created star notification for user ${project.authorid}`);
+      }
+    }
+
+    return star;
+  } catch (error) {
+    logger.error("添加收藏失败:", error);
+    throw error;
+  }
+}
