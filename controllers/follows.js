@@ -66,13 +66,16 @@ export async function followUser(followerId, followedId, note = "") {
     });
 
     // Create notification for followed user
-    const notificationData = notificationUtils.createUserNotificationData({
-      notificationType: notificationUtils.NotificationTypes.USER_FOLLOW,
+    const notificationData = notificationUtils.createNotification({
+      notificationType: "USER_FOLLOW",
       userId: followedId,
       actorId: followerId,
       additionalData: {
         follower_count: followerCount,
       },
+      targetType: "user",
+      targetId: followedId,
+      highPriority: true,
     });
 
     await notificationUtils.createNotification(notificationData);

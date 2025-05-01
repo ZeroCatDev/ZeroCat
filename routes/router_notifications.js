@@ -30,9 +30,9 @@ router.get('/', needLogin, async (req, res) => {
     });
 
     // 格式化通知以符合客户端期望的格式
-    const formattedNotifications = result.notifications.map(notification =>
+    const formattedNotifications = await Promise.all(result.notifications.map(notification =>
       notificationUtils.formatNotificationForClient(notification)
-    );
+    ));
 
     res.json({
       notifications: formattedNotifications,
@@ -213,13 +213,36 @@ router.post('/', needLogin, async (req, res) => {
       data
     });
 
+    // 格式化通知
+    const formattedNotification = await notificationUtils.formatNotificationForClient(notification);
+
     res.status(201).json({
       status: "success",
-      data: notification
+      data: formattedNotification
     });
   } catch (error) {
     logger.error('创建通知出错:', error);
     res.status(500).json({ error: '创建通知失败' });
+  }
+});
+
+/**
+ * @route GET /notifications/templates
+ * @desc 获取可用的通知模板数据
+ * @access Public
+ */
+router.get('/templates', async (req, res) => {
+  try {
+    // 获取所有通知模板
+    const templates = notificationUtils.getNotificationTemplates();
+
+    res.json({
+      status: "success",
+      templates: templates
+    });
+  } catch (error) {
+    logger.error('获取通知模板出错:', error);
+    res.status(500).json({ error: '获取通知模板失败' });
   }
 });
 
@@ -248,56 +271,53 @@ router.post('/test', needLogin, async (req, res) => {
     }
 
     const results = [];
-    const notifications = [];
 
     // 创建项目评论通知
-    const projectNotification = notificationUtils.createProjectNotificationData({
-      notificationType: notificationUtils.NotificationTypes.PROJECT_COMMENT,
+    const projectCommentNotification = await notificationUtils.createNotification({
       userId,
+      notificationType: notificationUtils.NotificationTypes.PROJECT_COMMENT,
       actorId,
-      projectId: 1,
-      projectTitle: '测试项目',
-      additionalData: {
+      targetType: notificationUtils.TargetTypes.PROJECT,
+      targetId: 1,
+      data: {
+        project_title: '测试项目',
         comment_text: '这是对您项目的测试评论',
         comment_id: 123
       }
     });
-    notifications.push(projectNotification);
+    results.push(projectCommentNotification);
 
     // 创建星标通知
-    const starNotification = notificationUtils.createProjectNotificationData({
-      notificationType: notificationUtils.NotificationTypes.PROJECT_STAR,
+    const starNotification = await notificationUtils.createNotification({
       userId,
+      notificationType: notificationUtils.NotificationTypes.PROJECT_STAR,
       actorId,
-      projectId: 1,
-      projectTitle: '测试项目',
-      additionalData: {
+      targetType: notificationUtils.TargetTypes.PROJECT,
+      targetId: 1,
+      data: {
+        project_title: '测试项目',
         star_count: 42
       }
     });
-    notifications.push(starNotification);
+    results.push(starNotification);
 
     // 创建关注通知
-    const followNotification = notificationUtils.createUserNotificationData({
-      notificationType: notificationUtils.NotificationTypes.USER_FOLLOW,
+    const followNotification = await notificationUtils.createNotification({
       userId,
+      notificationType: notificationUtils.NotificationTypes.USER_FOLLOW,
       actorId,
-      additionalData: {
+      targetType: notificationUtils.TargetTypes.USER,
+      targetId: userId,
+      data: {
         follower_count: 100
       }
     });
-    notifications.push(followNotification);
-
-    // 在数据库中创建所有通知
-    for (const notification of notifications) {
-      const result = await notificationUtils.createNotification(notification);
-      results.push(result);
-    }
+    results.push(followNotification);
 
     // 返回按客户端格式创建的通知
-    const formattedNotifications = results.map(notification =>
+    const formattedNotifications = await Promise.all(results.map(notification =>
       notificationUtils.formatNotificationForClient(notification)
-    );
+    ));
 
     res.json({
       success: true,

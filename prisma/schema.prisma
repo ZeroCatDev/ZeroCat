@@ -332,7 +332,7 @@ model ow_auth_tokens {
 model ow_notifications {
   id                Int       @id @default(autoincrement()) @db.UnsignedInt
   user_id           Int
-  notification_type Int
+  notification_type String    @db.VarChar(64)
   read              Boolean   @default(false)
   high_priority     Boolean   @default(false)
   created_at        DateTime  @default(now()) @db.Timestamp(0)
