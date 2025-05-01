@@ -1,6 +1,6 @@
-import logger from '../../utils/logger.js';
+import logger from '../utils/logger.js';
 import http from 'http';
-import app from '../../app.js';
+import app from './app.js';
 
 /**
  * 服务器配置和启动类

@@ -2,16 +2,16 @@ import "dotenv/config";
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import logger from "./utils/logger.js";
+import logger from "../utils/logger.js";
 
 // 导入配置模块
-import { configureMiddleware } from "./src/index.js";
-import { configureRoutes } from "./src/routes.js";
+import { configureMiddleware } from "./index.js";
+import { configureRoutes } from "./routes.js";
 
 // 导入服务
-import geoIpService from "./services/geoIp/geoIpService.js";
-import schedulerService from "./services/scheduler.js";
-import errorHandlerService from "./services/errorHandler.js";
+import geoIpService from "../services/geoIp/geoIpService.js";
+import schedulerService from "../services/scheduler.js";
+import errorHandlerService from "../services/errorHandler.js";
 
 // 全局初始化标志，防止重复初始化
 global.appInitialized = global.appInitialized || false;
