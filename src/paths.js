@@ -10,5 +10,4 @@ export default {
   VIEWS_DIR: path.resolve(ROOT_DIR, 'views'),
   PUBLIC_DIR: path.resolve(ROOT_DIR, 'public'),
   TOOLS_DIR: path.resolve(ROOT_DIR, 'tools'),
-  GEOIP_DB_FILE: path.resolve(ROOT_DIR, 'data/GeoLite2-City.mmdb')
 };

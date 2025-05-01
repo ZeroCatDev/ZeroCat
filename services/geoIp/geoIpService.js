@@ -2,23 +2,20 @@ import fs from 'fs';
 import logger from '../../utils/logger.js';
 import ipLocation from '../../utils/ipLocation.js';
 import configManager from '../../utils/configManager.js';
-import paths from '../../src/config/constants/paths.js';
+import paths from '../../src/paths.js';
 
 /**
  * GeoIP服务 - 负责管理MaxMind GeoIP数据库
  * 提供数据库检查、加载、下载和动态更新功能
  */
 class GeoIpService {
-  constructor() {
-    this.dbFile = paths.GEOIP_DB_FILE;
-  }
 
   /**
    * 检查数据库文件是否存在
    * @returns {boolean} 文件是否存在
    */
   checkDatabaseExists() {
-    return fs.existsSync(this.dbFile);
+    return fs.existsSync('./data/GeoLite2-City.mmdb');
   }
 
   /**

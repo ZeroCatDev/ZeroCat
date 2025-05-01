@@ -1,13 +1,8 @@
 import express from 'express';
-import logger from '../../utils/logger.js';
-import paths from '../config/constants/paths.js';
-import configManager from '../../utils/configManager.js';
+import logger from '../utils/logger.js';
+import paths from './paths.js';
+import configManager from '../utils/configManager.js';
 
-// 导入路由模块
-import accountRoutes from './account.routes.js';
-import eventRoutes from './event.routes.js';
-// import userRoutes from './user.routes.js';
-// import notificationRoutes from './notification.routes.js';
 
 /**
  * 配置应用路由
@@ -63,54 +58,57 @@ export async function configureRoutes(app) {
 async function registerBusinessRoutes(app) {
   try {
     // 新的标准化路由注册
-    app.use("/account", accountRoutes);
-    app.use("/events", eventRoutes);
+    const accountModule = await import('../routes/router_account.js');
+    app.use("/account", accountModule.default);
+
+    const eventModule = await import('../routes/router_event.js');
+    app.use("/events", eventModule.default);
     // app.use("/users", userRoutes);
 
     // 使用新的通知路由 (获取绝对路径版本)
-    const notificationModule = await import('../../routes/router_notifications.js');
+    const notificationModule = await import('../routes/router_notifications.js');
     app.use("/notifications", notificationModule.default);
 
     // 以下路由暂时保持原有导入方式，等待迁移完成
 
     // 个人中心路由
-    const myModule = await import('../../routes/router_my.js');
+    const myModule = await import('../routes/router_my.js');
     app.use("/my", myModule.default);
 
     // 搜索API路由
-    const searchModule = await import('../../routes/router_search.js');
+    const searchModule = await import('../routes/router_search.js');
     app.use("/searchapi", searchModule.default);
 
     // Scratch路由
-    const scratchModule = await import('../../routes/router_scratch.js');
+    const scratchModule = await import('../routes/router_scratch.js');
     app.use("/scratch", scratchModule.default);
 
     // API路由
-    const apiModule = await import('../../routes/router_api.js');
+    const apiModule = await import('../routes/router_api.js');
     app.use("/api", apiModule.default);
 
     // 项目列表路由
-    const projectlistModule = await import('../../routes/router_projectlist.js');
+    const projectlistModule = await import('../routes/router_projectlist.js');
     app.use("/projectlist", projectlistModule.default);
 
     // 项目路由
-    const projectModule = await import('../../routes/router_project.js');
+    const projectModule = await import('../routes/router_project.js');
     app.use("/project", projectModule.default);
 
     // 评论路由
-    const commentModule = await import('../../routes/router_comment.js');
+    const commentModule = await import('../routes/router_comment.js');
     app.use("/comment", commentModule.default);
 
     // 用户路由
-    const userModule = await import('../../routes/router_user.js');
+    const userModule = await import('../routes/router_user.js');
     app.use("/user", userModule.default);
 
     // 时间线路由
-    const timelineModule = await import('../../routes/router_timeline.js');
+    const timelineModule = await import('../routes/router_timeline.js');
     app.use("/timeline", timelineModule.default);
 
     // 关注路由
-    const followsModule = await import('../../routes/router_follows.js');
+    const followsModule = await import('../routes/router_follows.js');
     app.use("/follows", followsModule.default);
 
     logger.info('所有业务路由注册成功');

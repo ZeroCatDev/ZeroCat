@@ -2,7 +2,7 @@ import logger from "../utils/logger.js";
 import configManager from "../utils/configManager.js";
 import { Router } from "express";
 import { prisma } from "../utils/global.js";
-import default_project from "../src/config/default_project.js";
+import default_project from "../src/default_project.js";
 import {
   extractProjectData,
   projectSelectionFields,

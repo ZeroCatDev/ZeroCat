@@ -6,7 +6,7 @@
 
 import "dotenv/config";
 import logger from './utils/logger.js';
-import { serverConfig } from './src/config/index.js';
+import { serverConfig } from './src/index.js';
 
 /**
  * 应用主函数

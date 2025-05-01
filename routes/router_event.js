@@ -2,14 +2,14 @@
  * @fileoverview Event routes
  */
 import express from "express";
-import { needLogin } from "../../middleware/auth.js";
+import { needLogin } from "../middleware/auth.js";
 import {
   createEvent,
   getTargetEvents,
   getActorEvents,
   getProjectFollowersExternal,
   getUserFollowersExternal,
-} from "../../controllers/events.js";
+} from "../controllers/events.js";
 
 const router = express.Router();
 
