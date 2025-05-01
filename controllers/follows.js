@@ -57,28 +57,18 @@ export async function followUser(followerId, followedId, note = "") {
       },
     });
 
-    // Get follower count for notification
-    const followerCount = await prisma.user_relationships.count({
-      where: {
-        target_user_id: followedId,
-        relationship_type: "follow",
-      },
-    });
 
     // Create notification for followed user
-    const notificationData = notificationUtils.createNotification({
-      notificationType: "USER_FOLLOW",
+    await notificationUtils.createNotification({
       userId: followedId,
+      notificationType: notificationUtils.NotificationTypes.USER_FOLLOW,
       actorId: followerId,
-      additionalData: {
-        follower_count: followerCount,
-      },
-      targetType: "user",
+      targetType: notificationUtils.TargetTypes.USER,
       targetId: followedId,
+      data: {},
       highPriority: true,
     });
 
-    await notificationUtils.createNotification(notificationData);
     logger.debug(`Created follow notification for user ${followedId}`);
 
     return relationship;

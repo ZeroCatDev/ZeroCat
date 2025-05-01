@@ -14,15 +14,11 @@ export const NotificationTypes = {
   PROJECT_COMMENT: "PROJECT_COMMENT",
   PROJECT_STAR: "PROJECT_STAR",
   PROJECT_FORK: "PROJECT_FORK",
-  PROJECT_MENTION: "PROJECT_MENTION",
   PROJECT_UPDATE: "PROJECT_UPDATE",
-  PROJECT_LIKE: "PROJECT_LIKE",
   PROJECT_COLLECT: "PROJECT_COLLECT",
 
   // 用户通知
   USER_FOLLOW: "USER_FOLLOW",
-  USER_MENTION: "USER_MENTION",
-  USER_LIKE: "USER_LIKE",
   USER_NEW_COMMENT: "USER_NEW_COMMENT",
 
   // 系统通知
@@ -31,13 +27,9 @@ export const NotificationTypes = {
 
   // 评论通知
   COMMENT_REPLY: "COMMENT_REPLY",
-  COMMENT_LIKE: "COMMENT_LIKE",
-  COMMENT_MENTION: "COMMENT_MENTION",
 
   // 自定义通知
   CUSTOM_NOTIFICATION: "CUSTOM_NOTIFICATION",
-  CUSTOM_TOPIC_REPLY: "CUSTOM_TOPIC_REPLY",
-  CUSTOM_TOPIC_MENTION: "CUSTOM_TOPIC_MENTION",
 };
 
 /**
@@ -57,7 +49,7 @@ export const NotificationTemplates = {
   },
   PROJECT_STAR: {
     title: "项目星标",
-    template: "{{actor_name}} 收藏了您的项目 {{project_title}}",
+    template: "{{actor_name}} 为您的项目 {{project_title}} 添加了星标",
     icon: "star",
     requiresActor: true,
     requiresData: ["project_title"],
@@ -69,13 +61,7 @@ export const NotificationTemplates = {
     requiresActor: true,
     requiresData: ["project_title"],
   },
-  PROJECT_MENTION: {
-    title: "项目提及",
-    template: "{{actor_name}} 在项目 {{project_title}} 中提到了您",
-    icon: "mention",
-    requiresActor: true,
-    requiresData: ["project_title"],
-  },
+
   PROJECT_UPDATE: {
     title: "项目更新",
     template: "您关注的项目 {{project_title}} 有新的更新",
@@ -84,13 +70,7 @@ export const NotificationTemplates = {
     requiresData: ["project_title"],
   },
 
-  PROJECT_LIKE: {
-    title: "项目点赞",
-    template: "{{actor_name}} 赞了您的项目 {{project_title}}",
-    icon: "like",
-    requiresActor: true,
-    requiresData: ["project_title"],
-  },
+
   PROJECT_COLLECT: {
     title: "项目收藏",
     template: "{{actor_name}} 收藏了您的项目 {{project_title}}",
@@ -104,20 +84,6 @@ export const NotificationTemplates = {
     title: "新关注",
     template: "{{actor_name}} 关注了您",
     icon: "follow",
-    requiresActor: true,
-    requiresData: [],
-  },
-  USER_MENTION: {
-    title: "用户提及",
-    template: "{{actor_name}} 在帖子中提到了您",
-    icon: "mention",
-    requiresActor: true,
-    requiresData: [],
-  },
-  USER_LIKE: {
-    title: "用户点赞",
-    template: "{{actor_name}} 赞了您的内容",
-    icon: "like",
     requiresActor: true,
     requiresData: [],
   },
@@ -137,13 +103,6 @@ export const NotificationTemplates = {
     requiresActor: false,
     requiresData: ["content"],
   },
-  SYSTEM_MAINTENANCE: {
-    title: "系统维护",
-    template: "系统维护通知: {{content}}",
-    icon: "maintenance",
-    requiresActor: false,
-    requiresData: ["content"],
-  },
 
   // 评论通知
   COMMENT_REPLY: {
@@ -153,20 +112,6 @@ export const NotificationTemplates = {
     requiresActor: true,
     requiresData: ["comment_text"],
   },
-  COMMENT_LIKE: {
-    title: "评论点赞",
-    template: "{{actor_name}} 赞了您的评论",
-    icon: "like",
-    requiresActor: true,
-    requiresData: [],
-  },
-  COMMENT_MENTION: {
-    title: "评论提及",
-    template: "{{actor_name}} 在评论中提到了您",
-    icon: "mention",
-    requiresActor: true,
-    requiresData: [],
-  },
 
   // 自定义通知
   CUSTOM_NOTIFICATION: {
@@ -175,21 +120,7 @@ export const NotificationTemplates = {
     icon: "notification",
     requiresActor: false,
     requiresData: ["content"],
-  },
-  CUSTOM_TOPIC_REPLY: {
-    title: "话题回复",
-    template: "{{actor_name}} 回复了您的话题 {{topic_title}}",
-    icon: "topic",
-    requiresActor: true,
-    requiresData: ["topic_title"],
-  },
-  CUSTOM_TOPIC_MENTION: {
-    title: "话题提及",
-    template: "{{actor_name}} 在话题 {{topic_title}} 中提到了您",
-    icon: "mention",
-    requiresActor: true,
-    requiresData: ["topic_title"],
-  },
+  }
 };
 
 /**
@@ -257,31 +188,21 @@ export async function getActorInfo(actorId) {
  */
 export async function createNotification(notificationData) {
   try {
-    const {
-      userId,
-      notificationType,
-      actorId = 0,
-      targetType = null,
-      targetId = null,
-      data = {},
-      highPriority = false,
-    } = notificationData;
-
-    // 在数据库中创建通知 - 只存储必要信息，不添加额外数据
+    // 在数据库中创建通知 - 确保类型转换正确
     const notification = await prisma.ow_notifications.create({
       data: {
-        user_id: userId,
-        notification_type: notificationType,
-        actor_id: actorId,
-        target_type: targetType,
-        target_id: targetId,
-        data: data, // 直接保存传入的数据，不添加额外信息
-        high_priority: highPriority,
+        user_id: notificationData.userId ? Number(notificationData.userId) : undefined,
+        notification_type: notificationData.notificationType ? String(notificationData.notificationType) : undefined,
+        actor_id: notificationData.actorId ? Number(notificationData.actorId) : null,
+        target_type: notificationData.targetType ? String(notificationData.targetType) : null,
+        target_id: notificationData.targetId ? Number(notificationData.targetId) : null,
+        data: notificationData.data || {},
+        high_priority: notificationData.highPriority || false,
         read: false,
       },
     });
 
-    logger.debug(`创建通知 ID ${notification.id} 给用户 ${userId}`);
+    logger.debug(`创建通知 ID ${notification.id} 给用户 ${notificationData.userId}`);
     return notification;
   } catch (error) {
     logger.error("创建通知出错:", error);
@@ -307,7 +228,6 @@ export async function getTargetData(targetType, targetId) {
           select: {
             id: true,
             title: true,
-            slug: true,
             description: true,
           },
         });
@@ -319,12 +239,12 @@ export async function getTargetData(targetType, targetId) {
             id: true,
             username: true,
             display_name: true,
-            avatar: true,
+            images: true,
           },
         });
 
       case TargetTypes.COMMENT:
-        return await prisma.ow_comments.findUnique({
+        return await prisma.ow_comment.findUnique({
           where: { id: targetId },
           select: {
             id: true,
@@ -367,7 +287,10 @@ export async function getTargetData(targetType, targetId) {
         return null;
     }
   } catch (error) {
-    logger.error(`获取目标数据出错 (类型: ${targetType}, ID: ${targetId}):`, error);
+    logger.error(
+      `获取目标数据出错 (类型: ${targetType}, ID: ${targetId}):`,
+      error
+    );
     return null;
   }
 }
@@ -406,10 +329,19 @@ export async function getUserNotifications(options) {
       },
     });
 
-    // 格式化通知，包括获取相关目标数据
-    const formattedNotifications = await Promise.all(
-      notifications.map((notification) => formatNotificationForClient(notification))
-    );
+    // 只添加基本信息，不加载目标数据
+    const formattedNotifications = notifications.map((notification) => ({
+      id: Number(notification.id),
+      type: notification.notification_type,
+      read: notification.read,
+      created_at: notification.created_at,
+      read_at: notification.read_at,
+      high_priority: notification.high_priority,
+      data: notification.data || {},
+      actor_id: notification.actor_id,
+      target_type: notification.target_type,
+      target_id: notification.target_id,
+    }));
 
     return {
       notifications: formattedNotifications,
@@ -528,18 +460,23 @@ export async function formatNotificationForClient(notification) {
   // 基本通知信息
   const formattedNotification = {
     id: Number(notification.id),
-    type: notification.notification_type,
+    type: notification.type,
     read: notification.read,
     created_at: notification.created_at,
     read_at: notification.read_at,
     high_priority: notification.high_priority,
     data: notification.data || {},
+    actor_id: notification.actor_id,
+    target_type: notification.target_type,
+    target_id: notification.target_id,
   };
 
   // 获取模板信息
-  const template = NotificationTemplates[notification.notification_type] || {
-    title: "通知",
+  const template = NotificationTemplates[notification.type] || {
+    title: notification.type,
     icon: "notification",
+    template: "未知类型通知",
+    requiresActor: true,
   };
 
   formattedNotification.template_info = {
@@ -547,19 +484,6 @@ export async function formatNotificationForClient(notification) {
     icon: template.icon,
     template: template.template,
   };
-
-  // 如果有行为者，获取行为者信息
-  if (notification.actor_id && notification.actor_id > 0) {
-    formattedNotification.actor = await getActorInfo(notification.actor_id);
-  }
-
-  // 根据目标类型获取目标数据
-  if (notification.target_type && notification.target_id) {
-    formattedNotification.target = await getTargetData(
-      notification.target_type,
-      notification.target_id
-    );
-  }
 
   return formattedNotification;
 }

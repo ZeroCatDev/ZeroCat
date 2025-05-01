@@ -1,6 +1,7 @@
 import logger from "../services/logger.js";
 import { needLogin, strictTokenCheck } from "../middleware/auth.js";
 import zcconfig from "../services/config/zcconfig.js";
+import notificationUtils from "../controllers/notifications.js";
 
 import { Router } from "express";
 const router = Router();
@@ -147,6 +148,46 @@ router.post("/api/comment", needLogin, async (req, res, next) => {
       errno: 0,
       errmsg: "",
       data: transformComment([newComment])[0],
+    });
+    let user_id,targetType,targetId;
+    if (url.split("-")[0]=="user") {
+      targetType = "user";
+      targetId = url.split("-")[1];
+      user_id = targetId;
+    }else if(url.split("-")[0]=="project"){
+      const project = await prisma.ow_projects.findUnique({
+        where: {
+          id: Number(url.split("-")[1]),
+        },
+      });
+       user_id = project.authorid;
+       targetType = "PROJECT";
+       targetId = url.split("-")[1];
+    }else if(url.split("-")[0]=="projectlist"){
+       targetType = "PROJECTLIST";
+       targetId = url.split("-")[1];
+       const projectlist = await prisma.ow_projectlists.findUnique({
+        where: {
+          id: Number(url.split("-")[1]),
+        },
+      });
+      user_id = projectlist.authorid;
+    }else {
+      user_id = userid;
+      targetType = 'user';
+      targetId = userid;
+    }
+    // 创建通知
+    await notificationUtils.createNotification({
+      userId: user_id,
+      notificationType: "USER_NEW_COMMENT",
+      actorId: userid,
+      targetType: targetType,
+      targetId: targetId,
+      data: {
+        comment: newComment.text,
+      },
+      highPriority: true,
     });
   } catch (err) {
     next(err);

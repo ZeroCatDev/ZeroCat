@@ -3,7 +3,7 @@
  * 统一的通知系统路由
  */
 import express from 'express';
-import { needLogin } from '../middleware/auth.js';
+import { needAdmin, needLogin } from '../middleware/auth.js';
 import logger from '../services/logger.js';
 import notificationUtils from '../controllers/notifications.js';
 import { prisma } from '../services/global.js';
@@ -183,7 +183,7 @@ router.delete('/', needLogin, async (req, res) => {
  * @desc 创建通知
  * @access Private
  */
-router.post('/', needLogin, async (req, res) => {
+router.post('/', needAdmin, async (req, res) => {
   try {
     const {
       object_type,
@@ -251,7 +251,7 @@ router.get('/templates', async (req, res) => {
  * @desc 发送测试通知
  * @access Private
  */
-router.post('/test', needLogin, async (req, res) => {
+router.post('/test', needAdmin, async (req, res) => {
   try {
     const userId = res.locals.userid;
     const actorId = res.locals.userid; // 以自己为行为者进行测试
