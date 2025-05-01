@@ -1,4 +1,4 @@
-import configManager from "./configManager.js";
+import zcconfig from "./config/zcconfig.js";
 import logger from "./logger.js";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
@@ -15,11 +15,11 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 const pwdHash = new PasswordHash();
 const s3config = {
-  endpoint: await configManager.getConfig("s3.endpoint"),
-  region: await configManager.getConfig("s3.region"),
+  endpoint: await zcconfig.get("s3.endpoint"),
+  region: await zcconfig.get("s3.region"),
   credentials: {
-    accessKeyId: await configManager.getConfig("s3.AWS_ACCESS_KEY_ID"),
-    secretAccessKey: await configManager.getConfig("s3.AWS_SECRET_ACCESS_KEY"),
+    accessKeyId: await zcconfig.get("s3.AWS_ACCESS_KEY_ID"),
+    secretAccessKey: await zcconfig.get("s3.AWS_SECRET_ACCESS_KEY"),
   },
 };
 logger.debug(s3config);
@@ -29,7 +29,7 @@ const s3 = new S3Client(s3config);
 async function S3update(name, fileContent) {
   try {
     const command = new PutObjectCommand({
-      Bucket: await configManager.getConfig("s3.bucket"),
+      Bucket: await zcconfig.get("s3.bucket"),
       Key: name,
       Body: fileContent,
     });
@@ -37,7 +37,7 @@ async function S3update(name, fileContent) {
     const data = await s3.send(command);
     logger.debug(data);
     logger.debug(
-      `成功上传了文件 ${await configManager.getConfig("s3.bucket")}/${name}`
+      `成功上传了文件 ${await zcconfig.get("s3.bucket")}/${name}`
     );
   } catch (err) {
     logger.error("S3 update Error:", err);
@@ -88,7 +88,7 @@ function randomPassword(len = 12) {
 
 async function generateJwt(json) {
   try {
-    const secret = await configManager.getConfig("security.jwttoken");
+    const secret = await zcconfig.get("security.jwttoken");
     logger.debug(secret);
     if (!secret) {
       throw new Error("JWT secret is not defined in the configuration");

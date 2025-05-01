@@ -1,8 +1,8 @@
 import logger from "../logger.js";
-import configManager from "../configManager.js";
-const siteName = await configManager.getConfig("site.name");
-const siteDomain = await configManager.getConfig("site.domain");
-const siteEmail = await configManager.getConfig("site.email");
+import zcconfig from "../../services/config/zcconfig.js";
+const siteName = await zcconfig.get("site.name");
+const siteDomain = await zcconfig.get("site.domain");
+const siteEmail = await zcconfig.get("site.email");
 
 const registrationTemplate = async (email, password) => `
   <div class="page flex-col">
