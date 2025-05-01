@@ -1,7 +1,7 @@
 import fs from 'fs';
-import logger from '../../utils/logger.js';
-import ipLocation from '../../utils/ipLocation.js';
-import configManager from '../../utils/configManager.js';
+import logger from '../logger.js';
+import ipLocation from './ipLocation.js';
+import zcconfig from '../config/zcconfig.js';
 import paths from '../../src/paths.js';
 
 /**
@@ -40,7 +40,7 @@ class GeoIpService {
   async shouldDownloadDatabase() {
     try {
       // 检查是否启用
-      const enabled = await configManager.getConfig('maxmind.enabled');
+      const enabled = await zcconfig.get('maxmind.enabled');
       if (enabled !== 'true' && enabled !== '1') {
         logger.info('MaxMind GeoIP未启用，跳过数据库检查');
         return false;
@@ -69,8 +69,8 @@ class GeoIpService {
       logger.info('开始下载MaxMind GeoIP数据库...');
 
       // 检查许可证密钥和账户ID
-      const licenseKey = await configManager.getConfig('maxmind.license_key');
-      const accountId = await configManager.getConfig('maxmind.account_id');
+      const licenseKey = await zcconfig.get('maxmind.license_key');
+      const accountId = await zcconfig.get('maxmind.account_id');
 
       if (!licenseKey || !accountId) {
         logger.error('缺少MaxMind许可证密钥或账户ID，无法下载数据库');
@@ -78,7 +78,7 @@ class GeoIpService {
       }
 
       // 导入下载模块
-      const downloadModule = await import('../../tools/downloadMaxmindDb.js');
+      const downloadModule = await import('./downloadMaxmindDb.js');
 
       // 加载配置到下载模块
       await downloadModule.default.loadMaxmindConfigFromDB();

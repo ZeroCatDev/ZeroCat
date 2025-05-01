@@ -10,7 +10,7 @@ import {
   oauthController
 } from "../controllers/auth/index.js";
 import { initializeOAuthProviders } from "../controllers/oauth.js";
-import totpUtils from "../utils/totp.js";
+import totpUtils from "../services/auth/totp.js";
 
 const { validateTotpToken } = totpUtils;
 

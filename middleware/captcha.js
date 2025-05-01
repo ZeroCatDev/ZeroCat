@@ -1,5 +1,5 @@
 import { error as loggerError, debug } from "../logger.js";
-import { getConfig } from "../configManager.js";
+import { get } from "../zcconfig.js";
 import axios from "axios";
 import { URL } from "url";
 
@@ -11,7 +11,7 @@ const captchaMiddleware = async (req, res, next) => {
   }
 
   try {
-    const { url, secret } = await getConfig("captcha");
+    const { url, secret } = await get("captcha");
 
     const response = await axios.post(
       new URL("/siteverify", url),

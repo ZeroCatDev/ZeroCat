@@ -1,6 +1,6 @@
-import { prisma } from "../utils/global.js";
-import logger from '../utils/logger.js';
-import configManager from "../utils/configManager.js";
+import { prisma } from "../services/global.js";
+import logger from '../services/logger.js';
+import zcconfig from "../services/config/zcconfig.js";
 import crypto from 'crypto';
 
 import base32Encode from 'base32-encode';
@@ -60,10 +60,10 @@ export async function initializeOAuthProviders() {
   try {
     // 从数据库读取所有 OAuth 相关配置
     for (const provider of Object.values(OAUTH_PROVIDERS)) {
-      const enabled = await configManager.getConfig(`oauth.${provider.id}.enabled`);
-      const clientId = await configManager.getConfig(`oauth.${provider.id}.client_id`);
-      const clientSecret = await configManager.getConfig(`oauth.${provider.id}.client_secret`);
-      const baseUrl = await configManager.getConfig('urls.backend');
+      const enabled = await zcconfig.get(`oauth.${provider.id}.enabled`);
+      const clientId = await zcconfig.get(`oauth.${provider.id}.client_id`);
+      const clientSecret = await zcconfig.get(`oauth.${provider.id}.client_secret`);
+      const baseUrl = await zcconfig.get('urls.backend');
 
       provider.enabled = enabled === 'true';
       provider.clientId = clientId;

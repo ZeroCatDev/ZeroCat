@@ -1,7 +1,7 @@
 import express from 'express';
-import logger from '../utils/logger.js';
+import logger from '../services/logger.js';
 import paths from './paths.js';
-import configManager from '../utils/configManager.js';
+import zcconfig from '../services/config/zcconfig.js';
 
 
 /**
@@ -10,7 +10,7 @@ import configManager from '../utils/configManager.js';
  */
 export async function configureRoutes(app) {
   // 加载配置信息到全局
-  await configManager.loadConfigsFromDB();
+  await zcconfig.loadConfigsFromDB();
   logger.info('配置信息已加载到全局');
 
   // 设置视图目录和引擎

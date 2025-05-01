@@ -1,5 +1,5 @@
 import logger from "../logger.js";
-import zcconfig from "../../services/config/zcconfig.js";
+import zcconfig from "../config/zcconfig.js";
 const siteName = await zcconfig.get("site.name");
 const siteDomain = await zcconfig.get("site.domain");
 const siteEmail = await zcconfig.get("site.email");

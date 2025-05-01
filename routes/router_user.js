@@ -1,7 +1,7 @@
-import logger from "../utils/logger.js";
-import configManager from "../utils/configManager.js";
+import logger from "../services/logger.js";
+import zcconfig from "../services/config/zcconfig.js";
 import { Router } from "express";
-import { prisma } from "../utils/global.js";
+import { prisma } from "../services/global.js";
 import { needLogin, strictTokenCheck, needAdmin } from "../middleware/auth.js";
 import { createEvent } from "../controllers/events.js";
 import jwt from "jsonwebtoken";
@@ -365,7 +365,7 @@ router.post("/login", async function (req, res, next) {
     }
 
     // 获取JWT密钥
-    const jwtSecret = await configManager.getConfig("security.jwttoken");
+    const jwtSecret = await zcconfig.get("security.jwttoken");
 
     // 生成令牌
     const token = jwt.sign(

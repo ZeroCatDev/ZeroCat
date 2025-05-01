@@ -2,7 +2,7 @@
  * @fileoverview 全局错误处理服务
  * 提供统一的错误处理机制，包括未捕获异常、Express错误等
  */
-import logger from '../utils/logger.js';
+import logger from './logger.js';
 
 /**
  * 错误处理服务类

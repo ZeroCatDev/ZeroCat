@@ -2,14 +2,14 @@ import "dotenv/config";
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import logger from "../utils/logger.js";
+import logger from "../services/logger.js";
 
 // 导入配置模块
 import { configureMiddleware } from "./index.js";
 import { configureRoutes } from "./routes.js";
 
 // 导入服务
-import geoIpService from "../services/geoIp/geoIpService.js";
+import geoIpService from "../services/ip/geoIpService.js";
 import schedulerService from "../services/scheduler.js";
 import errorHandlerService from "../services/errorHandler.js";
 

@@ -1,6 +1,6 @@
-import logger from "../utils/logger.js";
+import logger from "../services/logger.js";
 import { needLogin, strictTokenCheck } from "../middleware/auth.js";
-import configManager from "../utils/configManager.js";
+import zcconfig from "../services/config/zcconfig.js";
 import fs from "fs";
 
 //个人中心
@@ -9,7 +9,7 @@ var router = Router();
 import { createReadStream } from "fs";
 import { createHash } from "crypto";
 //功能函数集
-import { S3update, checkhash, hash, prisma } from "../utils/global.js";
+import { S3update, checkhash, hash, prisma } from "../services/global.js";
 //数据库
 import geetestMiddleware from "../middleware/geetest.js";
 import multer from "multer";

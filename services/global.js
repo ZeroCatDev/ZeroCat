@@ -73,9 +73,6 @@ function emailTest(email) {
   return /^([a-zA-Z]|[0-9])(\w|\-)+@[a-zA-Z0-9]+\.[a-zA-Z]{2,4}$/.test(email);
 }
 
-function phoneTest(phone) {
-  return /^1[3456789]\d{9}$/.test(phone);
-}
 
 function randomPassword(len = 12) {
   const chars = "ABCDEFGHJKMNPQRSTWXYZabcdefhijkmnprstwxyz2345678";
@@ -120,7 +117,6 @@ export {
   checkhash,
   userpwTest,
   emailTest,
-  phoneTest,
   randomPassword,
   generateJwt,
   isJSON,

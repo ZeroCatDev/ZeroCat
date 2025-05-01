@@ -1,11 +1,11 @@
-import logger from "../utils/logger.js";
-import configManager from "../utils/configManager.js";
+import logger from "../services/logger.js";
+import zcconfig from "../services/config/zcconfig.js";
 
 import { Router } from "express";
 var router = Router();
 import fs from "fs";
 import cryptojs from "crypto-js";
-import { prisma } from "../utils/global.js";
+import { prisma } from "../services/global.js";
 import { needLogin, strictTokenCheck, needAdmin } from "../middleware/auth.js";
 import followsRoutes from "./router_follows.js";
 
@@ -29,7 +29,7 @@ router.get("/usertx", async function (req, res, next) {
     }
     res.redirect(
       302,
-      (await configManager.getConfig("s3.staticurl")) + "/user/" + USER.images
+      (await zcconfig.get("s3.staticurl")) + "/user/" + USER.images
     );
   } catch (err) {
     next(err);
@@ -188,7 +188,7 @@ router.get("/config/:key", async function (req, res, next) {
 });
 
 router.get("/admin/config/reload", needAdmin, async function (req, res, next) {
-  await configManager.loadConfigsFromDB();
+  await zcconfig.loadConfigsFromDB();
 
   res.status(200).send({
     status: "success",
@@ -268,9 +268,9 @@ router.get("/tuxiaochao", async function (req, res) {
   const displayName = res.locals.display_name;
 
   // 获取配置
-  const txcid = await configManager.getConfig("feedback.txcid");
-  const txckey = await configManager.getConfig("feedback.txckey");
-  const staticUrl = await configManager.getConfig("s3.staticurl");
+  const txcid = await zcconfig.get("feedback.txcid");
+  const txckey = await zcconfig.get("feedback.txckey");
+  const staticUrl = await zcconfig.get("s3.staticurl");
 
   // 判断登录状态和配置
   if (!res.locals.login || !txcid || !txckey) {

@@ -1,10 +1,10 @@
-import logger from "../../utils/logger.js";
-import authUtils from "../../utils/auth.js";
-import { prisma, checkhash, userpwTest, emailTest } from "../../utils/global.js";
+import logger from "../../services/logger.js";
+import authUtils from "../../services/auth/auth.js";
+import { prisma, checkhash, userpwTest, emailTest } from "../../services/global.js";
 import { createEvent, TargetTypes } from "../events.js";
-import memoryCache from "../../utils/memoryCache.js";
-import { sendEmail } from "../../utils/email/emailService.js";
-import configManager from "../../utils/configManager.js";
+import memoryCache from "../../services/memoryCache.js";
+import { sendEmail } from "../../services/email/emailService.js";
+import zcconfig from "../../services/config/zcconfig.js";
 import jsonwebtoken from "jsonwebtoken";
 import { verifyContact } from "../email.js";
 
@@ -359,7 +359,7 @@ export const generateMagicLink = async (req, res) => {
 
     const token = jsonwebtoken.sign(
       { id: user.id },
-      await configManager.getConfig("security.jwttoken"),
+      await zcconfig.get("security.jwttoken"),
       { expiresIn: 60 * 10 }
     );
 
@@ -371,7 +371,7 @@ export const generateMagicLink = async (req, res) => {
       },
     });
 
-    const magicLink = `${await configManager.getConfig(
+    const magicLink = `${await zcconfig.get(
       "urls.frontend"
     )}/app/account/magiclink/validate?token=${token}`;
 
@@ -428,7 +428,7 @@ export const validateMagicLink = async (req, res) => {
 
     const decoded = jsonwebtoken.verify(
       token,
-      await configManager.getConfig("security.jwttoken")
+      await zcconfig.get("security.jwttoken")
     );
 
     const magicLink = await prisma.ow_users_magiclink.findUnique({

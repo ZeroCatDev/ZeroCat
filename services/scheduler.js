@@ -2,7 +2,7 @@
  * @fileoverview 定时任务调度服务
  * 负责管理和执行系统中的各种定时任务
  */
-import logger from '../utils/logger.js';
+import logger from './logger.js';
 
 // 存储所有注册的任务
 const tasks = new Map();

@@ -1,8 +1,8 @@
 /**
  * @fileoverview 通知系统辅助函数和常量
  */
-import { prisma } from "../utils/global.js";
-import logger from "../utils/logger.js";
+import { prisma } from "../services/global.js";
+import logger from "../services/logger.js";
 
 /**
  * 通知类型定义

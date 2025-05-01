@@ -1,8 +1,8 @@
-import logger from "../../utils/logger.js";
-import { prisma, hash, emailTest, userpwTest } from "../../utils/global.js";
+import logger from "../../services/logger.js";
+import { prisma, hash, emailTest, userpwTest } from "../../services/global.js";
 import { addUserContact, sendVerificationEmail, verifyContact } from "../../controllers/email.js";
 import jsonwebtoken from "jsonwebtoken";
-import configManager from "../../utils/configManager.js";
+import zcconfig from "../../services/config/zcconfig.js";
 
 /**
  * 用户注册
@@ -204,7 +204,7 @@ export const resetPasswordWithToken = async (req, res, next) => {
     try {
       decoded = jsonwebtoken.verify(
         req.body.jwttoken,
-        await configManager.getConfig("security.jwttoken")
+        await zcconfig.get("security.jwttoken")
       );
     } catch (err) {
       res.status(200).send({

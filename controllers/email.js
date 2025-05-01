@@ -1,11 +1,11 @@
 import crypto from 'crypto';
 import base32Encode from 'base32-encode';
-import { prisma } from "../utils/global.js";
-import { sendEmail } from "../utils/email/emailService.js";
+import { prisma } from "../services/global.js";
+import { sendEmail } from "../services/email/emailService.js";
 import { TOTP } from "otpauth";
-import logger from '../utils/logger.js';
-import memoryCache from '../utils/memoryCache.js';
-import configManager from "../utils/configManager.js";
+import logger from '../services/logger.js';
+import memoryCache from '../services/memoryCache.js';
+import zcconfig from "../services/config/zcconfig.js";
 
 // 创建TOTP实例的通用函数
 function createTotpInstance(secret) {
@@ -74,11 +74,11 @@ const addUserContact = async (userId, contactValue, contactType, isPrimary = fal
 const rateLimitEmailVerification = async (email) => {
   const key = `email_verification:${email}`;
   const count = memoryCache.get(key) || 0;
-  
+
   if (count >= 3) {
     throw new Error('发送验证码过于频繁，请稍后再试');
   }
-  
+
   memoryCache.set(key, count + 1, 3600); // 1小时过期
 };
 
@@ -163,9 +163,9 @@ const EMAIL_SUBJECTS = {
 // Send verification email
 const sendVerificationEmail = async (contactValue, contactHash, template = 'DEFAULT') => {
     await rateLimitEmailVerification(contactValue);
-    
+
     const token = generateEmailToken(contactHash);
-    const verifyUrl = `${await configManager.getConfig("urls.frontend")}/app/account/email/verify?email=${encodeURIComponent(contactValue)}&token=${encodeURIComponent(token)}`;
+    const verifyUrl = `${await zcconfig.get("urls.frontend")}/app/account/email/verify?email=${encodeURIComponent(contactValue)}&token=${encodeURIComponent(token)}`;
 
     // 获取对应的邮件模板和主题
     const emailTemplate = EMAIL_TEMPLATES[template] || EMAIL_TEMPLATES.DEFAULT;
@@ -192,7 +192,7 @@ const verifyContact = async (contactValue, token) => {
 
     const isValid = validateEmailToken(contact.contact_hash, token);
     logger.debug('验证结果:', isValid);
-    
+
     if (!isValid) {
         logger.debug('验证码错误');
         return false;

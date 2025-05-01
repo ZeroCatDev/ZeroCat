@@ -1,10 +1,10 @@
-import logger from "../utils/logger.js";
+import logger from "../services/logger.js";
 import { needLogin, strictTokenCheck } from "../middleware/auth.js";
-import configManager from "../utils/configManager.js";
+import zcconfig from "../services/config/zcconfig.js";
 
 import { Router } from "express";
 const router = Router();
-import { prisma } from "../utils/global.js";
+import { prisma } from "../services/global.js";
 import { getUsersByList } from "../controllers/users.js";
 import { createEvent, TargetTypes } from "../controllers/events.js";
 // 中间件，确保所有请求均经过该处理

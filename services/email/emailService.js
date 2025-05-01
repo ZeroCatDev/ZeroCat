@@ -1,5 +1,5 @@
 import { createTransport } from "nodemailer";
-import zcconfig from "../../services/config/zcconfig.js";
+import zcconfig from "../config/zcconfig.js";
 import logger from "../logger.js";
 let transporter;
 const service = await zcconfig.get("mail.service");

@@ -1,14 +1,14 @@
-import logger from "../../utils/logger.js";
-import { prisma } from "../../utils/global.js";
+import logger from "../../services/logger.js";
+import { prisma } from "../../services/global.js";
 import crypto from "crypto";
-import memoryCache from "../../utils/memoryCache.js";
+import memoryCache from "../../services/memoryCache.js";
 import {
   OAUTH_PROVIDERS,
   generateAuthUrl,
   handleOAuthCallback,
   initializeOAuthProviders,
 } from "../oauth.js";
-import configManager from "../../utils/configManager.js";
+import zcconfig from "../../services/config/zcconfig.js";
 import { verifyContact } from "../email.js";
 
 /**
@@ -110,7 +110,7 @@ export const handleOAuthCallbackRequest = async (req, res) => {
     const cachedState = memoryCache.get(`oauth_state:${state}`);
     if (!cachedState) {
       return res.redirect(
-        `${await configManager.getConfig(
+        `${await zcconfig.get(
           "urls.frontend"
         )}/app/account/oauth/bind/error?message=无效的state`
       );
@@ -131,13 +131,13 @@ export const handleOAuthCallbackRequest = async (req, res) => {
       // 处理绑定结果
       if (bindingResult.success) {
         return res.redirect(
-          `${await configManager.getConfig(
+          `${await zcconfig.get(
             "urls.frontend"
           )}/app/account/oauth/bind/success`
         );
       } else {
         return res.redirect(
-          `${await configManager.getConfig(
+          `${await zcconfig.get(
             "urls.frontend"
           )}/app/account/oauth/bind/error?message=${bindingResult.message}`
         );
@@ -154,13 +154,13 @@ export const handleOAuthCallbackRequest = async (req, res) => {
         });
 
         return res.redirect(
-          `${await configManager.getConfig(
+          `${await zcconfig.get(
             "urls.frontend"
           )}/app/account/callback?token=${token}`
         );
       } else {
         return res.redirect(
-          `${await configManager.getConfig(
+          `${await zcconfig.get(
             "urls.frontend"
           )}/app/account/oauth/login/error?message=${contact.message}`
         );

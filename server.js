@@ -5,7 +5,7 @@
  */
 
 import "dotenv/config";
-import logger from './utils/logger.js';
+import logger from './services/logger.js';
 import { serverConfig } from './src/index.js';
 
 /**
@@ -33,11 +33,11 @@ async function main() {
 function printBanner() {
   const banner = `
 =============================================================
-|                 ZeroCat Backend Server
-|
-|  Version: ${process.env.npm_package_version || '1.0.0'}
-|  Environment: ${process.env.NODE_ENV}
-|  Node.js: ${process.version}
+ ZeroCat Backend Server
+
+ Version: ${process.env.npm_package_version || '1.0.0'}
+ Environment: ${process.env.NODE_ENV}
+ Node.js: ${process.version}
 =============================================================
   `;
   console.log(banner);
@@ -49,13 +49,13 @@ function printBanner() {
 function setupProcessHandlers() {
   // 处理SIGTERM信号
   process.on('SIGTERM', async () => {
-    logger.info('接收到SIGTERM信号，开始优雅关闭...');
+    logger.info('接收到SIGTERM信号，开始关闭...');
     await gracefulShutdown();
   });
 
   // 处理SIGINT信号
   process.on('SIGINT', async () => {
-    logger.info('接收到SIGINT信号，开始优雅关闭...');
+    logger.info('接收到SIGINT信号，开始关闭...');
     await gracefulShutdown();
   });
 }
@@ -65,11 +65,11 @@ function setupProcessHandlers() {
  */
 async function gracefulShutdown() {
   try {
-    logger.info('开始优雅关闭...');
+    logger.info('开始关闭...');
 
     // 等待15秒后强制退出
     const forceExitTimeout = setTimeout(() => {
-      logger.error('优雅关闭超时，强制退出');
+      logger.error('关闭超时，强制退出');
       process.exit(1);
     }, 15000);
 

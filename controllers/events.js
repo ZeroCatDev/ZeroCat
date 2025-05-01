@@ -1,5 +1,5 @@
-import { prisma } from "../utils/global.js";
-import logger from "../utils/logger.js";
+import { prisma } from "../services/global.js";
+import logger from "../services/logger.js";
 import eventConfigData from "../config/eventConfig.json" assert { type: "json" };
 
 // Extract data from the config file
@@ -28,7 +28,7 @@ export const EventTypes = {
   ...eventTypes,
 
   // Helper to get event config
-  getConfig(eventType) {
+  get(eventType) {
     const type = typeof eventType === 'string' ? eventType : String(eventType);
     return EventConfig[type.toLowerCase()];
   }

@@ -2,7 +2,7 @@ import express from 'express';
 import { needLogin } from "../middleware/auth.js";
 import followsController from "../controllers/follows.js";
 import errorHandlerService from "../services/errorHandler.js";
-import logger from "../utils/logger.js";
+import logger from "../services/logger.js";
 
 const router = express.Router();
 

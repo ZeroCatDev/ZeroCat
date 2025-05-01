@@ -1,8 +1,8 @@
 import jsonwebtoken from "jsonwebtoken";
-import configManager from "../utils/configManager.js";
-import logger from "../utils/logger.js";
-import authUtils from "../utils/auth.js";
-import { prisma } from "../utils/global.js";
+import zcconfig from "../services/config/zcconfig.js";
+import logger from "../services/logger.js";
+import authUtils from "../services/auth/auth.js";
+import { prisma } from "../services/global.js";
 
 /**
  * 验证令牌在数据库中的有效性
@@ -225,7 +225,7 @@ export const needAdmin = async (req, res, next) => {
   }
 
   try {
-    const adminConfig = await configManager.getConfig(
+    const adminConfig = await zcconfig.get(
       "security.adminusers",
       ""
     );
