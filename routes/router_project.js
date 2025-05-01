@@ -15,7 +15,7 @@ import {
   generateFileAccessToken,
   verifyFileAccessToken,
 } from "../utils/tokenManager.js";
-import { needLogin, strictTokenCheck, needadmin } from "../middleware/auth.js";
+import { needLogin, strictTokenCheck, needAdmin } from "../middleware/auth.js";
 import { hasProjectPermission } from "../utils/permissionManager.js";
 import { getUserByUsername } from "../controllers/users.js";
 import { createEvent, EventTypes, TargetTypes } from "../controllers/events.js";

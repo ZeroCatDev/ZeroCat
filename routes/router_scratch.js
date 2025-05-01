@@ -8,7 +8,7 @@ var router = Router();
 import { writeFile, exists, createReadStream } from "fs";
 import { createHash } from "crypto";
 import { prisma, S3update } from "../utils/global.js";
-import { needLogin, strictTokenCheck, needadmin } from "../middleware/auth.js";
+import { needLogin, strictTokenCheck, needAdmin } from "../middleware/auth.js";
 import { getProjectFile, getProjectById } from "../controllers/projects.js";
 import multer from "multer";
 const upload = multer({ dest: "./usercontent" });

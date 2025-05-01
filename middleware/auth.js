@@ -211,7 +211,7 @@ export const needLogin = async (req, res, next) => {
  * @param {import("express").Response} res
  * @param {import("express").NextFunction} next
  */
-export const needadmin = async (req, res, next) => {
+export const needAdmin = async (req, res, next) => {
   if (!res.locals.userid) {
     if (req.headers["accept"]?.includes("application/json")) {
       return res.status(401).send({

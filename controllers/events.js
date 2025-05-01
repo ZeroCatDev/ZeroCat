@@ -1,16 +1,16 @@
 import { prisma } from "../utils/global.js";
 import logger from "../utils/logger.js";
-import { EventConfig, TargetTypes } from "../models/events.js";
-import * as eventService from "../services/eventService.js";
+import eventConfigData from "../config/eventConfig.json" assert { type: "json" };
+
+// Extract data from the config file
+const { targetTypes: TargetTypes, eventConfig: EventConfig, eventTypes } = eventConfigData;
 
 // Re-export TargetTypes and EventConfig for use in other files
 export { TargetTypes, EventConfig };
 
-// Define a compatibility layer for old EventTypes structure
-// This maps the old EventTypes constants to the new event type strings
-// Required for backward compatibility with existing code
+// Compatibility layer for old code using EventTypes
 export const EventTypes = {
-  // Map the old structure to the new one
+  // Direct mapping for string event types
   'project_commit': 'project_commit',
   'project_update': 'project_update',
   'project_fork': 'project_fork',
@@ -22,22 +22,12 @@ export const EventTypes = {
   'user_register': 'user_register',
   'project_rename': 'project_rename',
   'project_info_update': 'project_info_update',
+  'project_star': 'project_star',
 
-  // Common event constants as uppercase for use in code
-  // This is for code using EventTypes.CONSTANT format
-  PROJECT_CREATE: 'project_create',
-  PROJECT_UPDATE: 'project_update',
-  PROJECT_FORK: 'project_fork',
-  PROJECT_PUBLISH: 'project_publish',
-  PROJECT_DELETE: 'project_delete',
-  PROJECT_RENAME: 'project_rename',
-  USER_PROFILE_UPDATE: 'user_profile_update',
-  USER_REGISTER: 'user_register',
-  PROJECT_INFO_UPDATE: 'project_info_update',
-  COMMENT_CREATE: 'comment_create',
-  USER_LOGIN: 'user_login',
+  // Constants for code using EventTypes.CONSTANT
+  ...eventTypes,
 
-  // Add a mapping function to get event config
+  // Helper to get event config
   getConfig(eventType) {
     const type = typeof eventType === 'string' ? eventType : String(eventType);
     return EventConfig[type.toLowerCase()];
@@ -45,241 +35,314 @@ export const EventTypes = {
 };
 
 /**
- * Create a new event
- * @param {string} eventType - Type of event
- * @param {number} actorId - ID of the actor (user) performing the action
- * @param {string} targetType - Type of the target (project, user, etc.)
- * @param {number} targetId - ID of the target
- * @param {object} eventData - Data specific to the event
- * @param {boolean} [forcePrivate=false] - Force the event to be private
+ * Create an event and send notifications
  */
-export async function createEvent(eventType, actorId, targetType, targetId, eventData, forcePrivate = false) {
+export async function createEvent(eventType, actorId, targetType, targetId, eventData = {}) {
   try {
-    // Handle case where eventType is from the old EventTypes object
-    const normalizedEventType = (typeof eventType === 'string' && eventType.toLowerCase()) ||
-                               (EventTypes[eventType] ? EventTypes[eventType].toLowerCase() : null);
+    const normalizedEventType = eventType.toLowerCase();
+    const eventConfig = EventConfig[normalizedEventType];
 
-    if (!normalizedEventType) {
-      logger.warn(`Invalid event type: ${eventType}`);
+    if (!eventConfig) {
+      logger.warn(`Unknown event type: ${eventType}`);
       return null;
     }
 
-    // Prepare the event data with actor and target information
-    const fullEventData = {
-      ...eventData,
-      event_type: normalizedEventType,
-      actor_id: actorId,
-      target_type: targetType,
-      target_id: targetId
-    };
+    // Create database record
+    const event = await prisma.events.create({
+      data: {
+        event_type: normalizedEventType,
+        actor_id: BigInt(actorId),
+        target_type: targetType,
+        target_id: BigInt(targetId),
+        event_data: {
+          ...eventData,
+          actor_id: actorId,
+          target_type: targetType,
+          target_id: targetId
+        },
+        public: eventConfig.public ? 1 : 0
+      }
+    });
 
-    // Use the service to create the event
-    return await eventService.createEvent(normalizedEventType, fullEventData, forcePrivate);
+    // Process notifications if there are notification targets
+    if (eventConfig.notifyTargets && eventConfig.notifyTargets.length > 0) {
+      await processNotifications(event, eventConfig, eventData);
+    }
+
+    return event;
   } catch (error) {
-    logger.error('Error in createEvent controller:', error);
-    throw error;
+    logger.error('Event creation error:', error);
+    return null;
   }
 }
 
 /**
  * Get events for a specific target
- * @param {string} targetType - Type of the target
- * @param {number} targetId - ID of the target
- * @param {number} [limit=10] - Maximum number of events to return
- * @param {number} [offset=0] - Pagination offset
- * @param {boolean} [includePrivate=false] - Whether to include private events
  */
 export async function getTargetEvents(targetType, targetId, limit = 10, offset = 0, includePrivate = false) {
   try {
-    return await eventService.getTargetEvents(targetType, targetId, limit, offset, includePrivate);
+    const events = await prisma.events.findMany({
+      where: {
+        target_type: targetType,
+        target_id: BigInt(targetId),
+        ...(includePrivate ? {} : { public: 1 }),
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
+      take: limit,
+      skip: offset,
+    });
+
+    return await enrichEvents(events);
   } catch (error) {
-    logger.error('Error in getTargetEvents controller:', error);
-    throw error;
+    logger.error('Error getting target events:', error);
+    return [];
   }
 }
 
 /**
  * Get events for a specific actor
- * @param {number} actorId - ID of the actor
- * @param {number} [limit=10] - Maximum number of events to return
- * @param {number} [offset=0] - Pagination offset
- * @param {boolean} [includePrivate=false] - Whether to include private events
  */
 export async function getActorEvents(actorId, limit = 10, offset = 0, includePrivate = false) {
   try {
-    return await eventService.getActorEvents(actorId, limit, offset, includePrivate);
+    const events = await prisma.events.findMany({
+      where: {
+        actor_id: BigInt(actorId),
+        ...(includePrivate ? {} : { public: 1 }),
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
+      take: limit,
+      skip: offset,
+    });
+
+    return await enrichEvents(events);
   } catch (error) {
-    logger.error('Error in getActorEvents controller:', error);
-    throw error;
+    logger.error('Error getting actor events:', error);
+    return [];
+  }
+}
+
+/**
+ * Enrich events with actor and target information
+ */
+async function enrichEvents(events) {
+  try {
+    return Promise.all(events.map(async (event) => {
+      const [actor, target] = await Promise.all([
+        getActor(event.actor_id),
+        getTarget(event.target_type, event.target_id)
+      ]);
+
+      return {
+        ...event,
+        actor,
+        target: {
+          type: event.target_type,
+          id: event.target_id,
+          info: target
+        }
+      };
+    }));
+  } catch (error) {
+    logger.error('Error enriching events:', error);
+    return events;
   }
 }
 
 /**
  * Get actor information
- * @param {number} actorId - The actor ID
- * @returns {Promise<object|null>} - Actor information
  */
 async function getActor(actorId) {
-  return await prisma.ow_users.findUnique({
-    where: { id: Number(actorId) },
-    select: {
-      id: true,
-      username: true,
-      display_name: true,
-      type: true
-    }
-  });
+  try {
+    return await prisma.ow_users.findUnique({
+      where: { id: Number(actorId) },
+      select: {
+        id: true,
+        username: true,
+        display_name: true,
+        type: true
+      }
+    });
+  } catch (error) {
+    logger.error(`Error getting actor ${actorId}:`, error);
+    return null;
+  }
 }
 
 /**
  * Get target information
- * @param {string} targetType - Type of the target
- * @param {number} targetId - ID of the target
- * @returns {Promise<object|null>} - Target information
  */
 async function getTarget(targetType, targetId) {
-  switch (targetType) {
-    case TargetTypes.PROJECT:
-      return await prisma.ow_projects.findUnique({
-        where: { id: Number(targetId) }
-      });
-    case TargetTypes.USER:
-      return await prisma.ow_users.findUnique({
-        where: { id: Number(targetId) }
-      });
-    case TargetTypes.COMMENT:
-      return await prisma.ow_comment.findUnique({
-        where: { id: Number(targetId) }
-      });
-    default:
-      return null;
+  try {
+    switch (targetType) {
+      case TargetTypes.PROJECT:
+        return await prisma.ow_projects.findUnique({
+          where: { id: Number(targetId) }
+        });
+      case TargetTypes.USER:
+        return await prisma.ow_users.findUnique({
+          where: { id: Number(targetId) }
+        });
+      case TargetTypes.COMMENT:
+        return await prisma.ow_comment.findUnique({
+          where: { id: Number(targetId) }
+        });
+      default:
+        return null;
+    }
+  } catch (error) {
+    logger.error(`Error getting target ${targetType}/${targetId}:`, error);
+    return null;
   }
 }
 
 /**
- * Handle event notifications based on configuration
+ * Process notifications for an event
  */
-async function handleEventNotifications(event, eventConfig, handlerContext) {
+async function processNotifications(event, eventConfig, eventData) {
   try {
-    const notifyUsers = new Set();
+    const userIds = new Set();
 
+    // Get users to notify for each target type
     for (const target of eventConfig.notifyTargets) {
-      const users = await getNotificationTargets(target, event, handlerContext);
-      users.forEach(userId => notifyUsers.add(userId));
+      const users = await getTargetUsers(target, event, eventData);
+      users.forEach(id => userIds.add(id));
     }
 
-    // Create notifications for all unique users
-    await Promise.all(
-      Array.from(notifyUsers).map(userId =>
-        createNotification(event.id, userId)
-      )
-    );
+    // Create notifications
+    const notifications = [];
+    for (const userId of userIds) {
+      notifications.push(createNotification(event.id, userId));
+    }
+
+    await Promise.all(notifications);
   } catch (error) {
-    logger.error('Error handling event notifications:', error);
+    logger.error('Notification processing error:', error);
   }
 }
 
 /**
- * Get users to notify based on target type
+ * Get users for a notification target type
  */
-async function getNotificationTargets(targetType, event, handlerContext) {
-  switch (targetType) {
-    case 'project_owner':
-      const project = await prisma.ow_projects.findUnique({
-        where: { id: Number(event.target_id) }
-      });
-      return project ? [project.authorid] : [];
+async function getTargetUsers(targetType, event, eventData) {
+  try {
+    switch (targetType) {
+      case 'project_owner':
+        const project = await prisma.ow_projects.findUnique({
+          where: { id: Number(event.target_id) }
+        });
+        return project ? [project.authorid] : [];
 
-    case 'project_followers':
-      return await getProjectFollowers(event.target_id);
+      case 'project_followers':
+        return await getProjectFollowers(event.target_id);
 
-    case 'user_followers':
-      return await getUserFollowers(event.actor_id);
+      case 'user_followers':
+        return await getUserFollowers(event.actor_id);
 
-    default:
-      return [];
+      case 'page_owner':
+        if (eventData.page_type && eventData.page_id) {
+          if (eventData.page_type === 'project') {
+            const project = await prisma.ow_projects.findUnique({
+              where: { id: Number(eventData.page_id) },
+              select: { authorid: true }
+            });
+            return project ? [project.authorid] : [];
+          } else if (eventData.page_type === 'user') {
+            return [Number(eventData.page_id)];
+          }
+        }
+        return [];
+
+      case 'thread_participants':
+        if (eventData.page_type && eventData.page_id) {
+          const comments = await prisma.ow_comment.findMany({
+            where: {
+              page_type: eventData.page_type,
+              page_id: Number(eventData.page_id)
+            },
+            select: { user_id: true }
+          });
+          return [...new Set(comments.map(c => c.user_id).filter(id => id !== null))];
+        }
+        return [];
+
+      default:
+        return [];
+    }
+  } catch (error) {
+    logger.error(`Error getting users for ${targetType}:`, error);
+    return [];
   }
 }
 
 /**
  * Create a notification
  */
-/*
 async function createNotification(eventId, userId) {
   try {
     return await prisma.notifications.create({
       data: {
         event_id: BigInt(eventId),
         user_id: BigInt(userId),
-      },
+        is_read: false
+      }
     });
   } catch (error) {
-    logger.error('Error creating notification:', error);
-    throw error;
+    logger.error(`Notification creation error for user ${userId}:`, error);
   }
 }
-*/
 
-// Event handler functions remain as they were, now they can be simplified to use the new service
-async function handleProjectCommit(context) {
-  const { event, actor, target, fullData } = context;
-  logger.debug('Handling project commit', { actor, target, fullData });
-  console.log("Hello World");
-}
-
-async function handleProjectShare(context) {
-  // Implementation...
-}
-
-async function handleProjectUpdate(context) {
-  // Implementation...
-}
-
-async function handleProjectFork(context) {
-  // Implementation...
-}
-
-async function handleProjectCreate(context) {
-  // Implementation...
-}
-
-async function handleProjectDelete(context) {
-  // Implementation...
-}
-
-async function handleProjectVisibilityChange(context) {
-  // Implementation...
-}
-
-async function handleProjectStar(context) {
-  // Implementation...
-}
-
-async function handleProfileUpdate(context) {
-  // Implementation...
-}
-
-async function handleUserLogin(context) {
-  // Implementation...
-}
-
-async function handleUserProfileUpdate(context) {
-  const { event, actor, target, fullData } = context;
-  logger.debug('Handling profile update', { actor, target, fullData });
-  // Implementation...
-}
-
-async function handleCommentCreate(context) {
-  const { event, actor, target, fullData } = context;
-  logger.debug('Handling comment create', { actor, target, fullData });
-  // Implementation...
-}
-
-// Helper functions
+/**
+ * Get project followers
+ */
 async function getProjectFollowers(projectId) {
-  return await eventService.getProjectFollowers(projectId);
+  try {
+    const followers = await prisma.user_relationships.findMany({
+      where: {
+        target_user_id: Number(projectId),
+        relationship_type: 'follow'
+      },
+      select: { source_user_id: true }
+    });
+    return followers.map(f => f.source_user_id);
+  } catch (error) {
+    logger.error(`Error getting project followers:`, error);
+    return [];
+  }
 }
 
+/**
+ * Get user followers
+ */
 async function getUserFollowers(userId) {
-  return await eventService.getUserFollowers(userId);
+  try {
+    const followers = await prisma.user_relationships.findMany({
+      where: {
+        target_user_id: Number(userId),
+        relationship_type: 'follow'
+      },
+      select: { source_user_id: true }
+    });
+    return followers.map(f => f.source_user_id);
+  } catch (error) {
+    logger.error(`Error getting user followers:`, error);
+    return [];
+  }
+}
+
+/**
+ * Get project followers - exported for external use
+ */
+export async function getProjectFollowersExternal(projectId) {
+  return await getProjectFollowers(projectId);
+}
+
+/**
+ * Get user followers - exported for external use
+ */
+export async function getUserFollowersExternal(userId) {
+  return await getUserFollowers(userId);
 }

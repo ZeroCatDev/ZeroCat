@@ -2,7 +2,7 @@ import { Router } from "express";
 import { prisma } from "../utils/global.js";
 import logger from "../utils/logger.js";
 import { EventTypes, EventConfig } from "../controllers/events.js";
-import { needLogin, strictTokenCheck, needadmin } from "../middleware/auth.js";
+import { needLogin, strictTokenCheck, needAdmin } from "../middleware/auth.js";
 
 const router = Router();
 
@@ -84,7 +84,7 @@ router.get("/user/:userid", async (req, res) => {
     });
 
     const where = {
-      actor_id: BigInt(userid),
+      actor_id: Number(userid),
       ...(isOwner ? {} : { public: 1 }),
     };
 

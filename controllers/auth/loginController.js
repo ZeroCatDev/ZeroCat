@@ -85,8 +85,8 @@ export const loginWithPassword = async (req, res, next) => {
       return;
     }
 
-    if (user.state == 2) {
-      res.status(200).send({ message: "您已经被封禁", status: "error" });
+    if (user.status != "active") {
+      res.status(200).send({ message: "账户状态异常", status: "error" });
       return;
     }
 
@@ -266,10 +266,10 @@ export const loginWithCode = async (req, res) => {
       });
     }
 
-    if (user.state == 2) {
+    if (user.status != "active") {
       return res.status(200).json({
         status: "error",
-        message: "您已经被封禁",
+        message: "账户状态异常",
       });
     }
 

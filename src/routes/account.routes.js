@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { needLogin, strictTokenCheck, needadmin } from "../../middleware/auth.js";
+import { needLogin, strictTokenCheck, needAdmin } from "../../middleware/auth.js";
 import geetestMiddleware from "../../middleware/geetest.js";
 import {
   loginController,

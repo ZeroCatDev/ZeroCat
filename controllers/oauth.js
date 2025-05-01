@@ -285,7 +285,6 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
               password: null,  // OAuth 用户不需要密码
               display_name: userInfo.name || username,
               type: 'user',  // 设置为普通用户
-              state: 0,      // 正常状态
               regTime: new Date()
             }
           });

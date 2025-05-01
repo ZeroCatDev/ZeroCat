@@ -5,6 +5,9 @@ import configManager from '../../utils/configManager.js';
 
 // 导入路由模块
 import accountRoutes from './account.routes.js';
+import eventRoutes from './event.routes.js';
+// import userRoutes from './user.routes.js';
+// import notificationRoutes from './notification.routes.js';
 
 /**
  * 配置应用路由
@@ -59,8 +62,14 @@ export async function configureRoutes(app) {
  */
 async function registerBusinessRoutes(app) {
   try {
-    // 账户管理路由 (使用新的标准化路由文件)
+    // 新的标准化路由注册
     app.use("/account", accountRoutes);
+    app.use("/events", eventRoutes);
+    // app.use("/users", userRoutes);
+
+    // 使用新的通知路由 (获取绝对路径版本)
+    const notificationModule = await import('../../routes/router_notifications.js');
+    app.use("/notifications", notificationModule.default);
 
     // 以下路由暂时保持原有导入方式，等待迁移完成
 
@@ -100,20 +109,13 @@ async function registerBusinessRoutes(app) {
     const timelineModule = await import('../../routes/router_timeline.js');
     app.use("/timeline", timelineModule.default);
 
-    // 通知路由
-    const notificationsModule = await import('../../routes/notifications.js');
-    app.use("/notifications", notificationsModule.default);
-
     // 关注路由
-    const followsModule = await import('../../routes/follows.js');
+    const followsModule = await import('../../routes/router_follows.js');
     app.use("/follows", followsModule.default);
 
-    // 事件路由
-    const eventsModule = await import('../../routes/events.js');
-    app.use("/api/events", eventsModule.default);
-
     logger.info('所有业务路由注册成功');
-  } catch (err) {
-    logger.error('注册业务路由失败:', err);
+  } catch (error) {
+    logger.error('Error registering business routes:', error);
+    throw error;
   }
 }
