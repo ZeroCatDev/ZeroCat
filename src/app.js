@@ -9,7 +9,7 @@ import { configureMiddleware } from "./index.js";
 import { configureRoutes } from "./routes.js";
 
 // 导入服务
-import geoIpService from "../services/ip/geoIpService.js";
+import geoIpService from "../services/ip/ipLocation.js";
 import schedulerService from "../services/scheduler.js";
 import errorHandlerService from "../services/errorHandler.js";
 
@@ -77,9 +77,9 @@ class Application {
       }
 
       logger.info('开始初始化服务...');
-
+//TODO 初始化MaxMind GeoIP服务
       // 初始化GeoIP服务
-      await geoIpService.initialize().catch(error => {
+      await geoIpService.loadConfigFromDB().catch(error => {
         logger.error('初始化MaxMind GeoIP失败:', error);
       });
 

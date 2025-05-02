@@ -138,12 +138,7 @@ export const loginWithPassword = async (req, res, next) => {
     memoryCache.delete(attemptKey);
 
     // 添加登录事件（不记录到数据库）
-    await createEvent("user_login", user.id, TargetTypes.USER, user.id, {
-      event_type: "user_login",
-      actor_id: user.id,
-      target_type: TargetTypes.USER,
-      target_id: user.id
-    });
+    //await createEvent("user_login", user.id, TargetTypes.USER, user.id, { event_type: "user_login", actor_id: user.id, target_type: TargetTypes.USER, target_id: user.id });
 
     res.status(200).send({
       status: "success",
