@@ -7,6 +7,7 @@ import {
   generateAuthUrl,
   handleOAuthCallback,
   initializeOAuthProviders,
+  generateJwt,
 } from "../oauth.js";
 import zcconfig from "../../services/config/zcconfig.js";
 import { verifyContact } from "../email.js";
