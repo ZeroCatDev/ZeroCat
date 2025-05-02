@@ -1,8 +1,8 @@
-import logger from "../utils/logger.js";
-import configManager from "../utils/configManager.js";
+import logger from "../services/logger.js";
+import zcconfig from "../services/config/zcconfig.js";
 import { Router } from "express";
-import { prisma } from "../utils/global.js";
-import default_project from "../src/config/default_project.js";
+import { prisma } from "../services/global.js";
+import default_project from "../src/default_project.js";
 import {
   extractProjectData,
   projectSelectionFields,
@@ -14,9 +14,9 @@ import jwt from "jsonwebtoken";
 import {
   generateFileAccessToken,
   verifyFileAccessToken,
-} from "../utils/tokenManager.js";
-import { needLogin, strictTokenCheck, needadmin } from "../middleware/auth.js";
-import { hasProjectPermission } from "../utils/permissionManager.js";
+} from "../services/auth/tokenManager.js";
+import { needLogin, strictTokenCheck, needAdmin } from "../middleware/auth.js";
+import { hasProjectPermission } from "../services/auth/permissionManager.js";
 import { getUserByUsername } from "../controllers/users.js";
 import { createEvent, EventTypes, TargetTypes } from "../controllers/events.js";
 
@@ -306,7 +306,7 @@ router.put("/commit/id/:id", needLogin, async (req, res, next) => {
 
     const decodedFileToken = jwt.verify(
       accessFileToken,
-      await configManager.getConfig("security.jwttoken")
+      await zcconfig.get("security.jwttoken")
     );
     if (!decodedFileToken) {
       return res.status(200).send({

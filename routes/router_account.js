@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { needLogin, strictTokenCheck, needadmin } from "../middleware/auth.js";
+import { needLogin, strictTokenCheck, needAdmin } from "../middleware/auth.js";
 import geetestMiddleware from "../middleware/geetest.js";
 import {
   loginController,
@@ -10,7 +10,7 @@ import {
   oauthController
 } from "../controllers/auth/index.js";
 import { initializeOAuthProviders } from "../controllers/oauth.js";
-import totpUtils from "../utils/totp.js";
+import totpUtils from "../services/auth/totp.js";
 
 const { validateTotpToken } = totpUtils;
 

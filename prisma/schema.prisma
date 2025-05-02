@@ -58,7 +58,8 @@ model ow_users {
   email        String?          @db.Char(100)
   password     String?          @db.VarChar(255)
   display_name String           @default("OurWorld创作者") @db.Char(20)
-  state        Int              @default(0) @db.TinyInt
+  /// User account status: pending = newly registered, active = normal user, suspended = temporarily disabled, banned = permanently disabled
+  status       String           @default("active") @db.VarChar(20)
   loginTime    DateTime?        @db.Timestamp(0)
   regTime      DateTime?        @default(now()) @db.Timestamp(0)
   sex          String?          @default("0") @db.VarChar(16)
@@ -328,6 +329,70 @@ model ow_auth_tokens {
   @@index([last_used_ip], map: "idx_tokens_last_used_ip")
 }
 
+model ow_notifications {
+  id                Int       @id @default(autoincrement()) @db.UnsignedInt
+  user_id           Int
+  notification_type String    @db.VarChar(64)
+  read              Boolean   @default(false)
+  high_priority     Boolean   @default(false)
+  created_at        DateTime  @default(now()) @db.Timestamp(0)
+  read_at           DateTime? @db.Timestamp(0)
+  actor_id          Int?
+  target_type       String?   @db.VarChar(50)
+  target_id         Int?
+  related_type      String?   @db.VarChar(50)
+  related_id        Int?
+  data              Json?
+
+  @@index([user_id, read, created_at], map: "idx_user_unread")
+  @@index([user_id, created_at], map: "idx_user_all")
+}
+
+model user_relationships {
+  id                Int                    @id @default(autoincrement())
+  source_user_id    Int
+  target_user_id    Int
+  relationship_type user_relationship_type
+  created_at        DateTime               @default(now()) @db.Timestamp(0)
+  updated_at        DateTime?              @updatedAt @db.Timestamp(0)
+  metadata          Json?
+
+  @@unique([source_user_id, target_user_id, relationship_type], name: "unique_user_relationship")
+  @@index([source_user_id, relationship_type], map: "idx_source_user_relationships")
+  @@index([target_user_id, relationship_type], map: "idx_target_user_relationships")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model ow_users_backup {
+  id           Int       @unique(map: "id_UNIQUE") @default(autoincrement())
+  username     String    @unique(map: "user_UNIQUE") @db.Char(20)
+  email        String?   @db.Char(100)
+  password     String?   @db.VarChar(255)
+  display_name String    @default("OurWorld创作者") @db.Char(20)
+  state        Int       @default(0) @db.TinyInt
+  loginTime    DateTime? @db.Timestamp(0)
+  regTime      DateTime? @default(now()) @db.Timestamp(0)
+  sex          String?   @default("0") @db.VarChar(16)
+  birthday     DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
+  motto        String?   @db.LongText
+  images       String?   @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
+  avatar       String?   @default("https://owcdn.190823.xyz/user/fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
+  type         String?   @default("guest") @db.VarChar(50)
+  url          String?   @db.VarChar(255)
+  github       String?   @db.VarChar(255)
+  twitter      String?   @db.VarChar(255)
+  facebook     String?   @db.VarChar(255)
+  google       String?   @db.VarChar(255)
+  weibo        String?   @db.VarChar(255)
+  qq           String?   @db.VarChar(255)
+  fa           String?   @map("2fa") @db.VarChar(255)
+  createdAt    DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
+  updatedAt    DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
+  label        String?   @db.VarChar(255)
+
+  @@id([id, username])
+}
+
 enum ow_users_contacts_contact_type {
   email
   phone
@@ -348,39 +413,6 @@ enum user_contacts_contact_type {
   phone
   qq
   other
-}
-
-model ow_notifications {
-  id                   BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
-  user_id              Int
-  notification_type    Int
-  read                 Boolean   @default(false)
-  high_priority        Boolean   @default(false)
-  created_at           DateTime  @default(now()) @db.Timestamp(0)
-  read_at              DateTime? @db.Timestamp(0)
-  actor_id             Int?
-  target_type          String?   @db.VarChar(50)
-  target_id            Int?
-  related_type         String?   @db.VarChar(50)
-  related_id           Int?
-  data                 Json?
-
-  @@index([user_id, read, created_at], map: "idx_user_unread")
-  @@index([user_id, created_at], map: "idx_user_all")
-}
-
-model user_relationships {
-  id               Int                    @id @default(autoincrement())
-  source_user_id   Int
-  target_user_id   Int
-  relationship_type user_relationship_type
-  created_at       DateTime               @default(now()) @db.Timestamp(0)
-  updated_at       DateTime?              @updatedAt @db.Timestamp(0)
-  metadata         Json?
-
-  @@unique([source_user_id, target_user_id, relationship_type], name: "unique_user_relationship")
-  @@index([source_user_id, relationship_type], name: "idx_source_user_relationships")
-  @@index([target_user_id, relationship_type], name: "idx_target_user_relationships")
 }
 
 enum user_relationship_type {

@@ -1,8 +1,6 @@
-import { prisma } from "../utils/global.js";
-import logger from "../utils/logger.js";
-import notificationController from "./notifications.js";
-import { NotificationTypes } from "./notifications.js";
-import notificationUtils from "../utils/notificationUtils.js";
+import { prisma } from "../services/global.js";
+import logger from "../services/logger.js";
+import notificationUtils from "./notifications.js";
 
 /**
  * Follow a user
@@ -12,7 +10,7 @@ import notificationUtils from "../utils/notificationUtils.js";
  * @param {string} note - Note to add to the follow relationship
  * @returns {Promise<Object>} Follow information
  */
-export async function followUser(followerId, followedId, note = '') {
+export async function followUser(followerId, followedId, note = "") {
   try {
     // Don't allow following yourself
     if (followerId === followedId) {
@@ -21,7 +19,7 @@ export async function followUser(followerId, followedId, note = '') {
 
     // Check if followed user exists
     const followedUser = await prisma.ow_users.findUnique({
-      where: { id: followedId }
+      where: { id: followedId },
     });
 
     if (!followedUser) {
@@ -34,9 +32,9 @@ export async function followUser(followerId, followedId, note = '') {
         unique_user_relationship: {
           source_user_id: followerId,
           target_user_id: followedId,
-          relationship_type: 'follow'
-        }
-      }
+          relationship_type: "follow",
+        },
+      },
     });
 
     if (existingFollow) {
@@ -52,32 +50,25 @@ export async function followUser(followerId, followedId, note = '') {
       data: {
         source_user_id: followerId,
         target_user_id: followedId,
-        relationship_type: 'follow',
+        relationship_type: "follow",
         metadata: {
-          note: note || ''
-        }
-      }
+          note: note || "",
+        },
+      },
     });
 
-    // Get follower count for notification
-    const followerCount = await prisma.user_relationships.count({
-      where: {
-        target_user_id: followedId,
-        relationship_type: 'follow'
-      }
-    });
 
     // Create notification for followed user
-    const notificationData = await notificationUtils.createUserNotificationData({
-      notificationType: NotificationTypes.USER_FOLLOW,
+    await notificationUtils.createNotification({
       userId: followedId,
+      notificationType: notificationUtils.NotificationTypes.USER_FOLLOW,
       actorId: followerId,
-      additionalData: {
-        follower_count: followerCount
-      }
+      targetType: notificationUtils.TargetTypes.USER,
+      targetId: followedId,
+      data: {},
+      highPriority: true,
     });
 
-    await notificationController.createNotification(notificationData);
     logger.debug(`Created follow notification for user ${followedId}`);
 
     return relationship;
@@ -101,8 +92,8 @@ export async function unfollowUser(followerId, followedId) {
       where: {
         source_user_id: followerId,
         target_user_id: followedId,
-        relationship_type: 'follow'
-      }
+        relationship_type: "follow",
+      },
     });
 
     return { count: result.count };
@@ -120,7 +111,7 @@ export async function unfollowUser(followerId, followedId) {
  * @param {string} reason - Reason for blocking
  * @returns {Promise<Object>} Block information
  */
-export async function blockUser(blockerId, blockedId, reason = '') {
+export async function blockUser(blockerId, blockedId, reason = "") {
   try {
     // Don't allow blocking yourself
     if (blockerId === blockedId) {
@@ -129,7 +120,7 @@ export async function blockUser(blockerId, blockedId, reason = '') {
 
     // Check if blocked user exists
     const blockedUser = await prisma.ow_users.findUnique({
-      where: { id: blockedId }
+      where: { id: blockedId },
     });
 
     if (!blockedUser) {
@@ -142,9 +133,9 @@ export async function blockUser(blockerId, blockedId, reason = '') {
         unique_user_relationship: {
           source_user_id: blockerId,
           target_user_id: blockedId,
-          relationship_type: 'block'
-        }
-      }
+          relationship_type: "block",
+        },
+      },
     });
 
     if (existingBlock) {
@@ -160,8 +151,8 @@ export async function blockUser(blockerId, blockedId, reason = '') {
       where: {
         source_user_id: blockerId,
         target_user_id: blockedId,
-        relationship_type: 'follow'
-      }
+        relationship_type: "follow",
+      },
     });
 
     // Create relationship record with reason
@@ -169,11 +160,11 @@ export async function blockUser(blockerId, blockedId, reason = '') {
       data: {
         source_user_id: blockerId,
         target_user_id: blockedId,
-        relationship_type: 'block',
+        relationship_type: "block",
         metadata: {
-          reason: reason || ''
-        }
-      }
+          reason: reason || "",
+        },
+      },
     });
 
     return relationship;
@@ -197,8 +188,8 @@ export async function unblockUser(blockerId, blockedId) {
       where: {
         source_user_id: blockerId,
         target_user_id: blockedId,
-        relationship_type: 'block'
-      }
+        relationship_type: "block",
+      },
     });
 
     return { count: result.count };
@@ -222,31 +213,31 @@ export async function getUserFollowers(userId, limit = 20, offset = 0) {
     const relationships = await prisma.user_relationships.findMany({
       where: {
         target_user_id: userId,
-        relationship_type: 'follow'
+        relationship_type: "follow",
       },
       include: {
         // Join with ow_users to get follower details
         // Note: This doesn't work directly with Prisma, we need to adjust the query
       },
-      orderBy: { created_at: 'desc' },
+      orderBy: { created_at: "desc" },
       take: limit,
-      skip: offset
+      skip: offset,
     });
 
     // Since we don't have direct relations in the model, we need to get users separately
-    const followerIds = relationships.map(rel => rel.source_user_id);
+    const followerIds = relationships.map((rel) => rel.source_user_id);
 
     // Get user details for all followers
     const followerDetails = await prisma.ow_users.findMany({
       where: {
-        id: { in: followerIds }
+        id: { in: followerIds },
       },
       select: {
         id: true,
         username: true,
         display_name: true,
         images: true,
-      }
+      },
     });
 
     // Create a map of user IDs to user details
@@ -256,24 +247,24 @@ export async function getUserFollowers(userId, limit = 20, offset = 0) {
     }, {});
 
     // Combine relationship data with user details
-    const followers = relationships.map(rel => ({
+    const followers = relationships.map((rel) => ({
       ...rel,
-      user: userMap[rel.source_user_id]
+      user: userMap[rel.source_user_id],
     }));
 
     // Get total count
     const totalCount = await prisma.user_relationships.count({
       where: {
         target_user_id: userId,
-        relationship_type: 'follow'
-      }
+        relationship_type: "follow",
+      },
     });
 
     return {
       followers,
       total: totalCount,
       limit,
-      offset
+      offset,
     };
   } catch (error) {
     logger.error("Error in getUserFollowers:", error);
@@ -295,27 +286,27 @@ export async function getUserFollowing(userId, limit = 20, offset = 0) {
     const relationships = await prisma.user_relationships.findMany({
       where: {
         source_user_id: userId,
-        relationship_type: 'follow'
+        relationship_type: "follow",
       },
-      orderBy: { created_at: 'desc' },
+      orderBy: { created_at: "desc" },
       take: limit,
-      skip: offset
+      skip: offset,
     });
 
     // Get the IDs of followed users
-    const followedIds = relationships.map(rel => rel.target_user_id);
+    const followedIds = relationships.map((rel) => rel.target_user_id);
 
     // Get user details for all followed users
     const followedDetails = await prisma.ow_users.findMany({
       where: {
-        id: { in: followedIds }
+        id: { in: followedIds },
       },
       select: {
         id: true,
         username: true,
         display_name: true,
         images: true,
-      }
+      },
     });
 
     // Create a map of user IDs to user details
@@ -325,24 +316,24 @@ export async function getUserFollowing(userId, limit = 20, offset = 0) {
     }, {});
 
     // Combine relationship data with user details
-    const following = relationships.map(rel => ({
+    const following = relationships.map((rel) => ({
       ...rel,
-      user: userMap[rel.target_user_id]
+      user: userMap[rel.target_user_id],
     }));
 
     // Get total count
     const totalCount = await prisma.user_relationships.count({
       where: {
         source_user_id: userId,
-        relationship_type: 'follow'
-      }
+        relationship_type: "follow",
+      },
     });
 
     return {
       following,
       total: totalCount,
       limit,
-      offset
+      offset,
     };
   } catch (error) {
     logger.error("Error in getUserFollowing:", error);
@@ -364,27 +355,27 @@ export async function getUserBlocked(userId, limit = 20, offset = 0) {
     const relationships = await prisma.user_relationships.findMany({
       where: {
         source_user_id: userId,
-        relationship_type: 'block'
+        relationship_type: "block",
       },
-      orderBy: { created_at: 'desc' },
+      orderBy: { created_at: "desc" },
       take: limit,
-      skip: offset
+      skip: offset,
     });
 
     // Get the IDs of blocked users
-    const blockedIds = relationships.map(rel => rel.target_user_id);
+    const blockedIds = relationships.map((rel) => rel.target_user_id);
 
     // Get user details for all blocked users
     const blockedDetails = await prisma.ow_users.findMany({
       where: {
-        id: { in: blockedIds }
+        id: { in: blockedIds },
       },
       select: {
         id: true,
         username: true,
         display_name: true,
         images: true,
-      }
+      },
     });
 
     // Create a map of user IDs to user details
@@ -394,24 +385,24 @@ export async function getUserBlocked(userId, limit = 20, offset = 0) {
     }, {});
 
     // Combine relationship data with user details
-    const blocked = relationships.map(rel => ({
+    const blocked = relationships.map((rel) => ({
       ...rel,
-      user: userMap[rel.target_user_id]
+      user: userMap[rel.target_user_id],
     }));
 
     // Get total count
     const totalCount = await prisma.user_relationships.count({
       where: {
         source_user_id: userId,
-        relationship_type: 'block'
-      }
+        relationship_type: "block",
+      },
     });
 
     return {
       blocked,
       total: totalCount,
       limit,
-      offset
+      offset,
     };
   } catch (error) {
     logger.error("Error in getUserBlocked:", error);
@@ -433,9 +424,9 @@ export async function isFollowing(followerId, followedId) {
         unique_user_relationship: {
           source_user_id: followerId,
           target_user_id: followedId,
-          relationship_type: 'follow'
-        }
-      }
+          relationship_type: "follow",
+        },
+      },
     });
 
     return !!relationship;
@@ -459,9 +450,9 @@ export async function isBlocking(blockerId, blockedId) {
         unique_user_relationship: {
           source_user_id: blockerId,
           target_user_id: blockedId,
-          relationship_type: 'block'
-        }
-      }
+          relationship_type: "block",
+        },
+      },
     });
 
     return !!relationship;
@@ -484,16 +475,16 @@ export async function getRelationshipsBetweenUsers(userId1, userId2) {
     const outgoingRelationships = await prisma.user_relationships.findMany({
       where: {
         source_user_id: userId1,
-        target_user_id: userId2
-      }
+        target_user_id: userId2,
+      },
     });
 
     // Get relationships where userId1 is the target
     const incomingRelationships = await prisma.user_relationships.findMany({
       where: {
         source_user_id: userId2,
-        target_user_id: userId1
-      }
+        target_user_id: userId1,
+      },
     });
 
     // Format into easy-to-use object
@@ -505,7 +496,7 @@ export async function getRelationshipsBetweenUsers(userId1, userId2) {
       incoming: incomingRelationships.reduce((map, rel) => {
         map[rel.relationship_type] = true;
         return map;
-      }, {})
+      }, {}),
     };
 
     return {
@@ -517,8 +508,8 @@ export async function getRelationshipsBetweenUsers(userId1, userId2) {
       hasFavorited: !!relationshipMap.outgoing.favorite,
       relationships: {
         outgoing: outgoingRelationships,
-        incoming: incomingRelationships
-      }
+        incoming: incomingRelationships,
+      },
     };
   } catch (error) {
     logger.error("Error in getRelationshipsBetweenUsers:", error);
@@ -542,9 +533,9 @@ export async function updateFollowNote(followerId, followedId, note) {
         unique_user_relationship: {
           source_user_id: followerId,
           target_user_id: followedId,
-          relationship_type: 'follow'
-        }
-      }
+          relationship_type: "follow",
+        },
+      },
     });
 
     if (!existingFollow) {
@@ -554,14 +545,14 @@ export async function updateFollowNote(followerId, followedId, note) {
     // Update the relationship note
     const updatedRelationship = await prisma.user_relationships.update({
       where: {
-        id: existingFollow.id
+        id: existingFollow.id,
       },
       data: {
         metadata: {
-          note: note || ''
+          note: note || "",
         },
-        updated_at: new Date()
-      }
+        updated_at: new Date(),
+      },
     });
 
     return updatedRelationship;
@@ -587,9 +578,9 @@ export async function updateBlockReason(blockerId, blockedId, reason) {
         unique_user_relationship: {
           source_user_id: blockerId,
           target_user_id: blockedId,
-          relationship_type: 'block'
-        }
-      }
+          relationship_type: "block",
+        },
+      },
     });
 
     if (!existingBlock) {
@@ -599,14 +590,14 @@ export async function updateBlockReason(blockerId, blockedId, reason) {
     // Update the relationship reason
     const updatedRelationship = await prisma.user_relationships.update({
       where: {
-        id: existingBlock.id
+        id: existingBlock.id,
       },
       data: {
         metadata: {
-          reason: reason || ''
+          reason: reason || "",
         },
-        updated_at: new Date()
-      }
+        updated_at: new Date(),
+      },
     });
 
     return updatedRelationship;
@@ -631,9 +622,9 @@ export async function getRelationshipNotes(userId, targetUserId) {
         unique_user_relationship: {
           source_user_id: userId,
           target_user_id: targetUserId,
-          relationship_type: 'follow'
-        }
-      }
+          relationship_type: "follow",
+        },
+      },
     });
 
     // Get block reason if exists
@@ -642,22 +633,26 @@ export async function getRelationshipNotes(userId, targetUserId) {
         unique_user_relationship: {
           source_user_id: userId,
           target_user_id: targetUserId,
-          relationship_type: 'block'
-        }
-      }
+          relationship_type: "block",
+        },
+      },
     });
 
     return {
-      follow: followRelationship ? {
-        note: followRelationship.metadata?.note || '',
-        created_at: followRelationship.created_at,
-        updated_at: followRelationship.updated_at
-      } : null,
-      block: blockRelationship ? {
-        reason: blockRelationship.metadata?.reason || '',
-        created_at: blockRelationship.created_at,
-        updated_at: blockRelationship.updated_at
-      } : null
+      follow: followRelationship
+        ? {
+            note: followRelationship.metadata?.note || "",
+            created_at: followRelationship.created_at,
+            updated_at: followRelationship.updated_at,
+          }
+        : null,
+      block: blockRelationship
+        ? {
+            reason: blockRelationship.metadata?.reason || "",
+            created_at: blockRelationship.created_at,
+            updated_at: blockRelationship.updated_at,
+          }
+        : null,
     };
   } catch (error) {
     logger.error("Error in getRelationshipNotes:", error);
@@ -683,5 +678,5 @@ export default {
   getRelationshipsBetweenUsers,
   updateFollowNote,
   updateBlockReason,
-  getRelationshipNotes
+  getRelationshipNotes,
 };

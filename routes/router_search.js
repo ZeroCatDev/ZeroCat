@@ -1,10 +1,10 @@
-import logger from "../utils/logger.js";
+import logger from "../services/logger.js";
 import { needLogin, strictTokenCheck } from "../middleware/auth.js";
-import configManager from "../utils/configManager.js";
+import zcconfig from "../services/config/zcconfig.js";
 
 import { Router } from "express";
 const router = Router();
-import { prisma } from "../utils/global.js"; // 功能函数集
+import { prisma } from "../services/global.js"; // 功能函数集
 
 // 搜索：Scratch项目列表：数据（只搜索标题）
 router.get("/", async (req, res, next) => {

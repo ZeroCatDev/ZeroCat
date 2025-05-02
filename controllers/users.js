@@ -1,5 +1,5 @@
-import logger from "../utils/logger.js";
-import { prisma } from "../utils/global.js";
+import logger from "../services/logger.js";
+import { prisma } from "../services/global.js";
 
 /**
  * Get users by list of IDs
@@ -11,7 +11,7 @@ async function getUsersByList(userIds) {
     id: true,
     username: true,
     display_name: true,
-    state: true,
+    status: true,
     regTime: true,
     motto: true,
     images: true,
@@ -37,7 +37,7 @@ export async function getUserByUsername(username) {
         id: true,
         username: true,
         display_name: true,
-        state: true,
+        status: true,
         regTime: true,
         motto: true,
         images: true,

@@ -1,7 +1,7 @@
-import logger from "../../utils/logger.js";
-import authUtils from "../../utils/auth.js";
-import { prisma } from "../../utils/global.js";
-import ipLocation from "../../utils/ipLocation.js";
+import logger from "../../services/logger.js";
+import authUtils from "../../services/auth/auth.js";
+import { prisma } from "../../services/global.js";
+import ipLocation from "../../services/ip/ipLocation.js";
 
 /**
  * 刷新令牌

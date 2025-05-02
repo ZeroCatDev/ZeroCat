@@ -1,6 +1,6 @@
 // 合并的数据库迁移脚本
 import { PrismaClient, Prisma } from '@prisma/client';
-import logger from '../../utils/logger.js';
+import logger from '../../services/logger.js';
 
 const prisma = new PrismaClient();
 

@@ -1,0 +1,72 @@
+{
+  "targetTypes": {
+    "PROJECT": "project",
+    "USER": "user",
+    "COMMENT": "comment"
+  },
+  "eventTypes": {
+    "PROJECT_CREATE": "project_create",
+    "PROJECT_UPDATE": "project_update",
+    "PROJECT_FORK": "project_fork",
+    "PROJECT_PUBLISH": "project_publish",
+    "PROJECT_DELETE": "project_delete",
+    "PROJECT_RENAME": "project_rename",
+    "PROJECT_INFO_UPDATE": "project_info_update",
+    "PROJECT_STAR": "project_star",
+    "PROJECT_COMMIT": "project_commit",
+    "COMMENT_CREATE": "comment_create",
+    "USER_PROFILE_UPDATE": "user_profile_update",
+    "USER_LOGIN": "user_login",
+    "USER_REGISTER": "user_register"
+  },
+  "eventConfig": {
+    "project_commit": {
+      "public": true,
+      "notifyTargets": ["project_owner", "project_followers"]
+    },
+    "project_update": {
+      "public": true,
+      "notifyTargets": ["project_owner"]
+    },
+    "project_fork": {
+      "public": true,
+      "notifyTargets": ["project_owner"]
+    },
+    "project_create": {
+      "public": true,
+      "notifyTargets": ["user_followers"]
+    },
+    "project_publish": {
+      "public": true,
+      "notifyTargets": ["user_followers"]
+    },
+    "comment_create": {
+      "public": false,
+      "notifyTargets": ["page_owner", "thread_participants"]
+    },
+    "user_profile_update": {
+      "public": true,
+      "notifyTargets": ["user_followers"]
+    },
+    "user_login": {
+      "public": false,
+      "notifyTargets": []
+    },
+    "user_register": {
+      "public": true,
+      "notifyTargets": []
+    },
+    "project_rename": {
+      "public": true,
+      "notifyTargets": ["project_followers"]
+    },
+    "project_info_update": {
+      "public": true,
+      "notifyTargets": ["project_followers"]
+    },
+    "project_star": {
+      "public": true,
+      "notifyTargets": ["project_owner"]
+    }
+  }
+}

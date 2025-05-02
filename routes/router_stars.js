@@ -1,4 +1,4 @@
-import logger from "../utils/logger.js";
+import logger from "../services/logger.js";
 import { Router } from "express";
 import { needLogin } from "../middleware/auth.js";
 import { createEvent, TargetTypes } from "../controllers/events.js";
@@ -11,29 +11,34 @@ import {
 
 const router = Router();
 
+/**
+ * Star a project
+ * @route POST /star
+ * @access Private
+ */
 router.post("/star", needLogin, async (req, res) => {
   try {
-    const { projectid } = req.body;
+    const projectId = parseInt(req.body.projectid);
 
-    if (!projectid) {
+    if (!projectId) {
       return res
         .status(400)
         .send({ status: "error", message: "项目ID不能为空" });
     }
 
-    await starProject(res.locals.userid, projectid);
+    await starProject(res.locals.userid, projectId);
 
     // Add star event
     await createEvent(
       "project_star",
       res.locals.userid,
-      TargetTypes.PROJECT,
-      projectid,
+      "project",
+      projectId,
       {
         event_type: "project_star",
         actor_id: res.locals.userid,
-        target_type: TargetTypes.PROJECT,
-        target_id: projectid,
+        target_type: "project",
+        target_id: projectId,
         action: "star"
       }
     );
@@ -45,17 +50,22 @@ router.post("/star", needLogin, async (req, res) => {
   }
 });
 
+/**
+ * Unstar a project
+ * @route POST /unstar
+ * @access Private
+ */
 router.post("/unstar", needLogin, async (req, res) => {
   try {
-    const { projectid } = req.body;
+    const projectId = parseInt(req.body.projectid);
 
-    if (!projectid) {
+    if (!projectId) {
       return res
         .status(400)
         .send({ status: "error", message: "项目ID不能为空" });
     }
 
-    await unstarProject(res.locals.userid, projectid);
+    await unstarProject(res.locals.userid, projectId);
 
     res
       .status(200)
@@ -66,17 +76,22 @@ router.post("/unstar", needLogin, async (req, res) => {
   }
 });
 
+/**
+ * Check if a project is starred by the current user
+ * @route GET /checkstar
+ * @access Public
+ */
 router.get("/checkstar", async (req, res) => {
   try {
-    const { projectid } = req.query;
+    const projectId = parseInt(req.query.projectid);
 
-    if (!projectid) {
+    if (!projectId) {
       return res
         .status(400)
         .send({ status: "error", message: "项目ID不能为空" });
     }
 
-    const status = await getProjectStarStatus(res.locals.userid, projectid);
+    const status = await getProjectStarStatus(res.locals.userid, projectId);
     res.status(200).send({
       status: "success",
       message: "获取成功",
@@ -88,10 +103,20 @@ router.get("/checkstar", async (req, res) => {
   }
 });
 
+/**
+ * Get the number of stars for a project
+ * @route GET /project/:id/stars
+ * @access Public
+ */
 router.get("/project/:id/stars", async (req, res) => {
   try {
-    const projectid = req.params.id;
-    const stars = await getProjectStars(projectid);
+    const projectId = parseInt(req.params.id);
+
+    if (!projectId) {
+      return res.status(400).send({ status: "error", message: "项目ID不能为空" });
+    }
+
+    const stars = await getProjectStars(projectId);
     res.status(200).send({
       status: "success",
       message: "获取成功",

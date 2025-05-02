@@ -105,7 +105,7 @@ export const EventTypes = {
   // ...其他常量
 
   // 获取事件配置的辅助方法
-  getConfig(eventType) {
+  get(eventType) {
     const type = typeof eventType === 'string' ? eventType : String(eventType);
     return EventConfig[type.toLowerCase()];
   }

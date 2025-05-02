@@ -1,5 +1,5 @@
-import logger from "../utils/logger.js";
-import configManager from "../utils/configManager.js";
+import logger from "../services/logger.js";
+import zcconfig from "../services/config/zcconfig.js";
 import axios from "axios";
 import { createHmac } from "crypto";
 
@@ -11,8 +11,8 @@ let GEE_API_SERVER = "http://gcaptcha4.geetest.com/validate";
 // Initialize configuration async
 async function initConfig() {
   try {
-    GEE_CAPTCHA_ID = await configManager.getConfig("captcha.GEE_CAPTCHA_ID", "");
-    GEE_CAPTCHA_KEY = await configManager.getConfig("captcha.GEE_CAPTCHA_KEY", "");
+    GEE_CAPTCHA_ID = await zcconfig.get("captcha.GEE_CAPTCHA_ID", "");
+    GEE_CAPTCHA_KEY = await zcconfig.get("captcha.GEE_CAPTCHA_KEY", "");
     logger.debug("Geetest config loaded");
   } catch (err) {
     logger.error("Failed to load Geetest config:", err);

@@ -1,10 +1,13 @@
-import logger from "../utils/logger.js";
+import logger from "../services/logger.js";
 import { needLogin, strictTokenCheck } from "../middleware/auth.js";
-import configManager from "../utils/configManager.js";
+import zcconfig from "../services/config/zcconfig.js";
+import notificationUtils from "../controllers/notifications.js";
+import { UAParser } from "ua-parser-js";
+import ipLocation from "../services/ip/ipLocation.js";
 
 import { Router } from "express";
 const router = Router();
-import { prisma } from "../utils/global.js";
+import { prisma } from "../services/global.js";
 import { getUsersByList } from "../controllers/users.js";
 import { createEvent, TargetTypes } from "../controllers/events.js";
 // 中间件，确保所有请求均经过该处理
@@ -25,39 +28,32 @@ const getSortCondition = (req) => {
 };
 
 // 转换评论数据
-const transformComment = (comments) => {
-  return comments.map((comment) => {
-    return comment;
-    const time = new Date(comment.insertedAt).getTime();
-    const objectId = comment.id;
-    const browser = (
-      comment.ua
-        ? comment.ua.match(/(Edge|Chrome|Firefox|Safari|Opera)/)
-        : ["未知"]
-    )[0];
-    const os = (
-      comment.ua ? comment.ua.match(/(Windows|Mac|Linux)/) : null || ["未知"]
-    )[0];
-    const type = comment.id == 1 ? "administrator" : "guest";
-    const avatar =
-      "https://owcdn.190823.xyz/user/fcd939e653195bb6d057e8c2519f5cc7";
-    const orig = comment.comment;
-    const ip = comment.ip;
-    const addr = "";
+const transformComment = async (comments) => {
+  return Promise.all(
+    comments.map(async (comment) => {
+      const time = new Date(comment.insertedAt).getTime();
+      const objectId = comment.id;
 
-    return {
-      ...comment,
-      time,
-      objectId,
-      browser,
-      os,
-      type,
-      avatar,
-      orig,
-      ip,
-      addr,
-    };
-  });
+      // 使用 UAParser 解析 UA
+      const parser = new UAParser(comment.user_ua || "");
+      const result = parser.getResult();
+      const browser = result.browser.name || "未知";
+      const os = result.os.name || "未知";
+
+      // 获取 IP 地址位置信息
+      let ipInfo = await ipLocation.getIPLocation(comment.user_ip);
+
+      return {
+        ...comment,
+        time,
+        objectId,
+        browser,
+        os,
+        addr: ipInfo.address,
+        most_specific_country_or_region: ipInfo.most_specific_country_or_region,
+      };
+    })
+  );
 };
 
 // 读取评论
@@ -73,7 +69,7 @@ router.get("/api/comment", async (req, res, next) => {
       skip: (page - 1) * pageSize,
     });
 
-    const transformedComments = transformComment(comments);
+    const transformedComments = await transformComment(comments);
 
     const ids = transformedComments.map((comment) => comment.id);
 
@@ -81,7 +77,9 @@ router.get("/api/comment", async (req, res, next) => {
       where: { page_key: path, rid: { in: ids }, type: "comment" },
     });
 
-    const transformedChildrenComments = transformComment(childrenComments);
+    const transformedChildrenComments = await transformComment(
+      childrenComments
+    );
     // 获取评论的用户id
 
     var user_ids = transformedComments.map((comment) => comment.user_id);
@@ -143,10 +141,52 @@ router.post("/api/comment", needLogin, async (req, res, next) => {
       },
     });
 
+    const transformedComment = (await transformComment([newComment]))[0];
     res.status(200).send({
       errno: 0,
       errmsg: "",
-      data: transformComment([newComment])[0],
+      data: transformedComment,
+    });
+
+    let user_id, targetType, targetId;
+    if (url.split("-")[0] == "user") {
+      targetType = "user";
+      targetId = url.split("-")[1];
+      user_id = targetId;
+    } else if (url.split("-")[0] == "project") {
+      const project = await prisma.ow_projects.findUnique({
+        where: {
+          id: Number(url.split("-")[1]),
+        },
+      });
+      user_id = project.authorid;
+      targetType = "PROJECT";
+      targetId = url.split("-")[1];
+    } else if (url.split("-")[0] == "projectlist") {
+      targetType = "PROJECTLIST";
+      targetId = url.split("-")[1];
+      const projectlist = await prisma.ow_projectlists.findUnique({
+        where: {
+          id: Number(url.split("-")[1]),
+        },
+      });
+      user_id = projectlist.authorid;
+    } else {
+      user_id = userid;
+      targetType = "user";
+      targetId = userid;
+    }
+    // 创建通知
+    await notificationUtils.createNotification({
+      userId: user_id,
+      notificationType: "USER_NEW_COMMENT",
+      actorId: userid,
+      targetType: targetType,
+      targetId: targetId,
+      data: {
+        comment: newComment.text,
+      },
+      highPriority: true,
     });
   } catch (err) {
     next(err);

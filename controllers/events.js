@@ -1,285 +1,458 @@
-import { prisma } from "../utils/global.js";
-import logger from "../utils/logger.js";
-import { EventConfig, TargetTypes } from "../models/events.js";
-import * as eventService from "../services/eventService.js";
+import { prisma } from "../services/global.js";
+import logger from "../services/logger.js";
+import { createNotification, NotificationTypes } from "./notifications.js";
+import {
+  TargetTypes,
+  EventTypes,
+  AudienceTypes,
+  EventConfig,
+  AudienceDataDependencies,
+  EventToNotificationMap
+} from "../config/eventConfig.js";
 
-// Re-export TargetTypes and EventConfig for use in other files
-export { TargetTypes, EventConfig };
-
-// Define a compatibility layer for old EventTypes structure
-// This maps the old EventTypes constants to the new event type strings
-// Required for backward compatibility with existing code
-export const EventTypes = {
-  // Map the old structure to the new one
-  'project_commit': 'project_commit',
-  'project_update': 'project_update',
-  'project_fork': 'project_fork',
-  'project_create': 'project_create',
-  'project_publish': 'project_publish',
-  'comment_create': 'comment_create',
-  'user_profile_update': 'user_profile_update',
-  'user_login': 'user_login',
-  'user_register': 'user_register',
-  'project_rename': 'project_rename',
-  'project_info_update': 'project_info_update',
-
-  // Common event constants as uppercase for use in code
-  // This is for code using EventTypes.CONSTANT format
-  PROJECT_CREATE: 'project_create',
-  PROJECT_UPDATE: 'project_update',
-  PROJECT_FORK: 'project_fork',
-  PROJECT_PUBLISH: 'project_publish',
-  PROJECT_DELETE: 'project_delete',
-  PROJECT_RENAME: 'project_rename',
-  USER_PROFILE_UPDATE: 'user_profile_update',
-  USER_REGISTER: 'user_register',
-  PROJECT_INFO_UPDATE: 'project_info_update',
-  COMMENT_CREATE: 'comment_create',
-  USER_LOGIN: 'user_login',
-
-  // Add a mapping function to get event config
-  getConfig(eventType) {
-    const type = typeof eventType === 'string' ? eventType : String(eventType);
-    return EventConfig[type.toLowerCase()];
-  }
-};
+// 重新导出这些常量供外部使用
+export { TargetTypes, EventTypes, AudienceTypes, EventConfig };
 
 /**
- * Create a new event
- * @param {string} eventType - Type of event
- * @param {number} actorId - ID of the actor (user) performing the action
- * @param {string} targetType - Type of the target (project, user, etc.)
- * @param {number} targetId - ID of the target
- * @param {object} eventData - Data specific to the event
- * @param {boolean} [forcePrivate=false] - Force the event to be private
+ * 创建事件并异步发送通知
  */
-export async function createEvent(eventType, actorId, targetType, targetId, eventData, forcePrivate = false) {
+export async function createEvent(eventType, actorId, targetType, targetId, eventData = {}) {
   try {
-    // Handle case where eventType is from the old EventTypes object
-    const normalizedEventType = (typeof eventType === 'string' && eventType.toLowerCase()) ||
-                               (EventTypes[eventType] ? EventTypes[eventType].toLowerCase() : null);
+    const normalizedEventType = eventType.toLowerCase();
+    const eventConfig = EventConfig[normalizedEventType];
 
-    if (!normalizedEventType) {
-      logger.warn(`Invalid event type: ${eventType}`);
+    if (!eventConfig) {
+      logger.warn(`未知的事件类型: ${eventType}`);
       return null;
     }
 
-    // Prepare the event data with actor and target information
-    const fullEventData = {
-      ...eventData,
-      event_type: normalizedEventType,
-      actor_id: actorId,
-      target_type: targetType,
-      target_id: targetId
-    };
+    // 创建事件记录
+    const event = await prisma.events.create({
+      data: {
+        event_type: normalizedEventType,
+        actor_id: BigInt(actorId),
+        target_type: targetType,
+        target_id: BigInt(targetId),
+        event_data: {
+          ...eventData,
+          actor_id: actorId,
+          target_type: targetType,
+          target_id: targetId
+        },
+        public: eventConfig.public ? 1 : 0
+      }
+    });
 
-    // Use the service to create the event
-    return await eventService.createEvent(normalizedEventType, fullEventData, forcePrivate);
+    // 异步处理通知
+    if (eventConfig.notifyTargets && eventConfig.notifyTargets.length > 0) {
+      // 使用 Promise.resolve().then() 使其异步执行
+      Promise.resolve().then(() => {
+        processNotifications(event, eventConfig, eventData);
+      }).catch(error => {
+        logger.error('异步通知处理错误:', error);
+      });
+    }
+
+    return event;
   } catch (error) {
-    logger.error('Error in createEvent controller:', error);
-    throw error;
+    logger.error('事件创建错误:', error);
+    return null;
   }
 }
 
 /**
- * Get events for a specific target
- * @param {string} targetType - Type of the target
- * @param {number} targetId - ID of the target
- * @param {number} [limit=10] - Maximum number of events to return
- * @param {number} [offset=0] - Pagination offset
- * @param {boolean} [includePrivate=false] - Whether to include private events
+ * 获取特定目标的事件
  */
 export async function getTargetEvents(targetType, targetId, limit = 10, offset = 0, includePrivate = false) {
   try {
-    return await eventService.getTargetEvents(targetType, targetId, limit, offset, includePrivate);
+    const events = await prisma.events.findMany({
+      where: {
+        target_type: targetType,
+        target_id: BigInt(targetId),
+        ...(includePrivate ? {} : { public: 1 }),
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
+      take: limit,
+      skip: offset,
+    });
+
+    return await enrichEvents(events);
   } catch (error) {
-    logger.error('Error in getTargetEvents controller:', error);
-    throw error;
+    logger.error('获取目标事件错误:', error);
+    return [];
   }
 }
 
 /**
- * Get events for a specific actor
- * @param {number} actorId - ID of the actor
- * @param {number} [limit=10] - Maximum number of events to return
- * @param {number} [offset=0] - Pagination offset
- * @param {boolean} [includePrivate=false] - Whether to include private events
+ * 获取特定行为者的事件
  */
 export async function getActorEvents(actorId, limit = 10, offset = 0, includePrivate = false) {
   try {
-    return await eventService.getActorEvents(actorId, limit, offset, includePrivate);
+    const events = await prisma.events.findMany({
+      where: {
+        actor_id: BigInt(actorId),
+        ...(includePrivate ? {} : { public: 1 }),
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
+      take: limit,
+      skip: offset,
+    });
+
+    return await enrichEvents(events);
   } catch (error) {
-    logger.error('Error in getActorEvents controller:', error);
-    throw error;
+    logger.error('获取行为者事件错误:', error);
+    return [];
   }
 }
 
 /**
- * Get actor information
- * @param {number} actorId - The actor ID
- * @returns {Promise<object|null>} - Actor information
+ * 用行为者和目标信息丰富事件数据
+ */
+async function enrichEvents(events) {
+  try {
+    return Promise.all(events.map(async (event) => {
+      const [actor, target] = await Promise.all([
+        getActor(event.actor_id),
+        getTarget(event.target_type, event.target_id)
+      ]);
+
+      return {
+        ...event,
+        actor,
+        target: {
+          type: event.target_type,
+          id: event.target_id,
+          info: target
+        }
+      };
+    }));
+  } catch (error) {
+    logger.error('丰富事件数据错误:', error);
+    return events;
+  }
+}
+
+/**
+ * 获取行为者信息
  */
 async function getActor(actorId) {
-  return await prisma.ow_users.findUnique({
-    where: { id: Number(actorId) },
-    select: {
-      id: true,
-      username: true,
-      display_name: true,
-      type: true
-    }
-  });
-}
-
-/**
- * Get target information
- * @param {string} targetType - Type of the target
- * @param {number} targetId - ID of the target
- * @returns {Promise<object|null>} - Target information
- */
-async function getTarget(targetType, targetId) {
-  switch (targetType) {
-    case TargetTypes.PROJECT:
-      return await prisma.ow_projects.findUnique({
-        where: { id: Number(targetId) }
-      });
-    case TargetTypes.USER:
-      return await prisma.ow_users.findUnique({
-        where: { id: Number(targetId) }
-      });
-    case TargetTypes.COMMENT:
-      return await prisma.ow_comment.findUnique({
-        where: { id: Number(targetId) }
-      });
-    default:
-      return null;
-  }
-}
-
-/**
- * Handle event notifications based on configuration
- */
-async function handleEventNotifications(event, eventConfig, handlerContext) {
   try {
-    const notifyUsers = new Set();
-
-    for (const target of eventConfig.notifyTargets) {
-      const users = await getNotificationTargets(target, event, handlerContext);
-      users.forEach(userId => notifyUsers.add(userId));
-    }
-
-    // Create notifications for all unique users
-    await Promise.all(
-      Array.from(notifyUsers).map(userId =>
-        createNotification(event.id, userId)
-      )
-    );
-  } catch (error) {
-    logger.error('Error handling event notifications:', error);
-  }
-}
-
-/**
- * Get users to notify based on target type
- */
-async function getNotificationTargets(targetType, event, handlerContext) {
-  switch (targetType) {
-    case 'project_owner':
-      const project = await prisma.ow_projects.findUnique({
-        where: { id: Number(event.target_id) }
-      });
-      return project ? [project.authorid] : [];
-
-    case 'project_followers':
-      return await getProjectFollowers(event.target_id);
-
-    case 'user_followers':
-      return await getUserFollowers(event.actor_id);
-
-    default:
-      return [];
-  }
-}
-
-/**
- * Create a notification
- */
-/*
-async function createNotification(eventId, userId) {
-  try {
-    return await prisma.notifications.create({
-      data: {
-        event_id: BigInt(eventId),
-        user_id: BigInt(userId),
-      },
+    return await prisma.ow_users.findUnique({
+      where: { id: Number(actorId) },
+      select: {
+        id: true,
+        username: true,
+        display_name: true,
+        type: true
+      }
     });
   } catch (error) {
-    logger.error('Error creating notification:', error);
-    throw error;
+    logger.error(`获取行为者 ${actorId} 错误:`, error);
+    return null;
   }
 }
-*/
 
-// Event handler functions remain as they were, now they can be simplified to use the new service
-async function handleProjectCommit(context) {
-  const { event, actor, target, fullData } = context;
-  logger.debug('Handling project commit', { actor, target, fullData });
-  console.log("Hello World");
+/**
+ * 获取目标信息
+ */
+async function getTarget(targetType, targetId) {
+  try {
+    switch (targetType) {
+      case TargetTypes.PROJECT:
+        return await prisma.ow_projects.findUnique({
+          where: { id: Number(targetId) }
+        });
+      case TargetTypes.USER:
+        return await prisma.ow_users.findUnique({
+          where: { id: Number(targetId) }
+        });
+      case TargetTypes.COMMENT:
+        return await prisma.ow_comment.findUnique({
+          where: { id: Number(targetId) }
+        });
+      default:
+        return null;
+    }
+  } catch (error) {
+    logger.error(`获取目标 ${targetType}/${targetId} 错误:`, error);
+    return null;
+  }
 }
 
-async function handleProjectShare(context) {
-  // Implementation...
+/**
+ * 处理事件的通知
+ */
+async function processNotifications(event, eventConfig, eventData) {
+  try {
+    const actorId = Number(event.actor_id);
+    const targetId = Number(event.target_id);
+
+    // 收集所有受众用户ID
+    const usersMap = new Map(); // 使用Map去重
+
+
+
+    // 用于存储中间结果的对象，供依赖关系使用
+    const audienceResults = {};
+
+    // 为每个受众类型获取用户并合并
+    for (const audienceType of eventConfig.notifyTargets) {
+      try {
+        const audienceUsers = await getAudienceUsers(audienceType, event, eventData, audienceResults);
+        audienceResults[audienceType] = audienceUsers;
+
+        // 将用户添加到Map中以去重
+        for (const userId of audienceUsers) {
+          if (userId && userId !== actorId) { // 排除空值和事件创建者自己
+            usersMap.set(userId, true);
+          }
+        }
+      } catch (err) {
+        logger.error(`获取受众 ${audienceType} 用户出错:`, err);
+        // 继续处理其他受众类型
+      }
+    }
+
+    // 没有用户需要通知则直接返回
+    if (usersMap.size === 0) return;
+
+    // 转换为数组
+    let userIds = Array.from(usersMap.keys());
+
+    // 排除在黑名单中的用户
+    userIds = await filterBlacklistedUsers(actorId, userIds);
+    if (userIds.length === 0) return;
+
+    // 获取对应的通知类型
+    const notificationType = EventToNotificationMap[event.event_type];
+    if (!notificationType) {
+      logger.debug(`未为事件类型 ${event.event_type} 定义通知类型`);
+      return;
+    }
+
+    // 创建通知
+    const notificationPromises = userIds.map(userId =>
+      createNotification({
+        userId,
+        notificationType,
+        actorId,
+        targetType: event.target_type,
+        targetId,
+        data: {}
+      })
+    );
+
+    await Promise.all(notificationPromises);
+  } catch (error) {
+    logger.error('通知处理错误:', error);
+  }
 }
 
-async function handleProjectUpdate(context) {
-  // Implementation...
+
+/**
+ * 过滤黑名单用户
+ */
+async function filterBlacklistedUsers(actorId, userIds) {
+  if (!userIds.length) return [];
+
+  try {
+    // 找出用户间的黑名单关系
+    const blacklistRelations = await prisma.user_relationships.findMany({
+      where: {
+        OR: [
+          // 用户将行为者拉黑
+          {
+            source_user_id: { in: userIds },
+            target_user_id: actorId,
+            relationship_type: 'block'
+          },
+          // 行为者将用户拉黑
+          {
+            source_user_id: actorId,
+            target_user_id: { in: userIds },
+            relationship_type: 'block'
+          }
+        ]
+      },
+      select: {
+        source_user_id: true,
+        target_user_id: true
+      }
+    });
+
+    // 创建黑名单用户集合
+    const blacklistedUsers = new Set();
+
+    blacklistRelations.forEach(relation => {
+      // 如果是用户拉黑行为者，添加用户到黑名单
+      if (relation.target_user_id === actorId) {
+        blacklistedUsers.add(relation.source_user_id);
+      }
+      // 如果是行为者拉黑用户，添加用户到黑名单
+      else if (relation.source_user_id === actorId) {
+        blacklistedUsers.add(relation.target_user_id);
+      }
+    });
+
+    // 过滤掉黑名单中的用户
+    return userIds.filter(userId => !blacklistedUsers.has(userId));
+  } catch (error) {
+    logger.error('过滤黑名单用户错误:', error);
+    return userIds; // 如果出错，返回原始列表
+  }
 }
 
-async function handleProjectFork(context) {
-  // Implementation...
+/**
+ * 根据配置获取特定受众类型的用户
+ * @param {string} audienceType - 受众类型
+ * @param {Object} event - 事件对象
+ * @param {Object} eventData - 事件数据
+ * @param {Object} audienceResults - 已获取的受众结果（用于依赖关系）
+ * @returns {Promise<number[]>} 用户ID数组
+ */
+async function getAudienceUsers(audienceType, event, eventData, audienceResults = {}) {
+  try {
+    const audienceConfig = AudienceDataDependencies[audienceType];
+    if (!audienceConfig) {
+      logger.warn(`未找到受众类型配置: ${audienceType}`);
+      return [];
+    }
+
+    const actorId = Number(event.actor_id);
+    const targetId = Number(event.target_id);
+
+    // 处理依赖关系：如果这个受众类型依赖于另一个受众类型的结果
+    if (audienceConfig.dependsOn) {
+      const { audienceType: dependencyType, field } = audienceConfig.dependsOn;
+
+      // 如果依赖的受众结果尚未获取，先获取它
+      if (!audienceResults[dependencyType]) {
+        audienceResults[dependencyType] = await getAudienceUsers(dependencyType, event, eventData, audienceResults);
+      }
+
+      // 没有依赖结果则直接返回空数组
+      if (!audienceResults[dependencyType] || audienceResults[dependencyType].length === 0) {
+        return [];
+      }
+
+      // 生成所有依赖受众的结果
+      let allResults = [];
+      for (const dependentId of audienceResults[dependencyType]) {
+        const usersForDependent = await getRelatedUsers(audienceConfig, dependentId);
+        allResults = [...allResults, ...usersForDependent];
+      }
+
+      // 去重并返回
+      return [...new Set(allResults)];
+    }
+
+    // 1. 从事件目标直接获取用户
+    if (audienceConfig.target) {
+      const targetType = audienceConfig.target;
+      let target;
+
+      if (targetType === 'project' && event.target_type === TargetTypes.PROJECT) {
+        target = await prisma.ow_projects.findUnique({
+          where: { id: targetId },
+          select: audienceConfig.fields.reduce((obj, field) => ({ ...obj, [field]: true }), {})
+        });
+      } else if (targetType === 'comment' && event.target_type === TargetTypes.COMMENT) {
+        target = await prisma.ow_comment.findUnique({
+          where: { id: targetId },
+          select: audienceConfig.fields.reduce((obj, field) => ({ ...obj, [field]: true }), {})
+        });
+      }
+
+      if (target) {
+        // 提取用户ID字段
+        return audienceConfig.fields
+          .map(field => target[field])
+          .filter(id => id !== null && id !== undefined);
+      }
+      return [];
+    }
+
+    // 2. 从事件数据中直接提取用户
+    if (audienceConfig.eventData) {
+      const userIdsData = eventData[audienceConfig.eventData];
+      return Array.isArray(userIdsData) ? userIdsData : [];
+    }
+
+    // 3. 从数据库查询用户关系
+    if (audienceConfig.query) {
+      // 确定关联ID
+      const relationId = audienceConfig.sourceField === 'actor_id' ?
+        actorId : targetId;
+
+      return await getRelatedUsers(audienceConfig, relationId);
+    }
+
+    return [];
+  } catch (error) {
+    logger.error(`获取受众 ${audienceType} 错误:`, error);
+    return [];
+  }
 }
 
-async function handleProjectCreate(context) {
-  // Implementation...
+/**
+ * 获取与特定ID相关的用户
+ * 根据配置从数据库获取相关用户
+ * @param {Object} config - 受众配置
+ * @param {number} relationId - 关联ID
+ * @returns {Promise<number[]>} 用户ID数组
+ */
+async function getRelatedUsers(config, relationId) {
+  try {
+    // 构建查询
+    const where = {
+      [config.relationField]: relationId,
+      ...config.additionalFilters
+    };
+
+    // 执行查询
+    const relations = await prisma[config.query].findMany({
+      where,
+      select: { [config.userField]: true }
+    });
+
+    // 提取用户ID
+    return relations
+      .map(r => r[config.userField])
+      .filter(id => id !== null && id !== undefined);
+  } catch (error) {
+    logger.error(`获取相关用户错误:`, error);
+    return [];
+  }
 }
 
-async function handleProjectDelete(context) {
-  // Implementation...
+/**
+ * 获取项目关注者 - 导出供外部使用
+ */
+export async function getProjectFollowersExternal(projectId) {
+  const followers = await prisma.user_relationships.findMany({
+    where: {
+      target_user_id: Number(projectId),
+      relationship_type: 'follow'
+    },
+    select: { source_user_id: true }
+  });
+  return followers.map(f => f.source_user_id);
 }
 
-async function handleProjectVisibilityChange(context) {
-  // Implementation...
-}
-
-async function handleProjectStar(context) {
-  // Implementation...
-}
-
-async function handleProfileUpdate(context) {
-  // Implementation...
-}
-
-async function handleUserLogin(context) {
-  // Implementation...
-}
-
-async function handleUserProfileUpdate(context) {
-  const { event, actor, target, fullData } = context;
-  logger.debug('Handling profile update', { actor, target, fullData });
-  // Implementation...
-}
-
-async function handleCommentCreate(context) {
-  const { event, actor, target, fullData } = context;
-  logger.debug('Handling comment create', { actor, target, fullData });
-  // Implementation...
-}
-
-// Helper functions
-async function getProjectFollowers(projectId) {
-  return await eventService.getProjectFollowers(projectId);
-}
-
-async function getUserFollowers(userId) {
-  return await eventService.getUserFollowers(userId);
+/**
+ * 获取用户关注者 - 导出供外部使用
+ */
+export async function getUserFollowersExternal(userId) {
+  const followers = await prisma.user_relationships.findMany({
+    where: {
+      target_user_id: Number(userId),
+      relationship_type: 'follow'
+    },
+    select: { source_user_id: true }
+  });
+  return followers.map(f => f.source_user_id);
 }

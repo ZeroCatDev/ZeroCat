@@ -1,5 +1,5 @@
-import logger from "../utils/logger.js";
-import configManager from "../utils/configManager.js";
+import logger from "../services/logger.js";
+import zcconfig from "../services/config/zcconfig.js";
 import jsonwebtoken from "jsonwebtoken";
 import fs from "fs";
 
@@ -7,8 +7,8 @@ import { Router } from "express";
 var router = Router();
 import { writeFile, exists, createReadStream } from "fs";
 import { createHash } from "crypto";
-import { prisma, S3update } from "../utils/global.js";
-import { needLogin, strictTokenCheck, needadmin } from "../middleware/auth.js";
+import { prisma, S3update } from "../services/global.js";
+import { needLogin, strictTokenCheck, needAdmin } from "../middleware/auth.js";
 import { getProjectFile, getProjectById } from "../controllers/projects.js";
 import multer from "multer";
 const upload = multer({ dest: "./usercontent" });
@@ -92,12 +92,12 @@ router.get("/projectinfo2", async function (req, res, next) {
         data: {
           type: "project",
           action: "read",
-          issuer: await configManager.getConfig("site.domain"),
+          issuer: await zcconfig.get("site.domain"),
           projectid: result.id,
           userid: res.locals.userid,
         },
       },
-      await configManager.getConfig("security.jwttoken")
+      await zcconfig.get("security.jwttoken")
     );
     logger.debug(project_token);
     var jsonscratch = {
@@ -170,10 +170,10 @@ router.get("/project/:id", async (req, res, next) => {
     let project_token;
     if (req.query.token) {
       try {
-        logger.debug(await configManager.getConfig("security.jwttoken"));
+        logger.debug(await zcconfig.get("security.jwttoken"));
         project_token = jsonwebtoken.verify(
           req.query.token,
-          await configManager.getConfig("security.jwttoken")
+          await zcconfig.get("security.jwttoken")
         );
         logger.debug(project_token);
       } catch (err) {
