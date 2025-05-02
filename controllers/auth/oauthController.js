@@ -1,5 +1,5 @@
 import logger from "../../services/logger.js";
-import { prisma } from "../../services/global.js";
+import { prisma ,generateJwt} from "../../services/global.js";
 import crypto from "crypto";
 import memoryCache from "../../services/memoryCache.js";
 import {
@@ -7,7 +7,7 @@ import {
   generateAuthUrl,
   handleOAuthCallback,
   initializeOAuthProviders,
-  generateJwt,
+
 } from "../oauth.js";
 import zcconfig from "../../services/config/zcconfig.js";
 import { verifyContact } from "../email.js";
