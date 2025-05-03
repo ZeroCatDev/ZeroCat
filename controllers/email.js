@@ -54,7 +54,7 @@ const addUserContact = async (userId, contactValue, contactType, isPrimary = fal
             data: {
                 user_id: userId,
                 contact_value: contactValue,
-                contact_hash: contactHash,
+                contact_info: contactHash,
                 contact_type: contactType,
                 is_primary: isPrimary,
                 verified: false
@@ -190,7 +190,7 @@ const verifyContact = async (contactValue, token) => {
         return false;
     }
 
-    const isValid = validateEmailToken(contact.contact_hash, token);
+    const isValid = validateEmailToken(contact.contact_info, token);
     logger.debug('验证结果:', isValid);
 
     if (!isValid) {

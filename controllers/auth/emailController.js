@@ -62,7 +62,7 @@ export const sendVerificationCode = async (req, res) => {
       });
     }
 
-    await sendVerificationEmail(email, contact.contact_hash, "ADD_EMAIL");
+    await sendVerificationEmail(email, contact.contact_info, "ADD_EMAIL");
 
     return res.status(200).json({
       status: "success",
@@ -150,7 +150,7 @@ export const addEmail = async (req, res) => {
 
     // 添加新邮箱
     const contact = await addUserContact(userId, email, "email", false);
-    await sendVerificationEmail(email, contact.contact_hash, "ADD_EMAIL");
+    await sendVerificationEmail(email, contact.contact_info, "ADD_EMAIL");
 
     return res.status(200).json({
       status: "success",

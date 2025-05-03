@@ -224,7 +224,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
           data: {
             user_id: user.id,
             contact_value: userInfo.id,
-            contact_hash: generateContactHash(),
+            contact_info: generateContactHash(),
             contact_type: "oauth_" + provider,
             verified: true
           }
@@ -239,7 +239,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
           data: {
             user_id: user.id,
             contact_value: userInfo.email,
-            contact_hash: generateContactHash(),
+            contact_info: generateContactHash(),
             contact_type: 'email',
             is_primary: false,
             verified: false
@@ -296,7 +296,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
             data: {
               user_id: userId,
               contact_value: userInfo.email,
-              contact_hash: generateContactHash(),
+              contact_info: generateContactHash(),
               contact_type: 'email',
               is_primary: true,
               verified: true
@@ -309,7 +309,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
           data: {
             user_id: userId,
             contact_value: userInfo.id,
-            contact_hash: generateContactHash(),
+            contact_info: generateContactHash(),
             contact_type: "oauth_" + provider,
             verified: true
           }

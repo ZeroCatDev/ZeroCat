@@ -23,8 +23,8 @@ const router = Router();
 router.post("/login", geetestMiddleware, loginController.loginWithPassword);
 router.post("/send-login-code", geetestMiddleware, loginController.sendLoginCode);
 router.post("/login-with-code", loginController.loginWithCode);
-router.post("/magiclink/generate", geetestMiddleware, loginController.generateMagicLink);
-router.get("/magiclink/validate", loginController.validateMagicLink);
+router.post("/magiclink/generate", geetestMiddleware, loginController.sendMagicLinkForLogin);
+router.get("/magiclink/validate", loginController.validateMagicLinkAndLogin);
 router.post("/logout", strictTokenCheck, loginController.logout);
 router.post("/logout-all-devices", strictTokenCheck, loginController.logoutAllDevices);
 router.get("/logout", (req, res) => {
@@ -34,10 +34,12 @@ router.get("/logout", (req, res) => {
 
 // 注册和密码管理相关路由
 router.post("/register", geetestMiddleware, registerController.registerUser);
+router.post("/register/verify-email", registerController.verifyEmail);
+router.post("/register/resend-verification-email", registerController.resendVerificationEmail);
+router.post("/register/change-register-email", registerController.changeRegisterEmail);
 router.post("/retrievePassword", geetestMiddleware, registerController.retrievePassword);
-router.post("/reset-password", geetestMiddleware, registerController.resetPassword);
-router.post("/torepw", geetestMiddleware, registerController.resetPasswordWithToken);
-router.post("/verify-email", registerController.verifyEmail);
+router.post("/reset-password", registerController.resetPassword);
+router.post("/set-password", registerController.setPassword);
 
 // 邮箱管理相关路由
 router.get("/emails", needLogin, emailController.getEmails);

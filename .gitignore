@@ -140,3 +140,6 @@ usercontent/*
 
 # MaxMind GeoIP database files
 data/*.mmdb
+
+redis/data/*
+redis/redis.conf

@@ -205,7 +205,7 @@ model ow_users_contacts {
   contact_id    Int                            @id @default(autoincrement())
   user_id       Int
   contact_value String                         @unique(map: "contact_value_UNIQUE") @db.VarChar(255)
-  contact_hash  String                         @db.VarChar(255)
+  contact_info  String?                        @db.VarChar(255)
   contact_type  ow_users_contacts_contact_type
   is_primary    Boolean?                       @default(false)
   verified      Boolean?                       @default(false)

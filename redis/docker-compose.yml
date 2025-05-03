@@ -1,0 +1,22 @@
+version: '3.9'
+
+services:
+  redis:
+    image: redis:7.4.3
+    container_name: zerocat_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    volumes:
+      # Windows 相对路径兼容写法（推荐）
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./data:/data
+    networks:
+      - internal
+    environment:
+      - TZ=Asia/Shanghai
+
+networks:
+  internal:
+    driver: bridge
