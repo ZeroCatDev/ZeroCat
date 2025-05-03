@@ -12,11 +12,11 @@ class RedisService {
   async initConnection() {
     try {
       const host = await zcconfig.get('redis.host')||'localhost';
-      logger.error(host);
+      logger.debug(host);
       const port = await zcconfig.get('redis.port')||6379;
-      logger.error(port);
+      logger.debug(port);
       const password = await zcconfig.get('redis.password')||'';
-      logger.error(password);
+      logger.debug(password);
       const db = 0;
 
       const options = {
