@@ -172,32 +172,32 @@ export const EventConfig = {
   project_commit: {
     public: true,
     notifyTargets: [AudienceTypes.PROJECT_OWNER, AudienceTypes.PROJECT_FOLLOWERS, AudienceTypes.PROJECT_OWNER_FOLLOWERS],
-    notificationData: ['project_title']
+    notificationData: ['project_name']
   },
   project_update: {
     public: true,
     notifyTargets: [AudienceTypes.PROJECT_OWNER, AudienceTypes.PROJECT_FOLLOWERS, AudienceTypes.PROJECT_OWNER_FOLLOWERS],
-    notificationData: ['project_title']
+    notificationData: ['project_name']
   },
   project_fork: {
     public: true,
     notifyTargets: [AudienceTypes.PROJECT_OWNER, AudienceTypes.PROJECT_OWNER_FOLLOWERS],
-    notificationData: ['project_title']
+    notificationData: ['project_name']
   },
   project_create: {
     public: true,
     notifyTargets: [AudienceTypes.USER_FOLLOWERS],
-    notificationData: ['project_title']
+    notificationData: ['project_name']
   },
   project_publish: {
     public: true,
     notifyTargets: [AudienceTypes.USER_FOLLOWERS, AudienceTypes.PROJECT_OWNER_FOLLOWERS],
-    notificationData: ['project_title']
+    notificationData: ['project_name']
   },
   comment_create: {
     public: false,
     notifyTargets: [AudienceTypes.PROJECT_OWNER, AudienceTypes.THREAD_PARTICIPANTS, AudienceTypes.MENTIONED_USERS],
-    notificationData: ['project_title', 'comment_text']
+    notificationData: ['project_name', 'comment_text']
   },
   user_profile_update: {
     public: true,
@@ -214,27 +214,27 @@ export const EventConfig = {
   project_rename: {
     public: true,
     notifyTargets: [AudienceTypes.PROJECT_FOLLOWERS, AudienceTypes.PROJECT_OWNER_FOLLOWERS],
-    notificationData: ['project_title']
+    notificationData: ['project_name']
   },
   project_info_update: {
     public: true,
     notifyTargets: [AudienceTypes.PROJECT_FOLLOWERS, AudienceTypes.PROJECT_OWNER_FOLLOWERS],
-    notificationData: ['project_title']
+    notificationData: ['project_name']
   },
   project_star: {
     public: true,
     notifyTargets: [AudienceTypes.PROJECT_OWNER, AudienceTypes.PROJECT_OWNER_FOLLOWERS],
-    notificationData: ['project_title']
+    notificationData: ['project_name']
   },
   project_like: {
     public: true,
     notifyTargets: [AudienceTypes.PROJECT_OWNER, AudienceTypes.PROJECT_OWNER_FOLLOWERS],
-    notificationData: ['project_title']
+    notificationData: ['project_name']
   },
   project_collect: {
     public: true,
     notifyTargets: [AudienceTypes.PROJECT_OWNER, AudienceTypes.PROJECT_OWNER_FOLLOWERS],
-    notificationData: ['project_title']
+    notificationData: ['project_name']
   },
   user_follow: {
     public: true,

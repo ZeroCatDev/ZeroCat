@@ -44,7 +44,7 @@ export async function createEvent(eventType, actorId, targetType, targetId, even
     });
 
     // 异步处理通知
-    if (eventConfig.notifyTargets && eventConfig.notifyTargets.length > 0) {
+    if (eventConfig.notifyTargets && eventConfig.notifyTargets.length > 0 ) {
       // 使用 Promise.resolve().then() 使其异步执行
       Promise.resolve().then(() => {
         processNotifications(event, eventConfig, eventData);
@@ -203,8 +203,9 @@ async function processNotifications(event, eventConfig, eventData) {
     for (const audienceType of eventConfig.notifyTargets) {
       try {
         const audienceUsers = await getAudienceUsers(audienceType, event, eventData, audienceResults);
+        logger.error(audienceUsers);
         audienceResults[audienceType] = audienceUsers;
-
+        logger.error(audienceResults);
         // 将用户添加到Map中以去重
         for (const userId of audienceUsers) {
           if (userId && userId !== actorId) { // 排除空值和事件创建者自己
@@ -315,6 +316,7 @@ async function filterBlacklistedUsers(actorId, userIds) {
  * @returns {Promise<number[]>} 用户ID数组
  */
 async function getAudienceUsers(audienceType, event, eventData, audienceResults = {}) {
+  logger.error(audienceResults);
   try {
     const audienceConfig = AudienceDataDependencies[audienceType];
     if (!audienceConfig) {
@@ -324,7 +326,9 @@ async function getAudienceUsers(audienceType, event, eventData, audienceResults 
 
     const actorId = Number(event.actor_id);
     const targetId = Number(event.target_id);
-
+    if(eventData.NotificationTo){
+      return eventData.NotificationTo
+    }
     // 处理依赖关系：如果这个受众类型依赖于另一个受众类型的结果
     if (audienceConfig.dependsOn) {
       const { audienceType: dependencyType, field } = audienceConfig.dependsOn;
@@ -378,8 +382,8 @@ async function getAudienceUsers(audienceType, event, eventData, audienceResults 
 
     // 2. 从事件数据中直接提取用户
     if (audienceConfig.eventData) {
-      const userIdsData = eventData[audienceConfig.eventData];
-      return Array.isArray(userIdsData) ? userIdsData : [];
+      const NotificationTo = eventData[audienceConfig.eventData];
+      return Array.isArray(NotificationTo) ? NotificationTo : [NotificationTo];
     }
 
     // 3. 从数据库查询用户关系

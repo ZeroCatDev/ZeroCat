@@ -42,41 +42,41 @@ export const NotificationTemplates = {
   // 项目通知
   PROJECT_COMMENT: {
     title: "项目评论",
-    template: "{{actor_name}} 评论了您的项目 {{project_title}}",
+    template: "{{actor_name}} 评论了您的项目 {{target_name}}",
     icon: "comment",
     requiresActor: true,
-    requiresData: ["project_title"],
+    requiresData: ["target_name"],
   },
   PROJECT_STAR: {
     title: "项目星标",
-    template: "{{actor_name}} 为您的项目 {{project_title}} 添加了星标",
+    template: "{{actor_name}} 为您的项目 {{target_name}} 添加了星标",
     icon: "star",
     requiresActor: true,
-    requiresData: ["project_title"],
+    requiresData: ["target_name"],
   },
   PROJECT_FORK: {
     title: "项目派生",
-    template: "{{actor_name}} 派生了您的项目 {{project_title}}",
+    template: "{{actor_name}} 派生了您的项目 {{target_name}}",
     icon: "fork",
     requiresActor: true,
-    requiresData: ["project_title"],
+    requiresData: ["target_name"],
   },
 
   PROJECT_UPDATE: {
     title: "项目更新",
-    template: "您关注的项目 {{project_title}} 有新的更新",
+    template: "您关注的项目 {{target_name}} 有新的更新",
     icon: "update",
     requiresActor: false,
-    requiresData: ["project_title"],
+    requiresData: ["target_name"],
   },
 
 
   PROJECT_COLLECT: {
     title: "项目收藏",
-    template: "{{actor_name}} 收藏了您的项目 {{project_title}}",
+    template: "{{actor_name}} 收藏了您的项目 {{target_name}}",
     icon: "collect",
     requiresActor: true,
-    requiresData: ["project_title"],
+    requiresData: ["target_name"],
   },
 
   // 用户通知

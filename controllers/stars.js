@@ -58,28 +58,17 @@ export async function starProject(userId, projectId) {
     });
 
     // 创建收藏事件
-    await createEvent(
-      "project_star",
-      {
-        event_type: "project_star",
-        actor_id: parsedUserId,
-        target_type: TargetTypes.PROJECT,
-        target_id: parsedProjectId,
-        project_name: project.name,
-        project_title: project.title || "Scratch新项目",
-        project_type: project.type || "text",
-        project_state: project.state || "private",
-        star_count: (project.star_count || 0) + 1,
-        metadata: {
-          action: "star"
-        }
-      }
-    );
+    await createEvent({
+      eventType: "project_star",
+      actorId: parsedUserId,
 
-    // 如果项目不是用户自己的，创建通知
-    if (project.authorid !== parsedUserId) {
-      await createStarNotification(project, parsedUserId);
-    }
+      targetType: TargetTypes.PROJECT,
+      targetId: parsedProjectId,
+      eventData: {
+        NotificationTo: [project.authorid]
+      }
+    });
+
 
     return star;
   } catch (error) {

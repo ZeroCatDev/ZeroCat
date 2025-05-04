@@ -1119,31 +1119,23 @@ router.post("/fork", needLogin, async (req, res, next) => {
       })
     );
 
-    // 根据原项目和新项目的状态决定事件是否公开
-    const isPrivate =
-      project.state === "private" || forkedProject.state === "private";
-
-    await createEvent(
-      "project_fork",
-      res.locals.userid,
-      TargetTypes.PROJECT,
-      Number(projectid),
-      {
-        event_type: "project_fork",
-        actor_id: res.locals.userid,
-        target_type: TargetTypes.PROJECT,
-        target_id: Number(projectid),
-        fork_id: forkedProject.id,
-        project_name: name,
-        project_title: project.title,
-      },
-      isPrivate
-    );
 
     res.status(200).send({
       status: "success",
       message: "项目已成功分叉",
     });
+    // 根据原项目和新项目的状态决定事件是否公开
+    const isPrivate =
+      project.state === "private" || forkedProject.state === "private";
+    logger.error(project)
+    await createEvent(
+      "project_fork",
+      res.locals.userid,
+      TargetTypes.PROJECT,
+      Number(forkedProject.id),
+      {NotificationTo: [project.authorid]},
+      isPrivate
+    );
   } catch (err) {
     logger.error("Error forking project:", err);
     res.status(500).send({
