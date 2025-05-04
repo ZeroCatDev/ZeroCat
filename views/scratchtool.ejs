@@ -340,7 +340,7 @@ function getZerocatUserInfo(userid) {
     data: { token: localStorage.getItem("token") },
     async: false,
     success: function (data) {
-      result = data.info;
+      result = data.data;
     },
     error: function (xhr) {
       const data = xhr.responseJSON;
