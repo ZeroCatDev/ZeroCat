@@ -1,6 +1,11 @@
 import logger from "../../services/logger.js";
 import authUtils from "../../services/auth/auth.js";
-import { prisma, checkhash, userpwTest, emailTest } from "../../services/global.js";
+import {
+  prisma,
+  checkhash,
+  userpwTest,
+  emailTest,
+} from "../../services/global.js";
 import { createEvent, TargetTypes } from "../events.js";
 import redisClient from "../../services/redis.js";
 import zcconfig from "../../services/config/zcconfig.js";
@@ -8,18 +13,19 @@ import {
   generateVerificationCode,
   verifyCode,
   checkRateLimit,
-  VerificationType
+  VerificationType,
 } from "../../services/auth/verification.js";
 import {
   generateMagicLinkForLogin,
   sendMagicLinkEmail,
   validateMagicLinkAndLogin as MagiclinkValidateMagicLinkAndLogin,
   markMagicLinkAsUsed,
-  checkMagicLinkRateLimit
+  checkMagicLinkRateLimit,
 } from "../../services/auth/magiclink.js";
 import { sendEmail } from "../../services/email/emailService.js";
 import jsonwebtoken from "jsonwebtoken";
 import { verifyContact } from "../email.js";
+import tokenUtils from "../../services/auth/tokenUtils.js";
 
 /**
  * 处理用户密码登录
@@ -30,7 +36,7 @@ export const loginWithPassword = async (req, res, next) => {
 
     // 检查登录尝试次数
     const attemptKey = `login_attempts:${loginId}`;
-    const attempts = await redisClient.get(attemptKey) || 0;
+    const attempts = (await redisClient.get(attemptKey)) || 0;
 
     if (attempts >= 5) {
       return res.status(200).json({
@@ -140,52 +146,41 @@ export const loginWithPassword = async (req, res, next) => {
 
     const userEmail = primaryEmail?.contact_value || verifiedEmail?.contact_value;
 
-    // 使用用户信息创建令牌
-    const userInfo = {
-      userid: user.id,
-      username: user.username,
-      display_name: user.display_name,
-      avatar: user.images,
-      email: userEmail,
-    };
+    // 使用新的统一令牌生成函数
+    // 获取标准化的用户信息
+    const userInfo = await tokenUtils.getUserInfoForToken(user, userEmail);
 
-    const tokenResult = await authUtils.createTokens(
+    // 创建登录令牌
+    const tokenResult = await tokenUtils.createUserLoginTokens(
       user.id,
       userInfo,
       req.ip,
-      req.headers["user-agent"]
+      req.headers["user-agent"],
+      {
+        recordLoginEvent: true,
+        loginMethod: 'password'
+      }
     );
+
+    if (!tokenResult.success) {
+      logger.error(`创建登录令牌失败: ${tokenResult.message}`);
+      return res.status(500).json({
+        status: "error",
+        message: "创建登录令牌失败"
+      });
+    }
 
     // 登录成功后清除尝试记录
     await redisClient.delete(attemptKey);
 
-    // 记录登录事件
-    await createEvent("user_login", user.id, TargetTypes.USER, user.id, {
-      event_type: "user_login",
-      actor_id: user.id,
-      target_type: TargetTypes.USER,
-      target_id: user.id,
-      method: "password"
-    });
-
-    return res.status(200).json({
-      status: "success",
-      message: "登录成功",
-      userid: parseInt(user.id),
-      username: user.username,
-      display_name: user.display_name,
-      avatar: user.images,
-      email: userEmail,
-      token: tokenResult.accessToken,
-      refresh_token: tokenResult.refreshToken,
-      expires_at: tokenResult.expiresAt,
-      refresh_expires_at: tokenResult.refreshExpiresAt
-    });
+    // 生成登录响应
+    const response = tokenUtils.generateLoginResponse(user, tokenResult, userEmail);
+    return res.status(200).json(response);
   } catch (err) {
     logger.error("密码登录失败:", err);
     return res.status(500).json({
       status: "error",
-      message: "服务器内部错误，请稍后再试"
+      message: "服务器内部错误，请稍后再试",
     });
   }
 };
@@ -240,7 +235,10 @@ export const sendLoginCode = async (req, res) => {
     }
 
     // 生成验证码
-    const verificationResult = await generateVerificationCode(email, VerificationType.LOGIN);
+    const verificationResult = await generateVerificationCode(
+      email,
+      VerificationType.LOGIN
+    );
 
     if (!verificationResult.success) {
       return res.status(200).json({
@@ -344,44 +342,33 @@ export const loginWithCode = async (req, res) => {
       });
     }
 
-    // 使用令牌创建函数
-    const userInfo = {
-      userid: user.id,
-      username: user.username,
-      display_name: user.display_name,
-      avatar: user.images,
-      email: email,
-    };
+    // 使用新的统一令牌生成函数
+    // 获取标准化的用户信息
+    const userInfo = await tokenUtils.getUserInfoForToken(user, email);
 
-    const tokenResult = await authUtils.createTokens(
+    // 创建登录令牌
+    const tokenResult = await tokenUtils.createUserLoginTokens(
       user.id,
       userInfo,
       req.ip,
-      req.headers["user-agent"]
+      req.headers["user-agent"],
+      {
+        recordLoginEvent: true,
+        loginMethod: 'code'
+      }
     );
 
-    // 记录登录事件
-    await createEvent("user_login", user.id, TargetTypes.USER, user.id, {
-      event_type: "user_login",
-      actor_id: user.id,
-      target_type: TargetTypes.USER,
-      target_id: user.id,
-      method: "code"
-    });
+    if (!tokenResult.success) {
+      logger.error(`创建登录令牌失败: ${tokenResult.message}`);
+      return res.status(500).json({
+        status: "error",
+        message: "创建登录令牌失败"
+      });
+    }
 
-    return res.status(200).json({
-      status: "success",
-      message: "登录成功",
-      userid: parseInt(user.id),
-      username: user.username,
-      display_name: user.display_name,
-      avatar: user.images,
-      email: email,
-      token: tokenResult.accessToken,
-      refresh_token: tokenResult.refreshToken,
-      expires_at: tokenResult.expiresAt,
-      refresh_expires_at: tokenResult.refreshExpiresAt
-    });
+    // 生成登录响应
+    const response = tokenUtils.generateLoginResponse(user, tokenResult, email);
+    return res.status(200).json(response);
   } catch (error) {
     logger.error("验证码登录时出错:", error);
     return res.status(200).json({
@@ -445,14 +432,20 @@ export const sendMagicLinkForLogin = async (req, res) => {
     }
 
     // 生成魔术链接
-    const clientId = req.headers["user-agent"] ? req.headers["user-agent"].substring(0, 50) : undefined;
+    const clientId = req.headers["user-agent"]
+      ? req.headers["user-agent"].substring(0, 50)
+      : undefined;
     const options = {
       expiresIn: 600, // 10分钟
       clientId,
-      redirect
+      redirect,
     };
 
-    const magicLinkResult = await generateMagicLinkForLogin(user.id, email, options);
+    const magicLinkResult = await generateMagicLinkForLogin(
+      user.id,
+      email,
+      options
+    );
 
     if (!magicLinkResult.success) {
       return res.status(200).json({
@@ -462,7 +455,9 @@ export const sendMagicLinkForLogin = async (req, res) => {
     }
 
     // 发送魔术链接邮件
-    await sendMagicLinkEmail(email, magicLinkResult.magicLink, { templateType: 'login' });
+    await sendMagicLinkEmail(email, magicLinkResult.magicLink, {
+      templateType: "login",
+    });
 
     return res.status(200).json({
       status: "success",
@@ -525,7 +520,11 @@ export const validateMagicLinkAndLogin = async (req, res) => {
         logger.debug("激活用户账户");
         //激活这个邮箱
         await prisma.ow_users_contacts.update({
-          where: { user_id: user.id, contact_value: validateResult.email, contact_type: "email" },
+          where: {
+            user_id: user.id,
+            contact_value: validateResult.email,
+            contact_type: "email",
+          },
           data: { verified: true },
         });
         // 更新用户对象以反映新状态
@@ -567,56 +566,49 @@ export const validateMagicLinkAndLogin = async (req, res) => {
       });
     }
 
-    const userEmail = primaryEmail?.contact_value || verifiedEmail?.contact_value || validateResult.email;
+    const userEmail =
+      primaryEmail?.contact_value ||
+      verifiedEmail?.contact_value ||
+      validateResult.email;
 
-    // 使用用户信息创建令牌
-    const userInfo = {
-      userid: user.id,
-      username: user.username,
-      display_name: user.display_name,
-      avatar: user.images,
-      email: userEmail,
-    };
+    // 使用新的统一令牌生成函数
+    // 获取标准化的用户信息
+    const userInfo = await tokenUtils.getUserInfoForToken(user, userEmail);
 
-    const tokenResult = await authUtils.createTokens(
+    // 创建登录令牌
+    const tokenResult = await tokenUtils.createUserLoginTokens(
       user.id,
       userInfo,
       req.ip,
-      req.headers["user-agent"]
+      req.headers["user-agent"],
+      {
+        recordLoginEvent: true,
+        loginMethod: 'magic_link'
+      }
     );
+
+    if (!tokenResult.success) {
+      logger.error(`创建登录令牌失败: ${tokenResult.message}`);
+      return res.status(500).json({
+        status: "error",
+        message: "创建登录令牌失败"
+      });
+    }
 
     // 标记魔术链接为已使用
     await markMagicLinkAsUsed(token);
 
-    // 记录登录事件
-    await createEvent("user_login", user.id, TargetTypes.USER, user.id, {
-      event_type: "user_login",
-      actor_id: user.id,
-      target_type: TargetTypes.USER,
-      target_id: user.id,
-      method: "magic_link"
-    });
-
     // 如果请求包含重定向URL，则构建回调数据
-    const callbackData = redirect ? {
-      redirect: decodeURIComponent(redirect),
-      canUseCurrentPage: true // 允许在当前页面登录
-    } : null;
+    const callbackData = redirect
+      ? {
+          redirect: decodeURIComponent(redirect),
+          canUseCurrentPage: true, // 允许在当前页面登录
+        }
+      : null;
 
-    return res.status(200).json({
-      status: "success",
-      message: "登录成功",
-      userid: parseInt(user.id),
-      username: user.username,
-      display_name: user.display_name,
-      avatar: user.images,
-      email: userEmail,
-      token: tokenResult.accessToken,
-      refresh_token: tokenResult.refreshToken,
-      expires_at: tokenResult.expiresAt,
-      refresh_expires_at: tokenResult.refreshExpiresAt,
-      callback: callbackData
-    });
+    // 生成登录响应，包含额外的回调数据
+    const response = tokenUtils.generateLoginResponse(user, tokenResult, userEmail, { callback: callbackData });
+    return res.status(200).json(response);
   } catch (error) {
     logger.error("验证魔术链接时出错:", error);
     return res.status(200).json({
@@ -637,7 +629,7 @@ export const logout = async (req, res) => {
     if (!userId || !tokenId) {
       return res.status(200).json({
         status: "error",
-        message: "未登录"
+        message: "未登录",
       });
     }
 
@@ -647,19 +639,19 @@ export const logout = async (req, res) => {
     if (result.success) {
       return res.status(200).json({
         status: "success",
-        message: "登出成功"
+        message: "登出成功",
       });
     } else {
       return res.status(200).json({
         status: "error",
-        message: result.message || "登出失败"
+        message: result.message || "登出失败",
       });
     }
   } catch (error) {
     logger.error("登出时出错:", error);
     return res.status(500).json({
       status: "error",
-      message: "登出失败"
+      message: "登出失败",
     });
   }
 };
@@ -675,7 +667,7 @@ export const logoutAllDevices = async (req, res) => {
     if (!userId) {
       return res.status(200).json({
         status: "error",
-        message: "未登录"
+        message: "未登录",
       });
     }
 
@@ -686,19 +678,19 @@ export const logoutAllDevices = async (req, res) => {
       return res.status(200).json({
         status: "success",
         message: "已登出所有其他设备",
-        count: result.count
+        count: result.count,
       });
     } else {
       return res.status(200).json({
         status: "error",
-        message: result.message || "登出失败"
+        message: result.message || "登出失败",
       });
     }
   } catch (error) {
     logger.error("登出所有设备时出错:", error);
     return res.status(500).json({
       status: "error",
-      message: "登出失败"
+      message: "登出失败",
     });
   }
 };

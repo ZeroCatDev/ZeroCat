@@ -11,6 +11,8 @@ import {
 } from "../oauth.js";
 import zcconfig from "../../services/config/zcconfig.js";
 import { verifyContact } from "../email.js";
+import { createTemporaryToken } from "../../services/auth/verification.js";
+import redisClient from "../../services/redis.js";
 
 /**
  * 获取支持的OAuth提供商列表
@@ -149,29 +151,60 @@ export const handleOAuthCallbackRequest = async (req, res) => {
       const { user, contact } = await handleOAuthCallback(provider, code);
 
       if (user && contact) {
-        const token = await generateJwt({
-          userid: user.id,
-          username: user.username,
+        // 查询用户主邮箱
+        const userEmail = await prisma.ow_users_contacts.findFirst({
+          where: {
+            user_id: user.id,
+            contact_type: 'email',
+            is_primary: true
+          }
         });
 
+        const email = userEmail ? userEmail.contact_value : null;
+
+        // 准备要存储在Redis中的用户数据
+        const userData = {
+          userid: parseInt(user.id),
+          username: user.username,
+          display_name: user.display_name,
+          avatar: user.images,
+          email: email
+        };
+
+        // 创建临时令牌，用途为oauth_login，直接传递userData作为附加数据
+        const tempToken = await createTemporaryToken(user.id, 'oauth_login', { userData });
+
+        if (!tempToken.success) {
+          logger.error(`OAuth登录创建临时令牌失败: ${tempToken.message}`);
+          return res.redirect(
+            `${await zcconfig.get(
+              "urls.frontend"
+            )}/app/account/oauth/login/error?message=生成临时令牌失败`
+          );
+        }
+
+        logger.info(`创建OAuth临时令牌成功: userId=${user.id}, token=${tempToken.token.substring(0, 8)}...`);
+
+        // 重定向到前端，并传递临时令牌
         return res.redirect(
           `${await zcconfig.get(
             "urls.frontend"
-          )}/app/account/callback?token=${token}`
+          )}/app/account/oauth/callback?temp_token=${tempToken.token}`
         );
       } else {
         return res.redirect(
           `${await zcconfig.get(
             "urls.frontend"
-          )}/app/account/oauth/login/error?message=${contact.message}`
+          )}/app/account/oauth/login/error?message=${contact && contact.message ? contact.message : '登录失败'}`
         );
       }
     }
   } catch (error) {
     logger.error("OAuth 回调错误:", error);
+    logger.error(`OAuth 回调错误堆栈: ${error.stack}`);
     res.status(500).json({
       status: "error",
-      message: "OAuth 处理失败",
+      message: "OAuth 处理失败"
     });
   }
 };

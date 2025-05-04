@@ -89,7 +89,7 @@ export const NotificationTemplates = {
   },
   USER_NEW_COMMENT: {
     title: "新评论",
-    template: "您有来自 {{actor_name}} 的新评论",
+    template: "{{target_name}} 有来自 {{actor_name}} 的新评论",
     icon: "comment",
     requiresActor: true,
     requiresData: [],

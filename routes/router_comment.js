@@ -160,10 +160,10 @@ router.post("/api/comment", needLogin, async (req, res, next) => {
         },
       });
       user_id = project.authorid;
-      targetType = "PROJECT";
+      targetType = "project";
       targetId = url.split("-")[1];
     } else if (url.split("-")[0] == "projectlist") {
-      targetType = "PROJECTLIST";
+      targetType = "projectlist";
       targetId = url.split("-")[1];
       const projectlist = await prisma.ow_projectlists.findUnique({
         where: {

@@ -73,7 +73,21 @@ async function createTokens(userId, userInfo, ipAddress, userAgent) {
   try {
     // 设置访问令牌有效期为15分钟，刷新令牌默认30天
     const accessTokenExpiry = 15 * 60; // 15分钟
-    const refreshTokenExpiry = parseInt(await zcconfig.get("security.refresh_token_expiry", 60 * 60 * 24 * 30), 10);
+
+    // 获取刷新令牌过期时间，如果无法解析则使用默认值
+    let refreshTokenExpiry;
+    try {
+      refreshTokenExpiry = parseInt(await zcconfig.get("security.refresh_token_expiry"), 10);
+      if (isNaN(refreshTokenExpiry) || refreshTokenExpiry <= 0) {
+        logger.warn(`无效的刷新令牌过期时间配置: ${await zcconfig.get("security.refresh_token_expiry")}, 使用默认值30天`);
+        refreshTokenExpiry = 60 * 60 * 24 * 30; // 默认30天
+      }
+    } catch (configError) {
+      logger.error(`获取令牌过期配置出错: ${configError.message}, 使用默认值30天`);
+      refreshTokenExpiry = 60 * 60 * 24 * 30; // 默认30天
+    }
+
+    logger.debug(`令牌过期设置: accessTokenExpiry=${accessTokenExpiry}秒, refreshTokenExpiry=${refreshTokenExpiry}秒`);
 
     // 解析设备信息
     const deviceInfo = userAgent ? parseDeviceInfo(userAgent) : null;
@@ -84,8 +98,11 @@ async function createTokens(userId, userInfo, ipAddress, userAgent) {
     const tokenId = crypto.randomBytes(16).toString('hex');
 
     // 计算过期时间
-    const accessTokenExpiresAt = new Date(Date.now() + accessTokenExpiry * 1000);
-    const refreshTokenExpiresAt = new Date(Date.now() + refreshTokenExpiry * 1000);
+    const now = Date.now();
+    const accessTokenExpiresAt = new Date(now + accessTokenExpiry * 1000);
+    const refreshTokenExpiresAt = new Date(now + refreshTokenExpiry * 1000);
+
+    logger.debug(`令牌过期时间: accessTokenExpiresAt=${accessTokenExpiresAt.toISOString()}, refreshTokenExpiresAt=${refreshTokenExpiresAt.toISOString()}`);
 
     // 存储令牌信息到Redis
     const tokenData = {
@@ -98,8 +115,8 @@ async function createTokens(userId, userInfo, ipAddress, userAgent) {
       ip_address: ipAddress,
       user_agent: userAgent?.substring(0, 255) || null,
       device_info: deviceInfo,
-      created_at: Date.now(),
-      last_used_at: Date.now(),
+      created_at: now,
+      last_used_at: now,
       last_used_ip: ipAddress,
       activity_count: 0,
       revoked: false
@@ -163,14 +180,21 @@ async function createTokens(userId, userInfo, ipAddress, userAgent) {
     const jwtSecret = await zcconfig.get("security.jwttoken");
     const jwt = jsonwebtoken.sign(jwtPayload, jwtSecret);
 
-    return {
+    // 检查并确保返回对象中的所有字段都有值
+    const result = {
       accessToken: jwt,
       refreshToken,
       expiresAt: accessTokenExpiresAt,
       refreshExpiresAt: refreshTokenExpiresAt
     };
+
+    // 日志记录返回数据的可用性
+    logger.debug(`创建令牌结果: accessToken=${!!result.accessToken}, refreshToken=${!!result.refreshToken}, expiresAt=${!!result.expiresAt}, refreshExpiresAt=${!!result.refreshExpiresAt}`);
+
+    return result;
   } catch (error) {
     logger.error("创建令牌时出错:", error);
+    logger.error(`错误堆栈: ${error.stack}`);
     throw error;
   }
 }
@@ -388,6 +412,7 @@ async function refreshAccessToken(refreshToken, ipAddress, userAgent) {
     const refreshTokenData = await redisClient.get(refreshTokenKey);
 
     if (!refreshTokenData) {
+      logger.warn(`刷新令牌不存在: ${refreshToken.substring(0, 8)}...`);
       return {
         success: false,
         message: "无效的刷新令牌"
@@ -401,6 +426,7 @@ async function refreshAccessToken(refreshToken, ipAddress, userAgent) {
     const tokenData = await redisClient.get(tokenKey);
 
     if (!tokenData || tokenData.revoked) {
+      logger.warn(`刷新令牌已被撤销: ${refreshToken.substring(0, 8)}...`);
       return {
         success: false,
         message: "刷新令牌已被撤销"
@@ -409,6 +435,7 @@ async function refreshAccessToken(refreshToken, ipAddress, userAgent) {
 
     // 检查刷新令牌是否过期
     if (tokenData.refresh_expires_at < Date.now()) {
+      logger.warn(`刷新令牌已过期: ${refreshToken.substring(0, 8)}...`);
       return {
         success: false,
         message: "刷新令牌已过期"
@@ -445,6 +472,7 @@ async function refreshAccessToken(refreshToken, ipAddress, userAgent) {
     });
 
     if (!user) {
+      logger.error(`刷新令牌对应的用户不存在: ${user_id}`);
       return {
         success: false,
         message: "用户不存在"
@@ -498,13 +526,20 @@ async function refreshAccessToken(refreshToken, ipAddress, userAgent) {
       // 继续使用Redis中的更新，不中断流程
     }
 
+    // 确保包含刷新令牌过期时间
+    const refreshExpiresAt = new Date(tokenData.refresh_expires_at);
+
+    logger.debug(`刷新令牌成功: 用户=${user_id}, 新令牌=${newAccessToken.substring(0, 8)}..., 访问令牌过期=${accessTokenExpiresAt.toISOString()}, 刷新令牌过期=${refreshExpiresAt.toISOString()}`);
+
     return {
       success: true,
       accessToken: jwt,
-      expiresAt: accessTokenExpiresAt
+      expiresAt: accessTokenExpiresAt,
+      refreshExpiresAt: refreshExpiresAt
     };
   } catch (error) {
     logger.error("刷新令牌时出错:", error);
+    logger.error(`错误堆栈: ${error.stack}`);
     return {
       success: false,
       message: "刷新令牌时出错"

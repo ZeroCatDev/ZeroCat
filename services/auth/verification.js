@@ -175,23 +175,42 @@ export async function checkRateLimit(identifier, type = 'default') {
 }
 
 // 为用户创建临时令牌
-export async function createTemporaryToken(userId, purpose = 'resend_email') {
+export async function createTemporaryToken(userId, purpose = 'resend_email', additionalData = {}) {
   try {
+    if (!userId) {
+      logger.error('创建临时令牌失败: 未提供用户ID');
+      return {
+        success: false,
+        message: '创建临时令牌失败: 未提供用户ID'
+      };
+    }
+
     // 生成一个随机令牌
     const token = crypto.randomBytes(32).toString('hex');
 
     // 令牌有效期为24小时
     const expiresIn = 86400; // 24小时 = 86400秒
     const expiry = Date.now() + expiresIn * 1000;
+    const createdAt = Date.now();
+
+    // 构建标准化的令牌数据结构
+    const tokenData = {
+      // 使用统一的字段名userId
+      userId: userId,
+      // 同时保留user_id以兼容可能使用该字段的代码
+      user_id: userId,
+      purpose,
+      createdAt,
+      expiry,
+      ...additionalData // 合并附加数据
+    };
 
     // 在Redis中存储令牌
     const key = `temp_token:${token}`;
-    await redisClient.set(key, {
-      userId,
-      purpose,
-      createdAt: Date.now(),
-      expiry
-    }, expiresIn);
+    await redisClient.set(key, tokenData, expiresIn);
+
+    // 记录创建的令牌信息
+    logger.debug(`创建临时令牌成功 [${token.substring(0, 8)}...], userId=${userId}, purpose=${purpose}`);
 
     return {
       success: true,
@@ -200,29 +219,49 @@ export async function createTemporaryToken(userId, purpose = 'resend_email') {
       expiresIn
     };
   } catch (error) {
-    logger.error(`创建临时令牌失败 [${userId}:${purpose}]:`, error);
+    logger.error(`创建临时令牌失败 [userId=${userId}, purpose=${purpose}]:`, error);
+    logger.error(`错误堆栈: ${error.stack}`);
     return {
       success: false,
-      message: '创建临时令牌失败'
+      message: '创建临时令牌失败',
+      error: error.message
     };
   }
 }
 
 // 验证临时令牌
 export async function validateTemporaryToken(token, purpose = 'resend_email') {
+  if (!token) {
+    logger.warn('尝试验证空令牌');
+    return {
+      success: false,
+      message: '无效的令牌'
+    };
+  }
+
+  const key = `temp_token:${token}`;
+
   try {
-    const key = `temp_token:${token}`;
+    // 从Redis获取令牌数据
     const tokenData = await redisClient.get(key);
 
+    // 详细记录验证过程
+    logger.debug(`验证临时令牌 [${token.substring(0, 8)}...], purpose=${purpose}, 数据存在=${!!tokenData}`);
+
+    // 令牌不存在
     if (!tokenData) {
       return {
         success: false,
-        message: '令牌不存在或已过期 #3'
+        message: '令牌不存在或已过期'
       };
     }
 
-    // 检查令牌用途
-    if (tokenData.purpose !== purpose) {
+    // 记录令牌数据结构，帮助调试
+    logger.debug(`令牌数据结构: ${JSON.stringify(Object.keys(tokenData))}`);
+
+    // 检查令牌用途 - 允许用途为null的临时令牌
+    if (tokenData.purpose && tokenData.purpose !== purpose) {
+      logger.warn(`令牌用途不匹配: 期望=${purpose}, 实际=${tokenData.purpose}`);
       return {
         success: false,
         message: '无效的令牌用途'
@@ -230,24 +269,51 @@ export async function validateTemporaryToken(token, purpose = 'resend_email') {
     }
 
     // 检查是否过期
-    if (tokenData.expiry < Date.now()) {
+    if (tokenData.expiry && tokenData.expiry < Date.now()) {
       await redisClient.delete(key);
+      logger.warn(`令牌已过期: ${new Date(tokenData.expiry).toISOString()}`);
       return {
         success: false,
         message: '令牌已过期'
       };
     }
 
+    // 统一返回格式，确保userId字段存在
+    const userId = tokenData.userId || tokenData.user_id;
+    if (!userId) {
+      logger.warn('令牌数据中没有用户ID');
+      return {
+        success: false,
+        message: '无效的令牌数据'
+      };
+    }
+
+    // 返回成功结果
     return {
       success: true,
-      userId: tokenData.userId,
+      userId: userId,
       data: tokenData
     };
   } catch (error) {
-    logger.error(`验证临时令牌失败 [${token}]:`, error);
+    // 详细记录错误
+    logger.error(`验证临时令牌失败 [${token.substring(0, 8)}...]:`, error);
+    logger.error(`错误堆栈: ${error.stack}`);
+
+    // 尝试获取Redis键信息以帮助调试
+    try {
+      const exists = await redisClient.exists(key);
+      logger.debug(`令牌键是否存在: ${exists}`);
+
+      const ttl = await redisClient.ttl(key);
+      logger.debug(`令牌剩余生存时间: ${ttl}秒`);
+    } catch (redisError) {
+      logger.error(`检查令牌Redis状态失败:`, redisError);
+    }
+
     return {
       success: false,
-      message: '验证临时令牌失败'
+      message: '令牌验证失败',
+      error: error.message // 添加错误详情，辅助调试
     };
   }
 }

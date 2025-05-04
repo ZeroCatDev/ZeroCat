@@ -162,7 +162,7 @@ function authorSelectionFields() {
     id: true,
     username: true,
     display_name: true,
-    state: true,
+    status: true,
     regTime: true,
     motto: true,
     images: true,
