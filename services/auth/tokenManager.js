@@ -1,20 +1,14 @@
 import jwt from "jsonwebtoken";
 import zcconfig from "../config/zcconfig.js";
+import { createTypedJWT } from "./tokenUtils.js";
 
 export async function generateFileAccessToken(sha256, userid) {
-  return jwt.sign(
-    {
-      exp: Math.floor(Date.now() / 1000) + 5 * 60,
-      data: {
-        type: "file",
-        action: "read",
-        issuer: await zcconfig.get("site.domain"),
-        sha256: sha256,
-        userid: userid,
-      },
-    },
-    await zcconfig.get("security.jwttoken")
-  );
+  return createTypedJWT("file", {
+    action: "read",
+    issuer: await zcconfig.get("site.domain"),
+    sha256: sha256,
+    userid: userid,
+  }, 5 * 60); // 5分钟
 }
 
 export async function verifyFileAccessToken(token, userid) {

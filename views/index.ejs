@@ -7,8 +7,7 @@
   <title>
     <%= global.config['site.name'] %>
   </title>
-  <link rel="shortcut icon" href="<%= global.config['urls.static'] %>/img/siteicon.png">
-  <link rel="stylesheet" href="<%= global.config['urls.static'] %>/mdui2/mdui.css" id="mdui_css">
+  <link rel="stylesheet" href="https://unpkg.com/mdui@2/mdui.css" id="mdui_css">
 </head>
 <style>
   :not(:defined) {
@@ -18,7 +17,6 @@
 
 <body>
   <mdui-layout>
-    <link href="<%= global.config['urls.static'] %>/font1.css" rel="stylesheet" />
     <mdui-layout-main>
       <mdui-list>
         <% const config=JSON.parse(JSON.stringify(global.publicconfig)); %>
@@ -38,7 +36,7 @@
     </mdui-layout-main>
   </mdui-layout>
 </body>
-<script src="<%= global.config['urls.static'] %>/mdui2/mdui.global.js"></script>
+<script src="https://unpkg.com/mdui@2/mdui.global.js"></script>
 <script>
   mdui.setColorScheme("<%= global.config['theme.mdui.color.primary'] %>");
 </script>

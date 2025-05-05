@@ -5,149 +5,150 @@ import zcconfig from "../config/zcconfig.js";
 import logger from "../logger.js";
 import { UAParser } from "ua-parser-js";
 import ipLocation from "../ip/ipLocation.js";
+import {
+  createUserLoginTokens,
+  verifyToken,
+  updateTokenActivity,
+  revokeToken,
+  revokeAllUserTokens,
+  refreshAccessToken,
+  parseDeviceInfo
+} from "./tokenUtils.js";
+import redisClient from "../redis.js";
 
-// 生成随机令牌
-const generateToken = (length = 64) => {
-  return crypto.randomBytes(length).toString("hex");
+
+// 用户退出登录
+const logout = async (tokenId) => {
+  return await revokeToken(tokenId);
 };
 
-// 解析设备信息
-const parseDeviceInfo = (userAgent) => {
-  if (!userAgent)
-    return { deviceType: "unknown", os: "unknown", browser: "unknown" };
 
-  const parser = new UAParser(userAgent);
-  const result = parser.getResult();
-
-  return {
-    deviceType: result.device.type || "desktop",
-    os: `${result.os.name || "unknown"} ${result.os.version || ""}`.trim(),
-    browser: `${result.browser.name || "unknown"} ${
-      result.browser.version || ""
-    }`.trim(),
-  };
-};
-
-// 创建新的访问令牌和刷新令牌
-const createTokens = async (userId, userInfo, ipAddress, userAgent) => {
+// 获取用户所有活跃令牌
+const getUserActiveTokens = async (userId) => {
   try {
-    // 设置访问令牌有效期为15分钟，刷新令牌默认30天
-    const accessTokenExpiry = 15 * 60; // 15分钟
-    const refreshTokenExpiry = await zcconfig.get(
-      "security.jwttoken",
-      60 * 60 * 24 * 30 // 默认30天
-    );
-
-    // 确保刷新令牌过期时间是数字
-    const refreshTokenExpirySeconds = parseInt(refreshTokenExpiry, 10) || 60 * 60 * 24 * 30; // 如果解析失败，使用默认值30天
-
-    // 解析设备信息并序列化为JSON
-    const deviceInfo = userAgent ? parseDeviceInfo(userAgent) : null;
-    const deviceInfoJson = deviceInfo ? JSON.stringify(deviceInfo) : null;
-
-    // 生成随机令牌
-    const accessToken = generateToken();
-    const refreshToken = generateToken();
-
-    // 计算过期时间
-    const accessTokenExpiresAt = new Date(
-      Date.now() + accessTokenExpiry * 1000
-    );
-    const refreshTokenExpiresAt = new Date(
-      Date.now() + refreshTokenExpirySeconds * 1000
-    );
-
-    // 存储令牌信息
-    const tokenRecord = await prisma.ow_auth_tokens.create({
-      data: {
+    const tokens = await prisma.ow_auth_tokens.findMany({
+      where: {
         user_id: userId,
-        access_token: accessToken,
-        refresh_token: refreshToken,
-        expires_at: accessTokenExpiresAt,
-        refresh_expires_at: refreshTokenExpiresAt,
-        ip_address: ipAddress,
-        user_agent: userAgent,
-        device_info: deviceInfoJson,
-        last_used_at: new Date(),
-        last_used_ip: ipAddress,
-        activity_count: 0,
+        revoked: false,
+        refresh_expires_at: { gt: new Date() }, // 使用refresh_expires_at作为活跃判断标准
       },
+      orderBy: [{ last_used_at: "desc" }, { created_at: "desc" }],
     });
 
-    // 创建JWT
-    const jwtPayload = {
-      ...userInfo,
-      token_id: tokenRecord.id,
-      exp: Math.floor(accessTokenExpiresAt.getTime() / 1000),
-    };
-
-    const jwtSecret = await zcconfig.get("security.jwttoken");
-    const jwt = jsonwebtoken.sign(jwtPayload, jwtSecret);
-
-    return {
-      accessToken: jwt,
-      refreshToken: refreshToken,
-      expiresAt: accessTokenExpiresAt,
-      refreshExpiresAt: refreshTokenExpiresAt,
-    };
+    return tokens;
   } catch (error) {
-    logger.error("创建令牌时出错:", error);
+    logger.error("获取用户活跃令牌时出错:", error);
     throw error;
   }
 };
 
-// 更新令牌活动记录
-const updateTokenActivity = async (tokenId, ipAddress) => {
+// 获取令牌详细信息，包括IP位置 - 实时获取位置信息
+const getTokenDetails = async (tokenId) => {
   try {
-    await prisma.ow_auth_tokens.update({
+    const token = await prisma.ow_auth_tokens.findUnique({
       where: { id: tokenId },
-      data: {
-        last_used_at: new Date(),
-        last_used_ip: ipAddress,
-        activity_count: {
-          increment: 1
-        }
-      },
     });
-    return true;
+
+    if (!token) {
+      return { success: false, message: "令牌不存在" };
+    }
+
+    // 实时获取IP位置信息，而不是从数据库读取
+    let ipLocationInfo = null;
+    let lastUsedIpLocationInfo = null;
+
+    // 如果有IP地址，则获取其位置信息
+    if (token.ip_address) {
+      ipLocationInfo = await ipLocation.getIPLocation(token.ip_address);
+    }
+
+    // 如果有最后使用IP，且与创建IP不同，则获取其位置信息
+    if (token.last_used_ip && token.last_used_ip !== token.ip_address) {
+      lastUsedIpLocationInfo = await ipLocation.getIPLocation(
+        token.last_used_ip
+      );
+    } else if (token.last_used_ip) {
+      // 如果最后使用IP与创建IP相同，复用创建IP的位置信息
+      lastUsedIpLocationInfo = ipLocationInfo;
+    }
+
+    // 解析设备信息
+    let deviceInfo = null;
+    if (token.device_info) {
+      try {
+        deviceInfo = JSON.parse(token.device_info);
+      } catch (e) {
+        logger.error("解析设备信息时出错:", e);
+      }
+    }
+
+    return {
+      success: true,
+      data: {
+        ...token,
+        ip_location: ipLocationInfo,
+        last_used_ip_location: lastUsedIpLocationInfo,
+        device_info: deviceInfo
+      },
+    };
   } catch (error) {
-    logger.error("更新令牌活动记录时出错:", error);
-    return false;
+    logger.error("获取令牌详情时出错:", error);
+    return { success: false, message: "获取令牌详情失败" };
   }
 };
 
-// 验证令牌
-const verifyToken = async (token, ipAddress) => {
+// 清理过期令牌
+const cleanupExpiredTokens = async () => {
   try {
-    const jwtSecret = await zcconfig.get("security.jwttoken");
-    const decoded = jsonwebtoken.verify(token, jwtSecret);
-
-    // 查找数据库中的令牌记录
-    const tokenRecord = await prisma.ow_auth_tokens.findFirst({
+    // 首先获取所有过期但未被撤销的令牌
+    const expiredTokens = await prisma.ow_auth_tokens.findMany({
       where: {
-        id: decoded.token_id,
         revoked: false,
+        refresh_expires_at: { lt: new Date() },
+      },
+      select: {
+        id: true,
+        refresh_token: true
+      }
+    });
+
+    // 获取访问令牌过期时间设置
+    const accessTokenExpiry = 15 * 60; // 默认15分钟
+
+    // 对每个过期令牌进行Redis处理
+    for (const token of expiredTokens) {
+      // 将令牌ID添加到黑名单
+      const blacklistKey = `token:blacklist:${token.id}`;
+      await redisClient.set(blacklistKey, {
+        reason: "token_expired",
+        revokedAt: Date.now()
+      }, accessTokenExpiry);
+
+      // 从Redis中删除令牌详情和刷新令牌
+      const tokenKey = `token:details:${token.id}`;
+      await redisClient.delete(tokenKey);
+
+      const refreshTokenKey = `token:refresh:${token.refresh_token}`;
+      await redisClient.delete(refreshTokenKey);
+    }
+
+    // 批量更新数据库记录
+    const result = await prisma.ow_auth_tokens.updateMany({
+      where: {
+        revoked: false,
+        refresh_expires_at: { lt: new Date() },
+      },
+      data: {
+        revoked: true,
+        revoked_at: new Date()
       },
     });
 
-    if (!tokenRecord) {
-      return { valid: false, message: "令牌已失效或已被吊销" };
-    }
-
-    // 检查令牌是否过期
-    if (tokenRecord.expires_at < new Date()) {
-      return { valid: false, message: "令牌已过期" };
-    }
-
-    // 更新令牌活动记录
-    if (ipAddress) {
-      await updateTokenActivity(tokenRecord.id, ipAddress);
-    }
-
-    return { valid: true, user: decoded, tokenRecord };
+    logger.info(`已清理 ${result.count} 个过期令牌`);
+    return result.count;
   } catch (error) {
-    logger.error("验证令牌时出错:", error);
-    return { valid: false, message: "无效的令牌" };
+    logger.error("清理过期令牌时出错:", error);
+    throw error;
   }
 };
 
@@ -231,238 +232,8 @@ const extendRefreshToken = async (tokenId) => {
   }
 };
 
-// 使用刷新令牌生成新的访问令牌
-const refreshAccessToken = async (refreshToken, ipAddress, userAgent) => {
-  try {
-    // 查找刷新令牌
-    const tokenRecord = await prisma.ow_auth_tokens.findFirst({
-      where: {
-        refresh_token: refreshToken,
-        revoked: false,
-      },
-      include: {
-        user: true,
-      },
-    });
-
-    if (!tokenRecord) {
-      return { success: false, message: "无效的刷新令牌" };
-    }
-
-    // 检查刷新令牌是否过期
-    if (tokenRecord.refresh_expires_at < new Date()) {
-      return { success: false, message: "刷新令牌已过期" };
-    }
-
-    // 检查是否可以延长刷新令牌有效期
-    const extensionCheck = await canExtendRefreshToken(tokenRecord);
-    let refreshTokenExtended = false;
-
-    // 如果可以延长，则延长刷新令牌有效期
-    if (extensionCheck.canExtend) {
-      const extension = await extendRefreshToken(tokenRecord.id);
-      refreshTokenExtended = extension.success;
-    }
-
-    // 设置访问令牌有效期为15分钟
-    const accessTokenExpiry = 15 * 60; // 15分钟
-
-    // 生成新的访问令牌
-    const newAccessToken = generateToken();
-    const accessTokenExpiresAt = new Date(
-      Date.now() + accessTokenExpiry * 1000
-    );
-
-    // 更新令牌记录 - 只更新访问令牌和使用记录，不更新刷新令牌
-    await prisma.ow_auth_tokens.update({
-      where: { id: tokenRecord.id },
-      data: {
-        access_token: newAccessToken,
-        expires_at: accessTokenExpiresAt,
-        updated_at: new Date(),
-        last_used_at: new Date(),
-        last_used_ip: ipAddress,
-        activity_count: {
-          increment: 1
-        }
-      },
-    });
-
-    // 获取用户信息
-    const primaryEmail = await prisma.ow_users_contacts.findFirst({
-      where: {
-        user_id: tokenRecord.user_id,
-        contact_type: "email",
-        is_primary: true,
-      },
-    });
-
-    // 创建JWT
-    const userInfo = {
-      userid: tokenRecord.user.id,
-      username: tokenRecord.user.username,
-      display_name: tokenRecord.user.display_name,
-      avatar: tokenRecord.user.images,
-      email: primaryEmail?.contact_value,
-    };
-
-    const jwtPayload = {
-      ...userInfo,
-      token_id: tokenRecord.id,
-      exp: Math.floor(accessTokenExpiresAt.getTime() / 1000),
-    };
-
-    const jwtSecret = await zcconfig.get("security.jwttoken");
-    const jwt = jsonwebtoken.sign(jwtPayload, jwtSecret);
-
-    return {
-      success: true,
-      accessToken: jwt,
-      expiresAt: accessTokenExpiresAt,
-      refreshTokenExtended: refreshTokenExtended,
-      canExtendRefreshToken: extensionCheck.canExtend
-    };
-  } catch (error) {
-    logger.error("刷新令牌时出错:", error);
-    return { success: false, message: "刷新令牌失败" };
-  }
-};
-
-// 吊销令牌
-const revokeToken = async (tokenId, allSessions = false) => {
-  try {
-    const tokenRecord = await prisma.ow_auth_tokens.findUnique({
-      where: { id: tokenId },
-    });
-
-    if (!tokenRecord) {
-      return { success: false, message: "令牌不存在" };
-    }
-
-    if (allSessions) {
-      // 吊销用户所有会话的令牌
-      await prisma.ow_auth_tokens.updateMany({
-        where: { user_id: tokenRecord.user_id, revoked: false },
-        data: { revoked: true, revoked_at: new Date() },
-      });
-    } else {
-      // 仅吊销特定令牌
-      await prisma.ow_auth_tokens.update({
-        where: { id: tokenId },
-        data: { revoked: true, revoked_at: new Date() },
-      });
-    }
-
-    return { success: true };
-  } catch (error) {
-    logger.error("吊销令牌时出错:", error);
-    return { success: false, message: "吊销令牌失败" };
-  }
-};
-
-// 用户退出登录
-const logout = async (tokenId) => {
-  return await revokeToken(tokenId);
-};
-
-// 获取用户所有活跃令牌
-const getUserActiveTokens = async (userId) => {
-  try {
-    const tokens = await prisma.ow_auth_tokens.findMany({
-      where: {
-        user_id: userId,
-        revoked: false,
-        refresh_expires_at: { gt: new Date() }, // 使用refresh_expires_at作为活跃判断标准
-      },
-      orderBy: [{ last_used_at: "desc" }, { created_at: "desc" }],
-    });
-
-    return tokens;
-  } catch (error) {
-    logger.error("获取用户活跃令牌时出错:", error);
-    throw error;
-  }
-};
-
-// 获取令牌详细信息，包括IP位置 - 实时获取位置信息
-const getTokenDetails = async (tokenId) => {
-  try {
-    const token = await prisma.ow_auth_tokens.findUnique({
-      where: { id: tokenId },
-    });
-
-    if (!token) {
-      return { success: false, message: "令牌不存在" };
-    }
-
-    // 实时获取IP位置信息，而不是从数据库读取
-    let ipLocationInfo = null;
-    let lastUsedIpLocationInfo = null;
-
-    // 如果有IP地址，则获取其位置信息
-    if (token.ip_address) {
-      ipLocationInfo = await ipLocation.getIPLocation(token.ip_address);
-    }
-
-    // 如果有最后使用IP，且与创建IP不同，则获取其位置信息
-    if (token.last_used_ip && token.last_used_ip !== token.ip_address) {
-      lastUsedIpLocationInfo = await ipLocation.getIPLocation(
-        token.last_used_ip
-      );
-    } else if (token.last_used_ip) {
-      // 如果最后使用IP与创建IP相同，复用创建IP的位置信息
-      lastUsedIpLocationInfo = ipLocationInfo;
-    }
-
-    // 解析设备信息
-    let deviceInfo = null;
-    if (token.device_info) {
-      try {
-        deviceInfo = JSON.parse(token.device_info);
-      } catch (e) {
-        logger.error("解析设备信息时出错:", e);
-      }
-    }
-
-    return {
-      success: true,
-      data: {
-        ...token,
-        ip_location: ipLocationInfo,
-        last_used_ip_location: lastUsedIpLocationInfo,
-        device_info: deviceInfo
-      },
-    };
-  } catch (error) {
-    logger.error("获取令牌详情时出错:", error);
-    return { success: false, message: "获取令牌详情失败" };
-  }
-};
-
-// 清理过期令牌
-const cleanupExpiredTokens = async () => {
-  try {
-    const result = await prisma.ow_auth_tokens.updateMany({
-      where: {
-        revoked: false,
-        refresh_expires_at: { lt: new Date() },
-      },
-      data: {
-        revoked: true,
-        revoked_at: new Date(),
-      },
-    });
-
-    logger.info(`已清理 ${result.count} 个过期令牌`);
-    return result.count;
-  } catch (error) {
-    logger.error("清理过期令牌时出错:", error);
-    throw error;
-  }
-};
-
 export default {
-  createTokens,
+  createTokens: createUserLoginTokens,
   verifyToken,
   refreshAccessToken,
   revokeToken,
@@ -473,5 +244,6 @@ export default {
   parseDeviceInfo,
   updateTokenActivity,
   canExtendRefreshToken,
-  extendRefreshToken
+  extendRefreshToken,
+  revokeAllUserTokens
 };

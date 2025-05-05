@@ -108,7 +108,7 @@ export const checkTotpToken = async (req, res) => {
       data: { validated: isValid },
     });
   } catch (error) {
-    logger.error("验证令牌时出错:", error);
+    logger.debug("验证令牌时出错:", error);
     return res.status(500).json({
       status: "error",
       message: "验证令牌失败",

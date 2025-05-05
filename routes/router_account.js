@@ -14,7 +14,6 @@ import totpUtils from "../services/auth/totp.js";
 import { validateTemporaryToken, invalidateTemporaryToken } from "../services/auth/verification.js";
 import { prisma } from "../services/global.js";
 import logger from "../services/logger.js";
-import tokenRedisHandler from "../services/auth/tokenRedis.js";
 import tokenUtils from "../services/auth/tokenUtils.js";
 
 const { validateTotpToken } = totpUtils;

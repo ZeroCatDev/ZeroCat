@@ -2,6 +2,8 @@ import crypto from 'crypto';
 import { TOTP } from 'otpauth';
 import redisClient from '../redis.js';
 import logger from '../logger.js';
+import { prisma } from '../global.js';
+import { generateToken } from './tokenUtils.js';
 
 // 验证码类型
 export const VerificationType = {
@@ -185,8 +187,8 @@ export async function createTemporaryToken(userId, purpose = 'resend_email', add
       };
     }
 
-    // 生成一个随机令牌
-    const token = crypto.randomBytes(32).toString('hex');
+    // 使用统一的令牌生成函数
+    const token = generateToken(32);
 
     // 令牌有效期为24小时
     const expiresIn = 86400; // 24小时 = 86400秒

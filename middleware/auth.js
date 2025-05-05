@@ -1,7 +1,7 @@
 import jsonwebtoken from "jsonwebtoken";
 import zcconfig from "../services/config/zcconfig.js";
 import logger from "../services/logger.js";
-import authUtils from "../services/auth/auth.js";
+import { verifyToken, updateTokenActivity } from "../services/auth/tokenUtils.js";
 import { prisma } from "../services/global.js";
 
 /**
@@ -40,8 +40,7 @@ const validateTokenInDatabase = async (tokenId, ipAddress = null) => {
     // 如果提供了IP地址，更新令牌的活动记录
     if (ipAddress) {
       // 使用单独的变量避免影响函数返回
-      authUtils
-        .updateTokenActivity(tokenId, ipAddress)
+      updateTokenActivity(tokenId, ipAddress)
         .catch((err) => logger.error("更新令牌活动记录时出错:", err));
     }
 
@@ -103,7 +102,7 @@ export const parseToken = async (req, res, next) => {
 
   try {
     // 使用新的令牌验证系统，传递IP地址用于追踪
-    const { valid, user, message } = await authUtils.verifyToken(token, req.ip);
+    const { valid, user, message } = await verifyToken(token, req.ip);
 
     if (valid && user) {
       // 设置用户信息
@@ -116,7 +115,7 @@ export const parseToken = async (req, res, next) => {
       logger.debug(`令牌验证失败: ${message}`);
     }
   } catch (err) {
-    logger.error("解析令牌时出错:", err);
+    logger.debug("解析令牌时出错:", err);
   }
 
   next();
@@ -143,11 +142,20 @@ export const strictTokenCheck = async (req, res, next) => {
   }
 
   try {
-    // 在继续请求前同步验证令牌在数据库中的状态
-    const { valid, message } = await validateTokenInDatabase(
-      res.locals.tokenId,
-      req.ip
-    );
+    // 重新验证令牌有效性
+    const token = req.headers["authorization"]?.split(" ")[1] ||
+                 req.query.token ||
+                 req.cookies?.token;
+
+    if (!token) {
+      return res.status(401).json({
+        status: "error",
+        message: "未提供授权令牌",
+        code: 401,
+      });
+    }
+
+    const { valid, message } = await verifyToken(token, req.ip);
 
     if (!valid) {
       return res.status(401).json({
@@ -181,7 +189,7 @@ export const needLogin = async (req, res, next) => {
       return res.status(401).send({
         status: "error",
         message: "需要登录",
-        code: 401,
+        code: 'ZC_ERROR_NEED_LOGIN',
       });
     } else {
       return res.redirect("/login");
@@ -191,15 +199,22 @@ export const needLogin = async (req, res, next) => {
   // 异步验证令牌在数据库中的状态
   // 这不会阻塞请求继续处理
   if (res.locals.tokenId) {
-    validateTokenInDatabase(res.locals.tokenId, req.ip)
-      .then(({ valid, message }) => {
-        if (!valid) {
-          logger.debug(`用户 ${res.locals.userid} 使用无效令牌: ${message}`);
-        }
-      })
-      .catch((err) => {
-        logger.error("异步验证令牌时出错:", err);
-      });
+    // 获取令牌
+    const token = req.headers["authorization"]?.split(" ")[1] ||
+                 req.query.token ||
+                 req.cookies?.token;
+
+    if (token) {
+      verifyToken(token, req.ip)
+        .then(({ valid, message }) => {
+          if (!valid) {
+            logger.debug(`用户 ${res.locals.userid} 使用无效令牌: ${message}`);
+          }
+        })
+        .catch((err) => {
+          logger.debug("异步验证令牌时出错:", err);
+        });
+    }
   }
 
   next();

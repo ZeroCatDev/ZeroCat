@@ -5,30 +5,24 @@ import redisClient from '../redis.js';
 import logger from '../logger.js';
 import { sendEmail } from '../email/emailService.js';
 import { checkRateLimit, VerificationType } from './verification.js';
+import { createJWT } from './tokenUtils.js';
 
 // 生成魔术链接
 export async function generateMagicLinkForLogin(userId, email, options = {}) {
   try {
-    // 获取JWT密钥
-    const jwtSecret = await zcconfig.get('security.jwttoken');
-
     // 默认10分钟过期
     const expiresIn = options.expiresIn || 600;
 
     // 客户端ID用于区分不同客户端的魔术链接
     const clientId = options.clientId || crypto.randomBytes(16).toString('hex');
 
-    // 创建token
-    const token = jsonwebtoken.sign(
-      {
-        id: userId,
-        email,
-        type: 'magic_link',
-        clientId
-      },
-      jwtSecret,
-      { expiresIn }
-    );
+    // 使用统一的JWT创建函数
+    const token = await createJWT({
+      id: userId,
+      email,
+      type: 'magic_link',
+      clientId
+    }, expiresIn);
 
     // 存储到Redis
     const redisKey = `magic_link:${token}`;

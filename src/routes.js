@@ -19,9 +19,10 @@ export async function configureRoutes(app) {
   app.set("views", paths.VIEWS_DIR);
   app.set("view engine", "ejs");
 
+  logger.debug(paths.VIEWS_DIR);
   // 首页路由
   app.get("/", (req, res) => {
-    res.render("index.ejs");
+    res.render("index");
   });
 
   // 健康检查路由
@@ -35,7 +36,7 @@ export async function configureRoutes(app) {
   // Scratch工具路由
   app.get("/scratchtool", (req, res) => {
     res.set("Content-Type", "application/javascript");
-    res.render("scratchtool.ejs");
+    res.render("scratchtool");
   });
 
   // 注册业务路由
