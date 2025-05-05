@@ -1,3 +1,5 @@
+var htmlElement = document.getElementsByTagName("html")[0];
+
 // Configuration management
 const ZCConfig = {
   frontend: {
@@ -14,6 +16,14 @@ const ZCConfig = {
   },
   s3: {
     staticUrl: "<%= global.config['s3.staticurl']%>"
+  }
+};
+
+// Application Management
+const App = {
+  initialize: async function() {
+    loadResources();
+    return Promise.resolve();
   }
 };
 
@@ -39,31 +49,205 @@ function loadResources() {
     loadScript(ZCConfig.frontend.getPath('/scratchtool/mdui.global.js'), () => {
       // 确保 $ 和 mdui 加载成功后执行初始化
       $(document).ready(() => {
+        // mdui 和 jQuery 都已加载完成，初始化UI
+        initUIComponents();
         initialize();
       });
     });
   });
 }
 
-// Application Management
-const App = {
-  initialize: async function() {
-    loadResources();
-    return Promise.resolve();
-  }
-};
-
-const UIManager = {
-  showSnackbar: function(message) {
-    mdui.snackbar({ message, closeable: true });
-  }
-};
+// 将依赖mdui的UI操作封装到这个函数中
+function initUIComponents() {
+  htmlElement.classList.add('mdui-theme-dark');
+            mdui.setColorScheme("#2087fd")
+  window.UIManager = {
+    showSnackbar: function(message) {
+      mdui.snackbar({ message, closeable: true });
+    },
+    showAlert: function(options) {
+      mdui.alert(options);
+    }
+  };
+}
 
 window.onload = () => {
   App.initialize().catch(error => {
     console.error('Application initialization failed:', error);
-    UIManager.showSnackbar("应用初始化失败");
+    // 不使用mdui，使用原生alert
+    alert("应用初始化失败");
   });
+};
+
+// 令牌管理工具
+const TokenManager = {
+  // 存储刷新令牌
+  refreshToken: null,
+
+  // 从JWT中获取过期时间
+  getTokenExpiration: function(token) {
+    try {
+      const decoded = jwtDecode(token);
+      return decoded.exp ? decoded.exp * 1000 : null; // 转换为毫秒
+    } catch (error) {
+      console.error('Token expiration parsing error:', error);
+      return null;
+    }
+  },
+
+  // 判断令牌是否即将过期 (提前5分钟刷新)
+  isTokenExpiringSoon: function(token) {
+    const expTime = this.getTokenExpiration(token);
+    if (!expTime) return true;
+
+    // 提前5分钟刷新令牌
+    return Date.now() > expTime - (5 * 60 * 1000);
+  },
+
+  // 获取当前令牌
+  getToken: function() {
+    return localStorage.getItem("token");
+  },
+
+  // 获取刷新令牌
+  getRefreshToken: function() {
+    return localStorage.getItem("refreshToken");
+  },
+
+  // 保存令牌信息
+  saveTokens: function(accessToken, refreshToken, expiresAt) {
+    localStorage.setItem("token", accessToken);
+    if (refreshToken) {
+      localStorage.setItem("refreshToken", refreshToken);
+    }
+    if (expiresAt) {
+      localStorage.setItem("tokenExpiresAt", expiresAt.getTime().toString());
+    }
+  },
+
+  // 刷新访问令牌
+  refreshAccessToken: async function() {
+    const refreshToken = this.getRefreshToken();
+    if (!refreshToken) {
+      return {
+        success: false,
+        message: "刷新令牌不存在"
+      };
+    }
+
+    try {
+      const response = await $.ajax({
+        url: ZCConfig.api.getPath('/account/refresh-token'),
+        type: 'POST',
+        data: { refresh_token: refreshToken },
+        dataType: 'json'
+      });
+
+      if (response.status === "success") {
+        // 保存新令牌
+        this.saveTokens(response.token, null, new Date(response.expires_at));
+        return {
+          success: true,
+          token: response.token
+        };
+      } else {
+        return {
+          success: false,
+          message: response.message
+        };
+      }
+    } catch (error) {
+      console.error('Token refresh error:', error);
+      if (error.status === 401) {
+        // 处理刷新令牌过期
+        localStorage.removeItem("token");
+        localStorage.removeItem("refreshToken");
+        localStorage.removeItem("tokenExpiresAt");
+        return {
+          success: false,
+          message: "登录已过期，请重新登录",
+          code: "AUTH_ERROR_LOGIN"
+        };
+      }
+      return {
+        success: false,
+        message: "刷新令牌出错"
+      };
+    }
+  },
+
+  // 检查并确保令牌有效，必要时刷新
+  ensureValidToken: async function() {
+    const token = this.getToken();
+    if (!token) {
+      return {
+        success: false,
+        message: "未登录 #1"
+      };
+    }
+
+    if (this.isTokenExpiringSoon(token)) {
+      // 令牌即将过期，尝试刷新
+      const refreshResult = await this.refreshAccessToken();
+      if (!refreshResult.success) {
+        if (refreshResult.code === "AUTH_ERROR_LOGIN") {
+          handleInvalidLogin(refreshResult.message);
+        }
+        return refreshResult;
+      }
+      return {
+        success: true,
+        token: refreshResult.token
+      };
+    }
+
+    return {
+      success: true,
+      token: token
+    };
+  },
+
+  // 执行带有令牌验证的API请求
+  apiRequest: async function(options) {
+    // 确保令牌有效
+    const tokenResult = await this.ensureValidToken();
+
+    if (!tokenResult.success) {
+      // 如果是登录问题，则处理登录
+      if (tokenResult.code === "AUTH_ERROR_LOGIN") {
+        handleInvalidLogin(tokenResult.message);
+      }
+
+      // 返回Promise失败
+      return Promise.reject({
+        status: 401,
+        responseJSON: {
+          status: "error",
+          message: tokenResult.message,
+          code: tokenResult.code || "AUTH_ERROR"
+        }
+      });
+    }
+
+    // 设置Authorization头
+    const headers = options.headers || {};
+    headers.Authorization = `Bearer ${tokenResult.token}`;
+
+    // 设置请求选项
+    const requestOptions = {
+      ...options,
+      headers
+    };
+
+    try {
+      return await $.ajax(requestOptions);
+    } catch (error) {
+      if (error.responseJSON && error.responseJSON.code === "AUTH_ERROR_LOGIN") {
+        handleInvalidLogin(error.responseJSON.message);
+      }
+      throw error;
+    }
+  }
 };
 
 // Description: ZeroCat Scratch Tool
@@ -78,6 +262,7 @@ let commitInfo = {};
 let commituser = {};
 let authorinfocard = {};
 let authorinfoavatar = {};
+
 const buttons = [
   { id: "open-zerocat-tab", text: "信息", onclick: () => updateZerocatTab() },
   { id: "save-button", text: "保存", onclick: () => openCommitDialog() },
@@ -92,8 +277,14 @@ function getCurrentTime() {
   return `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
 }
 
+// 封装showSnackbar函数，确保mdui已加载
 function showSnackbar(text) {
-  mdui.snackbar({ message: text, closeable: true });
+  if (window.UIManager) {
+    UIManager.showSnackbar(text);
+  } else {
+    // 如果mdui未加载，使用console.log作为备选
+    console.log(text);
+  }
 }
 
 // JWT 解析函数
@@ -159,16 +350,30 @@ function jwtDecode(token) {
 }
 
 function handleInvalidLogin(message) {
-  localStorage.removeItem("token");
-  mdui.alert({
-    headline: "登录问题",
-    description: message,
-    confirmText: "打开用户页面",
-    cancelText: "取消",
-    onConfirm: () => {
-      window.location.href = ZCConfig.frontend.getPath('/app/account/login');
-    },
-  });
+  //localStorage.removeItem("token");
+  //localStorage.removeItem("refreshToken");
+  //localStorage.removeItem("tokenExpiresAt");
+
+  if (window.UIManager) {
+    UIManager.showAlert({
+      headline: "登录问题",
+      description: message,
+      confirmText: "打开用户页面",
+      cancelText: "取消",
+      onConfirm: () => {
+        // 在新标签页打开登录页面
+        const returnUrl = encodeURIComponent(window.location.href);
+        window.open(`${ZCConfig.frontend.getPath('/app/account/login')}?return_url=${returnUrl}`, '_blank');
+      },
+    });
+  } else {
+    // mdui未加载时的备选方案
+    if (confirm(`登录问题: ${message}\n是否打开登录页面?`)) {
+      const returnUrl = encodeURIComponent(window.location.href);
+      window.open(`${ZCConfig.frontend.getPath('/app/account/login')}?return_url=${returnUrl}`, '_blank');
+    }
+  }
+
   showLoginButton();
 }
 
@@ -176,6 +381,8 @@ function handleInvalidLogin(message) {
 function loadUserInfo() {
   // 从localStorage中获取名为"token"的项
   const token = localStorage.getItem("token");
+  const refreshToken = localStorage.getItem("refreshToken");
+
   // 检查token是否存在
   if (token) {
     try {
@@ -183,8 +390,12 @@ function loadUserInfo() {
       const decoded = jwtDecode(token);
       // 获取当前时间的时间戳（秒）
       const currentTime = Math.floor(Date.now() / 1000);
-      // 检查解码后的token是否包含过期时间且是否已过期
-      if (decoded.exp && decoded.exp < currentTime) {
+
+      // 如果令牌即将过期但有刷新令牌，则不做处理
+      // TokenManager.ensureValidToken 会在后续API请求中处理刷新
+
+      // 如果令牌已过期且没有刷新令牌
+      if (decoded.exp && decoded.exp < currentTime && !refreshToken) {
         // 如果token已过期，调用handleInvalidLogin函数处理
         handleInvalidLogin("登录已过期，请重新登录。");
       } else {
@@ -196,8 +407,14 @@ function loadUserInfo() {
         localStorage.setItem("zc:username", decoded.display_name);
       }
     } catch (error) {
-      // 如果解码过程中发生错误，调用handleInvalidLogin函数处理
-      handleInvalidLogin("登录信息无效，请重新登录。");
+      // 如果解码过程中发生错误，并且没有刷新令牌
+      if (!refreshToken) {
+        // 调用handleInvalidLogin函数处理
+        handleInvalidLogin("登录信息无效，请重新登录。");
+      } else {
+        // 有刷新令牌，后续API请求会尝试刷新
+        console.log("Token parsing error, will attempt to refresh");
+      }
     }
   } else {
     // 如果token不存在，显示登录按钮
@@ -210,13 +427,19 @@ function showLoginButton() {
   buttons.push({
     id: "login-button",
     text: "登录/注册",
-    onclick: () => (window.location.href = ZCConfig.frontend.getPath('/app/account/login')),
+    onclick: () => {
+      // 添加当前URL作为return_url参数
+      const returnUrl = encodeURIComponent(window.location.href);
+      window.open(`${ZCConfig.frontend.getPath('/app/account/login')}?return_url=${returnUrl}`, '_blank');
+    },
   });
   renderButtons();
 }
 
 function renderButtons() {
   const zerocattool = document.getElementById("zerocattool");
+  if (!zerocattool) return; // 确保元素存在
+
   zerocattool.innerHTML = ""; // 清空现有按钮
   buttons.forEach((button) => {
     const btnTemplate = zerocattool.cloneNode(true);
@@ -229,6 +452,7 @@ function renderButtons() {
   zerocattool.style.display = "none";
 }
 window.renderButtons = renderButtons;
+
 function setButton(id, text, onclick) {
   const button = document.getElementById(id);
   if (button) {
@@ -247,13 +471,12 @@ function uploadProjectAssets() {
         `${asset.assetId}.${asset.dataFormat}`
       );
 
-      $.ajax({
-        url: `${ZCConfig.api.getPath('/scratch/assets/')}${asset.assetId}.${asset.dataFormat}?token=${localStorage.getItem("token")}`,
+      TokenManager.apiRequest({
+        url: `${ZCConfig.api.getPath('/scratch/assets/')}${asset.assetId}.${asset.dataFormat}`,
         type: "POST",
         data: formData,
         processData: false,
         contentType: false,
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         success: function () {
           logText.innerText += `[${getCurrentTime()}]文件上传成功${
             asset.assetId
@@ -261,17 +484,10 @@ function uploadProjectAssets() {
           asset.clean = true;
         },
         error: function (xhr, status, error) {
-          if (
-            xhr.responseJSON &&
-            xhr.responseJSON.code === "AUTH_ERROR_LOGIN"
-          ) {
-            handleInvalidLogin(xhr.responseJSON.message);
-          } else {
-            logText.innerText += `[${getCurrentTime()}]文件上传失败${
-              asset.assetId
-            }.${asset.dataFormat}\nerror:${error}\n`;
-          }
-        },
+          logText.innerText += `[${getCurrentTime()}]文件上传失败${
+            asset.assetId
+          }.${asset.dataFormat}\nerror:${error}\n`;
+        }
       });
     } else {
       logText.innerText += `[${getCurrentTime()}]文件未修改${asset.assetId}.${
@@ -284,10 +500,9 @@ function uploadProjectAssets() {
 
 function fetchProjectInfo() {
   if (_pid !== 0 && Number.isInteger(_pid)) {
-    $.ajax({
+    TokenManager.apiRequest({
       url: `${ZCConfig.api.getPath('/scratch/projectinfo2')}?id=${_pid}`,
       type: "GET",
-      data: { token: localStorage.getItem("token") },
       success: function (result) {
         if (result.status == "404") {
           location.href = `${ZCConfig.frontend.getPath('/editor.html')}?msg=404`;
@@ -317,19 +532,16 @@ function fetchProjectInfo() {
         }
       },
       error: function (xhr) {
-        const data = xhr.responseJSON;
-        if (data && data.code === "AUTH_ERROR_LOGIN") {
-          handleInvalidLogin(data.message);
-        } else {
-          alert(xhr);
-        }
-      },
+        alert(xhr);
+      }
     });
   }
 }
 
 function updateZerocatTab() {
-  zctab.open = true;
+  if (zctab) {
+    zctab.open = true;
+  }
 }
 
 function getZerocatUserInfo(userid) {
@@ -337,7 +549,6 @@ function getZerocatUserInfo(userid) {
   $.ajax({
     url: `${ZCConfig.api.getPath('/user/id/')}${userid}`,
     type: "GET",
-    data: { token: localStorage.getItem("token") },
     async: false,
     success: function (data) {
       result = data.data;
@@ -354,10 +565,43 @@ function getZerocatUserInfo(userid) {
   return result;
 }
 
+// 在initialize函数开始处添加检查URL参数中是否有token信息
+function checkUrlForTokens() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const token = urlParams.get("token");
+  const refreshToken = urlParams.get("refreshToken");
+  const expiresAt = urlParams.get("expires_at");
+
+  if (token) {
+    // 保存从URL获取的token
+    TokenManager.saveTokens(
+      token,
+      refreshToken,
+      expiresAt ? new Date(parseInt(expiresAt, 10)) : null
+    );
+
+    // 清除URL中的token参数
+    const url = new URL(window.location.href);
+    url.searchParams.delete("token");
+    url.searchParams.delete("refreshToken");
+    url.searchParams.delete("expires_at");
+    window.history.replaceState({}, "", url);
+
+    // 重新加载用户信息
+    loadUserInfo();
+    return true;
+  }
+
+  return false;
+}
+
 let isEmbed;
 function initialize() {
   if (window.initialized) return; // 避免初始化两次
   window.initialized = true;
+
+  // 检查URL中是否有token信息
+  const tokenFromUrl = checkUrlForTokens();
 
   const urlParams = new URLSearchParams(window.location.search);
   isEmbed = urlParams.get("embed") === "true";
@@ -490,53 +734,64 @@ function loadProject() {
 function downloadAndLoadProject(pid) {
   console.log(`Downloading project with ID: ${pid}`);
   const loadingDialog = document.querySelector(".loading-dialog");
-  loadingDialog.open = true;
+  if (loadingDialog) {
+    loadingDialog.open = true;
+  }
 
   const branch = getQueryStringParameter("branch") || "main";
   const ref = getQueryStringParameter("ref") || "latest";
 
-  $.ajax({
+  TokenManager.apiRequest({
     url: `${ZCConfig.api.getPath('/project/')}${pid}/${branch}/${ref}`,
     type: "GET",
-    data: { token: localStorage.getItem("token") },
     success: function (response) {
       if (response.status === "error") {
         if (response.commit.commit_message === "NoFirstCommit") {
-          mdui.alert({
+          const alertOptions = {
             headline: "作品未初始化",
             description: "你可以以Scratch模板初始化此作品",
             confirmText: "继续",
             onConfirm: () => {
-              $.ajax({
+              TokenManager.apiRequest({
                 url: `${ZCConfig.api.getPath('/project/edit/')}${pid}/init`,
                 type: "POST",
-                data: { token: localStorage.getItem("token") },
                 success: function (response) {
                   showSnackbar(response.message);
                   downloadAndLoadProject(pid);
                 },
                 error: function (xhr) {
                   console.error("Error initializing project:", xhr);
-                  mdui.alert({
-                    headline: "初始化失败",
-                    description: `作品初始化失败: ${xhr.responseText}`,
-                    confirmText: "重新加载",
-                    onConfirm: () => {
+                  showErrorAlert(
+                    "初始化失败",
+                    `作品初始化失败: ${xhr.responseText}`,
+                    "重新加载",
+                    () => {
                       window.location.reload();
-                    },
-                  });
+                    }
+                  );
                 },
               });
             },
-          });
+          };
+
+          if (window.UIManager) {
+            UIManager.showAlert(alertOptions);
+          } else {
+            if (confirm(`${alertOptions.headline}: ${alertOptions.description}`)) {
+              alertOptions.onConfirm();
+            }
+          }
         }
 
-        mdui.alert({
-          headline: "加载失败",
-          description: response.message,
-          confirmText: "关闭",
-        });
-        loadingDialog.open = false;
+        showErrorAlert(
+          "加载失败",
+          response.message,
+          "关闭"
+        );
+
+        if (loadingDialog) {
+          loadingDialog.open = false;
+        }
         isLoading = false;
         return;
       }
@@ -546,73 +801,235 @@ function downloadAndLoadProject(pid) {
       if (!isEmbed) {
         const commitDate = new Date(commitInfo.commit_date).toLocaleString();
         const commitInfoList = document.getElementById("commit-info");
-        commitInfoList.headline = commitInfo.commit_message;
-        const commitInfoAvatar = document.getElementById("commit-avatar");
-        commituser = getZerocatUserInfo(commitInfo.author_id);
-        commitInfoAvatar.src =
-          `${ZCConfig.s3.staticUrl}/${commituser.images}`;
-        commitInfoList.description = `${commituser.display_name} 于 ${commitDate}`;
+        if (commitInfoList) {
+          commitInfoList.headline = commitInfo.commit_message;
+          const commitInfoAvatar = document.getElementById("commit-avatar");
+          commituser = getZerocatUserInfo(commitInfo.author_id);
+          if (commitInfoAvatar) {
+            commitInfoAvatar.src = `${ZCConfig.s3.staticUrl}/${commituser.images}`;
+          }
+          commitInfoList.description = `${commituser.display_name} 于 ${commitDate}`;
+        }
       }
-      $.ajax({
+
+      TokenManager.apiRequest({
         url: `${ZCConfig.api.getPath('/project/files/')}${commit.commit_file}`,
         type: "GET",
-        data: { accessFileToken, token: localStorage.getItem("token") },
+        data: { accessFileToken },
+
         success: function (fileResponse) {
           zcvm
             .loadProject(JSON.parse(fileResponse.file.source))
             .then(() => {
               console.log("Project loaded into VM successfully.");
               setTimeout(() => {
-                loadingDialog.open = false;
+                if (loadingDialog) {
+                  loadingDialog.open = false;
+                }
               }, 10);
               isLoading = false;
             })
             .catch((err) => {
               console.error("Error loading project into VM:", err);
-              loadingDialog.open = false;
+              if (loadingDialog) {
+                loadingDialog.open = false;
+              }
               isLoading = false;
-              mdui.alert({
-                headline: "加载失败",
-                description: `作品加载失败: ${err.message}`,
-                confirmText: "重新加载",
-                onConfirm: () => {
+              showErrorAlert(
+                "加载失败",
+                `作品加载失败: ${err.message}`,
+                "重新加载",
+                () => {
                   window.location.reload();
-                },
-              });
+                }
+              );
             });
         },
         error: function (xhr) {
           console.error("Error fetching project file:", xhr);
-          loadingDialog.open = false;
+          if (loadingDialog) {
+            loadingDialog.open = false;
+          }
           isLoading = false;
-          mdui.alert({
-            headline: "加载失败",
-            description: `作品加载失败: ${xhr.responseText}`,
-            confirmText: "重新加载",
-            onConfirm: () => {
+          showErrorAlert(
+            "加载失败",
+            `作品加载失败: ${xhr.responseText}`,
+            "重新加载",
+            () => {
               window.location.reload();
-            },
-          });
+            }
+          );
         },
       });
     },
     error: function (xhr) {
-      const data = xhr.responseJSON;
-      if (data && data.code === "AUTH_ERROR_LOGIN") {
-        handleInvalidLogin(data.message);
-      } else {
-        console.error("Error downloading project data:", xhr);
+      console.error("Error downloading project data:", xhr);
+      if (loadingDialog) {
         loadingDialog.open = false;
-        isLoading = false;
-        mdui.alert({
-          headline: "加载失败",
-          description: `作品加载失败: ${xhr.responseText}`,
-          confirmText: "重新加载",
-          onConfirm: () => {
-            window.location.reload();
-          },
-        });
       }
+      isLoading = false;
+      showErrorAlert(
+        "加载失败",
+        `作品加载失败: ${xhr.responseText}`,
+        "重新加载",
+        () => {
+          window.location.reload();
+        }
+      );
+    },
+  });
+}
+
+// 通用错误提示函数
+function showErrorAlert(headline, description, confirmText, onConfirm) {
+  const options = {
+    headline,
+    description,
+    confirmText,
+  };
+
+  if (onConfirm) {
+    options.onConfirm = onConfirm;
+  }
+
+  if (window.UIManager) {
+    UIManager.showAlert(options);
+  } else {
+    if (confirm(`${headline}: ${description}`)) {
+      if (onConfirm) onConfirm();
+    }
+  }
+}
+
+function openCommitDialog() {
+  const commitDialog = document.getElementById("commit-dialog");
+  const branchNameInput = document.getElementById("branch-name");
+  if (!commitDialog || !branchNameInput) {
+    console.error("提交对话框未初始化");
+    showSnackbar("提交对话框未初始化");
+    return;
+  }
+
+  const branchRadioGroup = document.querySelector("mdui-radio-group");
+  if (!branchRadioGroup) {
+    console.error("分支选择未初始化");
+    showSnackbar("分支选择未初始化");
+    return;
+  }
+
+  const currentBranch = getQueryStringParameter("branch") || "main";
+  branchNameInput.value = currentBranch;
+
+  branchRadioGroup.addEventListener("change", (event) => {
+    if (event.target.value === "pr") {
+      const username = userinfo.username;
+      const timestamp = Date.now();
+      branchNameInput.value = `${username}-patch-${timestamp}`;
+      branchNameInput.disabled = false;
+    } else {
+      branchNameInput.value = currentBranch;
+      branchNameInput.disabled = true;
+    }
+  });
+
+  commitDialog.open = true;
+}
+
+function commitProject() {
+  const branchNameInput = document.getElementById("branch-name");
+  const commitMessageInput = document.getElementById("commit-message");
+  const commitDescriptionInput = document.getElementById("commit-description");
+
+  if (!branchNameInput || !commitMessageInput || !commitDescriptionInput) {
+    showErrorAlert("错误", "提交表单未完全加载", "关闭");
+    return;
+  }
+
+  const branchName = branchNameInput.value;
+  const commitMessage = commitMessageInput.value;
+  const commitDescription = commitDescriptionInput.value;
+
+  if (!commitMessage) {
+    showErrorAlert("提交信息不能为空", "请输入提交信息", "关闭");
+    return;
+  }
+
+  setButton("save-button", "保存中", () => openCommitDialog());
+
+  uploadProjectAssets();
+
+  if (zcvm.runtime.isRunning) {
+    zcvm.runtime.stopAll();
+  }
+
+  if (projectjson == zcvm.toJSON()) {
+    showSnackbar("作品未修改");
+    setButton("save-button", "保存", () => openCommitDialog());
+    return;
+  }
+
+  if (String(projectinfo.author.id) !== String(userinfo.userid)) {
+    showSnackbar("无权限");
+    setButton("save-button", "无权限", () => openCommitDialog());
+    return;
+  }
+
+  projectjson = zcvm.toJSON();
+
+  // 先调用文件保存接口
+  TokenManager.apiRequest({
+    url: `${ZCConfig.api.getPath('/project/savefile')}`,
+    type: "post",
+    data: projectjson,
+    contentType: "application/json",
+    success: function (saveResponse) {
+      const newAccessFileToken = saveResponse.accessFileToken;
+
+      // 然后调用提交接口
+      TokenManager.apiRequest({
+        url: `${ZCConfig.api.getPath('/project/commit/id/')}${_pid}`,
+        type: "put",
+        data: JSON.stringify({
+          projectid: _pid,
+          branch: branchName,
+          accessFileToken: newAccessFileToken,
+          message: commitMessage,
+          commit_description: commitDescription,
+        }),
+        contentType: "application/json",
+        success: function (commitResponse) {
+          showSnackbar(commitResponse.message);
+          const commitDialog = document.getElementById("commit-dialog");
+          if (commitDialog) {
+            commitDialog.open = false;
+          }
+          setButton("save-button", "保存完成", () => openCommitDialog());
+          if (logText) {
+            logText.innerText += `[${getCurrentTime()}]保存完成\n`;
+          }
+
+          // 修改或添加 URL query 部分的 branch
+          const url = new URL(window.location.href);
+          url.searchParams.set("branch", branchName);
+          window.history.replaceState({}, "", url);
+        },
+        error: function (xhr) {
+          console.log(xhr);
+          showErrorAlert(
+            "提交作品出错",
+            JSON.stringify(xhr),
+            "关闭"
+          );
+        },
+      });
+    },
+    error: function (xhr) {
+      console.log(xhr);
+      showErrorAlert(
+        "保存文件出错",
+        JSON.stringify(xhr),
+        "关闭"
+      );
     },
   });
 }
@@ -642,7 +1059,9 @@ function saveProject({ force = false } = {}) {
   showSnackbar("保存完成");
   setButton("save-button", "保存完成", () => openCommitDialog());
 
-  logText.innerText += `[${getCurrentTime()}]保存完成\n`;
+  if (logText) {
+    logText.innerText += `[${getCurrentTime()}]保存完成\n`;
+  }
 }
 
 function openBase64ImageInNewTab() {
@@ -661,18 +1080,15 @@ function setProjectThumbnail() {
       const formData = new FormData();
       formData.append("file", blob, "thumbnail.png");
 
-      const response = await fetch(`${ZCConfig.api.getPath('/scratch/thumbnail/')}${_pid}`, {
+      const response = await TokenManager.apiRequest({
+        url: `${ZCConfig.api.getPath('/scratch/thumbnail/')}${_pid}`,
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: formData,
+        data: formData,
+        processData: false,
+        contentType: false
       });
 
-      const data = await response.json();
-      if (data.code === "AUTH_ERROR_LOGIN") {
-        handleInvalidLogin(data.message);
-      } else if (response.ok) {
+      if (response.status === "success") {
         showSnackbar("封面设置成功");
       } else {
         showSnackbar("封面设置失败");
@@ -689,126 +1105,3 @@ buttons.push({
   text: "舞台截图设为封面",
   onclick: () => setProjectThumbnail(),
 });
-
-function openCommitDialog() {
-  const commitDialog = document.getElementById("commit-dialog");
-  const branchNameInput = document.getElementById("branch-name");
-  const branchRadioGroup = document.querySelector("mdui-radio-group");
-
-  const currentBranch = getQueryStringParameter("branch") || "main";
-  branchNameInput.value = currentBranch;
-
-  branchRadioGroup.addEventListener("change", (event) => {
-    if (event.target.value === "pr") {
-      const username = userinfo.username;
-      const timestamp = Date.now();
-      branchNameInput.value = `${username}-patch-${timestamp}`;
-      branchNameInput.disabled = false;
-    } else {
-      branchNameInput.value = currentBranch;
-      branchNameInput.disabled = true;
-    }
-  });
-
-  commitDialog.open = true;
-}
-
-function commitProject() {
-  const branchName = document.getElementById("branch-name").value;
-  const commitMessage = document.getElementById("commit-message").value;
-  const commitDescription = document.getElementById("commit-description").value;
-
-  if (!commitMessage) {
-    mdui.alert({
-      headline: "提交信息不能为空",
-      confirmText: "关闭",
-    });
-    return;
-  }
-
-  setButton("save-button", "保存中", () => openCommitDialog());
-
-  uploadProjectAssets();
-
-  if (zcvm.runtime.isRunning) {
-    zcvm.runtime.stopAll();
-  }
-
-  if (projectjson == zcvm.toJSON()) {
-    showSnackbar("作品未修改");
-    setButton("save-button", "保存", () => openCommitDialog());
-    return;
-  }
-
-  if (String(projectinfo.author.id) !== String(userinfo.userid)) {
-    showSnackbar("无权限");
-    setButton("save-button", "无权限", () => openCommitDialog());
-    return;
-  }
-
-  projectjson = zcvm.toJSON();
-
-  // 先调用文件保存接口
-  $.ajax({
-    url: `${ZCConfig.api.getPath('/project/savefile')}`,
-    type: "post",
-    data: projectjson,
-    contentType: "application/json",
-    headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-    success: function (saveResponse) {
-      const newAccessFileToken = saveResponse.accessFileToken;
-
-      // 然后调用提交接口
-      $.ajax({
-        url: `${ZCConfig.api.getPath('/project/commit/id/')}${_pid}`,
-        type: "put",
-        data: JSON.stringify({
-          projectid: _pid,
-          branch: branchName,
-          accessFileToken: newAccessFileToken,
-          message: commitMessage,
-          commit_description: commitDescription,
-        }),
-        contentType: "application/json",
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        success: function (commitResponse) {
-          showSnackbar(commitResponse.message);
-          document.getElementById("commit-dialog").open = false;
-          setButton("save-button", "保存完成", () => openCommitDialog());
-          logText.innerText += `[${getCurrentTime()}]保存完成\n`;
-
-          // 修改或添加 URL query 部分的 branch
-          const url = new URL(window.location.href);
-          url.searchParams.set("branch", branchName);
-          window.history.replaceState({}, "", url);
-        },
-        error: function (xhr) {
-          const data = xhr.responseJSON;
-          if (data && data.code === "AUTH_ERROR_LOGIN") {
-            handleInvalidLogin(data.message);
-          } else {
-            console.log(xhr);
-            mdui.alert({
-              headline: "提交作品出错",
-              description: JSON.stringify(xhr),
-              confirmText: "关闭",
-            });
-          }
-        },
-      });
-    },
-    error: function (xhr) {
-      const data = xhr.responseJSON;
-      if (data && data.code === "AUTH_ERROR_LOGIN") {
-        handleInvalidLogin(data.message);
-      } else {
-        console.log(xhr);
-        mdui.alert({
-          headline: "保存文件出错",
-          description: JSON.stringify(xhr),
-          confirmText: "关闭",
-        });
-      }
-    },
-  });
-}

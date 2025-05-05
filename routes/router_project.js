@@ -311,7 +311,7 @@ router.put("/commit/id/:id", needLogin, async (req, res, next) => {
     if (!decodedFileToken) {
       return res.status(200).send({
         status: "error",
-        message: "无效的文件访问令牌",
+        message: "无效的文件访问令牌 #2",
       });
     }
 
@@ -319,7 +319,7 @@ router.put("/commit/id/:id", needLogin, async (req, res, next) => {
     if (type !== "file" || action !== "read" || userid !== res.locals.userid) {
       return res.status(200).send({
         status: "error",
-        message: "无效的文件访问令牌",
+        message: "无效的文件访问令牌 #1",
       });
     }
 
@@ -731,9 +731,10 @@ router.get("/files/:sha256", async (req, res, next) => {
     try {
       await verifyFileAccessToken(accessFileToken, userId);
     } catch (err) {
+      logger.error("Error verifying file access token:", err);
       return res.status(200).send({
         status: "error",
-        message: "无效的文件访问令牌",
+        message: "无效的文件访问令牌 #3",
       });
     }
 
