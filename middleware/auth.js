@@ -232,7 +232,7 @@ export const needAdmin = async (req, res, next) => {
       return res.status(401).send({
         status: "error",
         message: "需要登录",
-        code: 401,
+        code: 'ZC_ERROR_NEED_LOGIN',
       });
     } else {
       return res.redirect("/login");
