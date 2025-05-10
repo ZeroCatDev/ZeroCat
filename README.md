@@ -25,7 +25,6 @@ This repository contains the backend code for ZeroCat.
   - [Contributor Covenant Code of Conduct](#contributor-covenant-code-of-conduct)
     - [Contributors](#contributors)
   - [License](#license)
-  - [项目结构](#项目结构)
 
 
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat?ref=badge_large)
@@ -105,7 +104,7 @@ Thanks to everyone who has contributed to this project. Their information can be
 
 ## License
 
-The ZeroCat community project is licensed under the [GPL-3.0 License](LICENSE).
+The ZeroCat community project is licensed under the [AGPL-3.0 License](LICENSE).
 
 Copyright (C) 2020-2024 Sun Wuyuan.
 
@@ -114,88 +113,3 @@ You are free to use the ZeroCat community under an open-source license, but you 
 For closed-source usage licenses, please contact QQ 1847261658.
 
 Thanks to the [scratch-cn/lite](https://gitee.com/scratch-cn/lite) project for inspiring this project.
-
-## 项目结构
-
-项目采用标准的Node.js/Express应用程序架构，遵循以下目录结构和命名约定：
-
-```
-src/
-├── config/                # 应用配置
-│   ├── app/               # 应用级配置
-│   │   └── server.js      # 服务器配置
-│   ├── constants/         # 常量定义
-│   │   └── paths.js       # 路径常量
-│   ├── middleware.js      # 中间件配置
-│   ├── default_project.js # 默认项目配置
-│   └── index.js           # 配置索引
-├── controllers/           # 控制器逻辑
-│   ├── auth/              # 认证相关控制器
-│   ├── event.controller.js # 事件控制器
-│   └── ...                # 其他控制器
-├── middleware/            # 自定义中间件
-│   ├── auth.middleware.js # 认证中间件
-│   └── ...                # 其他中间件
-├── models/                # 数据模型和验证
-│   ├── events.model.js    # 事件模型
-│   └── ...                # 其他模型
-├── routes/                # 路由定义
-│   ├── index.js           # 路由主入口
-│   ├── account.routes.js  # 账户相关路由
-│   ├── event.routes.js    # 事件相关路由
-│   └── ...                # 其他路由
-├── services/              # 业务服务
-│   ├── eventService.js    # 事件服务
-│   ├── scheduler.service.js # 调度器服务
-│   └── ...                # 其他服务
-└── utils/                 # 工具函数
-    └── ...                # 各种工具函数
-```
-
-### 命名约定
-
-- **路由文件**: `[功能].routes.js`
-  - 例如: `account.routes.js`, `event.routes.js`
-
-- **控制器文件**: `[功能].controller.js`
-  - 例如: `auth.controller.js`, `event.controller.js`
-
-- **中间件文件**: `[功能].middleware.js`
-  - 例如: `auth.middleware.js`, `validator.middleware.js`
-
-- **服务文件**: `[功能].service.js`
-  - 例如: `scheduler.service.js`, `errorHandler.service.js`
-
-- **模型文件**: `[功能].model.js`
-  - 例如: `events.model.js`, `user.model.js`
-
-### 最佳实践
-
-1. **关注点分离**: 保持路由、控制器和服务的职责单一清晰
-2. **模块化**: 相关功能应该分组在同一目录下
-3. **一致性**: 遵循相同的命名和结构约定
-4. **可扩展性**: 设计应便于添加新功能而无需大规模重构
-5. **配置集中**: 所有配置通过src/config/index.js统一导出
-
-### 迁移进展
-
-项目正在从旧结构迁移到新结构。下面是当前的迁移进度：
-
-✅ 完成
-- 事件模块 (events)
-- 用户模块 (users)
-- 通知模块 (notifications)
-- 核心服务 (scheduler, errorHandler)
-- 身份验证中间件 (auth)
-
-⏳ 进行中
-- 关注模块 (follows)
-- 项目模块 (projects)
-- 评论模块 (comments)
-
-⌛ 待完成
-- 搜索模块 (search)
-- 时间线模块 (timeline)
-- 点赞模块 (likes)
-- 收藏模块 (stars)
-- 列表模块 (lists)

@@ -100,7 +100,7 @@ ZeroCat 的项目 遵循 [Contributor Covenant](http://contributor-covenant.org/
 感谢所有参与项目的人，他们的信息可以在右侧看到，这是实时的且便于查看
 ## 许可协议
 
-ZeroCat 社区项目遵循 [GPL-3.0 许可证](LICENSE)。
+ZeroCat 社区项目遵循 [AGPL-3.0 许可证](LICENSE)。
 
 
 版权所有 (C) 2020-2024 孙悟元。
