@@ -40,7 +40,7 @@ import { createEvent, TargetTypes } from '../controllers/events.js';
 await createEvent(
   'project_create',  // event type
   userId,           // actor ID
-  TargetTypes.PROJECT, // target type
+  "project", // target type
   projectId,        // target ID
   {
     project_type: 'scratch',
@@ -63,7 +63,7 @@ import { getTargetEvents, TargetTypes } from '../controllers/events.js';
 
 // Get events for a project
 const events = await getTargetEvents(
-  TargetTypes.PROJECT,  // target type
+  "project",  // target type
   projectId,           // target ID
   10,                  // limit
   0,                   // offset

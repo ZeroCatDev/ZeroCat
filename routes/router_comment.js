@@ -9,7 +9,7 @@ import { Router } from "express";
 const router = Router();
 import { prisma } from "../services/global.js";
 import { getUsersByList } from "../controllers/users.js";
-import { createEvent, TargetTypes } from "../controllers/events.js";
+import { createEvent } from "../controllers/events.js";
 // 中间件，确保所有请求均经过该处理
 
 // 统一的错误处理函数
@@ -176,18 +176,14 @@ router.post("/api/comment", needLogin, async (req, res, next) => {
       targetType = "user";
       targetId = userid;
     }
-    // 创建通知
-    await notificationUtils.createNotification({
-      userId: user_id,
-      notificationType: "USER_NEW_COMMENT",
+    await createEvent({
+      eventType: "comment_reply",
       actorId: userid,
       targetType: targetType,
       targetId: targetId,
-      data: {
-        comment: newComment.text,
-      },
-      highPriority: true,
+      data: { comment: newComment.text },
     });
+
   } catch (err) {
     next(err);
   }

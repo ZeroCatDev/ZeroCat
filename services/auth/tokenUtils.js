@@ -3,7 +3,7 @@ import { prisma } from '../global.js';
 import jsonwebtoken from 'jsonwebtoken';
 import zcconfig from '../config/zcconfig.js';
 import crypto from 'crypto';
-import { createEvent, TargetTypes } from '../../controllers/events.js';
+import { createEvent } from '../../controllers/events.js';
 import redisClient from '../redis.js';
 
 /**
@@ -244,12 +244,8 @@ export async function createUserLoginTokens(userId, userInfo, ipAddress, userAge
     // 可选: 记录登录事件
     if (options.recordLoginEvent) {
       try {
-        await createEvent("user_login", userId, TargetTypes.USER, userId, {
+        await createEvent("user_login", userId, "user", userId, {
           event_type: "user_login",
-          actor_id: userId,
-          target_type: TargetTypes.USER,
-          target_id: userId,
-          method: options.loginMethod || "token",
           device_info: deviceInfo,
           ip_address: ipAddress
         });

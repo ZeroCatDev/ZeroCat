@@ -1,7 +1,6 @@
 import { prisma } from "../services/global.js";
 import logger from "../services/logger.js";
-import notificationUtils from "./notifications.js";
-
+import { createEvent } from "./events.js";
 /**
  * Follow a user
  *
@@ -56,17 +55,11 @@ export async function followUser(followerId, followedId, note = "") {
         },
       },
     });
-
-
-    // Create notification for followed user
-    await notificationUtils.createNotification({
-      userId: followedId,
-      notificationType: notificationUtils.NotificationTypes.USER_FOLLOW,
+    await createEvent({
+      eventType: "user_follow",
       actorId: followerId,
-      targetType: notificationUtils.TargetTypes.USER,
       targetId: followedId,
       data: {},
-      highPriority: true,
     });
 
     logger.debug(`Created follow notification for user ${followedId}`);

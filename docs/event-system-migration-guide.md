@@ -60,7 +60,7 @@ For retrieving events, use the new methods:
 import { getTargetEvents, TargetTypes } from '../controllers/events.js';
 
 const events = await getTargetEvents(
-  TargetTypes.PROJECT,  // target type
+  "project",  // target type
   projectId,           // target ID
   10,                  // limit
   0,                   // offset

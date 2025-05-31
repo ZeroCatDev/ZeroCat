@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { prisma } from "../services/global.js";
 import logger from "../services/logger.js";
-import { EventTypes, EventConfig } from "../controllers/events.js";
-import { needLogin, strictTokenCheck, needAdmin } from "../middleware/auth.js";
+import { EventConfig } from "../controllers/events.js";
+import { needLogin } from "../middleware/auth.js";
 
 const router = Router();
 

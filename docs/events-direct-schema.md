@@ -121,7 +121,7 @@ export const EventTypes = {
 await createEvent(
   EventTypes.PROJECT_CREATE,
   userId,
-  TargetTypes.PROJECT,
+  "project",
   projectId,
   // ...
 );
@@ -130,7 +130,7 @@ await createEvent(
 await createEvent(
   'project_create',
   userId,
-  TargetTypes.PROJECT,
+  "project",
   projectId,
   // ...
 );

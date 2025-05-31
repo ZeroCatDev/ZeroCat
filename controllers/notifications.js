@@ -5,34 +5,6 @@ import { prisma } from "../services/global.js";
 import logger from "../services/logger.js";
 
 /**
- * 通知类型定义
- * 每种通知类型映射到特定种类的通知
- * @enum {string}
- */
-export const NotificationTypes = {
-  // 项目通知
-  PROJECT_COMMENT: "PROJECT_COMMENT",
-  PROJECT_STAR: "PROJECT_STAR",
-  PROJECT_FORK: "PROJECT_FORK",
-  PROJECT_UPDATE: "PROJECT_UPDATE",
-  PROJECT_COLLECT: "PROJECT_COLLECT",
-
-  // 用户通知
-  USER_FOLLOW: "USER_FOLLOW",
-  USER_NEW_COMMENT: "USER_NEW_COMMENT",
-
-  // 系统通知
-  SYSTEM_ANNOUNCEMENT: "SYSTEM_ANNOUNCEMENT",
-  SYSTEM_MAINTENANCE: "SYSTEM_MAINTENANCE",
-
-  // 评论通知
-  COMMENT_REPLY: "COMMENT_REPLY",
-
-  // 自定义通知
-  CUSTOM_NOTIFICATION: "CUSTOM_NOTIFICATION",
-};
-
-/**
  * 通知模板定义
  * 为每种通知类型提供显示的文本模板和相关信息
  * 用于前端渲染通知内容
@@ -124,18 +96,6 @@ export const NotificationTemplates = {
 };
 
 /**
- * 目标类型枚举
- * @enum {string}
- */
-export const TargetTypes = {
-  PROJECT: "project",
-  USER: "user",
-  COMMENT: "comment",
-  TOPIC: "topic",
-  POST: "post",
-  SYSTEM: "system",
-  PROJECTLIST: "projectlist",
-};
 
 /**
  * 获取行为者（用户）信息用于通知
@@ -222,7 +182,7 @@ export async function getTargetData(targetType, targetId) {
 
   try {
     switch (targetType) {
-      case TargetTypes.PROJECT:
+      case "project":
         return await prisma.ow_projects.findUnique({
           where: { id: targetId },
           select: {
@@ -232,7 +192,7 @@ export async function getTargetData(targetType, targetId) {
           },
         });
 
-      case TargetTypes.USER:
+      case "user":
         return await prisma.ow_users.findUnique({
           where: { id: targetId },
           select: {
@@ -243,7 +203,7 @@ export async function getTargetData(targetType, targetId) {
           },
         });
 
-      case TargetTypes.COMMENT:
+      case "comment":
         return await prisma.ow_comment.findUnique({
           where: { id: targetId },
           select: {
@@ -253,27 +213,8 @@ export async function getTargetData(targetType, targetId) {
           },
         });
 
-      case TargetTypes.TOPIC:
-        return await prisma.ow_topics.findUnique({
-          where: { id: targetId },
-          select: {
-            id: true,
-            title: true,
-            content: true,
-          },
-        });
 
-      case TargetTypes.POST:
-        return await prisma.ow_posts.findUnique({
-          where: { id: targetId },
-          select: {
-            id: true,
-            title: true,
-            content: true,
-          },
-        });
-
-      case TargetTypes.PROJECTLIST:
+      case "projectlist":
         return await prisma.ow_project_lists.findUnique({
           where: { id: targetId },
           select: {
@@ -511,9 +452,7 @@ export async function formatNotificationForClient(notification) {
  */
 
 export default {
-  NotificationTypes,
   NotificationTemplates,
-  TargetTypes,
   createNotification,
   getUserNotifications,
   markNotificationsAsRead,

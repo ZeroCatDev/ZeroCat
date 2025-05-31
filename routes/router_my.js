@@ -13,7 +13,7 @@ import { S3update, checkhash, hash, prisma } from "../services/global.js";
 //数据库
 import geetestMiddleware from "../middleware/geetest.js";
 import multer from "multer";
-import { createEvent, TargetTypes } from "../controllers/events.js";
+import { createEvent } from "../controllers/events.js";
 
 const upload = multer({ dest: "./usercontent" });
 
@@ -82,12 +82,12 @@ router.post("/set/userinfo", async (req, res) => {
     await createEvent(
       "user_profile_update",
       res.locals.userid,
-      TargetTypes.USER,
+      "user",
       res.locals.userid,
       {
         event_type: "user_profile_update",
         actor_id: res.locals.userid,
-        target_type: TargetTypes.USER,
+        target_type: "user",
         target_id: res.locals.userid,
         update_type: "profile_update",
         updated_fields: ["display_name", "motto", "sex", "birthday"],

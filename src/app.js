@@ -38,18 +38,19 @@ class Application {
    */
   async configureApp() {
     try {
+      logger.debug('开始配置应用程序...');
       // 配置中间件
       await configureMiddleware(this.app);
-
+      logger.debug('中间件配置完成');
       // 配置路由
       await configureRoutes(this.app);
-
+      logger.debug('路由配置完成');
       // 添加全局错误处理中间件
       this.app.use(errorHandlerService.createExpressErrorHandler());
-
+      logger.debug('全局错误处理中间件配置完成');
       // 设置未捕获异常处理
       this.setupExceptionHandling();
-
+      logger.debug('未捕获异常处理配置完成');
       logger.info('应用程序配置完成');
     } catch (error) {
       logger.error('应用配置失败:', error);

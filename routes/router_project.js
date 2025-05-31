@@ -15,10 +15,10 @@ import {
   generateFileAccessToken,
   verifyFileAccessToken,
 } from "../services/auth/tokenManager.js";
-import { needLogin, strictTokenCheck, needAdmin } from "../middleware/auth.js";
+import { needLogin } from "../middleware/auth.js";
 import { hasProjectPermission } from "../services/auth/permissionManager.js";
 import { getUserByUsername } from "../controllers/users.js";
-import { createEvent, EventTypes, TargetTypes } from "../controllers/events.js";
+import { createEvent } from "../controllers/events.js";
 
 const router = Router();
 
@@ -117,12 +117,12 @@ router.post("/", needLogin, async (req, res, next) => {
     await createEvent(
       "project_create",
       res.locals.userid,
-      TargetTypes.PROJECT,
+      "project",
       result.id,
       {
         event_type: "project_create",
         actor_id: res.locals.userid,
-        target_type: TargetTypes.PROJECT,
+        target_type: "project",
         target_id: Number(result.id),
         project_name: result.name,
         project_type: result.type,
@@ -366,12 +366,12 @@ router.put("/commit/id/:id", needLogin, async (req, res, next) => {
     await createEvent(
       "project_commit",
       res.locals.userid,
-      TargetTypes.PROJECT,
+      "project",
       Number(projectid),
       {
         event_type: "project_commit",
         actor_id: res.locals.userid,
-        target_type: TargetTypes.PROJECT,
+        target_type: "project",
         target_id: Number(projectid),
         commit_id: commitId,
         commit_message: message,
@@ -645,7 +645,7 @@ router.put("/id/:id", needLogin, async (req, res, next) => {
     await createEvent(
       "project_info_update",
       res.locals.userid,
-      TargetTypes.PROJECT,
+      "project",
       Number(req.params.id),
       {
         updated_fields: changes.updated_fields,
@@ -779,12 +779,12 @@ router.delete("/:id", async (req, res, next) => {
       await createEvent(
         "project_delete",
         res.locals.userid,
-        TargetTypes.PROJECT,
+        "project",
         Number(req.params.id),
         {
           event_type: "project_delete",
           actor_id: res.locals.userid,
-          target_type: TargetTypes.PROJECT,
+          target_type: "project",
           target_id: Number(req.params.id),
           project_name: project.name,
           project_type: project.type,
@@ -939,12 +939,12 @@ router.put("/rename/:id", needLogin, async (req, res, next) => {
     await createEvent(
       "project_rename",
       res.locals.userid,
-      TargetTypes.PROJECT,
+      "project",
       Number(id),
       {
         event_type: "project_rename",
         actor_id: res.locals.userid,
-        target_type: TargetTypes.PROJECT,
+        target_type: "project",
         target_id: Number(id),
         old_name: project.name,
         new_name: newName,
@@ -1132,7 +1132,7 @@ router.post("/fork", needLogin, async (req, res, next) => {
     await createEvent(
       "project_fork",
       res.locals.userid,
-      TargetTypes.PROJECT,
+      "project",
       Number(forkedProject.id),
       {NotificationTo: [project.authorid]},
       isPrivate

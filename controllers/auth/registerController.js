@@ -16,7 +16,7 @@ import {
   generateMagicLinkForLogin,
   sendMagicLinkEmail
 } from "../../services/auth/magiclink.js";
-import { createEvent, TargetTypes } from "../events.js";
+import { createEvent } from "../events.js";
 
 /**
  * 初始用户注册 - 只需要邮箱或用户名
@@ -145,10 +145,10 @@ export const registerUser = async (req, res) => {
       }
 
       // 记录用户注册事件
-      await createEvent("user_register", newUser.id, TargetTypes.USER, newUser.id, {
+      await createEvent("user_register", newUser.id, "user", newUser.id, {
         event_type: "user_register",
         actor_id: newUser.id,
-        target_type: TargetTypes.USER,
+        target_type: "user",
         target_id: newUser.id
       });
 

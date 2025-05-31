@@ -1,17 +1,13 @@
 import { prisma } from "../services/global.js";
 import logger from "../services/logger.js";
-import { createNotification, NotificationTypes } from "./notifications.js";
+import { createNotification } from "./notifications.js";
 import {
-  TargetTypes,
-  EventTypes,
-  AudienceTypes,
   EventConfig,
   AudienceDataDependencies,
-  EventToNotificationMap
 } from "../config/eventConfig.js";
 
 // 重新导出这些常量供外部使用
-export { TargetTypes, EventTypes, AudienceTypes, EventConfig };
+export {  EventConfig };
 
 /**
  * 创建事件并异步发送通知
@@ -162,15 +158,15 @@ async function getActor(actorId) {
 async function getTarget(targetType, targetId) {
   try {
     switch (targetType) {
-      case TargetTypes.PROJECT:
+      case "project":
         return await prisma.ow_projects.findUnique({
           where: { id: Number(targetId) }
         });
-      case TargetTypes.USER:
+      case "user":
         return await prisma.ow_users.findUnique({
           where: { id: Number(targetId) }
         });
-      case TargetTypes.COMMENT:
+      case "comment":
         return await prisma.ow_comment.findUnique({
           where: { id: Number(targetId) }
         });
@@ -229,11 +225,8 @@ async function processNotifications(event, eventConfig, eventData) {
     if (userIds.length === 0) return;
 
     // 获取对应的通知类型
-    const notificationType = EventToNotificationMap[event.event_type];
-    if (!notificationType) {
-      logger.debug(`未为事件类型 ${event.event_type} 定义通知类型`);
-      return;
-    }
+    const notificationType = event.event_type;
+
 
     // 创建通知
     const notificationPromises = userIds.map(userId =>
@@ -359,12 +352,12 @@ async function getAudienceUsers(audienceType, event, eventData, audienceResults 
       const targetType = audienceConfig.target;
       let target;
 
-      if (targetType === 'project' && event.target_type === TargetTypes.PROJECT) {
+      if (targetType === 'project' && event.target_type === "project") {
         target = await prisma.ow_projects.findUnique({
           where: { id: targetId },
           select: audienceConfig.fields.reduce((obj, field) => ({ ...obj, [field]: true }), {})
         });
-      } else if (targetType === 'comment' && event.target_type === TargetTypes.COMMENT) {
+      } else if (targetType === 'comment' && event.target_type === "comment") {
         target = await prisma.ow_comment.findUnique({
           where: { id: targetId },
           select: audienceConfig.fields.reduce((obj, field) => ({ ...obj, [field]: true }), {})

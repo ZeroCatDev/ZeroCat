@@ -6,7 +6,6 @@ import {
   userpwTest,
   emailTest,
 } from "../../services/global.js";
-import { createEvent, TargetTypes } from "../events.js";
 import redisClient from "../../services/redis.js";
 import zcconfig from "../../services/config/zcconfig.js";
 import {
