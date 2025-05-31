@@ -26,7 +26,7 @@ export async function followUser(followerId, followedId, note = "") {
     }
 
     // Check if already following
-    const existingFollow = await prisma.user_relationships.findUnique({
+    const existingFollow = await prisma.ow_user_relationships.findUnique({
       where: {
         unique_user_relationship: {
           source_user_id: followerId,
@@ -45,7 +45,7 @@ export async function followUser(followerId, followedId, note = "") {
     }
 
     // Create relationship record with note
-    const relationship = await prisma.user_relationships.create({
+    const relationship = await prisma.ow_user_relationships.create({
       data: {
         source_user_id: followerId,
         target_user_id: followedId,
@@ -81,7 +81,7 @@ export async function followUser(followerId, followedId, note = "") {
 export async function unfollowUser(followerId, followedId) {
   try {
     // Delete relationship if it exists
-    const result = await prisma.user_relationships.deleteMany({
+    const result = await prisma.ow_user_relationships.deleteMany({
       where: {
         source_user_id: followerId,
         target_user_id: followedId,
@@ -121,7 +121,7 @@ export async function blockUser(blockerId, blockedId, reason = "") {
     }
 
     // Check if already blocked
-    const existingBlock = await prisma.user_relationships.findUnique({
+    const existingBlock = await prisma.ow_user_relationships.findUnique({
       where: {
         unique_user_relationship: {
           source_user_id: blockerId,
@@ -140,7 +140,7 @@ export async function blockUser(blockerId, blockedId, reason = "") {
     }
 
     // If the blocker follows the blocked user, automatically unfollow
-    await prisma.user_relationships.deleteMany({
+    await prisma.ow_user_relationships.deleteMany({
       where: {
         source_user_id: blockerId,
         target_user_id: blockedId,
@@ -149,7 +149,7 @@ export async function blockUser(blockerId, blockedId, reason = "") {
     });
 
     // Create relationship record with reason
-    const relationship = await prisma.user_relationships.create({
+    const relationship = await prisma.ow_user_relationships.create({
       data: {
         source_user_id: blockerId,
         target_user_id: blockedId,
@@ -177,7 +177,7 @@ export async function blockUser(blockerId, blockedId, reason = "") {
 export async function unblockUser(blockerId, blockedId) {
   try {
     // Delete relationship if it exists
-    const result = await prisma.user_relationships.deleteMany({
+    const result = await prisma.ow_user_relationships.deleteMany({
       where: {
         source_user_id: blockerId,
         target_user_id: blockedId,
@@ -203,7 +203,7 @@ export async function unblockUser(blockerId, blockedId) {
 export async function getUserFollowers(userId, limit = 20, offset = 0) {
   try {
     // Find all users who follow the target user
-    const relationships = await prisma.user_relationships.findMany({
+    const relationships = await prisma.ow_user_relationships.findMany({
       where: {
         target_user_id: userId,
         relationship_type: "follow",
@@ -246,7 +246,7 @@ export async function getUserFollowers(userId, limit = 20, offset = 0) {
     }));
 
     // Get total count
-    const totalCount = await prisma.user_relationships.count({
+    const totalCount = await prisma.ow_user_relationships.count({
       where: {
         target_user_id: userId,
         relationship_type: "follow",
@@ -276,7 +276,7 @@ export async function getUserFollowers(userId, limit = 20, offset = 0) {
 export async function getUserFollowing(userId, limit = 20, offset = 0) {
   try {
     // Find all users who the source user follows
-    const relationships = await prisma.user_relationships.findMany({
+    const relationships = await prisma.ow_user_relationships.findMany({
       where: {
         source_user_id: userId,
         relationship_type: "follow",
@@ -315,7 +315,7 @@ export async function getUserFollowing(userId, limit = 20, offset = 0) {
     }));
 
     // Get total count
-    const totalCount = await prisma.user_relationships.count({
+    const totalCount = await prisma.ow_user_relationships.count({
       where: {
         source_user_id: userId,
         relationship_type: "follow",
@@ -345,7 +345,7 @@ export async function getUserFollowing(userId, limit = 20, offset = 0) {
 export async function getUserBlocked(userId, limit = 20, offset = 0) {
   try {
     // Find all users who the source user has blocked
-    const relationships = await prisma.user_relationships.findMany({
+    const relationships = await prisma.ow_user_relationships.findMany({
       where: {
         source_user_id: userId,
         relationship_type: "block",
@@ -384,7 +384,7 @@ export async function getUserBlocked(userId, limit = 20, offset = 0) {
     }));
 
     // Get total count
-    const totalCount = await prisma.user_relationships.count({
+    const totalCount = await prisma.ow_user_relationships.count({
       where: {
         source_user_id: userId,
         relationship_type: "block",
@@ -412,7 +412,7 @@ export async function getUserBlocked(userId, limit = 20, offset = 0) {
  */
 export async function isFollowing(followerId, followedId) {
   try {
-    const relationship = await prisma.user_relationships.findUnique({
+    const relationship = await prisma.ow_user_relationships.findUnique({
       where: {
         unique_user_relationship: {
           source_user_id: followerId,
@@ -438,7 +438,7 @@ export async function isFollowing(followerId, followedId) {
  */
 export async function isBlocking(blockerId, blockedId) {
   try {
-    const relationship = await prisma.user_relationships.findUnique({
+    const relationship = await prisma.ow_user_relationships.findUnique({
       where: {
         unique_user_relationship: {
           source_user_id: blockerId,
@@ -465,7 +465,7 @@ export async function isBlocking(blockerId, blockedId) {
 export async function getRelationshipsBetweenUsers(userId1, userId2) {
   try {
     // Get relationships where userId1 is the source
-    const outgoingRelationships = await prisma.user_relationships.findMany({
+    const outgoingRelationships = await prisma.ow_user_relationships.findMany({
       where: {
         source_user_id: userId1,
         target_user_id: userId2,
@@ -473,7 +473,7 @@ export async function getRelationshipsBetweenUsers(userId1, userId2) {
     });
 
     // Get relationships where userId1 is the target
-    const incomingRelationships = await prisma.user_relationships.findMany({
+    const incomingRelationships = await prisma.ow_user_relationships.findMany({
       where: {
         source_user_id: userId2,
         target_user_id: userId1,
@@ -521,7 +521,7 @@ export async function getRelationshipsBetweenUsers(userId1, userId2) {
 export async function updateFollowNote(followerId, followedId, note) {
   try {
     // Check if relationship exists
-    const existingFollow = await prisma.user_relationships.findUnique({
+    const existingFollow = await prisma.ow_user_relationships.findUnique({
       where: {
         unique_user_relationship: {
           source_user_id: followerId,
@@ -536,7 +536,7 @@ export async function updateFollowNote(followerId, followedId, note) {
     }
 
     // Update the relationship note
-    const updatedRelationship = await prisma.user_relationships.update({
+    const updatedRelationship = await prisma.ow_user_relationships.update({
       where: {
         id: existingFollow.id,
       },
@@ -566,7 +566,7 @@ export async function updateFollowNote(followerId, followedId, note) {
 export async function updateBlockReason(blockerId, blockedId, reason) {
   try {
     // Check if relationship exists
-    const existingBlock = await prisma.user_relationships.findUnique({
+    const existingBlock = await prisma.ow_user_relationships.findUnique({
       where: {
         unique_user_relationship: {
           source_user_id: blockerId,
@@ -581,7 +581,7 @@ export async function updateBlockReason(blockerId, blockedId, reason) {
     }
 
     // Update the relationship reason
-    const updatedRelationship = await prisma.user_relationships.update({
+    const updatedRelationship = await prisma.ow_user_relationships.update({
       where: {
         id: existingBlock.id,
       },
@@ -610,7 +610,7 @@ export async function updateBlockReason(blockerId, blockedId, reason) {
 export async function getRelationshipNotes(userId, targetUserId) {
   try {
     // Get follow note if exists
-    const followRelationship = await prisma.user_relationships.findUnique({
+    const followRelationship = await prisma.ow_user_relationships.findUnique({
       where: {
         unique_user_relationship: {
           source_user_id: userId,
@@ -621,7 +621,7 @@ export async function getRelationshipNotes(userId, targetUserId) {
     });
 
     // Get block reason if exists
-    const blockRelationship = await prisma.user_relationships.findUnique({
+    const blockRelationship = await prisma.ow_user_relationships.findUnique({
       where: {
         unique_user_relationship: {
           source_user_id: userId,

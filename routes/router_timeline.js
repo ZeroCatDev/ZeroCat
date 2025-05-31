@@ -88,14 +88,14 @@ router.get("/user/:userid", async (req, res) => {
       ...(isOwner ? {} : { public: 1 }),
     };
 
-    const events = await prisma.events.findMany({
+    const events = await prisma.ow_events.findMany({
       where,
       orderBy: { created_at: "desc" },
       skip: (Number(page) - 1) * Number(limit),
       take: Number(limit),
     });
 
-    const total = await prisma.events.count({ where });
+    const total = await prisma.ow_events.count({ where });
 
     const actorIds = [
       ...new Set(events.map((event) => Number(event.actor_id))),
@@ -143,7 +143,7 @@ router.get("/following", needLogin, async (req, res) => {
 
     const followingIds = following.map((f) => f.following_id);
 
-    const events = await prisma.events.findMany({
+    const events = await prisma.ow_events.findMany({
       where: {
         actor_id: { in: followingIds.map((id) => BigInt(id)) },
         public: 1,

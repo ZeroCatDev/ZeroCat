@@ -23,7 +23,7 @@ export async function createEvent(eventType, actorId, targetType, targetId, even
     }
 
     // 创建事件记录
-    const event = await prisma.events.create({
+    const event = await prisma.ow_events.create({
       data: {
         event_type: normalizedEventType,
         actor_id: BigInt(actorId),
@@ -61,7 +61,7 @@ export async function createEvent(eventType, actorId, targetType, targetId, even
  */
 export async function getTargetEvents(targetType, targetId, limit = 10, offset = 0, includePrivate = false) {
   try {
-    const events = await prisma.events.findMany({
+    const events = await prisma.ow_events.findMany({
       where: {
         target_type: targetType,
         target_id: BigInt(targetId),
@@ -86,7 +86,7 @@ export async function getTargetEvents(targetType, targetId, limit = 10, offset =
  */
 export async function getActorEvents(actorId, limit = 10, offset = 0, includePrivate = false) {
   try {
-    const events = await prisma.events.findMany({
+    const events = await prisma.ow_events.findMany({
       where: {
         actor_id: BigInt(actorId),
         ...(includePrivate ? {} : { public: 1 }),
@@ -255,7 +255,7 @@ async function filterBlacklistedUsers(actorId, userIds) {
 
   try {
     // 找出用户间的黑名单关系
-    const blacklistRelations = await prisma.user_relationships.findMany({
+    const blacklistRelations = await prisma.ow_user_relationships.findMany({
       where: {
         OR: [
           // 用户将行为者拉黑
@@ -430,7 +430,7 @@ async function getRelatedUsers(config, relationId) {
  * 获取项目关注者 - 导出供外部使用
  */
 export async function getProjectFollowersExternal(projectId) {
-  const followers = await prisma.user_relationships.findMany({
+  const followers = await prisma.ow_user_relationships.findMany({
     where: {
       target_user_id: Number(projectId),
       relationship_type: 'follow'
@@ -444,7 +444,7 @@ export async function getProjectFollowersExternal(projectId) {
  * 获取用户关注者 - 导出供外部使用
  */
 export async function getUserFollowersExternal(userId) {
-  const followers = await prisma.user_relationships.findMany({
+  const followers = await prisma.ow_user_relationships.findMany({
     where: {
       target_user_id: Number(userId),
       relationship_type: 'follow'

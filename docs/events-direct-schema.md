@@ -75,7 +75,7 @@ await createEvent(
 const validationResult = eventConfig.schema.safeParse(eventData);
 
 // 如果验证通过，存储完整数据
-const event = await prisma.events.create({
+const event = await prisma.ow_events.create({
   data: {
     event_type: normalizedEventType,
     actor_id: BigInt(validatedData.actor_id),
