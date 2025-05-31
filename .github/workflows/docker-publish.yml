@@ -8,10 +8,6 @@ on:
     branches: ["main"]
   workflow_dispatch:
 
-env:
-  REGISTRY: ghcr.io
-  OWNER: zerocatdev
-  PROJECT_NAME: zerocat
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
@@ -53,7 +49,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images:
+          images: |
             sunwuyuan/zerocat
             ghcr.io/zerocat/zerocat
             registry.cn-hangzhou.aliyuncs.com/zerocat/zerocat
