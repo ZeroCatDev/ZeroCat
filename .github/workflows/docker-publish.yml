@@ -37,14 +37,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Login to aliyuncs Container Registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-            registry:  registry.cn-hangzhou.aliyuncs.com
-            username: ${{ vars.ALIYUNCS_USERNAME }}
-            password: ${{ secrets.ALIYUNCS_PASSWORD }}
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -52,7 +44,6 @@ jobs:
           images: |
             sunwuyuan/zerocat
             ghcr.io/zerocat/zerocat
-            registry.cn-hangzhou.aliyuncs.com/zerocat/zerocat
           tags: |
             type=ref,event=branch
             type=ref,event=pr
