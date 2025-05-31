@@ -72,7 +72,7 @@ export const CONFIG_TYPES = {
   "security.adminusers": {
     type: "array",
     required: false,
-    default: [],
+    default: [1],
     description: "管理员用户列表，用于权限控制，支持邮箱或用户ID",
     transform: (value) => {
       const arr = typeTransformers.array(value);

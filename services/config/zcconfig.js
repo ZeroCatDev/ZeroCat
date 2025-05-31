@@ -67,20 +67,18 @@ class ZCConfig {
       if (Array.isArray(configs)) {
         for (const { key, value, is_public } of configs) {
           try {
-            // Parse value if it's a JSON string
             let parsedValue = value;
-            if (typeof value === 'string') {
-              try {
-                const possibleJson = JSON.parse(value);
-                parsedValue = possibleJson;
-              } catch {
-                // Not JSON, use as is
-              }
-            }
-
-            // Validate and transform if we have type definition
-            if (CONFIG_TYPES[key]) {
+            // For non-object types, use the value as is
+            if (CONFIG_TYPES[key] && CONFIG_TYPES[key].type !== 'object') {
+              // Validate and transform if we have type definition
               parsedValue = validateConfig(key, parsedValue);
+            } else if (typeof value === 'string' && CONFIG_TYPES[key]?.type === 'object') {
+              // Only try JSON.parse for object type configs
+              try {
+                parsedValue = JSON.parse(value);
+              } catch {
+                logger.error(`Failed to parse JSON for object type config ${key}`);
+              }
             }
 
             // Store in cache
@@ -129,19 +127,18 @@ class ZCConfig {
       const config = await prisma.ow_config.findFirst({ where: { key } });
       let value = config?.value ?? null;
 
-      // Parse value if it's a JSON string
-      if (typeof value === 'string') {
-        try {
-          const possibleJson = JSON.parse(value);
-          value = possibleJson;
-        } catch {
-          // Not JSON, use as is
-        }
-      }
-
       // If value is null, try to get default value
       if (value === null) {
         value = defaultVal ?? getDefaultValue(key);
+      }
+
+      // For object type configs only, try to parse JSON
+      if (typeof value === 'string' && CONFIG_TYPES[key]?.type === 'object') {
+        try {
+          value = JSON.parse(value);
+        } catch {
+          logger.error(`Failed to parse JSON for object type config ${key}`);
+        }
       }
 
       // Validate and transform if we have type definition
@@ -178,10 +175,15 @@ class ZCConfig {
         finalValue = validateConfig(key, value);
       }
 
-      // Convert ALL values to strings for storage, not just objects/arrays
-      const storageValue = typeof finalValue === 'object' ?
-        JSON.stringify(finalValue) :
-        String(finalValue); // Convert all non-object values to strings
+      // Convert arrays to comma-separated strings and other values to strings
+      let storageValue;
+      if (Array.isArray(finalValue)) {
+        storageValue = finalValue.join(',');
+      } else if (typeof finalValue === 'object' && finalValue !== null) {
+        storageValue = JSON.stringify(finalValue);
+      } else {
+        storageValue = String(finalValue);
+      }
 
       // Update or create config in database
       await prisma.ow_config.upsert({
