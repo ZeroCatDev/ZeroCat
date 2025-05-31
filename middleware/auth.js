@@ -240,12 +240,10 @@ export const needAdmin = async (req, res, next) => {
   }
 
   try {
-    const adminConfig = await zcconfig.get(
-      "security.adminusers",
-      ""
+    const adminUsers = await zcconfig.get(
+      "security.adminusers"
     );
-    const adminUsers = adminConfig.split(",").map((id) => id.trim());
-
+    logger.debug(adminUsers)
     if (!adminUsers.includes(res.locals.userid.toString())) {
       return res.status(403).json({
         status: "error",

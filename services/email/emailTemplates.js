@@ -1,10 +1,16 @@
 import logger from "../logger.js";
 import zcconfig from "../config/zcconfig.js";
-const siteName = await zcconfig.get("site.name");
-const siteDomain = await zcconfig.get("site.domain");
-const siteEmail = await zcconfig.get("site.email");
 
-const registrationTemplate = async (email, password) => `
+const getTemplateConfig = async () => {
+  const siteName = await zcconfig.get("site.name");
+  const siteDomain = await zcconfig.get("site.domain");
+  const siteEmail = await zcconfig.get("site.email");
+  return { siteName, siteDomain, siteEmail };
+};
+
+const registrationTemplate = async (email, password) => {
+  const { siteName, siteDomain, siteEmail } = await getTemplateConfig();
+  return `
   <div class="page flex-col">
     <div class="box_3 flex-col"
       style="display: flex;position: relative;width: 100%;height: 206px;background: #1289d82e;top: 0;left: 0;justify-content: center;">
@@ -53,8 +59,11 @@ const registrationTemplate = async (email, password) => `
     </div>
   </div>
 `;
+};
 
-const passwordResetTemplate = async (email, token) => `
+const passwordResetTemplate = async (email, token) => {
+  const { siteName, siteDomain, siteEmail } = await getTemplateConfig();
+  return `
   <div class="page flex-col">
     <div class="box_3 flex-col"
       style="display: flex;position: relative;width: 100%;height: 206px;background: #1289d82e;top: 0;left: 0;justify-content: center;">
@@ -108,6 +117,7 @@ const passwordResetTemplate = async (email, token) => `
     </div>
   </div>
 `;
+};
 
 export {
   registrationTemplate,

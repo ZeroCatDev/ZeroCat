@@ -88,6 +88,10 @@ async function registerBusinessRoutes(app) {
     const apiModule = await import('../routes/router_api.js');
     app.use("/api", apiModule.default);
 
+    // 管理后台路由
+    const adminModule = await import('../routes/router_admin.js');
+    app.use("/admin", adminModule.default);
+
     // 项目列表路由
     const projectlistModule = await import('../routes/router_projectlist.js');
     app.use("/projectlist", projectlistModule.default);

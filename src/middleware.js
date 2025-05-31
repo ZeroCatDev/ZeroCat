@@ -35,7 +35,7 @@ export async function configureMiddleware(app) {
   );
 
   // CORS配置
-  const corslist = (await zcconfig.get("cors")).split(",");
+  const corslist = (await zcconfig.get("cors"));
   const corsOptionsDelegate = (origin, callback) => {
     if (!origin || corslist.includes(new URL(origin).hostname)) {
       return callback(null, true);
