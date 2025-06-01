@@ -40,8 +40,8 @@ export async function configureMiddleware(app) {
     if (!origin || corslist.includes(new URL(origin).hostname)) {
       return callback(null, true);
     } else {
-      logger.error("Not allowed by CORS");
-      return callback(new Error("Not allowed by CORS"));
+      logger.error("CORS限制，请求来源：" + origin);
+      return callback(new Error("CORS限制，请求来源可能存在风险"));
     }
   };
 

@@ -26,6 +26,8 @@ model ow_comment {
   createdAt  DateTime? @default(now()) @db.Timestamp(0)
   updatedAt  DateTime? @default(now()) @db.Timestamp(0)
   page_key   String?   @db.VarChar(128)
+
+  @@index([page_type, page_id, insertedAt], map: "idx_projects_comments")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -49,6 +51,8 @@ model ow_projects {
   tags           String    @default("") @db.VarChar(100)
   fork           Int?
   star_count     Int?      @default(0)
+
+  @@index([state], map: "idx_projects_state")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -146,6 +150,8 @@ model ow_projects_stars {
   userid     Int
   projectid  Int
   createTime DateTime? @default(now()) @db.Timestamp(0)
+
+  @@index([projectid], map: "idx_projects_stars_project")
 }
 
 /// Project lists model - improved structure
@@ -174,6 +180,7 @@ model ow_projects_commits {
   commit_description String?  @db.Text
 
   @@id([id, project_id])
+  @@index([project_id, commit_date], map: "idx_projects_commits_project_date")
 }
 
 model ow_users_magiclink {
@@ -309,4 +316,34 @@ enum ow_user_relationship_type {
   block
   mute
   favorite
+}
+
+view ow_projects_search_view {
+  id                 Int       @unique @db.UnsignedInt
+  name               String    @db.VarChar(128)
+  title              String?   @db.VarChar(1000)
+  description        String?   @db.VarChar(1000)
+  authorid           Int
+  state              String?   @db.VarChar(32)
+  type               String?   @db.VarChar(32)
+  license            String?   @db.VarChar(32)
+  view_count         Int?      @db.UnsignedInt
+  like_count         Int?      @default(0)
+  favo_count         Int?      @default(0)
+  star_count         Int?      @default(0)
+  time               DateTime? @db.Timestamp(0)
+  tags               String    @db.VarChar(100)
+  author_display_name String?  @db.Char(20)
+  author_username    String?   @db.Char(20)
+  author_motto        String?   @db.LongText
+  author_images      String?   @db.VarChar(255)
+  author_type        String?   @db.VarChar(50)
+  latest_source      String?   @db.MediumText
+  comment_count      Int?      @default(0)
+  latest_comment     String?   @db.MediumText
+  recent_comments    String?   @db.Text
+  recent_commits     Json?
+  branches           Json?
+
+  @@map("ow_projects_search")
 }

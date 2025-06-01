@@ -143,3 +143,5 @@ data/*.mmdb
 
 redis/data/*
 redis/redis.conf
+
+meili_data

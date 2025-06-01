@@ -1,0 +1,74 @@
+debug: true
+source:
+  type: mysql
+  host: host.docker.internal
+  port: 3557
+  user: root
+  password: "123456"
+  database: zerocat_develop
+  server_id: 1
+
+meilisearch:
+  api_url: http://host.docker.internal:7700
+  api_key: BXi0YPZzzVanUgZDp9LjdQk59CKaQhviAfiYFdpCTl0
+  insert_size: 1000
+  insert_interval: 10
+
+progress:
+  type: file
+  path: progress.json
+
+sync:
+  - table: ow_projects_search
+    index: projects
+    full: true
+    fields:
+      id:
+      name:
+      title:
+      description:
+      type:
+      license:
+      authorid:
+      state:
+      view_count:
+      like_count:
+      favo_count:
+      star_count:
+      time:
+      tags:
+      tag_list:
+      latest_source:
+      comment_count:
+      recent_comments_full:
+      star_users_full:
+      star_users_names:
+      author_info:
+      recent_commits:
+      commit_count:
+      fork_details:
+      included_in_lists:
+    searchable_attributes:
+      - name
+      - title
+      - description
+      - tags
+      - tag_list
+      - latest_source
+      - recent_comments_full
+      - star_users_names
+      - author_info
+    filterable_attributes:
+      - type
+      - license
+      - state
+      - authorid
+      - view_count
+      - like_count
+      - star_count
+      - comment_count
+      - commit_count
+    sortable_attributes:
+      - star_count
+      - comment_count
+      - time

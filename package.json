@@ -12,7 +12,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.782.0",
     "@maxmind/geoip2-node": "^4.2.0",
-    "@prisma/client": "^6.7.0",
+    "@prisma/client": "^6.8.2",
     "axios": "^1.8.4",
     "base32-encode": "^2.0.0",
     "bcrypt": "^5.1.1",
@@ -44,7 +44,7 @@
     "winston-daily-rotate-file": "^5.0.0"
   },
   "devDependencies": {
-    "prisma": "^6.7.0"
+    "prisma": "^6.8.2"
   },
   "version": "1.0.1"
 }
