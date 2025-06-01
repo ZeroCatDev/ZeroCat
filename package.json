@@ -1,5 +1,6 @@
 {
   "name": "zerocat",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -45,6 +46,5 @@
   },
   "devDependencies": {
     "prisma": "^6.8.2"
-  },
-  "version": "1.0.1"
+  }
 }
