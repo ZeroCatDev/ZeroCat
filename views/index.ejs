@@ -19,11 +19,11 @@
   <mdui-layout>
     <mdui-layout-main>
       <mdui-list>
-        <% const config=JSON.parse(JSON.stringify(global.publicconfig)); %>
+        <% const config = global.publicconfig || {}; %>
           <% Object.entries(config).forEach(([key, value])=> { %>
             <mdui-list-item rounded headline="<%= key %>"
               description="<%= typeof value === 'object' ? JSON.stringify(value) : value %>"></mdui-list-item>
-            <% }); %>
+          <% }); %>
       </mdui-list>
       <mdui-button variant="filled" href="<%= global.config['urls.frontend'] %>">打开网站</mdui-button>
       <mdui-button variant="elevated" href="#">了解更多</mdui-button><mdui-list>

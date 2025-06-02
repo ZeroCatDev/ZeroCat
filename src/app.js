@@ -7,6 +7,7 @@ import logger from "../services/logger.js";
 // 导入配置模块
 import { configureMiddleware } from "./index.js";
 import { configureRoutes } from "./routes.js";
+import zcconfigInstance from "../services/config/zcconfig.js";
 
 // 导入服务
 import geoIpService from "../services/ip/ipLocation.js";
@@ -39,6 +40,33 @@ class Application {
   async configureApp() {
     try {
       logger.debug('开始配置应用程序...');
+
+      // 初始化配置并设置为全局变量
+      await zcconfigInstance.initialize();
+      global.config = {};
+
+      // 设置全局配置访问器
+      Object.defineProperty(global, 'config', {
+        get: () => {
+          const configs = {};
+          for (const [key, value] of zcconfigInstance.cache.entries()) {
+            configs[key] = value;
+          }
+          return configs;
+        },
+        configurable: false,
+        enumerable: true
+      });
+
+      // 设置全局公共配置访问器
+      Object.defineProperty(global, 'publicconfig', {
+        get: () => {
+          return zcconfigInstance.getPublicConfigs();
+        },
+        configurable: false,
+        enumerable: true
+      });
+
       // 配置中间件
       await configureMiddleware(this.app);
       logger.debug('中间件配置完成');
