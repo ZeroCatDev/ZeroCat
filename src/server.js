@@ -68,7 +68,7 @@ class ServerConfig {
           logger.error('关闭服务器出错:', error);
           reject(error);
         } else {
-          logger.info('服务器已优雅关闭');
+          logger.info('服务器已关闭');
           resolve();
         }
       });

@@ -18,8 +18,7 @@ import { createGunzip } from "zlib";
 import logger from "../logger.js";
 import zcconfig from "../config/zcconfig.js";
 
-// 正确导入tar模块（CommonJS兼容方式）
-import tar from "tar";
+import * as tar from "tar";
 
 // 初始化常量
 const streamPipeline = promisify(pipeline);

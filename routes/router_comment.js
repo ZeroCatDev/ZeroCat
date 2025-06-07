@@ -61,12 +61,12 @@ router.get("/api/comment", async (req, res, next) => {
   try {
     const { path, page, pageSize } = req.query;
     const sort = getSortCondition(req);
-
+    logger.debug(req.query);
     const comments = await prisma.ow_comment.findMany({
-      where: { page_key: path, pid: null, rid: null, type: "comment" },
+      where: { page_type: path.split("-")[0], page_id: path.split("-")[1], pid: null, rid: null, type: "comment" },
       orderBy: sort,
       take: Number(pageSize) || 10,
-      skip: (page - 1) * pageSize,
+      skip: Number((page - 1) * pageSize),
     });
 
     const transformedComments = await transformComment(comments);
@@ -74,7 +74,7 @@ router.get("/api/comment", async (req, res, next) => {
     const ids = transformedComments.map((comment) => comment.id);
 
     const childrenComments = await prisma.ow_comment.findMany({
-      where: { page_key: path, rid: { in: ids }, type: "comment" },
+      where: { page_type  : path.split("-")[0], page_id: path.split("-")[1], rid: { in: ids }, type: "comment" },
     });
 
     const transformedChildrenComments = await transformComment(
@@ -132,7 +132,7 @@ router.post("/api/comment", needLogin, async (req, res, next) => {
         type: "comment",
         user_ip: req.ip,
         page_type: url.split("-")[0],
-        page_id: Number(url.split("-")[1]) || null,
+        page_id: url.split("-")[1] || null,
         text: comment,
         link: `/user/${userid}`,
         user_ua,

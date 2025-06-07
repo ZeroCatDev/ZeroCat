@@ -308,6 +308,7 @@ router.put("/commit/id/:id", needLogin, async (req, res, next) => {
       accessFileToken,
       await zcconfig.get("security.jwttoken")
     );
+    logger.debug(decodedFileToken);
     if (!decodedFileToken) {
       return res.status(200).send({
         status: "error",
@@ -316,7 +317,8 @@ router.put("/commit/id/:id", needLogin, async (req, res, next) => {
     }
 
     const { sha256, type, action, userid } = decodedFileToken.data;
-    if (type !== "file" || action !== "read" || userid !== res.locals.userid) {
+    if (decodedFileToken.type !== "file" || action !== "read" || Number(userid) !== Number(res.locals.userid)) {
+
       return res.status(200).send({
         status: "error",
         message: "无效的文件访问令牌 #1",
@@ -352,6 +354,7 @@ router.put("/commit/id/:id", needLogin, async (req, res, next) => {
         branch,
         commit_file: sha256,
         commit_message: message,
+        commit_description: commit_description,
         parent_commit_id,
         commit_date: new Date(timestamp),
       },

@@ -11,19 +11,19 @@
     "dev": "NODE_ENV=development nodemon server.js"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.782.0",
-    "@maxmind/geoip2-node": "^4.2.0",
-    "@prisma/client": "^6.8.2",
-    "axios": "^1.8.4",
+    "@aws-sdk/client-s3": "^3.826.0",
+    "@maxmind/geoip2-node": "^6.1.0",
+    "@prisma/client": "^6.9.0",
+    "axios": "^1.9.0",
     "base32-encode": "^2.0.0",
-    "bcrypt": "^5.1.1",
+    "bcrypt": "^6.0.0",
     "body-parser": "^2.2.0",
     "compression": "^1.8.0",
     "connect-multiparty": "^2.2.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "crypto-js": "^4.1.1",
-    "dotenv": "^16.4.7",
+    "dotenv": "^16.5.0",
     "ejs": "^3.1.10",
     "express": "^5.1.0",
     "express-jwt": "^8.5.1",
@@ -33,18 +33,18 @@
     "ioredis": "^5.6.1",
     "jsonwebtoken": "^9.0.0",
     "morgan": "^1.10.0",
-    "multer": "1.4.5-lts.1",
+    "multer": "^2.0.1",
     "mysql2": "^3.6.0",
-    "nodemailer": "^6.10.0",
+    "nodemailer": "^7.0.3",
     "otpauth": "^9.4.0",
     "phpass": "^0.1.1",
-    "tar": "^6.2.1",
+    "tar": "^7.4.3",
     "ua-parser-js": "^2.0.3",
     "uuid": "^11.1.0",
     "winston": "^3.17.0",
     "winston-daily-rotate-file": "^5.0.0"
   },
   "devDependencies": {
-    "prisma": "^6.8.2"
+    "prisma": "^6.9.0"
   }
 }

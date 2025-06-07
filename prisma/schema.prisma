@@ -22,7 +22,7 @@ model ow_comment {
   user_ua    String?   @db.MediumText
   url        String?   @db.VarChar(255)
   page_type  String?   @db.VarChar(32)
-  page_id    Int?
+  page_id    String?   @db.VarChar(32)
   createdAt  DateTime? @default(now()) @db.Timestamp(0)
   updatedAt  DateTime? @default(now()) @db.Timestamp(0)
   page_key   String?   @db.VarChar(128)
