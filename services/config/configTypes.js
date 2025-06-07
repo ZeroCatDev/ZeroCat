@@ -51,6 +51,7 @@ export const CONFIG_TYPES = {
     description: "前端应用URL地址，用于生成各类跳转链接",
     validate: (value) =>
       value.startsWith("http://") || value.startsWith("https://"),
+    public: true,
   },
   "urls.backend": {
     type: "string",
@@ -59,6 +60,7 @@ export const CONFIG_TYPES = {
     description: "后端API服务URL地址，用于生成API回调地址",
     validate: (value) =>
       value.startsWith("http://") || value.startsWith("https://"),
+    public: true,
   },
   "security.jwttoken": {
     type: "string",
@@ -216,17 +218,20 @@ export const CONFIG_TYPES = {
     type: "string",
     required: true,
     description: "站点名称，用于显示和邮件模板",
+    public: true,
   },
   "site.domain": {
     type: "string",
     required: true,
     description: "站点域名，用于生成链接和验证",
+    public: true,
   },
   "site.email": {
     type: "string",
     required: true,
     description: "站点联系邮箱",
     validate: (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
+    public: true,
   },
   "maxmind.enabled": {
     type: "boolean",
@@ -262,6 +267,7 @@ export const CONFIG_TYPES = {
       }
       return ["*"];
     },
+    public: true,
   },
 };
 

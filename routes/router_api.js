@@ -8,6 +8,7 @@ import cryptojs from "crypto-js";
 import { prisma } from "../services/global.js";
 import { needLogin, strictTokenCheck, needAdmin } from "../middleware/auth.js";
 import followsRoutes from "./router_follows.js";
+import { CONFIG_TYPES } from "../services/config/configTypes.js";
 
 router.get("/usertx", async function (req, res, next) {
   try {
@@ -312,6 +313,24 @@ router.get("/tuxiaochao", async function (req, res) {
       status: "error",
       message: "服务器内部错误",
     });
+  }
+});
+
+router.get("/public-config", async function (req, res, next) {
+  try {
+    // 获取所有 public: true 的配置项 key
+    const publicKeys = Object.entries(CONFIG_TYPES)
+      .filter(([_, v]) => v.public)
+      .map(([k]) => k);
+    // 并发获取所有配置项的当前值
+    const entries = await Promise.all(
+      publicKeys.map(async (key) => [key, await zcconfig.get(key)])
+    );
+    // 转为对象
+    const result = Object.fromEntries(entries);
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
   }
 });
 

@@ -4,8 +4,9 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
 }
 
 model ow_comment {
@@ -52,38 +53,58 @@ model ow_projects {
   fork           Int?
   star_count     Int?      @default(0)
 
+  // Relations
+  author       ow_users                 @relation("ProjectAuthor", fields: [authorid], references: [id])
+  teacher      ow_users?                @relation("ProjectTeacher", fields: [teacherid], references: [id])
+  stars        ow_projects_stars[]
+  lists        ow_projects_list_items[]
+  commits      ow_projects_commits[]
+  branches     ow_projects_branch[]
+  project_tags ow_projects_tags[]
+
   @@index([state], map: "idx_projects_state")
+  @@index([authorid], map: "idx_project_author")
+  @@index([teacherid], map: "idx_project_teacher")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model ow_users {
-  id           Int              @unique(map: "id_UNIQUE") @default(autoincrement())
-  username     String           @unique(map: "user_UNIQUE") @db.Char(20)
-  email        String?          @db.Char(100)
-  password     String?          @db.VarChar(255)
-  display_name String           @default("OurWorld创作者") @db.Char(20)
+  id           Int       @unique(map: "id_UNIQUE") @default(autoincrement())
+  username     String    @unique(map: "user_UNIQUE") @db.Char(20)
+  email        String?   @db.Char(100)
+  password     String?   @db.VarChar(255)
+  display_name String    @default("OurWorld创作者") @db.Char(20)
   /// User account status: pending = newly registered, active = normal user, suspended = temporarily disabled, banned = permanently disabled
-  status       String           @default("active") @db.VarChar(20)
-  loginTime    DateTime?        @db.Timestamp(0)
-  regTime      DateTime?        @default(now()) @db.Timestamp(0)
-  sex          String?          @default("0") @db.VarChar(16)
-  birthday     DateTime?        @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
-  motto        String?          @db.LongText
-  images       String?          @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
-  avatar       String?          @default("https://owcdn.190823.xyz/user/fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
-  type         String?          @default("guest") @db.VarChar(50)
-  url          String?          @db.VarChar(255)
-  github       String?          @db.VarChar(255)
-  twitter      String?          @db.VarChar(255)
-  facebook     String?          @db.VarChar(255)
-  google       String?          @db.VarChar(255)
-  weibo        String?          @db.VarChar(255)
-  qq           String?          @db.VarChar(255)
-  fa           String?          @map("2fa") @db.VarChar(255)
-  createdAt    DateTime?        @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
-  updatedAt    DateTime?        @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
-  label        String?          @db.VarChar(255)
-  auth_tokens  ow_auth_tokens[]
+  status       String    @default("active") @db.VarChar(20)
+  loginTime    DateTime? @db.Timestamp(0)
+  regTime      DateTime? @default(now()) @db.Timestamp(0)
+  sex          String?   @default("0") @db.VarChar(16)
+  birthday     DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
+  motto        String?   @db.LongText
+  images       String?   @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
+  avatar       String?   @default("https://owcdn.190823.xyz/user/fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
+  type         String?   @default("guest") @db.VarChar(50)
+  url          String?   @db.VarChar(255)
+  github       String?   @db.VarChar(255)
+  twitter      String?   @db.VarChar(255)
+  facebook     String?   @db.VarChar(255)
+  google       String?   @db.VarChar(255)
+  weibo        String?   @db.VarChar(255)
+  qq           String?   @db.VarChar(255)
+  fa           String?   @map("2fa") @db.VarChar(255)
+  createdAt    DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
+  updatedAt    DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
+  label        String?   @db.VarChar(255)
+
+  // Relations
+  auth_tokens             ow_auth_tokens[]
+  authored_projects       ow_projects[]           @relation("ProjectAuthor")
+  teaching_projects       ow_projects[]           @relation("ProjectTeacher")
+  starred_projects        ow_projects_stars[]
+  project_lists           ow_projects_lists[]
+  contacts                ow_users_contacts[]
+  relationships_as_source ow_user_relationships[] @relation("RelationshipSource")
+  relationships_as_target ow_user_relationships[] @relation("RelationshipTarget")
 
   @@id([id, username])
 }
@@ -141,6 +162,9 @@ model ow_projects_tags {
   projectid  Int
   created_at DateTime? @default(now()) @db.Timestamp(0)
 
+  // Relations
+  project ow_projects @relation(fields: [projectid], references: [id])
+
   @@index([projectid], map: "idx_projectid")
 }
 
@@ -151,7 +175,12 @@ model ow_projects_stars {
   projectid  Int
   createTime DateTime? @default(now()) @db.Timestamp(0)
 
+  // Relations
+  user    ow_users    @relation(fields: [userid], references: [id])
+  project ow_projects @relation(fields: [projectid], references: [id])
+
   @@index([projectid], map: "idx_projects_stars_project")
+  @@index([userid], map: "idx_projects_stars_user")
 }
 
 /// Project lists model - improved structure
@@ -164,6 +193,10 @@ model ow_projects_lists {
   list        String?   @db.MediumText
   updateTime  DateTime? @db.Timestamp(0)
   createTime  DateTime? @default(now()) @db.Timestamp(0)
+
+  // Relations
+  author     ow_users?                @relation(fields: [authorid], references: [id])
+  list_items ow_projects_list_items[]
 
   @@index([authorid], map: "idx_author_lists")
 }
@@ -178,6 +211,9 @@ model ow_projects_commits {
   commit_date        DateTime @db.DateTime(0)
   commit_file        String   @db.VarChar(256)
   commit_description String?  @db.Text
+
+  // Relations
+  project ow_projects @relation(fields: [project_id], references: [id])
 
   @@id([id, project_id])
   @@index([project_id, commit_date], map: "idx_projects_commits_project_date")
@@ -199,7 +235,11 @@ model ow_projects_branch {
   protected          String? @default("false") @db.VarChar(45)
   creator            Int?
 
+  // Relations
+  project ow_projects @relation(fields: [projectid], references: [id])
+
   @@unique([projectid, name], map: "unique_project_branch")
+  @@index([creator], map: "idx_branch_creator")
 }
 
 model ow_users_contacts {
@@ -212,6 +252,9 @@ model ow_users_contacts {
   verified      Boolean?                       @default(false)
   created_at    DateTime?                      @default(now()) @db.Timestamp(0)
   updated_at    DateTime?                      @default(now()) @db.Timestamp(0)
+
+  // Relations
+  user ow_users @relation(fields: [user_id], references: [id])
 
   @@unique([user_id, is_primary, contact_type], map: "unique_primary_contact")
 }
@@ -237,6 +280,10 @@ model ow_projects_list_items {
   listid     Int
   projectid  Int
   createTime DateTime? @default(now()) @db.Timestamp(0)
+
+  // Relations
+  list    ow_projects_lists @relation(fields: [listid], references: [id])
+  project ow_projects       @relation(fields: [projectid], references: [id])
 
   @@unique([listid, projectid], map: "unique_list_project")
   @@index([listid], map: "idx_list_items")
@@ -296,6 +343,10 @@ model ow_user_relationships {
   updated_at        DateTime?                 @updatedAt @db.Timestamp(0)
   metadata          Json?
 
+  // Relations
+  source_user ow_users @relation("RelationshipSource", fields: [source_user_id], references: [id])
+  target_user ow_users @relation("RelationshipTarget", fields: [target_user_id], references: [id])
+
   @@unique([source_user_id, target_user_id, relationship_type], name: "unique_user_relationship")
   @@index([source_user_id, relationship_type], map: "idx_source_user_relationships")
   @@index([target_user_id, relationship_type], map: "idx_target_user_relationships")
@@ -319,31 +370,31 @@ enum ow_user_relationship_type {
 }
 
 view ow_projects_search_view {
-  id                 Int       @unique @db.UnsignedInt
-  name               String    @db.VarChar(128)
-  title              String?   @db.VarChar(1000)
-  description        String?   @db.VarChar(1000)
-  authorid           Int
-  state              String?   @db.VarChar(32)
-  type               String?   @db.VarChar(32)
-  license            String?   @db.VarChar(32)
-  view_count         Int?      @db.UnsignedInt
-  like_count         Int?      @default(0)
-  favo_count         Int?      @default(0)
-  star_count         Int?      @default(0)
-  time               DateTime? @db.Timestamp(0)
-  tags               String    @db.VarChar(100)
-  author_display_name String?  @db.Char(20)
-  author_username    String?   @db.Char(20)
+  id                  Int       @unique @db.UnsignedInt
+  name                String    @db.VarChar(128)
+  title               String?   @db.VarChar(1000)
+  description         String?   @db.VarChar(1000)
+  authorid            Int
+  state               String?   @db.VarChar(32)
+  type                String?   @db.VarChar(32)
+  license             String?   @db.VarChar(32)
+  view_count          Int?      @db.UnsignedInt
+  like_count          Int?      @default(0)
+  favo_count          Int?      @default(0)
+  star_count          Int?      @default(0)
+  time                DateTime? @db.Timestamp(0)
+  tags                String    @db.VarChar(100)
+  author_display_name String?   @db.Char(20)
+  author_username     String?   @db.Char(20)
   author_motto        String?   @db.LongText
-  author_images      String?   @db.VarChar(255)
-  author_type        String?   @db.VarChar(50)
-  latest_source      String?   @db.MediumText
-  comment_count      Int?      @default(0)
-  latest_comment     String?   @db.MediumText
-  recent_comments    String?   @db.Text
-  recent_commits     Json?
-  branches           Json?
+  author_images       String?   @db.VarChar(255)
+  author_type         String?   @db.VarChar(50)
+  latest_source       String?   @db.MediumText
+  comment_count       Int?      @default(0)
+  latest_comment      String?   @db.MediumText
+  recent_comments     String?   @db.Text
+  recent_commits      Json?
+  branches            Json?
 
   @@map("ow_projects_search")
 }

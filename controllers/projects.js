@@ -150,6 +150,17 @@ function projectSelectionFields() {
     description: true,
     tags: true,
     star_count: true,
+    author: {
+      select: {
+        id: true,
+        username: true,
+        display_name: true,
+        status: true,
+        motto: true,
+        images: true,
+        regTime: true,
+      },
+    },
   };
 }
 

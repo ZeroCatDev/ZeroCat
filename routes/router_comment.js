@@ -99,7 +99,7 @@ router.get("/api/comment", async (req, res, next) => {
     });
 
     const count = await prisma.ow_comment.count({
-      where: { page_key: path, pid: null, rid: null, type: "comment" },
+      where: { page_type: path.split("-")[0], page_id: path.split("-")[1], pid: null, rid: null, type: "comment" },
     });
 
     res.status(200).send({
