@@ -188,8 +188,8 @@ class ZCConfig {
       // Update or create config in database
       await prisma.ow_config.upsert({
         where: { key },
-        update: { value: storageValue, is_public: isPublic ? true : false },
-        create: { key, value: storageValue, is_public: isPublic ? true : false }
+        update: { value: storageValue,  },
+        create: { key, value: storageValue,  }
       });
 
       // Update caches

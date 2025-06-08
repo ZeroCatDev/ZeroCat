@@ -77,9 +77,9 @@ model ow_users {
   /// User account status: pending = newly registered, active = normal user, suspended = temporarily disabled, banned = permanently disabled
   status       String    @default("active") @db.VarChar(20)
   loginTime    DateTime? @db.Timestamp(0)
-  regTime      DateTime? @default(now()) @db.Timestamp(0)
+  regTime      DateTime? @db.Timestamp(0)
   sex          String?   @default("0") @db.VarChar(16)
-  birthday     DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
+  birthday     DateTime? @default(dbgenerated("'2000-03-31 08:00:00'")) @db.Timestamp(0)
   motto        String?   @db.LongText
   images       String?   @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
   avatar       String?   @default("https://owcdn.190823.xyz/user/fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
@@ -92,8 +92,8 @@ model ow_users {
   weibo        String?   @db.VarChar(255)
   qq           String?   @db.VarChar(255)
   fa           String?   @map("2fa") @db.VarChar(255)
-  createdAt    DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
-  updatedAt    DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
+  createdAt    DateTime? @db.Timestamp(0)
+  updatedAt    DateTime? @updatedAt @db.Timestamp(0)
   label        String?   @db.VarChar(255)
 
   // Relations
@@ -131,14 +131,22 @@ model ow_projects_history {
   tags        String?  @db.VarChar(100)
 }
 
+enum ow_config_type {
+  STRING
+  NUMBER
+  BOOLEAN
+  ARRAY
+  ENUM
+}
+
 model ow_config {
   id         Int       @id @default(autoincrement())
   key        String    @unique(map: "config_key") @db.VarChar(255)
   value      String    @db.Text
-  user_id    Int?
+  type       ow_config_type @default(STRING)
+  metadata   Json?
   created_at DateTime? @default(now()) @db.DateTime(0)
   updated_at DateTime? @default(now()) @db.DateTime(0)
-  is_public  Boolean?  @default(false)
 }
 
 model ow_users_totp {

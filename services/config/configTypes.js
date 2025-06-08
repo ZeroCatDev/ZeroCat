@@ -31,18 +31,16 @@ const typeTransformers = {
     if (value == null) return "";
     return String(value);
   },
-  select: (value) => {
-    if (value == null) return "";
-    return String(value);
+  enum: (value, options) => {
+    const strValue = String(value);
+    if (!options || !Array.isArray(options) || !options.includes(strValue)) {
+      return options?.[0] || "";
+    }
+    return strValue;
   },
 };
 
-/**
- * 配置说明：
- * @special - 标记需要特殊处理的配置
- * @transform - 自定义转换函数
- * @comment - 使用说明
- */
+// 基础配置类型定义
 export const CONFIG_TYPES = {
   "urls.frontend": {
     type: "string",
@@ -271,9 +269,36 @@ export const CONFIG_TYPES = {
   },
 };
 
+// 从数据库加载的动态配置
+export let DYNAMIC_CONFIG_TYPES = {};
+
+// 合并静态和动态配置
+export function getMergedConfigTypes() {
+  return { ...CONFIG_TYPES, ...DYNAMIC_CONFIG_TYPES };
+}
+
+// 更新动态配置类型
+export function updateDynamicConfigTypes(dbConfigs) {
+  DYNAMIC_CONFIG_TYPES = {};
+  for (const config of dbConfigs) {
+    const metadata = config.metadata || {};
+    DYNAMIC_CONFIG_TYPES[config.key] = {
+      type: config.type.toLowerCase(),
+      required: metadata.required || false,
+      default: metadata.default,
+      description: metadata.description || "",
+      public: metadata.public || false,
+      fromDatabase: true,
+      options: metadata.options, // 用于enum类型
+      validate: metadata.validate ? new Function("value", metadata.validate) : null,
+    };
+  }
+}
+
 // Validation functions
 export function validateConfig(key, value) {
-  const configType = CONFIG_TYPES[key];
+  const allTypes = getMergedConfigTypes();
+  const configType = allTypes[key];
   if (!configType) {
     throw new Error(`Unknown configuration key: ${key}`);
   }
@@ -283,7 +308,9 @@ export function validateConfig(key, value) {
   if (configType.transform) {
     transformedValue = configType.transform(value);
   } else if (typeTransformers[configType.type]) {
-    transformedValue = typeTransformers[configType.type](value);
+    transformedValue = configType.type === "enum"
+      ? typeTransformers[configType.type](value, configType.options)
+      : typeTransformers[configType.type](value);
   }
 
   // Handle null/undefined for non-required fields
@@ -301,7 +328,8 @@ export function validateConfig(key, value) {
 
 // Get default value for a config key
 export function getDefaultValue(key) {
-  const configType = CONFIG_TYPES[key];
+  const allTypes = getMergedConfigTypes();
+  const configType = allTypes[key];
   if (!configType) return undefined;
 
   const defaultValue = configType.default;
@@ -311,23 +339,59 @@ export function getDefaultValue(key) {
   if (configType.transform) {
     return configType.transform(defaultValue);
   } else if (typeTransformers[configType.type]) {
-    return typeTransformers[configType.type](defaultValue);
+    return configType.type === "enum"
+      ? typeTransformers[configType.type](defaultValue, configType.options)
+      : typeTransformers[configType.type](defaultValue);
   }
   return defaultValue;
 }
 
 // Check if a config key is required
 export function isRequired(key) {
-  return CONFIG_TYPES[key]?.required ?? false;
+  const allTypes = getMergedConfigTypes();
+  return allTypes[key]?.required ?? false;
 }
 
 // Get all configs that need special handling
 export function getSpecialConfigs() {
-  return Object.entries(CONFIG_TYPES)
+  const allTypes = getMergedConfigTypes();
+  return Object.entries(allTypes)
     .filter(([_, config]) => config.special)
     .map(([key, config]) => ({
       key,
       description: config.description,
       required: config.required,
     }));
+}
+
+// 获取所有配置类型定义
+export function getAllConfigTypes() {
+  const allTypes = getMergedConfigTypes();
+  return Object.entries(allTypes).map(([key, config]) => ({
+    key,
+    type: config.type,
+    required: config.required,
+    default: config.default,
+    description: config.description,
+    public: config.public,
+    fromDatabase: config.fromDatabase || false,
+    options: config.options,
+  }));
+}
+
+// 验证配置类型定义是否有效
+export function validateConfigType(type, metadata) {
+  if (!typeTransformers[type]) {
+    throw new Error(`Unsupported config type: ${type}`);
+  }
+
+  if (type === "enum" && (!metadata.options || !Array.isArray(metadata.options) || metadata.options.length === 0)) {
+    throw new Error("Enum type requires non-empty options array in metadata");
+  }
+
+  if (metadata.validate && typeof metadata.validate !== "string") {
+    throw new Error("Validate function must be a string");
+  }
+
+  return true;
 }
