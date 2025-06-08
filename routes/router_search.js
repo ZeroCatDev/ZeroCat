@@ -4,8 +4,9 @@ import zcconfig from "../services/config/zcconfig.js";
 import { Router } from "express";
 const router = Router();
 import { prisma } from "../services/global.js"; // 功能函数集
+import { name } from "ejs";
 
-// 搜索：Scratch项目列表：数据（使用视图优化查询）
+// 搜索：Scratch项目列表：数据（直接查询表）
 router.get("/", async (req, res, next) => {
   try {
     const {
@@ -36,7 +37,7 @@ router.get("/", async (req, res, next) => {
 
     // 处理排序
     const [orderbyField, orderDirection] = orderbyQuery.split("_");
-    const orderbyMap = { view: "view_count", time: "time", id: "id",star:"star_count" };
+    const orderbyMap = { view: "view_count", time: "time", id: "id", star: "star_count" };
     const orderDirectionMap = { up: "asc", down: "desc" }; // 修正排序方向
     const orderBy = orderbyMap[orderbyField] || "time";
     const order = orderDirectionMap[orderDirection] || "desc";
@@ -52,24 +53,32 @@ router.get("/", async (req, res, next) => {
       tags: tags ? { contains: tags } : undefined,
     };
 
-    // 使用视图进行查询
-    const totalCount = await prisma.ow_projects_search_view.count({
+    // 直接查询表
+    const totalCount = await prisma.ow_projects.count({
       where: searchinfo,
     });
 
-    const projectresult = await prisma.ow_projects_search_view.findMany({
+    const projectresult = await prisma.ow_projects.findMany({
       where: searchinfo,
       orderBy: { [orderBy]: order },
       select: {
         id: true,
         title: true,
         description: true,
-        author_display_name: true,
         view_count: true,
         star_count: true,
         time: true,
         tags: true,
-        state: true
+        state: true,
+        name: true,
+        author: {
+          select: {
+            display_name: true,
+            id: true,
+            images: true,
+            username: true,
+          }
+        }
       },
       skip: (Number(curr) - 1) * Number(limit),
       take: Number(limit),
