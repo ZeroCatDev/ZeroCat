@@ -162,6 +162,12 @@ function projectSelectionFields() {
         regTime: true,
       },
     },
+    project_tags: {
+      select: {
+        id: true,
+        name: true,
+      },
+    },
   };
 }
 
