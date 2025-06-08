@@ -150,6 +150,7 @@ function projectSelectionFields() {
     description: true,
     tags: true,
     star_count: true,
+    fork: true,
     author: {
       select: {
         id: true,

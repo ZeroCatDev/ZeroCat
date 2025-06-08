@@ -54,8 +54,7 @@ model ow_projects {
   star_count     Int?      @default(0)
 
   // Relations
-  author       ow_users                 @relation("ProjectAuthor", fields: [authorid], references: [id])
-  teacher      ow_users?                @relation("ProjectTeacher", fields: [teacherid], references: [id])
+  author       ow_users?                 @relation("ProjectAuthor", fields: [authorid], references: [id])
   stars        ow_projects_stars[]
   lists        ow_projects_list_items[]
   commits      ow_projects_commits[]
@@ -99,7 +98,6 @@ model ow_users {
   // Relations
   auth_tokens             ow_auth_tokens[]
   authored_projects       ow_projects[]           @relation("ProjectAuthor")
-  teaching_projects       ow_projects[]           @relation("ProjectTeacher")
   starred_projects        ow_projects_stars[]
   project_lists           ow_projects_lists[]
   contacts                ow_users_contacts[]

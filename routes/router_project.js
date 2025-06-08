@@ -420,7 +420,7 @@ router.post("/batch", async (req, res, next) => {
     // 获取所有项目
     const projects = await prisma.ow_projects.findMany({
       where: { id: { in: projectIds } },
-      select: projectSelectionFields(),
+      select: projectSelectionFields()
     });
 
     // 并行化权限检查
