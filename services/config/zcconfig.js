@@ -16,10 +16,12 @@ class ZCConfig {
 
   async initialize() {
     if (this.initialized) {
+      //logger.debug("[config] 配置已初始化，跳过重复初始化");
       return true;
     }
 
     if (this.initializationPromise) {
+      logger.debug("[config] 配置初始化正在进行中，等待完成");
       return this.initializationPromise;
     }
 
@@ -40,13 +42,13 @@ class ZCConfig {
       }
 
       if (missingRequired.length > 0) {
-        throw new Error(`Missing required configurations: ${missingRequired.join(', ')}`);
+        throw new Error(`[config] 缺少必要的配置: ${missingRequired.join(', ')}`);
       }
 
       this.initialized = true;
       return true;
     } catch (error) {
-      logger.error("Failed to initialize config:", error);
+      logger.error("[config] 初始化配置失败:", error);
       throw error;
     } finally {
       this.initializationPromise = null;
@@ -77,7 +79,7 @@ class ZCConfig {
               try {
                 parsedValue = JSON.parse(value);
               } catch {
-                logger.error(`Failed to parse JSON for object type config ${key}`);
+                logger.error(`[config] 解析JSON失败: ${key}`);
               }
             }
 
@@ -89,7 +91,7 @@ class ZCConfig {
               this.publicCache.set(key, parsedValue);
             }
           } catch (validationError) {
-            logger.error(`Validation failed for config ${key}:`, validationError);
+            logger.error(`[config] 配置验证失败: ${key}:`, validationError);
             // If validation fails, use default value if available
             const defaultValue = getDefaultValue(key);
             if (defaultValue !== undefined) {
@@ -104,14 +106,14 @@ class ZCConfig {
 
       return true;
     } catch (error) {
-      logger.error("Error loading configs from database:", error);
+      logger.error("[config] 从数据库加载配置失败:", error);
       throw error;
     }
   }
 
   async get(key, defaultVal) {
     if (!key) {
-      logger.warn("Attempt to get config with null/undefined key");
+      logger.warn("[config] 尝试获取配置时，key为空或未定义");
       return null;
     }
 
@@ -137,7 +139,7 @@ class ZCConfig {
         try {
           value = JSON.parse(value);
         } catch {
-          logger.error(`Failed to parse JSON for object type config ${key}`);
+          logger.error(`[config] 解析JSON失败: ${key}`);
         }
       }
 
@@ -146,7 +148,7 @@ class ZCConfig {
         try {
           value = validateConfig(key, value);
         } catch (validationError) {
-          logger.error(`Validation failed for config ${key}:`, validationError);
+          logger.error(`[config] 配置验证失败: ${key}:`, validationError);
           value = defaultVal ?? getDefaultValue(key);
         }
       }
@@ -158,14 +160,14 @@ class ZCConfig {
 
       return value;
     } catch (error) {
-      logger.error(`Error retrieving config for key: ${key}`, error);
+      logger.error(`[config] 获取配置失败: ${key}`, error);
       return defaultVal ?? getDefaultValue(key) ?? null;
     }
   }
 
   async set(key, value, isPublic = false) {
     if (!key) {
-      throw new Error("Cannot set config with null/undefined key");
+      throw new Error("[config] 设置配置时，key为空或未定义");
     }
 
     try {
@@ -202,7 +204,7 @@ class ZCConfig {
 
       return true;
     } catch (error) {
-      logger.error(`Error setting config for key: ${key}`, error);
+      logger.error(`[config] 设置配置失败: ${key}`, error);
       throw error;
     }
   }

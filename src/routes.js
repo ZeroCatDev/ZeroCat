@@ -11,7 +11,7 @@ import zcconfig from '../services/config/zcconfig.js';
 export async function configureRoutes(app) {
   // 加载配置信息到全局
   await zcconfig.loadConfigsFromDB();
-  logger.info('配置信息已加载到全局');
+  logger.info('[routes] 配置信息已加载到全局');
 
   // 设置视图目录和引擎
   app.set("env", process.cwd());
@@ -19,7 +19,7 @@ export async function configureRoutes(app) {
   app.set("views", paths.VIEWS_DIR);
   app.set("view engine", "ejs");
 
-  logger.debug(paths.VIEWS_DIR);
+  logger.debug('[routes] 视图目录:', paths.VIEWS_DIR);
   // 首页路由
   app.get("/", (req, res) => {
     res.render("index");
@@ -116,9 +116,9 @@ async function registerBusinessRoutes(app) {
     const followsModule = await import('../routes/router_follows.js');
     app.use("/follows", followsModule.default);
 
-    logger.info('所有业务路由注册成功');
+    logger.info('[routes] 所有业务路由注册成功');
   } catch (error) {
-    logger.error('Error registering business routes:', error);
+    logger.error('[routes] 注册业务路由失败:', error);
     throw error;
   }
 }

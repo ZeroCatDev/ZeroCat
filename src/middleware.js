@@ -5,18 +5,22 @@ import bodyParser from 'body-parser';
 import compress from 'compression';
 import logger from '../services/logger.js';
 import zcconfig from '../services/config/zcconfig.js';
+import ipMiddleware from '../middleware/ipMiddleware.js';
 
 /**
  * 配置Express应用的中间件
  * @param {express.Application} app Express应用实例
  */
 export async function configureMiddleware(app) {
+  // IP中间件 - 在所有其他中间件之前添加，以确保IP信息可用
+  app.use(ipMiddleware);
+
   // 日志中间件 - 只记录HTTP请求，避免重复记录应用日志
   app.use(
     expressWinston.logger({
       winstonInstance: logger,
       meta: true,
-      msg: "HTTP {{req.method}} {{res.statusCode}} {{res.responseTime}}ms {{req.url}} {{req.ip}}",
+      msg: "HTTP {{req.method}} {{res.statusCode}} {{res.responseTime}}ms {{req.url}} {{req.ipInfo.clientIP}}",
       colorize: false,
       ignoreRoute: (req, res) => false,
       level: "info",
@@ -28,7 +32,8 @@ export async function configureMiddleware(app) {
         return {
           reqId: req.id,
           method: req.method,
-          url: req.url
+          url: req.url,
+          ip: req.ipInfo.clientIP
         };
       }
     })

@@ -18,7 +18,7 @@ class SchedulerService {
    * 初始化调度器
    */
   initialize() {
-    logger.info('正在初始化调度器服务...');
+    logger.info('[scheduler] 正在初始化调度器服务...');
 
     // 注册默认任务
     this.registerDefaultTasks();
@@ -26,7 +26,7 @@ class SchedulerService {
     // 启动所有任务
     this.startAllTasks();
 
-    logger.info('调度器服务初始化完成');
+    logger.info('[scheduler] 调度器服务初始化完成');
 
     return this;
   }
@@ -40,10 +40,10 @@ class SchedulerService {
       interval: 60 * 60 * 1000, // 1小时
       handler: async () => {
         try {
-          logger.info('执行每小时清理任务');
+          logger.info('[scheduler] 执行每小时清理任务');
           // 实际清理逻辑
         } catch (error) {
-          logger.error('每小时清理任务失败:', error);
+          logger.error('[scheduler] 每小时清理任务失败:', error);
         }
       }
     });
@@ -53,10 +53,10 @@ class SchedulerService {
       interval: 24 * 60 * 60 * 1000, // 24小时
       handler: async () => {
         try {
-          logger.info('执行每日统计任务');
+          logger.info('[scheduler] 执行每日统计任务');
           // 实际统计逻辑
         } catch (error) {
-          logger.error('每日统计任务失败:', error);
+          logger.error('[scheduler] 每日统计任务失败:', error);
         }
       }
     });
@@ -73,12 +73,12 @@ class SchedulerService {
    */
   registerTask(taskId, taskConfig) {
     if (tasks.has(taskId)) {
-      logger.warn(`任务 ${taskId} 已经存在，请先移除`);
+      logger.warn(`[scheduler] 任务 ${taskId} 已经存在，请先移除`);
       return false;
     }
 
     tasks.set(taskId, taskConfig);
-    logger.info(`任务 ${taskId} 注册成功`);
+    logger.info(`[scheduler] 任务 ${taskId} 注册成功`);
 
     // 如果需要立即启动
     if (taskConfig.runImmediately) {
@@ -95,7 +95,7 @@ class SchedulerService {
    */
   removeTask(taskId) {
     if (!tasks.has(taskId)) {
-      logger.warn(`任务 ${taskId} 不存在`);
+      logger.warn(`[scheduler] 任务 ${taskId} 不存在`);
       return false;
     }
 
@@ -104,7 +104,7 @@ class SchedulerService {
 
     // 从注册表中移除
     tasks.delete(taskId);
-    logger.info(`任务 ${taskId} 已移除`);
+    logger.info(`[scheduler] 任务 ${taskId} 已移除`);
 
     return true;
   }
@@ -116,12 +116,12 @@ class SchedulerService {
    */
   startTask(taskId) {
     if (!tasks.has(taskId)) {
-      logger.warn(`任务 ${taskId} 不存在`);
+      logger.warn(`[scheduler] 任务 ${taskId} 不存在`);
       return false;
     }
 
     if (taskHandles.has(taskId)) {
-      logger.warn(`任务 ${taskId} 已经在运行`);
+      logger.warn(`[scheduler] 任务 ${taskId} 已经在运行`);
       return false;
     }
 
@@ -129,17 +129,17 @@ class SchedulerService {
 
     // 如果需要立即执行一次
     if (task.runImmediately) {
-      task.handler().catch(err => logger.error(`任务 ${taskId} 立即执行失败:`, err));
+      task.handler().catch(err => logger.error(`[scheduler] 任务 ${taskId} 立即执行失败:`, err));
     }
 
     // 设置定时执行
     const handle = setInterval(() => {
-      task.handler().catch(err => logger.error(`任务 ${taskId} 执行失败:`, err));
+      task.handler().catch(err => logger.error(`[scheduler] 任务 ${taskId} 执行失败:`, err));
     }, task.interval);
 
     // 保存任务句柄
     taskHandles.set(taskId, handle);
-    logger.info(`任务 ${taskId} 已启动，间隔 ${task.interval}ms`);
+    logger.info(`[scheduler] 任务 ${taskId} 已启动，间隔 ${task.interval}ms`);
 
     return true;
   }
@@ -151,7 +151,7 @@ class SchedulerService {
    */
   stopTask(taskId) {
     if (!taskHandles.has(taskId)) {
-      logger.warn(`任务 ${taskId} 未在运行`);
+      logger.warn(`[scheduler] 任务 ${taskId} 未在运行`);
       return false;
     }
 
@@ -160,7 +160,7 @@ class SchedulerService {
 
     // 从运行表中移除
     taskHandles.delete(taskId);
-    logger.info(`任务 ${taskId} 已停止`);
+    logger.info(`[scheduler] 任务 ${taskId} 已停止`);
 
     return true;
   }
@@ -169,26 +169,26 @@ class SchedulerService {
    * 启动所有注册的任务
    */
   startAllTasks() {
-    logger.info('正在启动所有注册的任务...');
+    logger.info('[scheduler] 正在启动所有注册的任务...');
 
     for (const taskId of tasks.keys()) {
       this.startTask(taskId);
     }
 
-    logger.info(`已启动 ${taskHandles.size} 个任务`);
+    logger.info(`[scheduler] 已启动 ${taskHandles.size} 个任务`);
   }
 
   /**
    * 停止所有运行中的任务
    */
   stopAllTasks() {
-    logger.info('正在停止所有运行中的任务...');
+    logger.info('[scheduler] 正在停止所有运行中的任务...');
 
     for (const taskId of taskHandles.keys()) {
       this.stopTask(taskId);
     }
 
-    logger.info('所有任务已停止');
+    logger.info('[scheduler] 所有任务已停止');
   }
 }
 

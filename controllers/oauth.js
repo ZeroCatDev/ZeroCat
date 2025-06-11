@@ -70,18 +70,18 @@ export async function initializeOAuthProviders() {
       provider.clientSecret = clientSecret;
       provider.redirectUri = `${baseUrl}/account/oauth/${provider.id}/callback`;
 
-      logger.debug(`OAuth provider ${provider.name} initialized, enabled: ${provider.enabled}`);
+      //logger.debug(`OAuth provider ${provider.name} initialized, enabled: ${provider.enabled}`);
     }
   } catch (error) {
-    logger.error('Failed to initialize OAuth providers:', error);
+    logger.error('[oauth] 初始化OAuth提供商失败:', error);
   }
 }
 
 // 生成 OAuth 授权 URL
 export async function generateAuthUrl(provider, state) {
   const config = OAUTH_PROVIDERS[provider];
-  if (!config) throw new Error('不支持的 OAuth 提供商');
-  if (!config.enabled) throw new Error('此 OAuth 提供商未启用');
+  if (!config) throw new Error('[oauth] 不支持的 OAuth 提供商');
+  if (!config.enabled) throw new Error('[oauth] 此 OAuth 提供商未启用');
 
 
   const params = new URLSearchParams({
@@ -207,7 +207,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
       });
 
       if (!user) {
-        return { success: false, message: "绑定的用户不存在" };
+        return { success: false, message: "[oauth] 绑定的用户不存在" };
       }
 
       // 检查该 OAuth 账号是否已被其他用户绑定
@@ -230,7 +230,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
           }
         });
       } catch (error) {
-        return { success: false, message: "绑定 OAuth 账号时出错" };
+        return { success: false, message: "[oauth] 绑定 OAuth 账号时出错" };
         // 继续处理，不抛出异常
       }
 
@@ -246,7 +246,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
           }
         });
       } catch (error) {
-        logger.error('添加邮箱时出错:', error);
+        logger.error('[oauth] 添加邮箱时出错:', error);
         // 继续处理，不抛出异常
       }
 
@@ -273,7 +273,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
         if (emailContact) {
           // If found, associate with that user
           userId = emailContact.user_id;
-          logger.info(`关联 OAuth 账号到现有用户: ${userId}`);
+          logger.info(`[oauth] 关联 OAuth 账号到现有用户: ${userId}`);
         } else {
           // Create a new user
           const username = await generateUniqueUsername(userInfo.name || 'user');
@@ -289,7 +289,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
             }
           });
           userId = newUser.id;
-          logger.info(`创建新用户: ${userId}, username: ${username}`);
+          logger.info(`[oauth] 创建新用户: ${userId}, username: ${username}`);
 
           // 创建 email 联系方式
           await prisma.ow_users_contacts.create({
@@ -322,7 +322,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
       });
 
       if (!user) {
-        throw new Error('用户不存在');
+        throw new Error('[oauth] 用户不存在');
       }
 
       // 获取用户主邮箱
@@ -340,7 +340,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
       };
     }
   } catch (error) {
-    logger.error('OAuth callback error:', error);
+    logger.error('[oauth] OAuth callback error:', error);
     throw error;
   }
 }

@@ -19,7 +19,7 @@ const getMailConfig = async () => {
   const fromAddress = await zcconfig.get("mail.from_address");
 
   if (!host || !port || !user || !pass) {
-    logger.error("Missing required mail configuration");
+      logger.error("[email] 缺少必要的邮件配置");
     return null;
   }
 
@@ -38,24 +38,24 @@ const getMailConfig = async () => {
     from: fromName ? `${fromName} <${fromAddress}>` : fromAddress
   };
 };
-
 const initializeTransporter = async () => {
   try {
     const mailConfig = await getMailConfig();
+    logger.debug("[email] 邮件配置:", mailConfig);
     if (!mailConfig) {
-      logger.info("Email service is disabled or not properly configured");
+      logger.info("[email] 邮件服务已禁用或未正确配置");
       return false;
     }
 
-    logger.debug("Initializing email transporter with config:", mailConfig.config);
+    logger.debug("[email] 初始化邮件传输器:", mailConfig.config);
     transporter = createTransport(mailConfig.config);
 
     // Test the connection
     await transporter.verify();
-    logger.info("Email service initialized successfully");
+    logger.info("[email] 邮件服务初始化成功");
     return true;
   } catch (error) {
-    logger.error("Failed to initialize email service:", error);
+    logger.error("[email] 邮件服务初始化失败:", error);
     return false;
   }
 };
@@ -83,14 +83,14 @@ const sendEmail = async (to, subject, html) => {
 
     return true;
   } catch (error) {
-    logger.error("Error sending email:", error);
+    logger.error("[email] 发送邮件失败:", error);
     throw error;
   }
 };
 
 // Initialize email service when the module is loaded
 initializeTransporter().catch(error => {
-  logger.error("Failed to initialize email service on module load:", error);
+  logger.error("[email] 模块加载时初始化邮件服务失败:", error);
 });
 
 export { sendEmail };

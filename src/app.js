@@ -39,7 +39,7 @@ class Application {
    */
   async configureApp() {
     try {
-      logger.debug('开始配置应用程序...');
+      logger.debug('[app] 开始配置应用程序...');
 
       // 初始化配置并设置为全局变量
       await zcconfigInstance.initialize();
@@ -69,19 +69,19 @@ class Application {
 
       // 配置中间件
       await configureMiddleware(this.app);
-      logger.debug('中间件配置完成');
+      logger.debug('[app] 中间件配置完成');
       // 配置路由
       await configureRoutes(this.app);
-      logger.debug('路由配置完成');
+      logger.debug('[app] 路由配置完成');
       // 添加全局错误处理中间件
       this.app.use(errorHandlerService.createExpressErrorHandler());
-      logger.debug('全局错误处理中间件配置完成');
+      logger.debug('[app] 全局错误处理中间件配置完成');
       // 设置未捕获异常处理
       this.setupExceptionHandling();
-      logger.debug('未捕获异常处理配置完成');
-      logger.info('应用程序配置完成');
+      logger.debug('[app] 未捕获异常处理配置完成');
+      logger.info('[app] 应用程序配置完成');
     } catch (error) {
-      logger.error('应用配置失败:', error);
+      logger.error('[app] 应用配置失败:', error);
       process.exit(1);
     }
   }
@@ -101,26 +101,26 @@ class Application {
     try {
       // 防止重复初始化服务
       if (global.appInitialized) {
-        logger.debug('服务已经初始化过，跳过重复初始化');
+        logger.debug('[app] 服务已经初始化过，跳过重复初始化');
         return;
       }
 
-      logger.info('开始初始化服务...');
+      logger.info('[app] 开始初始化服务...');
 //TODO 初始化MaxMind GeoIP服务
       // 初始化GeoIP服务
       await geoIpService.loadConfigFromDB().catch(error => {
-        logger.error('初始化MaxMind GeoIP失败:', error);
+        logger.error('[app] 初始化MaxMind GeoIP失败:', error);
       });
 
       // 初始化调度服务
       schedulerService.initialize();
 
-      logger.info('所有服务初始化完成');
+      logger.info('[app] 所有服务初始化完成');
 
       // 标记应用已初始化
       global.appInitialized = true;
     } catch (error) {
-      logger.error('服务初始化失败:', error);
+      logger.error('[app] 服务初始化失败:', error);
     }
   }
 
@@ -141,7 +141,7 @@ Promise.all([
   application.initialized,
   application.initializeServices()
 ]).catch(error => {
-  logger.error('初始化失败:', error);
+  logger.error('[app] 初始化失败:', error);
 });
 
 // 导出Express应用实例

@@ -13,9 +13,9 @@ async function initConfig() {
   try {
     GEE_CAPTCHA_ID = await zcconfig.get("captcha.GEE_CAPTCHA_ID", "");
     GEE_CAPTCHA_KEY = await zcconfig.get("captcha.GEE_CAPTCHA_KEY", "");
-    logger.debug("Geetest config loaded");
+    //logger.debug("Geetest config loaded");
   } catch (err) {
-    logger.error("Failed to load Geetest config:", err);
+    logger.error("[geetest] 加载Geetest配置失败:", err);
   }
 }
 
@@ -41,13 +41,13 @@ function hmacSha256Encode(value, key) {
 async function geetestMiddleware(req, res, next) {
   // 开发环境下跳过验证码检查
   if (process.env.NODE_ENV === "development") {
-    logger.debug("Development mode: Bypassing captcha validation");
+    logger.debug("[geetest] 开发模式: 跳过验证码检查");
     return next();
   }
 
   // 如果未正确配置验证码，也跳过检查
   if (!GEE_CAPTCHA_ID || !GEE_CAPTCHA_KEY) {
-    logger.warn("Geetest is not configured properly, bypassing captcha validation");
+    logger.warn("[geetest] Geetest未正确配置，跳过验证码检查");
     return next();
   }
 
@@ -68,7 +68,7 @@ async function geetestMiddleware(req, res, next) {
       geetest = req.query || req.body;
     }
   } catch (error) {
-    logger.error("Captcha Parsing Error:", error);
+    logger.error("[geetest] 验证码解析错误:", error);
     return res.status(400).json({
       status: "error",
       code: 400,
@@ -77,7 +77,7 @@ async function geetestMiddleware(req, res, next) {
   }
 
   if (!geetest.lot_number || !geetest.captcha_output || !geetest.captcha_id || !geetest.pass_token || !geetest.gen_time) {
-    logger.error("Captcha data missing");
+    logger.error("[geetest] 验证码数据缺失");
     return res.status(400).json({
       status: "error",
       code: 400,
@@ -103,7 +103,7 @@ async function geetestMiddleware(req, res, next) {
 
   try {
     // 发送请求到极验服务
-    logger.debug("Sending request to Geetest server...");
+    logger.debug("[geetest] 发送请求到极验服务...");
     const result = await axios.post(GEE_API_SERVER, datas, {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
     });
@@ -112,7 +112,7 @@ async function geetestMiddleware(req, res, next) {
     if (result.data.result === "success") {
       next(); // 验证成功，继续处理请求
     } else {
-      logger.debug(`Validate fail: ${result.data.reason}`);
+      logger.debug(`[geetest] 验证失败: ${result.data.reason}`);
       return res.status(400).json({
         status: "error",
         code: 400,
@@ -120,7 +120,7 @@ async function geetestMiddleware(req, res, next) {
       });
     }
   } catch (error) {
-    logger.error("Geetest server error:", error);
+    logger.error("[geetest] 极验服务器错误:", error);
     // 极验服务器出错时放行，避免阻塞业务逻辑
     next();
   }

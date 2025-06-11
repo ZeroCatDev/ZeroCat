@@ -106,7 +106,7 @@ export const parseToken = async (req, res, next) => {
 
   try {
     // 使用新的令牌验证系统，传递IP地址用于追踪
-    const { valid, user, message } = await verifyToken(token, req.ip);
+    const { valid, user, message } = await verifyToken(token, req.ipInfo?.clientIP || req.ip);
 
     if (valid && user) {
       // 设置用户信息
@@ -160,7 +160,7 @@ export const strictTokenCheck = async (req, res, next) => {
       });
     }
 
-    const { valid, message } = await verifyToken(token, req.ip);
+    const { valid, message } = await verifyToken(token, req.ipInfo?.clientIP || req.ip);
 
     if (!valid) {
       return res.status(401).json({
@@ -211,7 +211,7 @@ export const needLogin = async (req, res, next) => {
       req.cookies?.token;
 
     if (token) {
-      verifyToken(token, req.ip)
+      verifyToken(token, req.ipInfo?.clientIP || req.ip)
         .then(({ valid, message }) => {
           if (!valid) {
             logger.debug(`用户 ${res.locals.userid} 使用无效令牌: ${message}`);

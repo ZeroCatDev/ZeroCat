@@ -130,7 +130,7 @@ router.post("/api/comment", needLogin, async (req, res, next) => {
       data: {
         user_id: userid,
         type: "comment",
-        user_ip: req.ip,
+        user_ip: req.ipInfo?.clientIP || req.ip,
         page_type: url.split("-")[0],
         page_id: url.split("-")[1] || null,
         text: comment,

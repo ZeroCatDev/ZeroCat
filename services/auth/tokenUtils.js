@@ -241,7 +241,6 @@ export async function createUserLoginTokens(userId, userInfo, ipAddress, userAge
       revoked: false
     }, refreshTokenExpiry);
 
-    // 可选: 记录登录事件
     if (options.recordLoginEvent) {
       try {
         await createEvent("user_login", userId, "user", userId, {

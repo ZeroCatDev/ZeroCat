@@ -47,16 +47,16 @@ class ErrorHandlerService {
   registerGlobalHandlers() {
     // 处理未捕获的Promise异常
     process.on('unhandledRejection', (reason, promise) => {
-      logger.error('未捕获的Promise异常:', reason);
+      logger.error('[errorHandler] 未捕获的Promise异常:', reason);
     });
 
     // 处理未捕获的同步异常
     process.on('uncaughtException', (error) => {
-      logger.error('未捕获的异常:', error);
+      logger.error('[errorHandler] 未捕获的异常:', error);
 
       // 如果是严重错误，可能需要优雅退出
       if (this.isFatalError(error)) {
-        logger.error('检测到严重错误，应用将在1秒后退出');
+        logger.error('[errorHandler] 检测到严重错误，应用将在1秒后退出');
 
         // 延迟退出，给日志写入时间
         setTimeout(() => {
@@ -65,7 +65,7 @@ class ErrorHandlerService {
       }
     });
 
-    logger.info('全局错误处理器已注册');
+    logger.info('[errorHandler] 全局错误处理器已注册');
   }
 
   /**
@@ -118,12 +118,12 @@ class ErrorHandlerService {
         method: req.method,
         url: req.originalUrl || req.url,
         headers: this.sanitizeHeaders(req.headers),
-        ip: req.ip || req.connection.remoteAddress
+        ip: req.ipInfo?.clientIP || req.ip || req.connection.remoteAddress
       };
     }
 
     // 记录详细错误日志
-    logger.error('应用错误:', errorInfo);
+    logger.error('[errorHandler] 应用错误:', errorInfo);
   }
 
   /**
