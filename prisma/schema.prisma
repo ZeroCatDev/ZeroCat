@@ -392,7 +392,7 @@ view ow_projects_search_view {
   tags                String    @db.VarChar(100)
   author_display_name String?   @db.Char(20)
   author_username     String?   @db.Char(20)
-  author_motto        String?   @db.LongText
+  author_motto         String?   @db.LongText
   author_images       String?   @db.VarChar(255)
   author_type         String?   @db.VarChar(50)
   latest_source       String?   @db.MediumText
@@ -403,4 +403,72 @@ view ow_projects_search_view {
   branches            Json?
 
   @@map("ow_projects_search")
+}
+
+// 设备信息表
+model AnalyticsDevice {
+  id              Int      @id @default(autoincrement())
+  fingerprint     String   // FingerprintJS 生成的指纹
+  user_id         Int?     // 创建该设备记录时的用户ID
+  hostname        String?  // 主机名
+  screen          String?  // 屏幕分辨率
+  language        String?  // 语言
+
+  // UA解析字段
+  browser         String?  // 浏览器名称 (从UA解析)
+  browser_version String?  // 浏览器版本 (从UA解析)
+  os             String?  // 操作系统 (从UA解析)
+  os_version     String?  // 操作系统版本 (从UA解析)
+  device_type    String?  // 设备类型: desktop/mobile/tablet (从UA解析)
+  device_vendor  String?  // 设备制造商 (从UA解析)
+  user_agent     String?  // 原始User Agent
+
+  first_seen     DateTime @default(now()) // 首次见到该设备的时间
+  last_seen      DateTime @default(now()) // 最后一次见到该设备的时间
+
+  // 关联的事件
+  events         AnalyticsEvent[]
+
+  // 复合唯一索引：同一个fingerprint可以对应多个用户
+  @@unique([fingerprint, user_id])
+  @@index([user_id])
+  @@index([first_seen])
+  @@index([last_seen])
+}
+
+// 统计事件表
+model AnalyticsEvent {
+  id              Int      @id @default(autoincrement())
+  device          AnalyticsDevice @relation(fields: [device_id], references: [id])
+  device_id       Int
+  user_id         Int?     // 事件发生时的用户ID
+
+  // URL相关
+  url             String   // 完整URL
+  url_path        String   // URL路径部分
+  url_query       String?  // URL查询参数
+  referrer        String?  // 原始来源URL
+  referrer_domain String?  // 来源域名
+  referrer_path   String?  // 来源路径
+  referrer_query  String?  // 来源查询参数
+  page_title      String?  // 页面标题
+
+  // 事件目标
+  target_type     String   // 事件目标类型 (project, user等)
+  target_id       Int      // 目标ID
+
+  // IP相关信息 (每次访问都记录，因为可能变化)
+  ip_address      String?  // IP地址
+  country         String?  // 国家 (从IP解析)
+  region          String?  // 地区/省份 (从IP解析)
+  city            String?  // 城市 (从IP解析)
+  timezone        String?  // 时区 (从IP解析)
+
+  created_at      DateTime @default(now())
+
+  @@index([device_id])
+  @@index([user_id])
+  @@index([created_at])
+  @@index([referrer_domain])
+  @@index([ip_address])
 }

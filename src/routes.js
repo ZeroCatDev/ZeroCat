@@ -64,7 +64,10 @@ async function registerBusinessRoutes(app) {
 
     const eventModule = await import('../routes/router_event.js');
     app.use("/events", eventModule.default);
-    // app.use("/users", userRoutes);
+
+    // 统计分析路由
+    const analyticsModule = await import('../routes/router_analytics.js');
+    app.use("/analytics", analyticsModule.default);
 
     // 使用新的通知路由 (获取绝对路径版本)
     const notificationModule = await import('../routes/router_notifications.js');
