@@ -2,6 +2,7 @@ import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import logger from "../services/logger.js";
 import {UAParser} from 'ua-parser-js';
+import ipLocation from '../services/ip/ipLocation.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -46,20 +47,24 @@ function parseUserAgent(userAgent) {
   }
 }
 
-// IP 地理位置解析函数 (需要配置 GeoLite2)
+// IP 地理位置解析函数
 async function parseIpLocation(ip) {
   try {
-    // 这里应该集成实际的 IP 地理位置解析服务
-    // 例如 MaxMind GeoLite2 或其他服务
+    const result = await ipLocation.getIPLocation(ip);
+    return {
+      country: result.most_specific_country_or_region || null,
+      region: result.address || null,
+      city: result.most_specific_country_or_region || null,
+      timezone: result.location?.timeZone || null
+    };
+  } catch (error) {
+    logger.error('[analytics] Failed to parse IP location:', error);
     return {
       country: null,
       region: null,
       city: null,
       timezone: null
     };
-  } catch (error) {
-    logger.error('[analytics] Failed to parse IP location:', error);
-    return {};
   }
 }
 
@@ -207,7 +212,7 @@ router.post('/send', async (req, res) => {
           referrer_query: referrerInfo.query,
           page_title,
           target_type,
-          target_id:Number(target_id),
+          target_id: Number(target_id),
           ip_address: req.ip,
           country: ipInfo.country,
           region: ipInfo.region,
@@ -219,7 +224,7 @@ router.post('/send', async (req, res) => {
       return { device, event };
     });
 
-    res.json({ success: true});
+    res.json({ success: true });
   } catch (error) {
     logger.error('[analytics] Failed to record analytics data:', error);
     res.status(500).json({ success: false, error: 'Internal server error' });
