@@ -406,7 +406,7 @@ view ow_projects_search_view {
 }
 
 // 设备信息表
-model AnalyticsDevice {
+model ow_analytics_device {
   id              Int      @id @default(autoincrement())
   fingerprint     String   // FingerprintJS 生成的指纹
   user_id         Int?     // 创建该设备记录时的用户ID
@@ -427,7 +427,7 @@ model AnalyticsDevice {
   last_seen      DateTime @default(now()) // 最后一次见到该设备的时间
 
   // 关联的事件
-  events         AnalyticsEvent[]
+  events         ow_analytics_event[]
 
   // 复合唯一索引：同一个fingerprint可以对应多个用户
   @@unique([fingerprint, user_id])
@@ -437,9 +437,9 @@ model AnalyticsDevice {
 }
 
 // 统计事件表
-model AnalyticsEvent {
+model ow_analytics_event {
   id              Int      @id @default(autoincrement())
-  device          AnalyticsDevice @relation(fields: [device_id], references: [id])
+  device          ow_analytics_device @relation(fields: [device_id], references: [id])
   device_id       Int
   user_id         Int?     // 事件发生时的用户ID
 
