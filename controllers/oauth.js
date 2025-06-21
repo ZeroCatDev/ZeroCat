@@ -61,7 +61,7 @@ export const OAUTH_PROVIDERS = {
     tokenUrl: 'https://api.abc.520gxx.com/oauth/token',
     refreshUrl: 'https://api.abc.520gxx.com/oauth/refresh',
     userInfoUrl: 'https://api.abc.520gxx.com/oauth/user',
-    scope: 'basic,message',
+    scope: 'basic',
     enabled: false,
     clientId: null,
     clientSecret: null,
