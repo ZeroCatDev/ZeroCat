@@ -429,7 +429,7 @@ model ow_analytics_device {
   os_version     String?  // 操作系统版本 (从UA解析)
   device_type    String?  // 设备类型: desktop/mobile/tablet (从UA解析)
   device_vendor  String?  // 设备制造商 (从UA解析)
-  user_agent     String?  // 原始User Agent
+  user_agent     String?  @db.MediumText // 原始User Agent
 
   first_seen     DateTime @default(now()) // 首次见到该设备的时间
   last_seen      DateTime @default(now()) // 最后一次见到该设备的时间
