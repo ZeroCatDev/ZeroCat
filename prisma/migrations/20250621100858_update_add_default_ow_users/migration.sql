@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `ow_users` MODIFY `createdAt` TIMESTAMP(0) NULL DEFAULT CURRENT_TIMESTAMP(0);

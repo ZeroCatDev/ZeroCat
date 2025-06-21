@@ -17,7 +17,7 @@ router.get("/usertx", async function (req, res, next) {
         id: parseInt(req.query.id),
       },
       select: {
-        images: true,
+        avatar: true,
       },
     });
     if (!USER) {
@@ -30,7 +30,7 @@ router.get("/usertx", async function (req, res, next) {
     }
     res.redirect(
       302,
-      (await zcconfig.get("s3.staticurl")) + "/user/" + USER.images
+      (await zcconfig.get("s3.staticurl")) + "/user/" + USER.avatar
     );
   } catch (err) {
     next(err);
@@ -46,11 +46,19 @@ router.get("/getuserinfo", async function (req, res, next) {
       select: {
         id: true,
         display_name: true,
+                bio: true,
         motto: true,
-        images: true,
+
+        avatar: true,
         regTime: true,
         sex: true,
         username: true,
+        location: true,
+        region: true,
+        birthday: true,
+        featured_projects: true,
+        custom_status: true,
+        url: true,
       },
     });
 
@@ -139,16 +147,18 @@ router.get("/projectinfo", async function (req, res, next) {
       where: { id: project.authorid },
       select: {
         display_name: true,
-        images: true,
+        avatar: true,
+                bio: true,
         motto: true,
+
       },
     });
 
     res.json({
       ...project,
       author_display_name: author.display_name,
-      author_images: author.images,
-      author_motto: author.motto,
+      author_avatar: author.avatar,
+      author_bio: author.bio,
     });
   } catch (err) {
     next(err);
@@ -287,7 +297,7 @@ router.get("/tuxiaochao", async function (req, res) {
     // 查询用户信息
     const USER = await prisma.ow_users.findFirst({
       where: { id: userId },
-      select: { images: true },
+      select: { avatar: true },
     });
 
     if (!USER) {
@@ -299,7 +309,7 @@ router.get("/tuxiaochao", async function (req, res) {
       return;
     }
 
-    const userImage = USER.images;
+    const userImage = USER.avatar;
     const txcinfo = `${userId}${displayName}${staticUrl}/user/${userImage}${txckey}`;
     const cryptostr = cryptojs.MD5(txcinfo).toString();
 

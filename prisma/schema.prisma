@@ -75,25 +75,29 @@ model ow_users {
   display_name String    @default("OurWorld创作者") @db.Char(20)
   /// User account status: pending = newly registered, active = normal user, suspended = temporarily disabled, banned = permanently disabled
   status       String    @default("active") @db.VarChar(20)
+
+  // Profile information
+  motto        String?   @db.LongText  // One-line introduction
+  bio          String?   @db.LongText  // Markdown biography
+  location     String?   @db.VarChar(100)
+  region       String?   @db.VarChar(100)
+  birthday     DateTime? @default(dbgenerated("'2000-03-31 08:00:00'")) @db.Timestamp(0)
+  sex          String?   @default("0") @db.VarChar(16)
+  url          String?   @db.VarChar(255)
+  custom_status Json?    // Contains emoji and status text
+  featured_projects Int? // Array of featured project IDs stored as JSON
+
+  // Visual elements
+  images       String?   @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
+  avatar       String?   @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
+
+  // System fields
+  type         String?   @default("guest") @db.VarChar(50)
+  label        String?   @db.VarChar(255)
   loginTime    DateTime? @db.Timestamp(0)
   regTime      DateTime? @db.Timestamp(0)
-  sex          String?   @default("0") @db.VarChar(16)
-  birthday     DateTime? @default(dbgenerated("'2000-03-31 08:00:00'")) @db.Timestamp(0)
-  motto        String?   @db.LongText
-  images       String?   @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
-  avatar       String?   @default("https://owcdn.190823.xyz/user/fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
-  type         String?   @default("guest") @db.VarChar(50)
-  url          String?   @db.VarChar(255)
-  github       String?   @db.VarChar(255)
-  twitter      String?   @db.VarChar(255)
-  facebook     String?   @db.VarChar(255)
-  google       String?   @db.VarChar(255)
-  weibo        String?   @db.VarChar(255)
-  qq           String?   @db.VarChar(255)
-  fa           String?   @map("2fa") @db.VarChar(255)
-  createdAt    DateTime? @db.Timestamp(0)
+  createdAt    DateTime? @default(now()) @db.Timestamp(0)
   updatedAt    DateTime? @updatedAt @db.Timestamp(0)
-  label        String?   @db.VarChar(255)
 
   // Relations
   auth_tokens             ow_auth_tokens[]
@@ -256,13 +260,15 @@ model ow_users_contacts {
   contact_type  ow_users_contacts_contact_type
   is_primary    Boolean?                       @default(false)
   verified      Boolean?                       @default(false)
+  metadata      Json?
   created_at    DateTime?                      @default(now()) @db.Timestamp(0)
   updated_at    DateTime?                      @default(now()) @db.Timestamp(0)
 
   // Relations
   user ow_users @relation(fields: [user_id], references: [id])
 
-  @@unique([user_id, is_primary, contact_type], map: "unique_primary_contact")
+  @@index([user_id], map: "idx_user_contacts")
+  @@index([user_id, contact_type], map: "idx_user_contact_type")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -366,6 +372,8 @@ enum ow_users_contacts_contact_type {
   oauth_google
   oauth_github
   oauth_microsoft
+  oauth_40code
+  oauth_linuxdo
 }
 
 enum ow_user_relationship_type {

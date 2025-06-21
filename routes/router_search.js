@@ -75,7 +75,7 @@ router.get("/", async (req, res, next) => {
           select: {
             display_name: true,
             id: true,
-            images: true,
+            avatar: true,
             username: true,
           }
         }

@@ -54,8 +54,10 @@ router.get("/projectinfo", async function (req, res, next) {
       where: { id: project.authorid },
       select: {
         display_name: true,
-        images: true,
+        avatar: true,
+                bio: true,
         motto: true,
+
       },
     });
 
@@ -64,8 +66,8 @@ router.get("/projectinfo", async function (req, res, next) {
     res.json({
       ...project,
       author_display_name: author.display_name,
-      author_images: author.images,
-      author_motto: author.motto,
+      author_images: author.avatar,
+      author_bio: author.bio,
     });
   } catch (err) {
     next(err);
@@ -112,19 +114,19 @@ router.get("/projectinfo2", async function (req, res, next) {
       author: {
         id: result.authorid,
         username: author.display_name,
-        description: author.motto,
+        description: author.bio,
         scratchteam: author.id == 1 ? true : false,
         history: {
           joined: author.createdAt,
         },
         profile: {
-          id: author.images,
+          id: author.avatar,
           images: {
-            "90x90": `${global.config["s3.staticurl"]}/user/${author.images}`,
-            "60x60": `${global.config["s3.staticurl"]}/user/${author.images}`,
-            "55x55": `${global.config["s3.staticurl"]}/user/${author.images}`,
-            "50x50": `${global.config["s3.staticurl"]}/user/${author.images}`,
-            "32x32": `${global.config["s3.staticurl"]}/user/${author.images}`,
+            "90x90": `${global.config["s3.staticurl"]}/user/${author.avatar}`,
+            "60x60": `${global.config["s3.staticurl"]}/user/${author.avatar}`,
+            "55x55": `${global.config["s3.staticurl"]}/user/${author.avatar}`,
+            "50x50": `${global.config["s3.staticurl"]}/user/${author.avatar}`,
+            "32x32": `${global.config["s3.staticurl"]}/user/${author.avatar}`,
           },
         },
       },

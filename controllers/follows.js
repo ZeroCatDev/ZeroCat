@@ -229,7 +229,7 @@ export async function getUserFollowers(userId, limit = 20, offset = 0) {
         id: true,
         username: true,
         display_name: true,
-        images: true,
+        avatar: true,
       },
     });
 
@@ -298,7 +298,7 @@ export async function getUserFollowing(userId, limit = 20, offset = 0) {
         id: true,
         username: true,
         display_name: true,
-        images: true,
+        avatar: true,
       },
     });
 
@@ -367,7 +367,8 @@ export async function getUserBlocked(userId, limit = 20, offset = 0) {
         id: true,
         username: true,
         display_name: true,
-        images: true,
+        avatar: true,
+        bio: true,
       },
     });
 

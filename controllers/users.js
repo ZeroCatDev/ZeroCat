@@ -13,8 +13,10 @@ async function getUsersByList(userIds) {
     display_name: true,
     status: true,
     regTime: true,
-    motto: true,
-    images: true,
+            bio: true,
+        motto: true,
+
+    avatar: true,
   };
 
   // Get each user's info
@@ -39,8 +41,10 @@ export async function getUserByUsername(username) {
         display_name: true,
         status: true,
         regTime: true,
+                bio: true,
         motto: true,
-        images: true,
+
+        avatar: true,
       }
     });
     return user;

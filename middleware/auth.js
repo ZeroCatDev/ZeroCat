@@ -191,13 +191,13 @@ export const strictTokenCheck = async (req, res, next) => {
 export const needLogin = async (req, res, next) => {
   if (!res.locals.userid) {
     if (req.headers["accept"]?.includes("application/json")) {
-      return res.status(401).send({
+      return res.status(401).json({
         status: "error",
         message: "需要登录",
         code: "ZC_ERROR_NEED_LOGIN",
       });
     } else {
-      return res.redirect("/login");
+      return res.redirect(await zcconfig.get("urls.frontend") + "/app/login");
     }
   }
 
@@ -211,15 +211,24 @@ export const needLogin = async (req, res, next) => {
       req.cookies?.token;
 
     if (token) {
-      verifyToken(token, req.ipInfo?.clientIP || req.ip)
-        .then(({ valid, message }) => {
-          if (!valid) {
-            logger.debug(`用户 ${res.locals.userid} 使用无效令牌: ${message}`);
-          }
-        })
-        .catch((err) => {
-          logger.debug("异步验证令牌时出错:", err);
+      try {
+        const { valid, message } = await verifyToken(token, req.ipInfo?.clientIP || req.ip);
+        if (!valid) {
+          logger.debug(`用户 ${res.locals.userid} 使用无效令牌: ${message}`);
+          return res.status(401).json({
+            status: "error",
+            message: "无效的认证令牌",
+            code: "ZC_ERROR_INVALID_TOKEN",
+          });
+        }
+      } catch (err) {
+        logger.debug("验证令牌时出错:", err);
+        return res.status(401).json({
+          status: "error",
+          message: "令牌验证失败",
+          code: "ZC_ERROR_TOKEN_VERIFICATION_FAILED",
         });
+      }
     }
   }
 

@@ -52,6 +52,33 @@ export const OAUTH_PROVIDERS = {
     clientId: null,
     clientSecret: null,
     redirectUri: null
+  },
+  "40code": {
+    id: '40code',
+    name: '40Code',
+    type: 'oauth_40code',
+    authUrl: 'https://www.40code.com/#page=oauth_authorize',
+    tokenUrl: 'https://api.abc.520gxx.com/oauth/token',
+    refreshUrl: 'https://api.abc.520gxx.com/oauth/refresh',
+    userInfoUrl: 'https://api.abc.520gxx.com/oauth/user',
+    scope: 'basic,message',
+    enabled: false,
+    clientId: null,
+    clientSecret: null,
+    redirectUri: null
+  },
+  linuxdo: {
+    id: 'linuxdo',
+    name: 'Linux.do',
+    type: 'oauth_linuxdo',
+    authUrl: 'https://connect.linux.do/oauth2/authorize',
+    tokenUrl: 'https://connect.linux.do/oauth2/token',
+    userInfoUrl: 'https://connect.linux.do/api/user',
+    scope: '',
+    enabled: false,
+    clientId: null,
+    clientSecret: null,
+    redirectUri: null
   }
 };
 
@@ -64,13 +91,12 @@ export async function initializeOAuthProviders() {
       const clientId = await zcconfig.get(`oauth.${provider.id}.client_id`);
       const clientSecret = await zcconfig.get(`oauth.${provider.id}.client_secret`);
       const baseUrl = await zcconfig.get('urls.backend');
-
-      provider.enabled = enabled === 'true';
+      provider.enabled = enabled;
       provider.clientId = clientId;
       provider.clientSecret = clientSecret;
       provider.redirectUri = `${baseUrl}/account/oauth/${provider.id}/callback`;
 
-      //logger.debug(`OAuth provider ${provider.name} initialized, enabled: ${provider.enabled}`);
+      logger.debug(`OAuth 提供商 ${provider.name} 加载完成, 启用状态: ${provider.enabled}`);
     }
   } catch (error) {
     logger.error('[oauth] 初始化OAuth提供商失败:', error);
@@ -83,6 +109,15 @@ export async function generateAuthUrl(provider, state) {
   if (!config) throw new Error('[oauth] 不支持的 OAuth 提供商');
   if (!config.enabled) throw new Error('[oauth] 此 OAuth 提供商未启用');
 
+  if (provider === '40code') {
+    const params = new URLSearchParams({
+      client_id: config.clientId,
+      redirect_uri: config.redirectUri,
+      scope: config.scope,
+      state: state
+    });
+    return `${config.authUrl}&${params.toString()}`;
+  }
 
   const params = new URLSearchParams({
     client_id: config.clientId,
@@ -169,6 +204,30 @@ const getUserInfoFunctions = {
       email: primaryEmail,
       name: userData.name || userData.login
     };
+  },
+
+  "40code": async (accessToken) => {
+    const response = await fetch(OAUTH_PROVIDERS["40code"].userInfoUrl, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+    const data = await response.json();
+    return {
+      id: data.id.toString(),
+      email: data.email,
+      name: data.nickname,
+    };
+  },
+
+  linuxdo: async (accessToken) => {
+    const response = await fetch(OAUTH_PROVIDERS.linuxdo.userInfoUrl, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+    const data = await response.json();
+    return {
+      id: data.id.toString(),
+      email: data.email,
+      name: data.name || data.username
+    };
   }
 };
 
@@ -199,6 +258,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
 
     // 获取用户信息
     const userInfo = await getUserInfoFunctions[provider](accessToken);
+    logger.debug(userInfo);
 
     if (userIdToBind) {
       // 绑定操作
@@ -226,7 +286,8 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
             contact_value: userInfo.id,
             contact_info: generateContactHash(),
             contact_type: "oauth_" + provider,
-            verified: true
+            verified: true,
+            metadata: userInfo
           }
         });
       } catch (error) {
@@ -285,7 +346,8 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
               password: null,  // OAuth 用户不需要密码
               display_name: userInfo.name || username,
               type: 'user',  // 设置为普通用户
-              regTime: new Date()
+              regTime: new Date(),
+              createdAt: new Date()  // 添加 createdAt 字段
             }
           });
           userId = newUser.id;

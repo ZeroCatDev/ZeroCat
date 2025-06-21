@@ -725,7 +725,7 @@ export async function refreshAccessToken(refreshToken, ipAddress, userAgent) {
       userid: user.id,
       username: user.username,
       display_name: user.display_name,
-      avatar: user.images,
+      avatar: user.avatar,
       email: primaryEmail?.contact_value
     };
 
@@ -814,7 +814,7 @@ export async function getUserInfoForToken(user, email = null) {
       userid: parseInt(user.id),
       username: user.username,
       display_name: user.display_name,
-      avatar: user.images,
+      avatar: user.avatar,
       email: email
     };
   } catch (error) {
@@ -824,7 +824,7 @@ export async function getUserInfoForToken(user, email = null) {
       userid: parseInt(user.id),
       username: user.username,
       display_name: user.display_name || user.username,
-      avatar: user.images
+      avatar: user.avatar
     };
   }
 }
@@ -844,7 +844,7 @@ export function generateLoginResponse(user, tokenResult, email, additionalData =
     userid: parseInt(user.id),
     username: user.username,
     display_name: user.display_name,
-    avatar: user.images,
+    avatar: user.avatar,
     email: email,
     token: tokenResult.accessToken,
     refresh_token: tokenResult.refreshToken,

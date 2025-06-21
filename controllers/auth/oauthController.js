@@ -46,7 +46,7 @@ export const bindOAuth = async (req, res) => {
 
     const state =
       crypto.randomBytes(16).toString("hex") + `:bind:${res.locals.userid}`;
-    const authUrl = generateAuthUrl(provider, state);
+    const authUrl = await generateAuthUrl(provider, state);
 
     // 存储 state 与用户 ID 的映射，用于回调时识别绑定操作
     memoryCache.set(
@@ -167,7 +167,7 @@ export const handleOAuthCallbackRequest = async (req, res) => {
           userid: parseInt(user.id),
           username: user.username,
           display_name: user.display_name,
-          avatar: user.images,
+          avatar: user.avatar,
           email: email
         };
 
@@ -221,8 +221,17 @@ export const getBoundOAuthAccounts = async (req, res) => {
       where: {
         user_id: userId,
         contact_type: {
-          in: ["oauth_google", "oauth_microsoft", "oauth_github"], // 只查找 OAuth 联系方式
+          in: ["oauth_google", "oauth_microsoft", "oauth_github", "oauth_linuxdo","oauth_40code"], // 只查找 OAuth 联系方式
         },
+      },
+      select: {
+        contact_id: true,
+        contact_type: true,
+        is_primary: true,
+        verified: true,
+        created_at: true,
+        updated_at: true,
+        metadata: true,
       },
     });
 

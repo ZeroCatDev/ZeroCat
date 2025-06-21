@@ -112,7 +112,7 @@ export async function getActorInfo(actorId) {
         username: true,
         display_name: true,
         avatar: true,
-        images: true,
+        bio: true,
       },
     });
 
@@ -124,7 +124,7 @@ export async function getActorInfo(actorId) {
       display_name: user.display_name,
       acting_user_name: user.display_name,
       acting_user_avatar_template:
-        user.avatar || `https://owcdn.190823.xyz/user/${user.images}`,
+        user.avatar || `https://owcdn.190823.xyz/user/${user.avatar}`,
     };
   } catch (error) {
     logger.error("获取行为者信息出错:", error);
@@ -199,7 +199,7 @@ export async function getTargetData(targetType, targetId) {
             id: true,
             username: true,
             display_name: true,
-            images: true,
+            avatar: true,
           },
         });
 
