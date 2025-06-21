@@ -100,7 +100,7 @@ router.post('/send', async (req, res) => {
       // 1. 如果用户已登录，先查找该用户的设备记录
       // 2. 如果未找到或用户未登录，查找无用户ID的设备记录
       let device = currentUserId
-        ? await tx.analyticsDevice.findUnique({
+        ? await tx.ow_analytics_device.findUnique({
             where: {
               fingerprint_user_id: {
                 fingerprint,
@@ -112,7 +112,7 @@ router.post('/send', async (req, res) => {
 
       if (!device) {
         // 查找无用户ID的设备记录
-        device = await tx.analyticsDevice.findFirst({
+        device = await tx.ow_analytics_device.findFirst({
           where: {
             fingerprint,
             user_id: null
@@ -121,7 +121,7 @@ router.post('/send', async (req, res) => {
 
         if (device && currentUserId) {
           // 如果找到无用户ID的设备且用户已登录，创建新的设备记录
-          device = await tx.analyticsDevice.create({
+          device = await tx.ow_analytics_device.create({
             data: {
               fingerprint,
               user_id: currentUserId,
@@ -139,7 +139,7 @@ router.post('/send', async (req, res) => {
           });
         } else if (device) {
           // 更新无用户ID的设备记录
-          device = await tx.analyticsDevice.update({
+          device = await tx.ow_analytics_device.update({
             where: { id: device.id },
             data: {
               last_seen: new Date(),
@@ -159,7 +159,7 @@ router.post('/send', async (req, res) => {
           });
         } else {
           // 创建新的设备记录（无用户ID或带用户ID）
-          device = await tx.analyticsDevice.create({
+          device = await tx.ow_analytics_device.create({
             data: {
               fingerprint,
               user_id: currentUserId,
@@ -178,7 +178,7 @@ router.post('/send', async (req, res) => {
         }
       } else {
         // 更新已有的用户设备记录
-        device = await tx.analyticsDevice.update({
+        device = await tx.ow_analytics_device.update({
           where: { id: device.id },
           data: {
             last_seen: new Date(),
@@ -199,7 +199,7 @@ router.post('/send', async (req, res) => {
       }
 
       // 创建事件记录
-      const event = await tx.analyticsEvent.create({
+      const event = await tx.ow_analytics_event.create({
         data: {
           device_id: device.id,
           user_id: currentUserId,
@@ -253,7 +253,7 @@ router.get('/stats', async (req, res) => {
       where.user_id = parseInt(user_id);
     }
 
-    const events = await prisma.analyticsEvent.findMany({
+    const events = await prisma.ow_analytics_event.findMany({
       where,
       include: {
         device: true

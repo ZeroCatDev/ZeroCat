@@ -35,7 +35,11 @@ const getMailConfig = async () => {
 
   return {
     config,
-    from: fromName ? `${fromName} <${fromAddress}>` : fromAddress
+    from: fromName ? `${fromName} <${fromAddress}>` : fromAddress,
+    tls: {
+      maxVersion: 'TLSv1.2',
+      rejectUnauthorized: false
+    }
   };
 };
 const initializeTransporter = async () => {
