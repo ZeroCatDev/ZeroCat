@@ -23,6 +23,8 @@ export const getOAuthProviders = async (req, res) => {
     .map((provider) => ({
       id: provider.id,
       name: provider.name,
+      type: provider.type,
+      enabled: provider.enabled
     }));
 
   res.status(200).json({

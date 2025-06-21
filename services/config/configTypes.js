@@ -282,30 +282,6 @@ export const CONFIG_TYPES = {
     required: false,
     description: "腾讯兔小巢密钥",
   },
-  "feedback.qq.link": {
-    type: "string",
-    required: false,
-    description: "QQ反馈链接",
-    public: true,
-  },
-  "feedback.qq.group": {
-    type: "string",
-    required: false,
-    description: "QQ群号",
-    public: true,
-  },
-  "feedback.qq.description": {
-    type: "string",
-    required: false,
-    description: "QQ反馈说明",
-    public: true,
-  },
-  "theme.mdui.color.primary": {
-    type: "string",
-    required: false,
-    description: "MDUI主题主色",
-    public: true,
-  },
   "oauth.enabled": {
     type: "boolean",
     required: false,
