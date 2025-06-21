@@ -27,6 +27,8 @@ ZeroCat 是一个轻量级的在线编程、分享平台
   - [](#-2)
     - [贡献者](#贡献者)
   - [许可协议](#许可协议)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat?ref=badge_large)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ZeroCatDev/ZeroCat)
 
 ## 背景
 
