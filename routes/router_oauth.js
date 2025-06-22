@@ -198,6 +198,7 @@ router.get("/applications", needLogin, async (req, res) => {
     const applications = await prisma.ow_oauth_applications.findMany({
       where: {
         owner_id: res.locals.userid,
+        status: "active",
       },
       select: {
         id: true,
@@ -478,7 +479,7 @@ router.delete("/applications/:client_id", needLogin, async (req, res) => {
       },
     });
 
-    res.json({ message: "应用删除成功" });
+    res.json({ code: 'success', message: "应用删除成功" });
   } catch (error) {
     logger.error("Delete OAuth application error:", error);
     res.status(500).json({ error: "Internal server error" });
