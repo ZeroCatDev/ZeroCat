@@ -94,8 +94,8 @@ model ow_users {
   // System fields
   type         String?   @default("guest") @db.VarChar(50)
   label        String?   @db.VarChar(255)
-  loginTime    DateTime? @db.Timestamp(0)
-  regTime      DateTime? @db.Timestamp(0)
+  loginTime    DateTime? @db.Timestamp(0) @default(now())
+  regTime      DateTime? @db.Timestamp(0) @default(now())
   createdAt    DateTime? @default(now()) @db.Timestamp(0)
   updatedAt    DateTime? @updatedAt @db.Timestamp(0)
 
