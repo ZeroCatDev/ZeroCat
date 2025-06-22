@@ -108,6 +108,11 @@ model ow_users {
   relationships_as_source ow_user_relationships[] @relation("RelationshipSource")
   relationships_as_target ow_user_relationships[] @relation("RelationshipTarget")
 
+  // OAuth relations
+  oauth_applications      ow_oauth_applications[]
+  oauth_authorizations    ow_oauth_authorizations[]
+  oauth_access_tokens     ow_oauth_access_tokens[]
+
   @@id([id, username])
 }
 
@@ -479,4 +484,109 @@ model ow_analytics_event {
   @@index([created_at])
   @@index([referrer_domain])
   @@index([ip_address])
+}
+
+// OAuth应用表
+model ow_oauth_applications {
+  id              Int      @id @default(autoincrement())
+  owner_id        Int
+  name            String
+  description     String?
+  homepage_url    String?
+  client_id       String   @unique
+  client_secret   String
+  redirect_uris   Json     // Stored as JSON array
+  type            String   @default("oauth")
+  client_type     String   @default("confidential") // "confidential" or "public"
+  scopes          Json     // Stored as JSON array
+  webhook_url     String?
+  logo_url        String?
+  terms_url       String?
+  privacy_url     String?
+  status          String   @default("active")
+  is_verified     Boolean  @default(false)
+  is_public       Boolean  @default(false)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+  owner           ow_users @relation(fields: [owner_id], references: [id])
+  authorizations  ow_oauth_authorizations[]
+  access_tokens   ow_oauth_access_tokens[]
+
+  @@index([owner_id])
+  @@index([client_id])
+  @@map("oauth_applications")
+}
+
+// OAuth授权记录表
+model ow_oauth_authorizations {
+  id                    Int       @id @default(autoincrement())
+  application_id        Int       // OAuth应用ID
+  user_id              Int       // 授权用户ID
+  authorized_email     String    @db.VarChar(255) // 用户授权的邮箱
+  scopes               Json      // 授权的权限范围
+  code                 String?   @unique @db.VarChar(255) // 授权码
+  code_challenge       String?   @db.VarChar(255) // PKCE挑战码
+  code_challenge_method String?  @db.VarChar(20)  // PKCE方法
+  code_expires_at      DateTime? // 授权码过期时间
+  status               String    @default("active") @db.VarChar(50) // 授权状态
+  last_used_at         DateTime? // 最后使用时间
+  metadata             Json?     // 额外元数据
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+
+  // 关联
+  application          ow_oauth_applications @relation(fields: [application_id], references: [id])
+  user                 ow_users             @relation(fields: [user_id], references: [id])
+  access_tokens        ow_oauth_access_tokens[]
+
+  @@unique([application_id, user_id])
+  @@index([code])
+  @@index([user_id])
+}
+
+// OAuth访问令牌表
+model ow_oauth_access_tokens {
+  id                    Int       @id @default(autoincrement())
+  application_id        Int       // OAuth应用ID
+  authorization_id      Int       // 授权记录ID
+  user_id              Int       // 用户ID
+  access_token         String    @unique @db.VarChar(255) // 访问令牌
+  refresh_token        String?   @unique @db.VarChar(255) // 刷新令牌
+  scopes               Json      // 令牌的权限范围
+  expires_at           DateTime  // 访问令牌过期时间
+  refresh_token_expires_at DateTime? // 刷新令牌过期时间
+  ip_address           String?   @db.VarChar(100) // 创建时的IP地址
+  user_agent           String?   @db.Text        // 创建时的User Agent
+  last_used_at         DateTime? // 最后使用时间
+  last_used_ip         String?   @db.VarChar(100) // 最后使用的IP
+  is_revoked           Boolean   @default(false)  // 是否已撤销
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+
+  // 关联
+  application          ow_oauth_applications @relation(fields: [application_id], references: [id])
+  authorization        ow_oauth_authorizations @relation(fields: [authorization_id], references: [id])
+  user                 ow_users             @relation(fields: [user_id], references: [id])
+
+  @@index([access_token])
+  @@index([refresh_token])
+  @@index([user_id])
+  @@index([application_id])
+  @@index([authorization_id])
+}
+
+// OAuth权限表
+model ow_oauth_scopes {
+  id                    Int       @id @default(autoincrement())
+  name                 String    @unique @db.VarChar(100) // 权限名称
+  description          String    @db.Text                // 权限描述
+  is_default           Boolean   @default(false)         // 是否默认授权
+  requires_verification Boolean   @default(false)        // 是否需要验证
+  category             String    @db.VarChar(50)        // 权限分类
+  risk_level           String    @default("low") @db.VarChar(20) // 风险等级
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+
+  @@index([category])
+  @@index([risk_level])
 }

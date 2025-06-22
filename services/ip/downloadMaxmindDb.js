@@ -46,7 +46,7 @@ let USER_CONFIG = {
  */
 async function loadMaxmindConfigFromDB() {
   try {
-    console.log("[ip] 正在从数据库加载MaxMind配置...");
+    logger.info("[ip] 正在从数据库加载MaxMind配置...");
 
     // 仅加载必要配置
     const enabled = await zcconfig.get("maxmind.enabled");
