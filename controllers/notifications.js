@@ -258,6 +258,26 @@ export async function getUserNotifications(options) {
       orderBy: {
         created_at: "desc",
       },
+      select: {
+        id: true,
+        notification_type: true,
+        read: true,
+        created_at: true,
+        read_at: true,
+        high_priority: true,
+        data: true,
+        actor_id: true,
+        actor: {
+          select: {
+            id: true,
+            username: true,
+            display_name: true,
+            avatar: true,
+          },
+        },
+        target_type: true,
+        target_id: true,
+      },
       take: limit,
       skip: offset,
     });
@@ -269,7 +289,7 @@ export async function getUserNotifications(options) {
         ...(unreadOnly ? { read: false } : {}),
       },
     });
-
+    //logger.debug(notifications);
     // 只添加基本信息，不加载目标数据
     const formattedNotifications = notifications.map((notification) => ({
       id: Number(notification.id),
@@ -280,6 +300,7 @@ export async function getUserNotifications(options) {
       high_priority: notification.high_priority,
       data: notification.data || {},
       actor_id: notification.actor_id,
+      actor: notification.actor,
       target_type: notification.target_type,
       target_id: notification.target_id,
     }));
@@ -369,7 +390,7 @@ export async function deleteNotifications(options) {
 
     const result = await prisma.ow_notifications.deleteMany({
       where: {
-        id: { in: notificationIds.map((id) => BigInt(id)) },
+        id: { in: notificationIds.map((id) => Number(id)) },
         user_id: userId,
       },
     });
@@ -408,6 +429,7 @@ export async function formatNotificationForClient(notification) {
     high_priority: notification.high_priority,
     data: notification.data || {},
     actor_id: notification.actor_id,
+    actor: notification.actor,
     target_type: notification.target_type,
     target_id: notification.target_id,
   };

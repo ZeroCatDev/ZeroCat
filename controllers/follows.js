@@ -55,12 +55,13 @@ export async function followUser(followerId, followedId, note = "") {
         },
       },
     });
-    await createEvent({
-      eventType: "user_follow",
-      actorId: followerId,
-      targetId: followedId,
-      data: {},
-    });
+    await createEvent(
+      "user_follow",
+      followerId,
+      "user",
+      followedId,
+      {}
+    );
 
     logger.debug(`Created follow notification for user ${followedId}`);
 
