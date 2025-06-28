@@ -19,7 +19,7 @@ export const AudienceDataDependencies = {
     userField: 'user_id'            // 用户ID字段
   },
   ["project_followers"]: {
-    query: 'user_relationships',
+    query: 'ow_user_relationships',
     relationField: 'target_user_id',
     userField: 'source_user_id',
     additionalFilters: {
@@ -32,7 +32,7 @@ export const AudienceDataDependencies = {
     userField: 'user_id'
   },
   ["project_owner_followers"]: {
-    query: 'user_relationships',
+    query: 'ow_user_relationships',
     relationField: 'target_user_id',
     userField: 'source_user_id',
     additionalFilters: {
@@ -44,7 +44,7 @@ export const AudienceDataDependencies = {
     }
   },
   ["user_followers"]: {
-    query: 'user_relationships',
+    query: 'ow_user_relationships',
     relationField: 'target_user_id',
     userField: 'source_user_id',
     additionalFilters: {
@@ -53,7 +53,7 @@ export const AudienceDataDependencies = {
     sourceField: 'actor_id' // 使用行为者ID而不是目标ID
   },
   ["user_following"]: {
-    query: 'user_relationships',
+    query: 'ow_user_relationships',
     relationField: 'source_user_id',
     userField: 'target_user_id',
     additionalFilters: {
@@ -82,6 +82,9 @@ export const AudienceDataDependencies = {
   },
   ["custom_users"]: {
     eventData: 'custom_users' // 直接从事件数据中获取
+  },
+  ["target_user"]: {
+    eventData: 'target_user' // 直接从事件数据中获取
   }
 };
 
@@ -159,7 +162,7 @@ export const EventConfig = {
   },
   user_follow: {
     public: true,
-    notifyTargets: ["user_followers"]
+    notifyTargets: ["target_user"]
   },
   comment_reply: {
     public: true,

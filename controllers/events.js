@@ -26,9 +26,9 @@ export async function createEvent(eventType, actorId, targetType, targetId, even
     const event = await prisma.ow_events.create({
       data: {
         event_type: normalizedEventType,
-        actor_id: BigInt(actorId),
+        actor_id: actorId,
         target_type: targetType,
-        target_id: BigInt(targetId),
+        target_id: targetId,
         event_data: {
           ...eventData,
           actor_id: actorId,
@@ -64,7 +64,7 @@ export async function getTargetEvents(targetType, targetId, limit = 10, offset =
     const events = await prisma.ow_events.findMany({
       where: {
         target_type: targetType,
-        target_id: BigInt(targetId),
+        target_id: targetId,
         ...(includePrivate ? {} : { public: 1 }),
       },
       orderBy: {
@@ -88,7 +88,7 @@ export async function getActorEvents(actorId, limit = 10, offset = 0, includePri
   try {
     const events = await prisma.ow_events.findMany({
       where: {
-        actor_id: BigInt(actorId),
+        actor_id: actorId,
         ...(includePrivate ? {} : { public: 1 }),
       },
       orderBy: {
@@ -190,8 +190,6 @@ async function processNotifications(event, eventConfig, eventData) {
     // 收集所有受众用户ID
     const usersMap = new Map(); // 使用Map去重
 
-
-
     // 用于存储中间结果的对象，供依赖关系使用
     const audienceResults = {};
 
@@ -227,7 +225,6 @@ async function processNotifications(event, eventConfig, eventData) {
     // 获取对应的通知类型
     const notificationType = event.event_type;
 
-
     // 创建通知
     const notificationPromises = userIds.map(userId =>
       createNotification({
@@ -236,7 +233,7 @@ async function processNotifications(event, eventConfig, eventData) {
         actorId,
         targetType: event.target_type,
         targetId,
-        data: {}
+        data: eventData
       })
     );
 
@@ -245,7 +242,6 @@ async function processNotifications(event, eventConfig, eventData) {
     logger.error('通知处理错误:', error);
   }
 }
-
 
 /**
  * 过滤黑名单用户
@@ -322,6 +318,37 @@ async function getAudienceUsers(audienceType, event, eventData, audienceResults 
     if(eventData.NotificationTo){
       return eventData.NotificationTo
     }
+
+    // Handle direct target user notification
+    if (audienceType === "target_user") {
+      if (event.target_type === "user") {
+        // If target is a user, directly notify them
+        return [targetId];
+      }
+
+      // For other target types, notify their owners
+      let ownerId;
+      switch (event.target_type) {
+        case "project":
+          const project = await prisma.ow_projects.findUnique({
+            where: { id: targetId },
+            select: { authorid: true }
+          });
+          ownerId = project?.authorid;
+          break;
+        case "list":
+          const list = await prisma.ow_lists.findUnique({
+            where: { id: targetId },
+            select: { owner_id: true }
+          });
+          ownerId = list?.owner_id;
+          break;
+        // Add more cases for other target types as needed
+      }
+
+      return ownerId ? [ownerId] : [];
+    }
+
     // 处理依赖关系：如果这个受众类型依赖于另一个受众类型的结果
     if (audienceConfig.dependsOn) {
       const { audienceType: dependencyType, field } = audienceConfig.dependsOn;

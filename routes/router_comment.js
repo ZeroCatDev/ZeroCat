@@ -123,7 +123,7 @@ router.get("/api/comment", async (req, res, next) => {
 router.post("/api/comment", needLogin, async (req, res, next) => {
   try {
     const { url, comment, pid, rid } = req.body;
-    const { userid, display_name } = res.locals;
+    const { userid } = res.locals;
     const user_ua = req.headers["user-agent"] || "";
 
     const newComment = await prisma.ow_comment.create({
@@ -176,13 +176,21 @@ router.post("/api/comment", needLogin, async (req, res, next) => {
       targetType = "user";
       targetId = userid;
     }
-    await createEvent({
-      eventType: "comment_reply",
-      actorId: userid,
-      targetType: targetType,
-      targetId: targetId,
-      data: { comment: newComment.text },
-    });
+
+    // 创建事件 - 区分新评论和回复评论
+    if (rid) {
+      // 如果有 rid，说明是回复评论
+      await createEvent("comment_reply", userid, "comment", rid, {
+        comment_text: comment,
+        target_user: user_id
+      });
+    } else {
+      // 如果没有 rid，说明是新评论
+      await createEvent("comment_create", userid, targetType, targetId, {
+        comment_text: comment,
+        target_user: user_id
+      });
+    }
 
   } catch (err) {
     next(err);

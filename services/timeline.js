@@ -206,7 +206,7 @@ export async function getMyTimeline(userId, page = 1, limit = 20) {
     const [events, total] = await Promise.all([
       prisma.ow_events.findMany({
         where: {
-          actor_id: { in: followingIds.map((id) => BigInt(id)) },
+          actor_id: { in: id },
           public: 1,
         },
         orderBy: { created_at: "desc" },

@@ -3,134 +3,9 @@
  */
 import { prisma } from "../services/global.js";
 import logger from "../services/logger.js";
-
-/**
- * 通知模板定义
- * 为每种通知类型提供显示的文本模板和相关信息
- * 用于前端渲染通知内容
- * @type {Object}
- */
-export const NotificationTemplates = {
-  // 项目通知
-  PROJECT_COMMENT: {
-    title: "项目评论",
-    template: "{{actor_name}} 评论了您的项目 {{target_name}}",
-    icon: "comment",
-    requiresActor: true,
-    requiresData: ["target_name"],
-  },
-  PROJECT_STAR: {
-    title: "项目星标",
-    template: "{{actor_name}} 为您的项目 {{target_name}} 添加了星标",
-    icon: "star",
-    requiresActor: true,
-    requiresData: ["target_name"],
-  },
-  PROJECT_FORK: {
-    title: "项目派生",
-    template: "{{actor_name}} 派生了您的项目 {{target_name}}",
-    icon: "fork",
-    requiresActor: true,
-    requiresData: ["target_name"],
-  },
-
-  PROJECT_UPDATE: {
-    title: "项目更新",
-    template: "您关注的项目 {{target_name}} 有新的更新",
-    icon: "update",
-    requiresActor: false,
-    requiresData: ["target_name"],
-  },
+import NotificationTemplates from "../config/notificationTemplates.json" assert { type: "json" };
 
 
-  PROJECT_COLLECT: {
-    title: "项目收藏",
-    template: "{{actor_name}} 收藏了您的项目 {{target_name}}",
-    icon: "collect",
-    requiresActor: true,
-    requiresData: ["target_name"],
-  },
-
-  // 用户通知
-  USER_FOLLOW: {
-    title: "新关注",
-    template: "{{actor_name}} 关注了您",
-    icon: "follow",
-    requiresActor: true,
-    requiresData: [],
-  },
-  USER_NEW_COMMENT: {
-    title: "新评论",
-    template: "{{target_name}} 有来自 {{actor_name}} 的新评论",
-    icon: "comment",
-    requiresActor: true,
-    requiresData: [],
-  },
-
-  // 系统通知
-  SYSTEM_ANNOUNCEMENT: {
-    title: "系统公告",
-    template: "系统公告: {{content}}",
-    icon: "announcement",
-    requiresActor: false,
-    requiresData: ["content"],
-  },
-
-  // 评论通知
-  COMMENT_REPLY: {
-    title: "评论回复",
-    template: "{{actor_name}} 回复了您的评论: {{comment_text}}",
-    icon: "reply",
-    requiresActor: true,
-    requiresData: ["comment_text"],
-  },
-
-  // 自定义通知
-  CUSTOM_NOTIFICATION: {
-    title: "自定义通知",
-    template: "{{content}}",
-    icon: "notification",
-    requiresActor: false,
-    requiresData: ["content"],
-  }
-};
-
-/**
-
-/**
- * 获取行为者（用户）信息用于通知
- *
- * @param {number} actorId - 行为者用户ID
- * @returns {Promise<Object>} 行为者信息
- */
-export async function getActorInfo(actorId) {
-  try {
-    const user = await prisma.ow_users.findUnique({
-      where: { id: actorId },
-      select: {
-        id: true,
-        username: true,
-        display_name: true,
-        avatar: true,
-        bio: true,
-      },
-    });
-
-    if (!user) return null;
-
-    return {
-      id: user.id,
-      username: user.username,
-      display_name: user.display_name,
-      acting_user_name: user.display_name,
-      acting_user_avatar_template:
-        user.avatar || `https://owcdn.190823.xyz/user/${user.avatar}`,
-    };
-  } catch (error) {
-    logger.error("获取行为者信息出错:", error);
-    return null;
-  }
-}
 
 /**
  * 创建新通知
@@ -170,71 +45,6 @@ export async function createNotification(notificationData) {
   }
 }
 
-/**
- * 根据目标类型和ID获取具体目标数据
- *
- * @param {string} targetType - 目标类型
- * @param {number} targetId - 目标ID
- * @returns {Promise<Object>} 目标详细数据
- */
-export async function getTargetData(targetType, targetId) {
-  if (!targetType || !targetId) return null;
-
-  try {
-    switch (targetType) {
-      case "project":
-        return await prisma.ow_projects.findUnique({
-          where: { id: targetId },
-          select: {
-            id: true,
-            title: true,
-            description: true,
-          },
-        });
-
-      case "user":
-        return await prisma.ow_users.findUnique({
-          where: { id: targetId },
-          select: {
-            id: true,
-            username: true,
-            display_name: true,
-            avatar: true,
-          },
-        });
-
-      case "comment":
-        return await prisma.ow_comment.findUnique({
-          where: { id: targetId },
-          select: {
-            id: true,
-            content: true,
-            created_at: true,
-          },
-        });
-
-
-      case "projectlist":
-        return await prisma.ow_project_lists.findUnique({
-          where: { id: targetId },
-          select: {
-            id: true,
-            name: true,
-            description: true,
-          },
-        });
-
-      default:
-        return null;
-    }
-  } catch (error) {
-    logger.error(
-      `获取目标数据出错 (类型: ${targetType}, ID: ${targetId}):`,
-      error
-    );
-    return null;
-  }
-}
 
 /**
  * 获取用户的通知
@@ -451,28 +261,6 @@ export async function formatNotificationForClient(notification) {
   return formattedNotification;
 }
 
-/**
- * SQL创建通知表的命令:
- *
- * CREATE TABLE IF NOT EXISTS ow_notifications (
- *   id BIGINT PRIMARY KEY AUTO_INCREMENT,
- *   user_id BIGINT NOT NULL,
- *   notification_type VARCHAR(64) NOT NULL,
- *   target_type VARCHAR(50),
- *   target_id BIGINT,
- *   actor_id BIGINT DEFAULT 0,
- *   data JSON DEFAULT (JSON_OBJECT()),
- *   high_priority BOOLEAN DEFAULT FALSE,
- *   read BOOLEAN DEFAULT FALSE,
- *   read_at DATETIME,
- *   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
- *   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
- *   INDEX idx_user_read (user_id, read),
- *   INDEX idx_target (target_type, target_id),
- *   INDEX idx_created_at (created_at)
- * );
- */
-
 export default {
   NotificationTemplates,
   createNotification,
@@ -482,6 +270,4 @@ export default {
   deleteNotifications,
   formatNotificationForClient,
   getNotificationTemplates,
-  getActorInfo,
-  getTargetData,
 };
