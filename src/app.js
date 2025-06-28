@@ -13,6 +13,7 @@ import zcconfigInstance from "../services/config/zcconfig.js";
 import geoIpService from "../services/ip/ipLocation.js";
 import schedulerService from "../services/scheduler.js";
 import errorHandlerService from "../services/errorHandler.js";
+import sitemapService from '../services/sitemap.js';
 
 // 全局初始化标志，防止重复初始化
 global.appInitialized = global.appInitialized || false;
@@ -79,6 +80,9 @@ class Application {
       // 设置未捕获异常处理
       this.setupExceptionHandling();
       logger.debug('[app] 未捕获异常处理配置完成');
+      // 初始化sitemap服务
+      await sitemapService.initialize();
+      logger.debug('[app] sitemap服务初始化完成');
       logger.info('[app] 应用程序配置完成');
     } catch (error) {
       logger.error('[app] 应用配置失败:', error);

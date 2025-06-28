@@ -9,6 +9,7 @@ import { prisma } from "../services/global.js";
 import { needLogin, strictTokenCheck, needAdmin } from "../middleware/auth.js";
 import followsRoutes from "./router_follows.js";
 import { CONFIG_TYPES } from "../services/config/configTypes.js";
+import sitemapService from '../services/sitemap.js';
 
 router.get("/usertx", async function (req, res, next) {
   try {
@@ -341,6 +342,43 @@ router.get("/public-config", async function (req, res, next) {
     res.status(200).json(result);
   } catch (err) {
     next(err);
+  }
+});
+
+// Public sitemap route
+router.get('/sitemap.xml', async (req, res) => {
+  try {
+    const enabled = await zcconfig.get('sitemap.enabled');
+    if (!enabled) {
+      return res.status(404).send('Sitemap is disabled');
+    }
+
+    const hash = await sitemapService.getCurrentSitemapHash();
+    if (!hash) {
+      return res.status(404).send('Sitemap not generated yet');
+    }
+
+    const file = await prisma.ow_projects_file.findUnique({
+      where: { sha256: hash }
+    });
+
+    if (!file) {
+      return res.status(404).send('Sitemap file not found');
+    }
+
+    // Convert base64 to buffer
+    const buffer = Buffer.from(file.source, 'base64');
+
+    // Set appropriate headers
+    res.header('Content-Type', 'application/xml');
+    res.header('Content-Encoding', 'gzip');
+    res.header('Content-Length', buffer.length);
+
+    // Send the gzipped XML
+    res.send(buffer);
+  } catch (error) {
+    logger.error('[api] Error serving sitemap:', error);
+    res.status(500).send('Internal server error');
   }
 });
 

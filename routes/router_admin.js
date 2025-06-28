@@ -2,6 +2,10 @@ import { Router } from "express";
 import { needAdmin } from "../middleware/auth.js";
 import logger from "../services/logger.js";
 import configRouter from "./admin/config.js";
+import { needLogin } from '../middleware/auth.js';
+
+import sitemapService from '../services/sitemap.js';
+import zcconfig from '../services/config/zcconfig.js';
 
 const router = Router();
 
@@ -50,6 +54,85 @@ router.get("/system/info", needAdmin, async (req, res) => {
       status: "error",
       message: "获取系统信息失败",
       error: error.message
+    });
+  }
+});
+
+// Admin authentication middleware
+router.use(needLogin);
+router.use(needAdmin);
+
+// Sitemap management routes
+router.get('/sitemap/status', async (req, res) => {
+  try {
+    const status = await sitemapService.getSitemapStatus();
+    res.json({
+      status: 'success',
+      data: status
+    });
+  } catch (error) {
+    logger.error('[admin] Error getting sitemap status:', error);
+    res.status(500).json({
+      status: 'error',
+      message: '获取站点地图状态失败'
+    });
+  }
+});
+
+router.post('/sitemap/settings', async (req, res) => {
+  try {
+    const { enabled, autoUpdate } = req.body;
+
+    // 验证并更新设置
+    if (typeof enabled === 'boolean') {
+      await zcconfig.set('sitemap.enabled', enabled);
+    }
+
+    if (typeof autoUpdate === 'boolean') {
+      await zcconfig.set('sitemap.auto_update', autoUpdate);
+    }
+
+    // 重新初始化服务
+    await sitemapService.initialize();
+
+    res.json({
+      status: 'success',
+      message: '设置已更新'
+    });
+  } catch (error) {
+    logger.error('[admin] Error updating sitemap settings:', error);
+    res.status(500).json({
+      status: 'error',
+      message: '更新站点地图设置失败'
+    });
+  }
+});
+
+router.post('/sitemap/generate', async (req, res) => {
+  try {
+    const { type = 'full' } = req.body;
+
+    if (type !== 'full' && type !== 'incremental') {
+      return res.status(400).json({
+        status: 'error',
+        message: '无效的生成类型'
+      });
+    }
+
+    const hash = type === 'full'
+      ? await sitemapService.generateFullSitemap()
+      : await sitemapService.generateIncrementalSitemap();
+
+    res.json({
+      status: 'success',
+      message: '站点地图生成成功',
+      data: { hash }
+    });
+  } catch (error) {
+    logger.error('[admin] Error generating sitemap:', error);
+    res.status(500).json({
+      status: 'error',
+      message: '生成站点地图失败'
     });
   }
 });

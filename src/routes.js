@@ -73,8 +73,6 @@ async function registerBusinessRoutes(app) {
     const notificationModule = await import('../routes/router_notifications.js');
     app.use("/notifications", notificationModule.default);
 
-    // 以下路由暂时保持原有导入方式，等待迁移完成
-
     // 个人中心路由
     const myModule = await import('../routes/router_my.js');
     app.use("/my", myModule.default);

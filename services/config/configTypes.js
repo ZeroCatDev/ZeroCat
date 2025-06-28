@@ -398,6 +398,42 @@ export const CONFIG_TYPES = {
     description: "MaxMind账户ID",
     transform: (value) => value?.toString(),
   },
+  "sitemap.enabled": {
+    type: "boolean",
+    required: false,
+    default: true,
+    description: "是否启用站点地图功能",
+    transform: typeTransformers.boolean,
+  },
+  "sitemap.auto_update": {
+    type: "boolean",
+    required: false,
+    default: true,
+    description: "是否启用自动更新站点地图",
+    transform: typeTransformers.boolean,
+  },
+  "sitemap.update_cron": {
+    type: "string",
+    required: false,
+    default: "0 0 * * *", // 每天凌晨执行
+    description: "站点地图自动更新的cron表达式",
+    validate: (value) => /^(\S+ ){4}\S+$/.test(value), // 简单验证cron格式
+  },
+  "sitemap.current_file_hash": {
+    type: "string",
+    required: false,
+    description: "当前站点地图文件的SHA256哈希值",
+  },
+  "sitemap.last_full_update": {
+    type: "string",
+    required: false,
+    description: "最后一次全量更新时间",
+  },
+  "sitemap.last_incremental_update": {
+    type: "string",
+    required: false,
+    description: "最后一次增量更新时间",
+  },
   cors: {
     type: "array",
     required: true,

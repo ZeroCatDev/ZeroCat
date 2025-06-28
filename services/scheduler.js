@@ -190,6 +190,15 @@ class SchedulerService {
 
     logger.info('[scheduler] 所有任务已停止');
   }
+
+  /**
+   * 检查任务是否正在运行
+   * @param {string} taskId - 任务ID
+   * @returns {boolean} 是否正在运行
+   */
+  isTaskRunning(taskId) {
+    return taskHandles.has(taskId);
+  }
 }
 
 // 创建单例实例
