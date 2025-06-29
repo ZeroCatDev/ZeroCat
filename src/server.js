@@ -27,11 +27,11 @@ class ServerConfig {
 
         // 启动服务器
         this.server.listen(this.port, this.host, () => {
-          logger.info(`服务器已启动，监听 http://${this.host}:${this.port}`);
+          logger.info(`[server] 服务器已启动，监听 http://${this.host}:${this.port}`);
           resolve(this.server);
         });
       } catch (error) {
-        logger.error('启动服务器失败:', error);
+        logger.error('[server] 启动服务器失败:', error);
         reject(error);
       }
     });
@@ -43,9 +43,9 @@ class ServerConfig {
    */
   handleServerError(error) {
     if (error.code === 'EADDRINUSE') {
-      logger.error(`端口 ${this.port} 已被占用，请尝试不同端口`);
+      logger.error(`[server] 端口 ${this.port} 已被占用，请尝试不同端口`);
     } else {
-      logger.error('服务器错误:', error);
+      logger.error('[server] 服务器错误:', error);
     }
 
     // 严重错误，退出进程
@@ -58,17 +58,17 @@ class ServerConfig {
    */
   async stop() {
     if (!this.server) {
-      logger.warn('尝试关闭未启动的服务器');
+      logger.warn('[server] 尝试关闭未启动的服务器');
       return;
     }
 
     return new Promise((resolve, reject) => {
       this.server.close((error) => {
         if (error) {
-          logger.error('关闭服务器出错:', error);
+          logger.error('[server] 关闭服务器出错:', error);
           reject(error);
         } else {
-          logger.info('服务器已优雅关闭');
+          logger.info('[server] 服务器已关闭');
           resolve();
         }
       });

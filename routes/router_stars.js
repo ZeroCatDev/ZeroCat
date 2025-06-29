@@ -1,7 +1,7 @@
 import logger from "../services/logger.js";
 import { Router } from "express";
 import { needLogin } from "../middleware/auth.js";
-import { createEvent, TargetTypes } from "../controllers/events.js";
+import { createEvent } from "../controllers/events.js";
 import {
   starProject,
   unstarProject,

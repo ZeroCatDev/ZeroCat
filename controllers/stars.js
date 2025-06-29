@@ -1,8 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import logger from "../services/logger.js";
 import { prisma } from "../services/global.js";
-import notificationUtils from "./notifications.js";
-import { createEvent, TargetTypes } from "./events.js";
+import { createEvent } from "./events.js";
 
 const prismaClient = new PrismaClient();
 
@@ -62,7 +61,7 @@ export async function starProject(userId, projectId) {
       eventType: "project_star",
       actorId: parsedUserId,
 
-      targetType: TargetTypes.PROJECT,
+      targetType: "project",
       targetId: parsedProjectId,
       eventData: {
         NotificationTo: [project.authorid]
@@ -182,38 +181,5 @@ export async function getProjectStars(projectId) {
   } catch (error) {
     logger.error("Error in getProjectStars:", error);
     throw error;
-  }
-}
-
-/**
- * Create a notification for project star
- * @private
- * @param {object} project - The project object
- * @param {number} userId - The user ID who starred the project
- */
-async function createStarNotification(project, userId) {
-  try {
-    const actorInfo = await notificationUtils.getActorInfo(userId);
-
-    if (actorInfo) {
-      const notificationData = notificationUtils.createProjectNotificationData({
-        notificationType: notificationUtils.NotificationTypes.PROJECT_STAR,
-        userId: project.authorid,
-        actorId: userId,
-        projectId: project.id,
-        projectTitle: project.title,
-        additionalData: {
-          star_count: (project.star_count || 0) + 1,
-          acting_user_name: actorInfo.display_name,
-          acting_user_avatar_template: actorInfo.acting_user_avatar_template
-        }
-      });
-
-      await notificationUtils.createNotification(notificationData);
-      logger.debug(`Created star notification for user ${project.authorid}`);
-    }
-  } catch (error) {
-    logger.error("Error creating star notification:", error);
-    // Don't throw the error as notification failure shouldn't affect the main flow
   }
 }

@@ -22,7 +22,7 @@ const s3config = {
     secretAccessKey: await zcconfig.get("s3.AWS_SECRET_ACCESS_KEY"),
   },
 };
-logger.debug(s3config);
+//logger.debug(s3config);
 
 const s3 = new S3Client(s3config);
 

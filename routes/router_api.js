@@ -8,6 +8,8 @@ import cryptojs from "crypto-js";
 import { prisma } from "../services/global.js";
 import { needLogin, strictTokenCheck, needAdmin } from "../middleware/auth.js";
 import followsRoutes from "./router_follows.js";
+import { CONFIG_TYPES } from "../services/config/configTypes.js";
+import sitemapService from '../services/sitemap.js';
 
 router.get("/usertx", async function (req, res, next) {
   try {
@@ -16,7 +18,7 @@ router.get("/usertx", async function (req, res, next) {
         id: parseInt(req.query.id),
       },
       select: {
-        images: true,
+        avatar: true,
       },
     });
     if (!USER) {
@@ -29,7 +31,7 @@ router.get("/usertx", async function (req, res, next) {
     }
     res.redirect(
       302,
-      (await zcconfig.get("s3.staticurl")) + "/user/" + USER.images
+      (await zcconfig.get("s3.staticurl")) + "/user/" + USER.avatar
     );
   } catch (err) {
     next(err);
@@ -45,11 +47,19 @@ router.get("/getuserinfo", async function (req, res, next) {
       select: {
         id: true,
         display_name: true,
+                bio: true,
         motto: true,
-        images: true,
+
+        avatar: true,
         regTime: true,
         sex: true,
         username: true,
+        location: true,
+        region: true,
+        birthday: true,
+        featured_projects: true,
+        custom_status: true,
+        url: true,
       },
     });
 
@@ -138,16 +148,18 @@ router.get("/projectinfo", async function (req, res, next) {
       where: { id: project.authorid },
       select: {
         display_name: true,
-        images: true,
+        avatar: true,
+                bio: true,
         motto: true,
+
       },
     });
 
     res.json({
       ...project,
       author_display_name: author.display_name,
-      author_images: author.images,
-      author_motto: author.motto,
+      author_avatar: author.avatar,
+      author_bio: author.bio,
     });
   } catch (err) {
     next(err);
@@ -286,7 +298,7 @@ router.get("/tuxiaochao", async function (req, res) {
     // 查询用户信息
     const USER = await prisma.ow_users.findFirst({
       where: { id: userId },
-      select: { images: true },
+      select: { avatar: true },
     });
 
     if (!USER) {
@@ -298,7 +310,7 @@ router.get("/tuxiaochao", async function (req, res) {
       return;
     }
 
-    const userImage = USER.images;
+    const userImage = USER.avatar;
     const txcinfo = `${userId}${displayName}${staticUrl}/user/${userImage}${txckey}`;
     const cryptostr = cryptojs.MD5(txcinfo).toString();
 
@@ -312,6 +324,61 @@ router.get("/tuxiaochao", async function (req, res) {
       status: "error",
       message: "服务器内部错误",
     });
+  }
+});
+
+router.get("/public-config", async function (req, res, next) {
+  try {
+    // 获取所有 public: true 的配置项 key
+    const publicKeys = Object.entries(CONFIG_TYPES)
+      .filter(([_, v]) => v.public)
+      .map(([k]) => k);
+    // 并发获取所有配置项的当前值
+    const entries = await Promise.all(
+      publicKeys.map(async (key) => [key, await zcconfig.get(key)])
+    );
+    // 转为对象
+    const result = Object.fromEntries(entries);
+    res.status(200).json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Public sitemap route
+router.get('/sitemap.xml', async (req, res) => {
+  try {
+    const enabled = await zcconfig.get('sitemap.enabled');
+    if (!enabled) {
+      return res.status(404).send('Sitemap is disabled');
+    }
+
+    const hash = await sitemapService.getCurrentSitemapHash();
+    if (!hash) {
+      return res.status(404).send('Sitemap not generated yet');
+    }
+
+    const file = await prisma.ow_projects_file.findUnique({
+      where: { sha256: hash }
+    });
+
+    if (!file) {
+      return res.status(404).send('Sitemap file not found');
+    }
+
+    // Convert base64 to buffer
+    const buffer = Buffer.from(file.source, 'base64');
+
+    // Set appropriate headers
+    res.header('Content-Type', 'application/xml');
+    res.header('Content-Encoding', 'gzip');
+    res.header('Content-Length', buffer.length);
+
+    // Send the gzipped XML
+    res.send(buffer);
+  } catch (error) {
+    logger.error('[api] Error serving sitemap:', error);
+    res.status(500).send('Internal server error');
   }
 });
 

@@ -10,7 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_FILE = path.resolve(__dirname, "../../data/GeoLite2-City.mmdb");
 
 // 配置参数
-const CONFIG = {
+var CONFIG = {
   enabled: false, // 是否启用MaxMind
 };
 
@@ -29,16 +29,18 @@ const defaultResponse = {
 };
 // 从数据库加载配置
 const loadConfigFromDB = async () => {
+
   try {
     const enabled = await zcconfig.get("maxmind.enabled");
+    logger.debug("[ip] 从数据库加载MaxMind配置:", enabled);
     if (enabled !== null) {
-      CONFIG.enabled = enabled === "true" || enabled === "1";
+      CONFIG.enabled = enabled === true;
     }
-    logger.debug("已从数据库加载MaxMind配置", CONFIG);
+    logger.debug("[ip] 已从数据库加载MaxMind配置", CONFIG);
     await initMaxMind();
     return CONFIG;
   } catch (error) {
-    logger.error("从数据库加载MaxMind配置失败:", error);
+    logger.error("[ip] 从数据库加载MaxMind配置失败:", error);
   }
 };
 
@@ -49,7 +51,7 @@ const initMaxMind = async () => {
   }
 
   if (!CONFIG.enabled) {
-    logger.debug("MaxMind GeoIP未启用，跳过初始化");
+    logger.debug("[ip] MaxMind GeoIP未启用，跳过初始化");
     return;
   }
 
@@ -59,9 +61,9 @@ const initMaxMind = async () => {
     // 加载数据库
     const dbBuffer = fs.readFileSync(DB_FILE);
     geoipReader = Reader.openBuffer(dbBuffer);
-    logger.info("MaxMind GeoIP数据库加载成功");
+    logger.info("[ip] MaxMind GeoIP数据库加载成功");
   } catch (error) {
-    logger.error("初始化MaxMind GeoIP数据库失败:", error);
+    logger.error("[ip] 初始化MaxMind GeoIP数据库失败:", error);
     geoipReader = null;
   }
 };
@@ -84,7 +86,7 @@ const initMaxMind = async () => {
  */
 const getIPLocation = async (ipAddress) => {
   if (!ipAddress) {
-    logger.warn("IP地址为空");
+    logger.warn("[ip] IP地址为空");
     return defaultResponse;
   }
 
@@ -92,7 +94,7 @@ const getIPLocation = async (ipAddress) => {
     try {
       const response = geoipReader.city("128.101.101.101");
       if (!response) {
-        logger.debug(`MaxMind查询IP(${ipAddress})位置失败: 返回空响应`);
+        logger.debug(`[ip] MaxMind查询IP(${ipAddress})位置失败: 返回空响应`);
         return defaultResponse;
       }
 
@@ -129,7 +131,7 @@ const getIPLocation = async (ipAddress) => {
         //response: response,
       };
     } catch (error) {
-      logger.debug(`MaxMind查询IP(${ipAddress})位置失败: ${error.message}`);
+      logger.debug(`[ip] MaxMind查询IP(${ipAddress})位置失败: ${error.message}`);
     }
   }
 

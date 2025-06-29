@@ -6,7 +6,6 @@ import {
   userpwTest,
   emailTest,
 } from "../../services/global.js";
-import { createEvent, TargetTypes } from "../events.js";
 import redisClient from "../../services/redis.js";
 import zcconfig from "../../services/config/zcconfig.js";
 import {
@@ -154,7 +153,7 @@ export const loginWithPassword = async (req, res, next) => {
     const tokenResult = await tokenUtils.createUserLoginTokens(
       user.id,
       userInfo,
-      req.ip,
+      req.ipInfo?.clientIP || req.ip,
       req.headers["user-agent"],
       {
         recordLoginEvent: true,
@@ -350,7 +349,7 @@ export const loginWithCode = async (req, res) => {
     const tokenResult = await tokenUtils.createUserLoginTokens(
       user.id,
       userInfo,
-      req.ip,
+      req.ipInfo?.clientIP || req.ip,
       req.headers["user-agent"],
       {
         recordLoginEvent: true,
@@ -579,7 +578,7 @@ export const validateMagicLinkAndLogin = async (req, res) => {
     const tokenResult = await tokenUtils.createUserLoginTokens(
       user.id,
       userInfo,
-      req.ip,
+      req.ipInfo?.clientIP || req.ip,
       req.headers["user-agent"],
       {
         recordLoginEvent: true,

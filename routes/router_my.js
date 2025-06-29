@@ -13,7 +13,7 @@ import { S3update, checkhash, hash, prisma } from "../services/global.js";
 //数据库
 import geetestMiddleware from "../middleware/geetest.js";
 import multer from "multer";
-import { createEvent, TargetTypes } from "../controllers/events.js";
+import { createEvent } from "../controllers/events.js";
 
 const upload = multer({ dest: "./usercontent" });
 
@@ -41,7 +41,7 @@ router.post("/set/avatar", upload.single("zcfile"), async (req, res) => {
       await S3update(`user/${hashValue}`, fileBuffer);
       await prisma.ow_users.update({
         where: { id: res.locals.userid },
-        data: { images: hashValue },
+        data: { avatar: hashValue },
       });
       res.status(200).send({ status: "success", message: "头像上传成功" });
     });
@@ -68,35 +68,82 @@ router.use((err, req, res, next) => {
 //修改个人信息
 router.post("/set/userinfo", async (req, res) => {
   try {
+    const updateData = {
+      display_name: req.body.display_name,
+      bio: req.body.bio,
+      bio: req.body.bio,
+      location: req.body.location,
+      region: req.body.region,
+      sex: req.body.sex,
+      url: req.body.url,
+      birthday: req.body.birthday ? new Date(req.body.birthday) : undefined
+    };
+
+    // 处理custom_status (表情和状态文本)
+    if (req.body.custom_status) {
+      try {
+        updateData.custom_status = JSON.parse(req.body.custom_status);
+      } catch (e) {
+        return res.status(400).send({
+          status: "error",
+          message: "custom_status 必须是有效的 JSON 格式"
+        });
+      }
+    }
+
+    // 处理featured_projects (精选项目ID)
+    if (req.body.featured_projects) {
+      const featuredProjectId = parseInt(req.body.featured_projects);
+      if (isNaN(featuredProjectId)) {
+        return res.status(400).send({
+          status: "error",
+          message: "featured_projects 必须是有效的数字"
+        });
+      }
+
+      // 验证项目是否存在且属于当前用户
+      const project = await prisma.ow_projects.findFirst({
+        where: {
+          id: featuredProjectId,
+          authorid: res.locals.userid
+        }
+      });
+
+      if (!project) {
+        return res.status(400).send({
+          status: "error",
+          message: "指定的项目不存在或不属于当前用户"
+        });
+      }
+
+      updateData.featured_projects = featuredProjectId;
+    }
+
+    // 移除所有undefined的字段
+    Object.keys(updateData).forEach(key =>
+      updateData[key] === undefined && delete updateData[key]
+    );
+
     await prisma.ow_users.update({
       where: { id: res.locals.userid },
-      data: {
-        display_name: req.body["display_name"],
-        motto: req.body["aboutme"],
-        sex: req.body["sex"],
-        birthday: new Date(`2000-01-01 00:00:00`),
-      },
+      data: updateData
     });
 
     // 添加个人资料更新事件
     await createEvent(
       "user_profile_update",
       res.locals.userid,
-      TargetTypes.USER,
+      "user",
       res.locals.userid,
       {
         event_type: "user_profile_update",
         actor_id: res.locals.userid,
-        target_type: TargetTypes.USER,
+        target_type: "user",
         target_id: res.locals.userid,
         update_type: "profile_update",
-        updated_fields: ["display_name", "motto", "sex", "birthday"],
+        updated_fields: Object.keys(updateData),
         old_value: null,
-        new_value: JSON.stringify({
-          display_name: req.body["display_name"],
-          motto: req.body["aboutme"],
-          sex: req.body["sex"]
-        })
+        new_value: JSON.stringify(updateData)
       }
     );
 

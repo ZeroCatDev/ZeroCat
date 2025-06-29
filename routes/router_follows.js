@@ -230,7 +230,7 @@ router.delete('/block/:userId', needLogin, async (req, res) => {
  *         "id": 123,
  *         "username": "user1",
  *         "display_name": "User One",
- *         "images": "abc123def456",
+ *         "avatar": "abc123def456",
  *         "avatar": "https://example.com/avatar/abc123def456",
  *         "relationship": {
  *           "id": 456,
@@ -283,7 +283,7 @@ router.get('/followers/:userId', async (req, res) => {
  *         "id": 789,
  *         "username": "user2",
  *         "display_name": "User Two",
- *         "images": "xyz789abc",
+ *         "avatar": "xyz789abc",
  *         "avatar": "https://example.com/avatar/xyz789abc",
  *         "relationship": {
  *           "id": 789,
@@ -335,7 +335,7 @@ router.get('/following/:userId', async (req, res) => {
  *         "id": 555,
  *         "username": "blocked_user",
  *         "display_name": "Blocked User",
- *         "images": "def456ghi789",
+ *         "avatar": "def456ghi789",
  *         "avatar": "https://example.com/avatar/def456ghi789",
  *         "relationship": {
  *           "id": 123,

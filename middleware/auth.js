@@ -1,7 +1,10 @@
 import jsonwebtoken from "jsonwebtoken";
 import zcconfig from "../services/config/zcconfig.js";
 import logger from "../services/logger.js";
-import { verifyToken, updateTokenActivity } from "../services/auth/tokenUtils.js";
+import {
+  verifyToken,
+  updateTokenActivity,
+} from "../services/auth/tokenUtils.js";
 import { prisma } from "../services/global.js";
 
 /**
@@ -40,8 +43,9 @@ const validateTokenInDatabase = async (tokenId, ipAddress = null) => {
     // 如果提供了IP地址，更新令牌的活动记录
     if (ipAddress) {
       // 使用单独的变量避免影响函数返回
-      updateTokenActivity(tokenId, ipAddress)
-        .catch((err) => logger.error("更新令牌活动记录时出错:", err));
+      updateTokenActivity(tokenId, ipAddress).catch((err) =>
+        logger.error("更新令牌活动记录时出错:", err)
+      );
     }
 
     return {
@@ -102,7 +106,7 @@ export const parseToken = async (req, res, next) => {
 
   try {
     // 使用新的令牌验证系统，传递IP地址用于追踪
-    const { valid, user, message } = await verifyToken(token, req.ip);
+    const { valid, user, message } = await verifyToken(token, req.ipInfo?.clientIP || req.ip);
 
     if (valid && user) {
       // 设置用户信息
@@ -143,9 +147,10 @@ export const strictTokenCheck = async (req, res, next) => {
 
   try {
     // 重新验证令牌有效性
-    const token = req.headers["authorization"]?.split(" ")[1] ||
-                 req.query.token ||
-                 req.cookies?.token;
+    const token =
+      req.headers["authorization"]?.split(" ")[1] ||
+      req.query.token ||
+      req.cookies?.token;
 
     if (!token) {
       return res.status(401).json({
@@ -155,7 +160,7 @@ export const strictTokenCheck = async (req, res, next) => {
       });
     }
 
-    const { valid, message } = await verifyToken(token, req.ip);
+    const { valid, message } = await verifyToken(token, req.ipInfo?.clientIP || req.ip);
 
     if (!valid) {
       return res.status(401).json({
@@ -186,13 +191,13 @@ export const strictTokenCheck = async (req, res, next) => {
 export const needLogin = async (req, res, next) => {
   if (!res.locals.userid) {
     if (req.headers["accept"]?.includes("application/json")) {
-      return res.status(401).send({
+      return res.status(401).json({
         status: "error",
         message: "需要登录",
-        code: 'ZC_ERROR_NEED_LOGIN',
+        code: "ZC_ERROR_NEED_LOGIN",
       });
     } else {
-      return res.redirect("/login");
+      return res.redirect(await zcconfig.get("urls.frontend") + "/app/login");
     }
   }
 
@@ -200,20 +205,30 @@ export const needLogin = async (req, res, next) => {
   // 这不会阻塞请求继续处理
   if (res.locals.tokenId) {
     // 获取令牌
-    const token = req.headers["authorization"]?.split(" ")[1] ||
-                 req.query.token ||
-                 req.cookies?.token;
+    const token =
+      req.headers["authorization"]?.split(" ")[1] ||
+      req.query.token ||
+      req.cookies?.token;
 
     if (token) {
-      verifyToken(token, req.ip)
-        .then(({ valid, message }) => {
-          if (!valid) {
-            logger.debug(`用户 ${res.locals.userid} 使用无效令牌: ${message}`);
-          }
-        })
-        .catch((err) => {
-          logger.debug("异步验证令牌时出错:", err);
+      try {
+        const { valid, message } = await verifyToken(token, req.ipInfo?.clientIP || req.ip);
+        if (!valid) {
+          logger.debug(`用户 ${res.locals.userid} 使用无效令牌: ${message}`);
+          return res.status(401).json({
+            status: "error",
+            message: "无效的认证令牌",
+            code: "ZC_ERROR_INVALID_TOKEN",
+          });
+        }
+      } catch (err) {
+        logger.debug("验证令牌时出错:", err);
+        return res.status(401).json({
+          status: "error",
+          message: "令牌验证失败",
+          code: "ZC_ERROR_TOKEN_VERIFICATION_FAILED",
         });
+      }
     }
   }
 
@@ -232,7 +247,7 @@ export const needAdmin = async (req, res, next) => {
       return res.status(401).send({
         status: "error",
         message: "需要登录",
-        code: 'ZC_ERROR_NEED_LOGIN',
+        code: "ZC_ERROR_NEED_LOGIN",
       });
     } else {
       return res.redirect("/login");
@@ -240,12 +255,8 @@ export const needAdmin = async (req, res, next) => {
   }
 
   try {
-    const adminConfig = await zcconfig.get(
-      "security.adminusers",
-      ""
-    );
-    const adminUsers = adminConfig.split(",").map((id) => id.trim());
-
+    const adminUsers = await zcconfig.get("security.adminusers");
+    logger.debug(adminUsers);
     if (!adminUsers.includes(res.locals.userid.toString())) {
       return res.status(403).json({
         status: "error",

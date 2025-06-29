@@ -15,10 +15,11 @@ import {
   generateFileAccessToken,
   verifyFileAccessToken,
 } from "../services/auth/tokenManager.js";
-import { needLogin, strictTokenCheck, needAdmin } from "../middleware/auth.js";
+import { needLogin } from "../middleware/auth.js";
 import { hasProjectPermission } from "../services/auth/permissionManager.js";
 import { getUserByUsername } from "../controllers/users.js";
-import { createEvent, EventTypes, TargetTypes } from "../controllers/events.js";
+import { createEvent } from "../controllers/events.js";
+import { getAnalytics } from "../services/analytics.js";
 
 const router = Router();
 
@@ -82,6 +83,139 @@ async function updateBranchLatestCommit(projectid, branch, commitId) {
   });
 }
 
+// 根据类型查询项目
+router.get("/query", async (req, res, next) => {
+  try {
+    const { type, target, limit = 20, offset = 0 } = req.query;
+    const userId = res.locals.userid || 0; // 未登录用户为匿名用户
+
+    if (!type || !target) {
+      return res.status(400).send({
+        status: "error",
+        message: "缺少必要的参数",
+      });
+    }
+
+    let projects;
+    let totalCount;
+
+    // Fork 类型查询
+    if (type === "fork") {
+      [projects, totalCount] = await Promise.all([
+        prisma.ow_projects.findMany({
+          where: {
+            fork: Number(target),
+            OR: [
+              { state: "public" },
+              { authorid: userId }
+            ]
+          },
+          select: projectSelectionFields(),
+          take: Number(limit),
+          skip: Number(offset),
+          orderBy: { time: "desc" }
+        }),
+        prisma.ow_projects.count({
+          where: {
+            fork: Number(target),
+            OR: [
+              { state: "public" },
+              { authorid: userId }
+            ]
+          }
+        })
+      ]);
+    }
+    // Tag 类型查询
+    else if (type === "tag") {
+      [projects, totalCount] = await Promise.all([
+        prisma.ow_projects.findMany({
+          where: {
+            state: "public",
+            project_tags: {
+              some: {
+                name: target
+              }
+            },
+            OR: [
+              { state: "public" },
+              { authorid: userId }
+            ]
+          },
+          select: projectSelectionFields(),
+          take: Number(limit),
+          skip: Number(offset),
+          orderBy: { time: "desc" }
+        }),
+        prisma.ow_projects.count({
+          where: {
+            state: "public",
+            project_tags: {
+              some: {
+                name: target
+              }
+            },
+            OR: [
+              { state: "public" },
+              { authorid: userId }
+            ]
+          }
+        })
+      ]);
+    }
+    // 作者类型查询
+    else if (type === "author") {
+      [projects, totalCount] = await Promise.all([
+        prisma.ow_projects.findMany({
+          where: {
+            authorid: Number(target),
+            OR: [
+              { state: "public" },
+              { authorid: userId }
+            ]
+          },
+          select: projectSelectionFields(),
+          take: Number(limit),
+          skip: Number(offset),
+          orderBy: { time: "desc" }
+        }),
+        prisma.ow_projects.count({
+          where: {
+            authorid: Number(target),
+            OR: [
+              { state: "public" },
+              { authorid: userId }
+            ]
+          }
+        })
+      ]);
+    }
+
+    // 不支持的查询类型
+    else {
+      return res.status(400).send({
+        status: "error",
+        message: "不支持的查询类型",
+      });
+    }
+
+    res.status(200).send({
+      status: "success",
+      message: "获取成功",
+      data: {
+        projects,
+        total: totalCount,
+        limit: Number(limit),
+        offset: Number(offset)
+      }
+    });
+
+  } catch (err) {
+    logger.error("Error querying projects:", err);
+    next(err);
+  }
+});
+
 // 创建新作品
 router.post("/", needLogin, async (req, res, next) => {
   try {
@@ -117,12 +251,12 @@ router.post("/", needLogin, async (req, res, next) => {
     await createEvent(
       "project_create",
       res.locals.userid,
-      TargetTypes.PROJECT,
+      "project",
       result.id,
       {
         event_type: "project_create",
         actor_id: res.locals.userid,
-        target_type: TargetTypes.PROJECT,
+        target_type: "project",
         target_id: Number(result.id),
         project_name: result.name,
         project_type: result.type,
@@ -308,6 +442,7 @@ router.put("/commit/id/:id", needLogin, async (req, res, next) => {
       accessFileToken,
       await zcconfig.get("security.jwttoken")
     );
+    logger.debug(decodedFileToken);
     if (!decodedFileToken) {
       return res.status(200).send({
         status: "error",
@@ -316,7 +451,8 @@ router.put("/commit/id/:id", needLogin, async (req, res, next) => {
     }
 
     const { sha256, type, action, userid } = decodedFileToken.data;
-    if (type !== "file" || action !== "read" || userid !== res.locals.userid) {
+    if (decodedFileToken.type !== "file" || action !== "read" || Number(userid) !== Number(res.locals.userid)) {
+
       return res.status(200).send({
         status: "error",
         message: "无效的文件访问令牌 #1",
@@ -352,6 +488,7 @@ router.put("/commit/id/:id", needLogin, async (req, res, next) => {
         branch,
         commit_file: sha256,
         commit_message: message,
+        commit_description: commit_description,
         parent_commit_id,
         commit_date: new Date(timestamp),
       },
@@ -366,12 +503,12 @@ router.put("/commit/id/:id", needLogin, async (req, res, next) => {
     await createEvent(
       "project_commit",
       res.locals.userid,
-      TargetTypes.PROJECT,
+      "project",
       Number(projectid),
       {
         event_type: "project_commit",
         actor_id: res.locals.userid,
-        target_type: TargetTypes.PROJECT,
+        target_type: "project",
         target_id: Number(projectid),
         commit_id: commitId,
         commit_message: message,
@@ -417,6 +554,7 @@ router.post("/batch", async (req, res, next) => {
     // 获取所有项目
     const projects = await prisma.ow_projects.findMany({
       where: { id: { in: projectIds } },
+      select: projectSelectionFields()
     });
 
     // 并行化权限检查
@@ -645,7 +783,7 @@ router.put("/id/:id", needLogin, async (req, res, next) => {
     await createEvent(
       "project_info_update",
       res.locals.userid,
-      TargetTypes.PROJECT,
+      "project",
       Number(req.params.id),
       {
         updated_fields: changes.updated_fields,
@@ -779,12 +917,12 @@ router.delete("/:id", async (req, res, next) => {
       await createEvent(
         "project_delete",
         res.locals.userid,
-        TargetTypes.PROJECT,
+        "project",
         Number(req.params.id),
         {
           event_type: "project_delete",
           actor_id: res.locals.userid,
-          target_type: TargetTypes.PROJECT,
+          target_type: "project",
           target_id: Number(req.params.id),
           project_name: project.name,
           project_type: project.type,
@@ -939,12 +1077,12 @@ router.put("/rename/:id", needLogin, async (req, res, next) => {
     await createEvent(
       "project_rename",
       res.locals.userid,
-      TargetTypes.PROJECT,
+      "project",
       Number(id),
       {
         event_type: "project_rename",
         actor_id: res.locals.userid,
-        target_type: TargetTypes.PROJECT,
+        target_type: "project",
         target_id: Number(id),
         old_name: project.name,
         new_name: newName,
@@ -1132,7 +1270,7 @@ router.post("/fork", needLogin, async (req, res, next) => {
     await createEvent(
       "project_fork",
       res.locals.userid,
-      TargetTypes.PROJECT,
+      "project",
       Number(forkedProject.id),
       {NotificationTo: [project.authorid]},
       isPrivate
@@ -1146,6 +1284,96 @@ router.post("/fork", needLogin, async (req, res, next) => {
   }
 });
 
+// 获取项目访问统计数据
+router.get("/stats/:id", async (req, res, next) => {
+  try {
+    const userId = res.locals.userid || 0; // 未登录用户为匿名用户
+    await checkProjectPermission(req.params.id, userId, "read");
+
+    // 获取分析数据（最近30天）
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const [analytics, forkCount] = await Promise.all([
+      getAnalytics(
+        "project",
+        Number(req.params.id),
+        thirtyDaysAgo.toISOString().split('T')[0],
+        now.toISOString().split('T')[0]
+      ),
+      prisma.ow_projects.count({
+        where: {
+          fork: Number(req.params.id)
+        }
+      })
+    ]);
+
+    res.status(200).send({
+      status: "success",
+      message: "获取成功",
+      data: {
+        pageviews: analytics.overview.pageviews.value,
+        visitors: analytics.overview.visitors.value,
+        forks: forkCount
+      }
+    });
+  } catch (err) {
+    logger.error("Error getting project stats:", err);
+    next(err);
+  }
+});
+
+// 获取项目信息（包含分析数据）
+router.get("/info/:id", async (req, res, next) => {
+  try {
+    const userId = res.locals.userid || 0; // 未登录用户为匿名用户
+    await checkProjectPermission(req.params.id, userId, "read");
+
+    // 获取项目基本信息
+    const project = await prisma.ow_projects.findFirst({
+      where: { id: Number(req.params.id) },
+      select: projectSelectionFields(),
+    });
+
+    // 获取作者信息
+    const author = await prisma.ow_users.findFirst({
+      where: { id: Number(project.authorid) },
+      select: authorSelectionFields(),
+    });
+
+    // 获取标签信息
+    const tags = await prisma.ow_projects_tags.findMany({
+      where: { projectid: Number(req.params.id) },
+      select: { name: true, id: true, created_at: true },
+    });
+
+    // 获取分析数据
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const analytics = await getAnalytics(
+      "project",
+      Number(req.params.id),
+      thirtyDaysAgo.toISOString().split('T')[0],
+      now.toISOString().split('T')[0]
+    );
+
+    // 组合所有数据
+    project.author = author;
+    project.tags = tags;
+    project.analytics = {
+      pageviews: analytics.overview.pageviews.value,
+      visitors: analytics.overview.visitors.value,
+    };
+
+    res.status(200).send({
+      status: "success",
+      message: "获取成功",
+      data: project,
+    });
+  } catch (err) {
+    logger.error("Error getting project information with analytics:", err);
+    next(err);
+  }
+});
 // 获取项目文件 放最后最后匹配免得冲突
 router.get("/:id/:branch/:ref", async (req, res, next) => {
   try {
@@ -1211,4 +1439,6 @@ router.get("/:id/:branch/:ref", async (req, res, next) => {
     next(err);
   }
 });
+
+
 export default router;

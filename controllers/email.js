@@ -76,7 +76,7 @@ const rateLimitEmailVerification = async (email) => {
   const count = memoryCache.get(key) || 0;
 
   if (count >= 3) {
-    throw new Error('发送验证码过于频繁，请稍后再试');
+    throw new Error('发送验证码过于频繁，请稍后再试 #2');
   }
 
   memoryCache.set(key, count + 1, 3600); // 1小时过期

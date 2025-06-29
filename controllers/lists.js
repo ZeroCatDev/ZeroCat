@@ -46,7 +46,19 @@ export async function getProjectList(listId, userId) {
         view_count: true,
         like_count: true,
         star_count: true,
-        time: true
+        time: true,
+        author: {
+          select: {
+            id: true,
+            username: true,
+            display_name: true,
+                    bio: true,
+        motto: true,
+
+            avatar: true,
+            regTime: true,
+          },
+        },
       }
     });
 
@@ -74,13 +86,13 @@ export async function getUserListInfoAndCheak(userId, projectId) {
 
     // 使用原始 SQL 查询获取用户的列表
     const lists = await prisma.$queryRaw`
-      SELECT * FROM ow_projects_lists 
+      SELECT * FROM ow_projects_lists
       WHERE authorid = ${parseInt(userId)}
     `;
 
     // 使用原始 SQL 查询获取项目的列表项
     const listItems = await prisma.$queryRaw`
-      SELECT * FROM ow_projects_list_items 
+      SELECT * FROM ow_projects_list_items
       WHERE projectid = ${parseInt(projectId)}
     `;
 
@@ -171,42 +183,50 @@ export async function deleteList(userId, listId) {
  */
 export async function addProjectToList(userId, listId, projectId) {
   try {
-    // 检查列表是否属于用户
-    const list = await prisma.$queryRaw`
-      SELECT * FROM ow_projects_lists
-      WHERE id = ${parseInt(listId)} AND authorid = ${parseInt(userId)}
-      LIMIT 1
-    `;
+    // Check if the list belongs to the user
+    const list = await prisma.ow_projects_lists.findFirst({
+      where: {
+        id: parseInt(listId),
+        authorid: parseInt(userId)
+      }
+    });
 
-    if (!list || list.length === 0) {
+    if (!list) {
       throw new Error("List not found or you don't have permission");
     }
 
-    // 检查项目是否已在列表中
-    const existingItem = await prisma.$queryRaw`
-      SELECT * FROM ow_projects_list_items
-      WHERE listid = ${parseInt(listId)} AND projectid = ${parseInt(projectId)}
-      LIMIT 1
-    `;
+    // Check if the project is already in the list
+    const existingItem = await prisma.ow_projects_list_items.findFirst({
+      where: {
+        listid: parseInt(listId),
+        projectid: parseInt(projectId)
+      }
+    });
 
-    if (existingItem && existingItem.length > 0) {
-      return existingItem[0];
+    if (existingItem) {
+      return existingItem;
     }
 
-    // 添加项目到列表
-    await prisma.$executeRaw`
-      INSERT INTO ow_projects_list_items (listid, projectid, createTime)
-      VALUES (${parseInt(listId)}, ${parseInt(projectId)}, NOW())
-    `;
+    // Add project to the list
+    const listItem = await prisma.ow_projects_list_items.create({
+      data: {
+        listid: parseInt(listId),
+        projectid: parseInt(projectId),
+        createTime: new Date()
+      }
+    });
 
-    // 更新列表的更新时间
-    await prisma.$executeRaw`
-      UPDATE ow_projects_lists
-      SET updateTime = NOW()
-      WHERE id = ${parseInt(listId)}
-    `;
+    // Update the list's update time
+    await prisma.ow_projects_lists.update({
+      where: {
+        id: parseInt(listId)
+      },
+      data: {
+        updateTime: new Date()
+      }
+    });
 
-    return { listid: parseInt(listId), projectid: parseInt(projectId) };
+    return listItem;
   } catch (error) {
     logger.error("Error in addProjectToList:", error);
     throw error;
@@ -267,7 +287,27 @@ export async function getUserListInfo(userId) {
     }
 
     const lists = await prisma.ow_projects_lists.findMany({
-      where: { authorid: parseInt(userId) }
+      where: { authorid: parseInt(userId) },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        state: true,
+        updateTime: true,
+        createTime: true,
+        author: {
+          select: {
+            id: true,
+            username: true,
+            display_name: true,
+                    bio: true,
+        motto: true,
+
+            avatar: true,
+            regTime: true,
+          },
+        },
+      },
     });
 
     return lists;
@@ -292,7 +332,26 @@ export async function getUserListInfoPublic(userId, currentUserId) {
       where.state = "public";
     }
 
-    const lists = await prisma.ow_projects_lists.findMany({ where });
+    const lists = await prisma.ow_projects_lists.findMany({ where ,select:{
+      id: true,
+      title: true,
+      description: true,
+      state: true,
+      updateTime: true,
+      createTime: true,
+      author: {
+        select: {
+          id: true,
+          username: true,
+          display_name: true,
+                  bio: true,
+        motto: true,
+
+          avatar: true,
+          regTime: true,
+        },
+      },
+    }});
 
     return lists;
   } catch (error) {
@@ -338,4 +397,4 @@ export async function updateList(userId, listId, data) {
     logger.error("Error in updateList:", error);
     throw error;
   }
-} 
+}

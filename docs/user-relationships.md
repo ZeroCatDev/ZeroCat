@@ -146,7 +146,7 @@ enum user_relationship_type {
 export async function superFollowUser(followerId, followedId) {
   try {
     // Implementation
-    const relationship = await prisma.user_relationships.create({
+    const relationship = await prisma.ow_user_relationships.create({
       data: {
         source_user_id: followerId,
         target_user_id: followedId,

@@ -1,0 +1,72 @@
+{
+  "project_comment": {
+    "title": "项目评论",
+    "template": "{{actor_name}} 评论了您的项目 {{target_name}}",
+    "icon": "comment",
+    "requiresActor": true,
+    "requiresData": ["target_name"]
+  },
+  "project_star": {
+    "title": "项目星标",
+    "template": "{{actor_name}} 为您的项目 {{target_name}} 添加了星标",
+    "icon": "star",
+    "requiresActor": true,
+    "requiresData": ["target_name"]
+  },
+  "project_fork": {
+    "title": "项目派生",
+    "template": "{{actor_name}} 派生了您的项目 {{target_name}}",
+    "icon": "fork",
+    "requiresActor": true,
+    "requiresData": ["target_name"]
+  },
+  "project_update": {
+    "title": "项目更新",
+    "template": "您关注的项目 {{target_name}} 有新的更新",
+    "icon": "update",
+    "requiresActor": false,
+    "requiresData": ["target_name"]
+  },
+  "project_collect": {
+    "title": "项目收藏",
+    "template": "{{actor_name}} 收藏了您的项目 {{target_name}}",
+    "icon": "collect",
+    "requiresActor": true,
+    "requiresData": ["target_name"]
+  },
+  "user_follow": {
+    "title": "新关注",
+    "template": "{{actor_name}} 关注了您",
+    "icon": "follow",
+    "requiresActor": true,
+    "requiresData": []
+  },
+  "user_new_comment": {
+    "title": "新评论",
+    "template": "{{target_name}} 有来自 {{actor_name}} 的新评论",
+    "icon": "comment",
+    "requiresActor": true,
+    "requiresData": []
+  },
+  "system_announcement": {
+    "title": "系统公告",
+    "template": "系统公告: {{content}}",
+    "icon": "announcement",
+    "requiresActor": false,
+    "requiresData": ["content"]
+  },
+  "comment_reply": {
+    "title": "评论回复",
+    "template": "{{actor_name}} 回复了您的评论: {{comment_text}}",
+    "icon": "reply",
+    "requiresActor": true,
+    "requiresData": ["comment_text"]
+  },
+  "custom_notification": {
+    "title": "自定义通知",
+    "template": "{{content}}",
+    "icon": "notification",
+    "requiresActor": false,
+    "requiresData": ["content"]
+  }
+}

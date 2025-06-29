@@ -1,10 +1,15 @@
+version: '3.9'  # 明确指定 Compose 文件版本
+
 services:
   zerocat:
-    restart: always
-    build:
-      context: . #指定dockerfile文件的所在路径
-      dockerfile: Dockerfile #指定Dockerfile文件名称
-    image: zerocat:1.0.0 #自定义镜像名和版本号
     container_name: zerocat
+    image: zerocat:1.0.0
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
-      - 3000:3000
+      - "3000:3000"
+    restart: unless-stopped  # 推荐值，更安全
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=mysql://root:123456@127.0.0.1:3557/zerocat_develop

@@ -3,7 +3,7 @@ import { prisma } from '../global.js';
 import jsonwebtoken from 'jsonwebtoken';
 import zcconfig from '../config/zcconfig.js';
 import crypto from 'crypto';
-import { createEvent, TargetTypes } from '../../controllers/events.js';
+import { createEvent } from '../../controllers/events.js';
 import redisClient from '../redis.js';
 
 /**
@@ -241,15 +241,10 @@ export async function createUserLoginTokens(userId, userInfo, ipAddress, userAge
       revoked: false
     }, refreshTokenExpiry);
 
-    // 可选: 记录登录事件
     if (options.recordLoginEvent) {
       try {
-        await createEvent("user_login", userId, TargetTypes.USER, userId, {
+        await createEvent("user_login", userId, "user", userId, {
           event_type: "user_login",
-          actor_id: userId,
-          target_type: TargetTypes.USER,
-          target_id: userId,
-          method: options.loginMethod || "token",
           device_info: deviceInfo,
           ip_address: ipAddress
         });
@@ -730,7 +725,7 @@ export async function refreshAccessToken(refreshToken, ipAddress, userAgent) {
       userid: user.id,
       username: user.username,
       display_name: user.display_name,
-      avatar: user.images,
+      avatar: user.avatar,
       email: primaryEmail?.contact_value
     };
 
@@ -819,7 +814,7 @@ export async function getUserInfoForToken(user, email = null) {
       userid: parseInt(user.id),
       username: user.username,
       display_name: user.display_name,
-      avatar: user.images,
+      avatar: user.avatar,
       email: email
     };
   } catch (error) {
@@ -829,7 +824,7 @@ export async function getUserInfoForToken(user, email = null) {
       userid: parseInt(user.id),
       username: user.username,
       display_name: user.display_name || user.username,
-      avatar: user.images
+      avatar: user.avatar
     };
   }
 }
@@ -849,7 +844,7 @@ export function generateLoginResponse(user, tokenResult, email, additionalData =
     userid: parseInt(user.id),
     username: user.username,
     display_name: user.display_name,
-    avatar: user.images,
+    avatar: user.avatar,
     email: email,
     token: tokenResult.accessToken,
     refresh_token: tokenResult.refreshToken,

@@ -1,17 +1,13 @@
 import { prisma } from "../services/global.js";
 import logger from "../services/logger.js";
-import { createNotification, NotificationTypes } from "./notifications.js";
+import { createNotification } from "./notifications.js";
 import {
-  TargetTypes,
-  EventTypes,
-  AudienceTypes,
   EventConfig,
   AudienceDataDependencies,
-  EventToNotificationMap
 } from "../config/eventConfig.js";
 
 // 重新导出这些常量供外部使用
-export { TargetTypes, EventTypes, AudienceTypes, EventConfig };
+export {  EventConfig };
 
 /**
  * 创建事件并异步发送通知
@@ -27,12 +23,12 @@ export async function createEvent(eventType, actorId, targetType, targetId, even
     }
 
     // 创建事件记录
-    const event = await prisma.events.create({
+    const event = await prisma.ow_events.create({
       data: {
         event_type: normalizedEventType,
-        actor_id: BigInt(actorId),
+        actor_id: actorId,
         target_type: targetType,
-        target_id: BigInt(targetId),
+        target_id: targetId,
         event_data: {
           ...eventData,
           actor_id: actorId,
@@ -65,10 +61,10 @@ export async function createEvent(eventType, actorId, targetType, targetId, even
  */
 export async function getTargetEvents(targetType, targetId, limit = 10, offset = 0, includePrivate = false) {
   try {
-    const events = await prisma.events.findMany({
+    const events = await prisma.ow_events.findMany({
       where: {
         target_type: targetType,
-        target_id: BigInt(targetId),
+        target_id: targetId,
         ...(includePrivate ? {} : { public: 1 }),
       },
       orderBy: {
@@ -90,9 +86,9 @@ export async function getTargetEvents(targetType, targetId, limit = 10, offset =
  */
 export async function getActorEvents(actorId, limit = 10, offset = 0, includePrivate = false) {
   try {
-    const events = await prisma.events.findMany({
+    const events = await prisma.ow_events.findMany({
       where: {
-        actor_id: BigInt(actorId),
+        actor_id: actorId,
         ...(includePrivate ? {} : { public: 1 }),
       },
       orderBy: {
@@ -162,15 +158,15 @@ async function getActor(actorId) {
 async function getTarget(targetType, targetId) {
   try {
     switch (targetType) {
-      case TargetTypes.PROJECT:
+      case "project":
         return await prisma.ow_projects.findUnique({
           where: { id: Number(targetId) }
         });
-      case TargetTypes.USER:
+      case "user":
         return await prisma.ow_users.findUnique({
           where: { id: Number(targetId) }
         });
-      case TargetTypes.COMMENT:
+      case "comment":
         return await prisma.ow_comment.findUnique({
           where: { id: Number(targetId) }
         });
@@ -193,8 +189,6 @@ async function processNotifications(event, eventConfig, eventData) {
 
     // 收集所有受众用户ID
     const usersMap = new Map(); // 使用Map去重
-
-
 
     // 用于存储中间结果的对象，供依赖关系使用
     const audienceResults = {};
@@ -229,11 +223,7 @@ async function processNotifications(event, eventConfig, eventData) {
     if (userIds.length === 0) return;
 
     // 获取对应的通知类型
-    const notificationType = EventToNotificationMap[event.event_type];
-    if (!notificationType) {
-      logger.debug(`未为事件类型 ${event.event_type} 定义通知类型`);
-      return;
-    }
+    const notificationType = event.event_type;
 
     // 创建通知
     const notificationPromises = userIds.map(userId =>
@@ -243,7 +233,7 @@ async function processNotifications(event, eventConfig, eventData) {
         actorId,
         targetType: event.target_type,
         targetId,
-        data: {}
+        data: eventData
       })
     );
 
@@ -253,7 +243,6 @@ async function processNotifications(event, eventConfig, eventData) {
   }
 }
 
-
 /**
  * 过滤黑名单用户
  */
@@ -262,7 +251,7 @@ async function filterBlacklistedUsers(actorId, userIds) {
 
   try {
     // 找出用户间的黑名单关系
-    const blacklistRelations = await prisma.user_relationships.findMany({
+    const blacklistRelations = await prisma.ow_user_relationships.findMany({
       where: {
         OR: [
           // 用户将行为者拉黑
@@ -329,6 +318,37 @@ async function getAudienceUsers(audienceType, event, eventData, audienceResults 
     if(eventData.NotificationTo){
       return eventData.NotificationTo
     }
+
+    // Handle direct target user notification
+    if (audienceType === "target_user") {
+      if (event.target_type === "user") {
+        // If target is a user, directly notify them
+        return [targetId];
+      }
+
+      // For other target types, notify their owners
+      let ownerId;
+      switch (event.target_type) {
+        case "project":
+          const project = await prisma.ow_projects.findUnique({
+            where: { id: targetId },
+            select: { authorid: true }
+          });
+          ownerId = project?.authorid;
+          break;
+        case "list":
+          const list = await prisma.ow_lists.findUnique({
+            where: { id: targetId },
+            select: { owner_id: true }
+          });
+          ownerId = list?.owner_id;
+          break;
+        // Add more cases for other target types as needed
+      }
+
+      return ownerId ? [ownerId] : [];
+    }
+
     // 处理依赖关系：如果这个受众类型依赖于另一个受众类型的结果
     if (audienceConfig.dependsOn) {
       const { audienceType: dependencyType, field } = audienceConfig.dependsOn;
@@ -359,12 +379,12 @@ async function getAudienceUsers(audienceType, event, eventData, audienceResults 
       const targetType = audienceConfig.target;
       let target;
 
-      if (targetType === 'project' && event.target_type === TargetTypes.PROJECT) {
+      if (targetType === 'project' && event.target_type === "project") {
         target = await prisma.ow_projects.findUnique({
           where: { id: targetId },
           select: audienceConfig.fields.reduce((obj, field) => ({ ...obj, [field]: true }), {})
         });
-      } else if (targetType === 'comment' && event.target_type === TargetTypes.COMMENT) {
+      } else if (targetType === 'comment' && event.target_type === "comment") {
         target = await prisma.ow_comment.findUnique({
           where: { id: targetId },
           select: audienceConfig.fields.reduce((obj, field) => ({ ...obj, [field]: true }), {})
@@ -437,7 +457,7 @@ async function getRelatedUsers(config, relationId) {
  * 获取项目关注者 - 导出供外部使用
  */
 export async function getProjectFollowersExternal(projectId) {
-  const followers = await prisma.user_relationships.findMany({
+  const followers = await prisma.ow_user_relationships.findMany({
     where: {
       target_user_id: Number(projectId),
       relationship_type: 'follow'
@@ -451,7 +471,7 @@ export async function getProjectFollowersExternal(projectId) {
  * 获取用户关注者 - 导出供外部使用
  */
 export async function getUserFollowersExternal(userId) {
-  const followers = await prisma.user_relationships.findMany({
+  const followers = await prisma.ow_user_relationships.findMany({
     where: {
       target_user_id: Number(userId),
       relationship_type: 'follow'

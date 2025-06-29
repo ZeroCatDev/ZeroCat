@@ -52,6 +52,33 @@ export const OAUTH_PROVIDERS = {
     clientId: null,
     clientSecret: null,
     redirectUri: null
+  },
+  "40code": {
+    id: '40code',
+    name: '40Code',
+    type: 'oauth_40code',
+    authUrl: 'https://www.40code.com/#page=oauth_authorize',
+    tokenUrl: 'https://api.abc.520gxx.com/oauth/token',
+    refreshUrl: 'https://api.abc.520gxx.com/oauth/refresh',
+    userInfoUrl: 'https://api.abc.520gxx.com/oauth/user',
+    scope: 'basic',
+    enabled: false,
+    clientId: null,
+    clientSecret: null,
+    redirectUri: null
+  },
+  linuxdo: {
+    id: 'linuxdo',
+    name: 'Linux.do',
+    type: 'oauth_linuxdo',
+    authUrl: 'https://connect.linux.do/oauth2/authorize',
+    tokenUrl: 'https://connect.linux.do/oauth2/token',
+    userInfoUrl: 'https://connect.linux.do/api/user',
+    scope: '',
+    enabled: false,
+    clientId: null,
+    clientSecret: null,
+    redirectUri: null
   }
 };
 
@@ -64,25 +91,33 @@ export async function initializeOAuthProviders() {
       const clientId = await zcconfig.get(`oauth.${provider.id}.client_id`);
       const clientSecret = await zcconfig.get(`oauth.${provider.id}.client_secret`);
       const baseUrl = await zcconfig.get('urls.backend');
-
-      provider.enabled = enabled === 'true';
+      provider.enabled = enabled;
       provider.clientId = clientId;
       provider.clientSecret = clientSecret;
       provider.redirectUri = `${baseUrl}/account/oauth/${provider.id}/callback`;
 
-      logger.debug(`OAuth provider ${provider.name} initialized, enabled: ${provider.enabled}`);
+      logger.debug(`OAuth 提供商 ${provider.name} 加载完成, 启用状态: ${provider.enabled}`);
     }
   } catch (error) {
-    logger.error('Failed to initialize OAuth providers:', error);
+    logger.error('[oauth] 初始化OAuth提供商失败:', error);
   }
 }
 
 // 生成 OAuth 授权 URL
 export async function generateAuthUrl(provider, state) {
   const config = OAUTH_PROVIDERS[provider];
-  if (!config) throw new Error('不支持的 OAuth 提供商');
-  if (!config.enabled) throw new Error('此 OAuth 提供商未启用');
+  if (!config) throw new Error('[oauth] 不支持的 OAuth 提供商');
+  if (!config.enabled) throw new Error('[oauth] 此 OAuth 提供商未启用');
 
+  if (provider === '40code') {
+    const params = new URLSearchParams({
+      client_id: config.clientId,
+      redirect_uri: config.redirectUri,
+      scope: config.scope,
+      state: state
+    });
+    return `${config.authUrl}&${params.toString()}`;
+  }
 
   const params = new URLSearchParams({
     client_id: config.clientId,
@@ -169,6 +204,30 @@ const getUserInfoFunctions = {
       email: primaryEmail,
       name: userData.name || userData.login
     };
+  },
+
+  "40code": async (accessToken) => {
+    const response = await fetch(OAUTH_PROVIDERS["40code"].userInfoUrl, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+    const data = await response.json();
+    return {
+      id: data.id.toString(),
+      email: data.email,
+      name: data.nickname,
+    };
+  },
+
+  linuxdo: async (accessToken) => {
+    const response = await fetch(OAUTH_PROVIDERS.linuxdo.userInfoUrl, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+    const data = await response.json();
+    return {
+      id: data.id.toString(),
+      email: data.email,
+      name: data.name || data.username
+    };
   }
 };
 
@@ -199,6 +258,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
 
     // 获取用户信息
     const userInfo = await getUserInfoFunctions[provider](accessToken);
+    logger.debug(userInfo);
 
     if (userIdToBind) {
       // 绑定操作
@@ -207,7 +267,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
       });
 
       if (!user) {
-        return { success: false, message: "绑定的用户不存在" };
+        return { success: false, message: "[oauth] 绑定的用户不存在" };
       }
 
       // 检查该 OAuth 账号是否已被其他用户绑定
@@ -226,11 +286,12 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
             contact_value: userInfo.id,
             contact_info: generateContactHash(),
             contact_type: "oauth_" + provider,
-            verified: true
+            verified: true,
+            metadata: userInfo
           }
         });
       } catch (error) {
-        return { success: false, message: "绑定 OAuth 账号时出错" };
+        return { success: false, message: "[oauth] 绑定 OAuth 账号时出错" };
         // 继续处理，不抛出异常
       }
 
@@ -246,7 +307,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
           }
         });
       } catch (error) {
-        logger.error('添加邮箱时出错:', error);
+        logger.error('[oauth] 添加邮箱时出错:', error);
         // 继续处理，不抛出异常
       }
 
@@ -273,7 +334,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
         if (emailContact) {
           // If found, associate with that user
           userId = emailContact.user_id;
-          logger.info(`关联 OAuth 账号到现有用户: ${userId}`);
+          logger.info(`[oauth] 关联 OAuth 账号到现有用户: ${userId}`);
         } else {
           // Create a new user
           const username = await generateUniqueUsername(userInfo.name || 'user');
@@ -285,11 +346,12 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
               password: null,  // OAuth 用户不需要密码
               display_name: userInfo.name || username,
               type: 'user',  // 设置为普通用户
-              regTime: new Date()
+              regTime: new Date(),
+              createdAt: new Date()  // 添加 createdAt 字段
             }
           });
           userId = newUser.id;
-          logger.info(`创建新用户: ${userId}, username: ${username}`);
+          logger.info(`[oauth] 创建新用户: ${userId}, username: ${username}`);
 
           // 创建 email 联系方式
           await prisma.ow_users_contacts.create({
@@ -322,7 +384,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
       });
 
       if (!user) {
-        throw new Error('用户不存在');
+        throw new Error('[oauth] 用户不存在');
       }
 
       // 获取用户主邮箱
@@ -340,7 +402,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
       };
     }
   } catch (error) {
-    logger.error('OAuth callback error:', error);
+    logger.error('[oauth] OAuth callback error:', error);
     throw error;
   }
 }

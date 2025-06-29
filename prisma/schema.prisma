@@ -4,8 +4,9 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
 }
 
 model ow_comment {
@@ -22,10 +23,12 @@ model ow_comment {
   user_ua    String?   @db.MediumText
   url        String?   @db.VarChar(255)
   page_type  String?   @db.VarChar(32)
-  page_id    Int?
+  page_id    String?   @db.VarChar(32)
   createdAt  DateTime? @default(now()) @db.Timestamp(0)
   updatedAt  DateTime? @default(now()) @db.Timestamp(0)
   page_key   String?   @db.VarChar(128)
+
+  @@index([page_type, page_id, insertedAt], map: "idx_projects_comments")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -49,45 +52,70 @@ model ow_projects {
   tags           String    @default("") @db.VarChar(100)
   fork           Int?
   star_count     Int?      @default(0)
+
+  // Relations
+  author       ow_users?                 @relation("ProjectAuthor", fields: [authorid], references: [id])
+  stars        ow_projects_stars[]
+  lists        ow_projects_list_items[]
+  commits      ow_projects_commits[]
+  branches     ow_projects_branch[]
+  project_tags ow_projects_tags[]
+
+  @@index([state], map: "idx_projects_state")
+  @@index([authorid], map: "idx_project_author")
+  @@index([teacherid], map: "idx_project_teacher")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model ow_users {
-  id           Int              @unique(map: "id_UNIQUE") @default(autoincrement())
-  username     String           @unique(map: "user_UNIQUE") @db.Char(20)
-  email        String?          @db.Char(100)
-  password     String?          @db.VarChar(255)
-  display_name String           @default("OurWorld创作者") @db.Char(20)
+  id           Int       @unique(map: "id_UNIQUE") @default(autoincrement())
+  username     String    @unique(map: "user_UNIQUE") @db.Char(20)
+  email        String?   @db.Char(100)
+  password     String?   @db.VarChar(255)
+  display_name String    @default("OurWorld创作者") @db.Char(20)
   /// User account status: pending = newly registered, active = normal user, suspended = temporarily disabled, banned = permanently disabled
-  status       String           @default("active") @db.VarChar(20)
-  loginTime    DateTime?        @db.Timestamp(0)
-  regTime      DateTime?        @default(now()) @db.Timestamp(0)
-  sex          String?          @default("0") @db.VarChar(16)
-  birthday     DateTime?        @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
-  motto        String?          @db.LongText
-  images       String?          @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
-  avatar       String?          @default("https://owcdn.190823.xyz/user/fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
-  type         String?          @default("guest") @db.VarChar(50)
-  url          String?          @db.VarChar(255)
-  github       String?          @db.VarChar(255)
-  twitter      String?          @db.VarChar(255)
-  facebook     String?          @db.VarChar(255)
-  google       String?          @db.VarChar(255)
-  weibo        String?          @db.VarChar(255)
-  qq           String?          @db.VarChar(255)
-  fa           String?          @map("2fa") @db.VarChar(255)
-  createdAt    DateTime?        @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
-  updatedAt    DateTime?        @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
-  label        String?          @db.VarChar(255)
-  auth_tokens  ow_auth_tokens[]
+  status       String    @default("active") @db.VarChar(20)
+
+  // Profile information
+  motto        String?   @db.LongText  // One-line introduction
+  bio          String?   @db.LongText  // Markdown biography
+  location     String?   @db.VarChar(100)
+  region       String?   @db.VarChar(100)
+  birthday     DateTime? @default(dbgenerated("'2000-03-31 08:00:00'")) @db.Timestamp(0)
+  sex          String?   @default("0") @db.VarChar(16)
+  url          String?   @db.VarChar(255)
+  custom_status Json?    // Contains emoji and status text
+  featured_projects Int? // Array of featured project IDs stored as JSON
+
+  // Visual elements
+  images       String?   @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
+  avatar       String?   @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
+
+  // System fields
+  type         String?   @default("guest") @db.VarChar(50)
+  label        String?   @db.VarChar(255)
+  loginTime    DateTime? @db.Timestamp(0) @default(now())
+  regTime      DateTime? @db.Timestamp(0) @default(now())
+  createdAt    DateTime? @default(now()) @db.Timestamp(0)
+  updatedAt    DateTime? @updatedAt @db.Timestamp(0)
+
+  // Relations
+  auth_tokens             ow_auth_tokens[]
+  authored_projects       ow_projects[]           @relation("ProjectAuthor")
+  starred_projects        ow_projects_stars[]
+  project_lists           ow_projects_lists[]
+  contacts                ow_users_contacts[]
+  relationships_as_source ow_user_relationships[] @relation("RelationshipSource")
+  relationships_as_target ow_user_relationships[] @relation("RelationshipTarget")
+  notifications_acted     ow_notifications[]      @relation("NotificationActor")
+  events_acted           ow_events[]             @relation("EventActor")
+
+  // OAuth relations
+  oauth_applications      ow_oauth_applications[]
+  oauth_authorizations    ow_oauth_authorizations[]
+  oauth_access_tokens     ow_oauth_access_tokens[]
 
   @@id([id, username])
-}
-
-model sys_ini {
-  id       Int     @id @default(autoincrement()) @db.UnsignedInt
-  iniKey   String? @db.Char(16)
-  iniValue String? @db.Char(64)
 }
 
 model ow_projects_file {
@@ -112,14 +140,22 @@ model ow_projects_history {
   tags        String?  @db.VarChar(100)
 }
 
+enum ow_config_type {
+  STRING
+  NUMBER
+  BOOLEAN
+  ARRAY
+  ENUM
+}
+
 model ow_config {
   id         Int       @id @default(autoincrement())
   key        String    @unique(map: "config_key") @db.VarChar(255)
   value      String    @db.Text
-  user_id    Int?
+  type       ow_config_type @default(STRING)
+  metadata   Json?
   created_at DateTime? @default(now()) @db.DateTime(0)
   updated_at DateTime? @default(now()) @db.DateTime(0)
-  is_public  Boolean?  @default(false)
 }
 
 model ow_users_totp {
@@ -143,6 +179,9 @@ model ow_projects_tags {
   projectid  Int
   created_at DateTime? @default(now()) @db.Timestamp(0)
 
+  // Relations
+  project ow_projects @relation(fields: [projectid], references: [id])
+
   @@index([projectid], map: "idx_projectid")
 }
 
@@ -152,6 +191,13 @@ model ow_projects_stars {
   userid     Int
   projectid  Int
   createTime DateTime? @default(now()) @db.Timestamp(0)
+
+  // Relations
+  user    ow_users    @relation(fields: [userid], references: [id])
+  project ow_projects @relation(fields: [projectid], references: [id])
+
+  @@index([projectid], map: "idx_projects_stars_project")
+  @@index([userid], map: "idx_projects_stars_user")
 }
 
 /// Project lists model - improved structure
@@ -164,6 +210,10 @@ model ow_projects_lists {
   list        String?   @db.MediumText
   updateTime  DateTime? @db.Timestamp(0)
   createTime  DateTime? @default(now()) @db.Timestamp(0)
+
+  // Relations
+  author     ow_users?                @relation(fields: [authorid], references: [id])
+  list_items ow_projects_list_items[]
 
   @@index([authorid], map: "idx_author_lists")
 }
@@ -179,7 +229,11 @@ model ow_projects_commits {
   commit_file        String   @db.VarChar(256)
   commit_description String?  @db.Text
 
+  // Relations
+  project ow_projects @relation(fields: [project_id], references: [id])
+
   @@id([id, project_id])
+  @@index([project_id, commit_date], map: "idx_projects_commits_project_date")
 }
 
 model ow_users_magiclink {
@@ -198,7 +252,11 @@ model ow_projects_branch {
   protected          String? @default("false") @db.VarChar(45)
   creator            Int?
 
+  // Relations
+  project ow_projects @relation(fields: [projectid], references: [id])
+
   @@unique([projectid, name], map: "unique_project_branch")
+  @@index([creator], map: "idx_branch_creator")
 }
 
 model ow_users_contacts {
@@ -209,41 +267,34 @@ model ow_users_contacts {
   contact_type  ow_users_contacts_contact_type
   is_primary    Boolean?                       @default(false)
   verified      Boolean?                       @default(false)
+  metadata      Json?
   created_at    DateTime?                      @default(now()) @db.Timestamp(0)
   updated_at    DateTime?                      @default(now()) @db.Timestamp(0)
 
-  @@unique([user_id, is_primary, contact_type], map: "unique_primary_contact")
+  // Relations
+  user ow_users @relation(fields: [user_id], references: [id])
+
+  @@index([user_id], map: "idx_user_contacts")
+  @@index([user_id, contact_type], map: "idx_user_contact_type")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model events {
-  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+model ow_events {
+  id          Int   @id @default(autoincrement()) @db.UnsignedInt
   event_type  String   @db.VarChar(50)
-  actor_id    BigInt   @db.UnsignedBigInt
+  actor_id    Int      @db.UnsignedInt
   target_type String   @db.VarChar(50)
-  target_id   BigInt   @db.UnsignedBigInt
+  target_id   Int   @db.UnsignedInt
   event_data  Json
   created_at  DateTime @default(now()) @db.Timestamp(0)
   public      Int      @default(0) @db.TinyInt
 
+  // Relations
+  actor       ow_users @relation("EventActor", fields: [actor_id], references: [id])
+
   @@index([created_at], map: "idx_created")
   @@index([target_type, target_id], map: "idx_target")
   @@index([event_type, actor_id], map: "idx_type_actor")
-}
-
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model notifications {
-  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
-  event_id   BigInt    @db.UnsignedBigInt
-  user_id    BigInt    @db.UnsignedBigInt
-  is_read    Boolean   @default(false)
-  read_at    DateTime? @db.Timestamp(0)
-  created_at DateTime  @default(now()) @db.Timestamp(0)
-
-  @@index([is_read, created_at], map: "idx_cleanup")
-  @@index([event_id, user_id], map: "idx_event_user")
-  @@index([user_id, created_at], map: "idx_user_all")
-  @@index([user_id, is_read, created_at], map: "idx_user_unread")
 }
 
 model ow_projects_list_items {
@@ -252,56 +303,13 @@ model ow_projects_list_items {
   projectid  Int
   createTime DateTime? @default(now()) @db.Timestamp(0)
 
+  // Relations
+  list    ow_projects_lists @relation(fields: [listid], references: [id])
+  project ow_projects       @relation(fields: [projectid], references: [id])
+
   @@unique([listid, projectid], map: "unique_list_project")
   @@index([listid], map: "idx_list_items")
   @@index([projectid], map: "idx_project_in_lists")
-}
-
-model scratchmirror_projects {
-  id                  BigInt                             @id
-  title               String                             @db.Text
-  description         String?                            @db.Text
-  instructions        String?                            @db.Text
-  visibility          scratchmirror_projects_visibility?
-  public              Boolean?
-  comments_allowed    Boolean?
-  is_published        Boolean?
-  history_created_at  DateTime?                          @db.DateTime(0)
-  history_modified_at DateTime?                          @db.DateTime(0)
-  history_shared_at   DateTime?                          @db.DateTime(0)
-  stats_views         Int?                               @default(0)
-  stats_loves         Int?                               @default(0)
-  stats_favorites     Int?                               @default(0)
-  stats_remixes       Int?                               @default(0)
-  image               String?                            @db.VarChar(255)
-  author_id           BigInt
-  remix_parent        Int?
-  remix_root          Int?
-}
-
-model scratchmirror_users {
-  id             Int       @id
-  username       String?   @db.VarChar(45)
-  scratchteam    Int?      @db.TinyInt
-  history_joined DateTime? @db.Timestamp(0)
-  profile_id     Int?
-  status         String?   @db.Text
-  bio            String?   @db.Text
-  country        String?   @db.Text
-}
-
-model user_contacts {
-  contact_id    Int                        @id @default(autoincrement())
-  user_id       Int
-  contact_value String                     @unique(map: "contact_value") @db.VarChar(255)
-  contact_hash  String                     @db.VarChar(255)
-  contact_type  user_contacts_contact_type
-  is_primary    Boolean?                   @default(false)
-  verified      Boolean?                   @default(false)
-  created_at    DateTime?                  @default(now()) @db.Timestamp(0)
-  updated_at    DateTime?                  @default(now()) @db.Timestamp(0)
-
-  @@unique([user_id, is_primary, contact_type], map: "unique_primary_contact")
 }
 
 model ow_auth_tokens {
@@ -344,53 +352,30 @@ model ow_notifications {
   related_id        Int?
   data              Json?
 
+  // Relations
+  actor ow_users? @relation("NotificationActor", fields: [actor_id], references: [id])
+
   @@index([user_id, read, created_at], map: "idx_user_unread")
   @@index([user_id, created_at], map: "idx_user_all")
+  @@index([actor_id], map: "idx_notification_actor")
 }
 
-model user_relationships {
-  id                Int                    @id @default(autoincrement())
+model ow_user_relationships {
+  id                Int                       @id @default(autoincrement())
   source_user_id    Int
   target_user_id    Int
-  relationship_type user_relationship_type
-  created_at        DateTime               @default(now()) @db.Timestamp(0)
-  updated_at        DateTime?              @updatedAt @db.Timestamp(0)
+  relationship_type ow_user_relationship_type
+  created_at        DateTime                  @default(now()) @db.Timestamp(0)
+  updated_at        DateTime?                 @updatedAt @db.Timestamp(0)
   metadata          Json?
+
+  // Relations
+  source_user ow_users @relation("RelationshipSource", fields: [source_user_id], references: [id])
+  target_user ow_users @relation("RelationshipTarget", fields: [target_user_id], references: [id])
 
   @@unique([source_user_id, target_user_id, relationship_type], name: "unique_user_relationship")
   @@index([source_user_id, relationship_type], map: "idx_source_user_relationships")
   @@index([target_user_id, relationship_type], map: "idx_target_user_relationships")
-}
-
-/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
-model ow_users_backup {
-  id           Int       @unique(map: "id_UNIQUE") @default(autoincrement())
-  username     String    @unique(map: "user_UNIQUE") @db.Char(20)
-  email        String?   @db.Char(100)
-  password     String?   @db.VarChar(255)
-  display_name String    @default("OurWorld创作者") @db.Char(20)
-  state        Int       @default(0) @db.TinyInt
-  loginTime    DateTime? @db.Timestamp(0)
-  regTime      DateTime? @default(now()) @db.Timestamp(0)
-  sex          String?   @default("0") @db.VarChar(16)
-  birthday     DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
-  motto        String?   @db.LongText
-  images       String?   @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
-  avatar       String?   @default("https://owcdn.190823.xyz/user/fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
-  type         String?   @default("guest") @db.VarChar(50)
-  url          String?   @db.VarChar(255)
-  github       String?   @db.VarChar(255)
-  twitter      String?   @db.VarChar(255)
-  facebook     String?   @db.VarChar(255)
-  google       String?   @db.VarChar(255)
-  weibo        String?   @db.VarChar(255)
-  qq           String?   @db.VarChar(255)
-  fa           String?   @map("2fa") @db.VarChar(255)
-  createdAt    DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
-  updatedAt    DateTime? @default(dbgenerated("'2000-03-31 16:00:00'")) @db.Timestamp(0)
-  label        String?   @db.VarChar(255)
-
-  @@id([id, username])
 }
 
 enum ow_users_contacts_contact_type {
@@ -401,23 +386,216 @@ enum ow_users_contacts_contact_type {
   oauth_google
   oauth_github
   oauth_microsoft
+  oauth_40code
+  oauth_linuxdo
 }
 
-enum scratchmirror_projects_visibility {
-  visible
-  hidden
-}
-
-enum user_contacts_contact_type {
-  email
-  phone
-  qq
-  other
-}
-
-enum user_relationship_type {
+enum ow_user_relationship_type {
   follow
   block
   mute
   favorite
+}
+
+view ow_projects_search_view {
+  id                  Int       @unique @db.UnsignedInt
+  name                String    @db.VarChar(128)
+  title               String?   @db.VarChar(1000)
+  description         String?   @db.VarChar(1000)
+  authorid            Int
+  state               String?   @db.VarChar(32)
+  type                String?   @db.VarChar(32)
+  license             String?   @db.VarChar(32)
+  view_count          Int?      @db.UnsignedInt
+  like_count          Int?      @default(0)
+  favo_count          Int?      @default(0)
+  star_count          Int?      @default(0)
+  time                DateTime? @db.Timestamp(0)
+  tags                String    @db.VarChar(100)
+  author_display_name String?   @db.Char(20)
+  author_username     String?   @db.Char(20)
+  author_motto         String?   @db.LongText
+  author_images       String?   @db.VarChar(255)
+  author_type         String?   @db.VarChar(50)
+  latest_source       String?   @db.MediumText
+  comment_count       Int?      @default(0)
+  latest_comment      String?   @db.MediumText
+  recent_comments     String?   @db.Text
+  recent_commits      Json?
+  branches            Json?
+
+  @@map("ow_projects_search")
+}
+
+// 设备信息表
+model ow_analytics_device {
+  id              Int      @id @default(autoincrement())
+  fingerprint     String   // FingerprintJS 生成的指纹
+  user_id         Int?     // 创建该设备记录时的用户ID
+  hostname        String?  // 主机名
+  screen          String?  // 屏幕分辨率
+  language        String?  // 语言
+
+  // UA解析字段
+  browser         String?  // 浏览器名称 (从UA解析)
+  browser_version String?  // 浏览器版本 (从UA解析)
+  os             String?  // 操作系统 (从UA解析)
+  os_version     String?  // 操作系统版本 (从UA解析)
+  device_type    String?  // 设备类型: desktop/mobile/tablet (从UA解析)
+  device_vendor  String?  // 设备制造商 (从UA解析)
+  user_agent     String?  @db.MediumText // 原始User Agent
+
+  first_seen     DateTime @default(now()) // 首次见到该设备的时间
+  last_seen      DateTime @default(now()) // 最后一次见到该设备的时间
+
+  // 关联的事件
+  events         ow_analytics_event[]
+
+  // 复合唯一索引：同一个fingerprint可以对应多个用户
+  @@unique([fingerprint, user_id])
+  @@index([user_id])
+  @@index([first_seen])
+  @@index([last_seen])
+}
+
+// 统计事件表
+model ow_analytics_event {
+  id              Int      @id @default(autoincrement())
+  device          ow_analytics_device @relation(fields: [device_id], references: [id])
+  device_id       Int
+  user_id         Int?     // 事件发生时的用户ID
+
+  // URL相关
+  url             String   // 完整URL
+  url_path        String   // URL路径部分
+  url_query       String?  // URL查询参数
+  referrer        String?  // 原始来源URL
+  referrer_domain String?  // 来源域名
+  referrer_path   String?  // 来源路径
+  referrer_query  String?  // 来源查询参数
+  page_title      String?  // 页面标题
+
+  // 事件目标
+  target_type     String   // 事件目标类型 (project, user等)
+  target_id       Int      // 目标ID
+
+  // IP相关信息 (每次访问都记录，因为可能变化)
+  ip_address      String?  // IP地址
+  country         String?  // 国家 (从IP解析)
+  region          String?  // 地区/省份 (从IP解析)
+  city            String?  // 城市 (从IP解析)
+  timezone        String?  // 时区 (从IP解析)
+
+  created_at      DateTime @default(now())
+
+  @@index([device_id])
+  @@index([user_id])
+  @@index([created_at])
+  @@index([referrer_domain])
+  @@index([ip_address])
+}
+
+// OAuth应用表
+model ow_oauth_applications {
+  id              Int      @id @default(autoincrement())
+  owner_id        Int
+  name            String
+  description     String?
+  homepage_url    String?
+  client_id       String   @unique
+  client_secret   String
+  redirect_uris   Json     // Stored as JSON array
+  type            String   @default("oauth")
+  client_type     String   @default("confidential") // "confidential" or "public"
+  scopes          Json     // Stored as JSON array
+  webhook_url     String?
+  logo_url        String?
+  terms_url       String?
+  privacy_url     String?
+  status          String   @default("active")
+  is_verified     Boolean  @default(false)
+  is_public       Boolean  @default(false)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+  owner           ow_users @relation(fields: [owner_id], references: [id])
+  authorizations  ow_oauth_authorizations[]
+  access_tokens   ow_oauth_access_tokens[]
+
+  @@index([owner_id])
+  @@index([client_id])
+  @@map("oauth_applications")
+}
+
+// OAuth授权记录表
+model ow_oauth_authorizations {
+  id                    Int       @id @default(autoincrement())
+  application_id        Int       // OAuth应用ID
+  user_id              Int       // 授权用户ID
+  authorized_email     String    @db.VarChar(255) // 用户授权的邮箱
+  scopes               Json      // 授权的权限范围
+  code                 String?   @unique @db.VarChar(255) // 授权码
+  code_challenge       String?   @db.VarChar(255) // PKCE挑战码
+  code_challenge_method String?  @db.VarChar(20)  // PKCE方法
+  code_expires_at      DateTime? // 授权码过期时间
+  status               String    @default("active") @db.VarChar(50) // 授权状态
+  last_used_at         DateTime? // 最后使用时间
+  metadata             Json?     // 额外元数据
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+
+  // 关联
+  application          ow_oauth_applications @relation(fields: [application_id], references: [id])
+  user                 ow_users             @relation(fields: [user_id], references: [id])
+  access_tokens        ow_oauth_access_tokens[]
+
+  @@unique([application_id, user_id])
+  @@index([code])
+  @@index([user_id])
+}
+
+// OAuth访问令牌表
+model ow_oauth_access_tokens {
+  id                    Int       @id @default(autoincrement())
+  application_id        Int       // OAuth应用ID
+  authorization_id      Int       // 授权记录ID
+  user_id              Int       // 用户ID
+  access_token         String    @unique @db.VarChar(255) // 访问令牌
+  refresh_token        String?   @unique @db.VarChar(255) // 刷新令牌
+  scopes               Json      // 令牌的权限范围
+  expires_at           DateTime  // 访问令牌过期时间
+  refresh_token_expires_at DateTime? // 刷新令牌过期时间
+  ip_address           String?   @db.VarChar(100) // 创建时的IP地址
+  user_agent           String?   @db.Text        // 创建时的User Agent
+  last_used_at         DateTime? // 最后使用时间
+  last_used_ip         String?   @db.VarChar(100) // 最后使用的IP
+  is_revoked           Boolean   @default(false)  // 是否已撤销
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+
+  // 关联
+  application          ow_oauth_applications @relation(fields: [application_id], references: [id])
+  authorization        ow_oauth_authorizations @relation(fields: [authorization_id], references: [id])
+  user                 ow_users             @relation(fields: [user_id], references: [id])
+
+  @@index([access_token])
+  @@index([refresh_token])
+  @@index([user_id])
+  @@index([application_id])
+  @@index([authorization_id])
+}
+
+// OAuth权限表
+model ow_oauth_scopes {
+  id                    Int       @id @default(autoincrement())
+  name                 String    @unique @db.VarChar(100) // 权限名称
+  description          String    @db.Text                // 权限描述
+  is_default           Boolean   @default(false)         // 是否默认授权
+  requires_verification Boolean   @default(false)        // 是否需要验证
+  category             String    @db.VarChar(50)        // 权限分类
+  risk_level           String    @default("low") @db.VarChar(20) // 风险等级
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+
+  @@index([category])
+  @@index([risk_level])
 }

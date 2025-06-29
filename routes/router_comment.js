@@ -9,7 +9,7 @@ import { Router } from "express";
 const router = Router();
 import { prisma } from "../services/global.js";
 import { getUsersByList } from "../controllers/users.js";
-import { createEvent, TargetTypes } from "../controllers/events.js";
+import { createEvent } from "../controllers/events.js";
 // 中间件，确保所有请求均经过该处理
 
 // 统一的错误处理函数
@@ -61,12 +61,12 @@ router.get("/api/comment", async (req, res, next) => {
   try {
     const { path, page, pageSize } = req.query;
     const sort = getSortCondition(req);
-
+    logger.debug(req.query);
     const comments = await prisma.ow_comment.findMany({
-      where: { page_key: path, pid: null, rid: null, type: "comment" },
+      where: { page_type: path.split("-")[0], page_id: path.split("-")[1], pid: null, rid: null, type: "comment" },
       orderBy: sort,
       take: Number(pageSize) || 10,
-      skip: (page - 1) * pageSize,
+      skip: Number((page - 1) * pageSize),
     });
 
     const transformedComments = await transformComment(comments);
@@ -74,7 +74,7 @@ router.get("/api/comment", async (req, res, next) => {
     const ids = transformedComments.map((comment) => comment.id);
 
     const childrenComments = await prisma.ow_comment.findMany({
-      where: { page_key: path, rid: { in: ids }, type: "comment" },
+      where: { page_type  : path.split("-")[0], page_id: path.split("-")[1], rid: { in: ids }, type: "comment" },
     });
 
     const transformedChildrenComments = await transformComment(
@@ -99,7 +99,7 @@ router.get("/api/comment", async (req, res, next) => {
     });
 
     const count = await prisma.ow_comment.count({
-      where: { page_key: path, pid: null, rid: null, type: "comment" },
+      where: { page_type: path.split("-")[0], page_id: path.split("-")[1], pid: null, rid: null, type: "comment" },
     });
 
     res.status(200).send({
@@ -123,16 +123,16 @@ router.get("/api/comment", async (req, res, next) => {
 router.post("/api/comment", needLogin, async (req, res, next) => {
   try {
     const { url, comment, pid, rid } = req.body;
-    const { userid, display_name } = res.locals;
+    const { userid } = res.locals;
     const user_ua = req.headers["user-agent"] || "";
 
     const newComment = await prisma.ow_comment.create({
       data: {
         user_id: userid,
         type: "comment",
-        user_ip: req.ip,
+        user_ip: req.ipInfo?.clientIP || req.ip,
         page_type: url.split("-")[0],
-        page_id: Number(url.split("-")[1]) || null,
+        page_id: url.split("-")[1] || null,
         text: comment,
         link: `/user/${userid}`,
         user_ua,
@@ -176,18 +176,22 @@ router.post("/api/comment", needLogin, async (req, res, next) => {
       targetType = "user";
       targetId = userid;
     }
-    // 创建通知
-    await notificationUtils.createNotification({
-      userId: user_id,
-      notificationType: "USER_NEW_COMMENT",
-      actorId: userid,
-      targetType: targetType,
-      targetId: targetId,
-      data: {
-        comment: newComment.text,
-      },
-      highPriority: true,
-    });
+
+    // 创建事件 - 区分新评论和回复评论
+    if (rid) {
+      // 如果有 rid，说明是回复评论
+      await createEvent("comment_reply", userid, "comment", rid, {
+        comment_text: comment,
+        target_user: user_id
+      });
+    } else {
+      // 如果没有 rid，说明是新评论
+      await createEvent("comment_create", userid, targetType, targetId, {
+        comment_text: comment,
+        target_user: user_id
+      });
+    }
+
   } catch (err) {
     next(err);
   }

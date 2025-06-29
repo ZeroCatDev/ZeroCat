@@ -18,8 +18,7 @@ import { createGunzip } from "zlib";
 import logger from "../logger.js";
 import zcconfig from "../config/zcconfig.js";
 
-// 正确导入tar模块（CommonJS兼容方式）
-import tar from "tar";
+import * as tar from "tar";
 
 // 初始化常量
 const streamPipeline = promisify(pipeline);
@@ -47,7 +46,7 @@ let USER_CONFIG = {
  */
 async function loadMaxmindConfigFromDB() {
   try {
-    console.log("正在从数据库加载MaxMind配置...");
+    logger.info("[ip] 正在从数据库加载MaxMind配置...");
 
     // 仅加载必要配置
     const enabled = await zcconfig.get("maxmind.enabled");
@@ -60,10 +59,10 @@ async function loadMaxmindConfigFromDB() {
     if (licenseKey) USER_CONFIG.licenseKey = licenseKey;
     if (accountId) USER_CONFIG.accountId = accountId;
 
-    logger.info("MaxMind配置已从数据库加载");
+    logger.info("[ip] MaxMind配置已从数据库加载");
     return true;
   } catch (error) {
-    logger.error("从数据库加载MaxMind配置失败:", error);
+    logger.error("[ip] 从数据库加载MaxMind配置失败:", error);
     return false;
   }
 }
@@ -73,20 +72,20 @@ async function loadMaxmindConfigFromDB() {
  */
 async function downloadDatabase() {
   if (fs.existsSync(DB_FILE)) {
-    logger.info("MaxMind数据库文件已存在，跳过下载...");
+    logger.info("[ip] MaxMind数据库文件已存在，跳过下载...");
     return true;
   }
   if (!USER_CONFIG.licenseKey) {
-    logger.error("未设置MaxMind许可证密钥，无法下载数据库");
+    logger.error("[ip] 未设置MaxMind许可证密钥，无法下载数据库");
     return false;
   }
 
   if (!USER_CONFIG.accountId) {
-    logger.error("未设置MaxMind账户ID，无法下载数据库");
+    logger.error("[ip] 未设置MaxMind账户ID，无法下载数据库");
     return false;
   }
 
-  logger.info("开始下载MaxMind数据库...");
+  logger.info("[ip] 开始下载MaxMind数据库...");
 
   // 构建下载URL (包含账户ID和许可证密钥)
   const url = `${DOWNLOAD_CONFIG.downloadUrl}?edition_id=${DOWNLOAD_CONFIG.edition}&license_key=${USER_CONFIG.licenseKey}&suffix=${DOWNLOAD_CONFIG.suffix}&account_id=${USER_CONFIG.accountId}`;
@@ -101,7 +100,7 @@ async function downloadDatabase() {
   }
 
   // 下载文件
-  logger.info(`正在从MaxMind服务器下载数据库...`);
+  logger.info(`[ip] 正在从MaxMind服务器下载数据库...`);
 
   // 使用axios下载并显示进度
   const { data, headers } = await axios({
@@ -114,7 +113,7 @@ async function downloadDatabase() {
   });
 
   if (!data) {
-    throw new Error("下载失败: 未收到数据流");
+    throw new Error("[ip] 下载失败: 未收到数据流");
   }
 
   // 获取文件总大小 (如果服务器提供)
@@ -138,7 +137,7 @@ async function downloadDatabase() {
     if (totalSize && percent % 10 === 0 && percent > lastLoggedPercent) {
       const downloadedMB = (downloadedSize / 1024 / 1024).toFixed(2);
       const totalMB = (totalSize / 1024 / 1024).toFixed(2);
-      logger.info(`下载进度: ${percent}% (${downloadedMB}MB / ${totalMB}MB)`);
+      logger.info(`[ip] 下载进度: ${percent}% (${downloadedMB}MB / ${totalMB}MB)`);
 
       // 在控制台也显示进度
       if (process.stdout.isTTY) {
@@ -171,7 +170,7 @@ async function downloadDatabase() {
     );
   }
 
-  logger.info(`数据库下载完成，开始解压...`);
+  logger.info(`[ip] 数据库下载完成，开始解压...`);
 
   // 解压文件
   await extractDatabase(tempFile);
@@ -191,7 +190,7 @@ async function extractDatabase(tempFile) {
     }
     fs.mkdirSync(extractDir, { recursive: true });
 
-    logger.info(`解压文件到临时目录: ${extractDir}`);
+    logger.info(`[ip] 解压文件到临时目录: ${extractDir}`);
 
     // 创建进度跟踪器
     const showProgress = process.stdout.isTTY;
@@ -207,7 +206,7 @@ async function extractDatabase(tempFile) {
         process.stdout.clearLine(0);
         process.stdout.cursorTo(0);
         const elapsedSec = ((Date.now() - extractStartTime) / 1000).toFixed(1);
-        process.stdout.write(`解压中${dotsStr.padEnd(3)} [${elapsedSec}秒]`);
+        process.stdout.write(`[ip] 解压中${dotsStr.padEnd(3)} [${elapsedSec}秒]`);
       }, 500);
     }
 
@@ -228,14 +227,14 @@ async function extractDatabase(tempFile) {
                 1000
               ).toFixed(1);
               process.stdout.write(
-                `解压: ${fileName.slice(0, 40).padEnd(40)} [${elapsedSec}秒]`
+                `[ip] 解压: ${fileName.slice(0, 40).padEnd(40)} [${elapsedSec}秒]`
               );
             }
           : undefined,
       });
     } catch (error) {
       // 如果上面的方法失败，尝试命令行方式
-      logger.warn(`使用tar.x解压失败: ${error.message}，尝试使用命令行解压...`);
+      logger.warn(`[ip] 使用tar.x解压失败: ${error.message}，尝试使用命令行解压...`);
       await extractWithCommandLine(tempFile, extractDir);
     } finally {
       // 清除进度显示
@@ -244,12 +243,12 @@ async function extractDatabase(tempFile) {
         process.stdout.clearLine(0);
         process.stdout.cursorTo(0);
         const elapsedSec = ((Date.now() - extractStartTime) / 1000).toFixed(1);
-        process.stdout.write(`解压完成 [${elapsedSec}秒]\n`);
+        process.stdout.write(`[ip] 解压完成 [${elapsedSec}秒]\n`);
       }
     }
 
     // 查找解压后的数据库文件
-    logger.info("查找数据库文件...");
+    logger.info("[ip] 查找数据库文件...");
     const findDatabaseFile = (dir) => {
       try {
         const files = fs.readdirSync(dir);
@@ -269,7 +268,7 @@ async function extractDatabase(tempFile) {
           }
         }
       } catch (err) {
-        logger.error(`查找数据库文件时出错: ${err.message}`);
+        logger.error(`[ip] 查找数据库文件时出错: ${err.message}`);
       }
 
       return null;
@@ -279,11 +278,11 @@ async function extractDatabase(tempFile) {
     const dbSourceFile = findDatabaseFile(extractDir);
 
     if (!dbSourceFile) {
-      throw new Error("在解压文件中未找到数据库(.mmdb)文件");
+      throw new Error("[ip] 在解压文件中未找到数据库(.mmdb)文件");
     }
 
     // 复制到最终位置
-    logger.info(`找到数据库文件: ${dbSourceFile}，正在安装...`);
+    logger.info(`[ip] 找到数据库文件: ${dbSourceFile}，正在安装...`);
 
     // 如果是TTY，显示复制进度动画
     let copyInterval;
@@ -294,7 +293,7 @@ async function extractDatabase(tempFile) {
         phase = (phase + 1) % phases.length;
         process.stdout.clearLine(0);
         process.stdout.cursorTo(0);
-        process.stdout.write(`安装数据库文件... ${phases[phase]}`);
+        process.stdout.write(`[ip] 安装数据库文件... ${phases[phase]}`);
       }, 100);
     }
 
@@ -305,12 +304,12 @@ async function extractDatabase(tempFile) {
         clearInterval(copyInterval);
         process.stdout.clearLine(0);
         process.stdout.cursorTo(0);
-        process.stdout.write(`数据库文件安装完成 ✓\n`);
+        process.stdout.write(`[ip] 数据库文件安装完成 ✓\n`);
       }
     }
 
     // 清理临时文件
-    logger.info("清理临时文件...");
+    logger.info("[ip] 清理临时文件...");
     try {
       if (fs.existsSync(tempFile)) {
         fs.unlinkSync(tempFile);
@@ -319,12 +318,12 @@ async function extractDatabase(tempFile) {
         fs.rmSync(extractDir, { recursive: true, force: true });
       }
     } catch (err) {
-      logger.warn(`清理临时文件失败: ${err.message}`);
+      logger.warn(`[ip] 清理临时文件失败: ${err.message}`);
     }
 
-    logger.info(`MaxMind数据库已成功安装到: ${DB_FILE}`);
+    logger.info(`[ip] MaxMind数据库已成功安装到: ${DB_FILE}`);
   } catch (error) {
-    logger.error("解压数据库文件失败:", error.message);
+    logger.error("[ip] 解压数据库文件失败:", error.message);
     throw error; // 重新抛出错误以便上层处理
   }
 }
@@ -344,7 +343,7 @@ async function extractWithCommandLine(tarFile, targetDir) {
       execSync(`tar -xzf "${tarFile}" -C "${targetDir}"`, { stdio: "ignore" });
     }
   } catch (error) {
-    logger.error(`命令行解压失败: ${error.message}`);
+    logger.error(`[ip] 命令行解压失败: ${error.message}`);
     throw error;
   }
 }
@@ -374,26 +373,26 @@ async function loadMaxmind() {
   // 检查必要配置
   if (!USER_CONFIG.licenseKey) {
     logger.error(
-      "错误: 未找到MaxMind许可证密钥。请在数据库中设置 maxmind.license_key 配置项。"
+      "[ip] 错误: 未找到MaxMind许可证密钥。请在数据库中设置 maxmind.license_key 配置项。"
     );
     process.exit(1);
   }
 
   if (!USER_CONFIG.accountId) {
     logger.error(
-      "错误: 未找到MaxMind账户ID。请在数据库中设置 maxmind.account_id 配置项。"
+      "[ip] 错误: 未找到MaxMind账户ID。请在数据库中设置 maxmind.account_id 配置项。"
     );
     process.exit(1);
   }
 
   // 开始下载
-  logger.info(`开始下载MaxMind GeoIP数据库...`);
+  logger.info(`[ip] 开始下载MaxMind GeoIP数据库...`);
   const success = await downloadDatabase();
 
   if (success) {
-    logger.info("✓ MaxMind GeoIP数据库下载并更新成功！");
+    logger.info("[ip] ✓ MaxMind GeoIP数据库下载并更新成功！");
   } else {
-    logger.error("✗ MaxMind GeoIP数据库下载或更新失败！");
+    logger.error("[ip] ✗ MaxMind GeoIP数据库下载或更新失败！");
   }
 }
 

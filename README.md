@@ -28,7 +28,7 @@ This repository contains the backend code for ZeroCat.
 
 
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat?ref=badge_large)
-
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ZeroCatDev/ZeroCat)
 ## Background
 
 `ZeroCat` was originally proposed by [@sunwuyuan](https://github.com/sunwuyuan) a long time ago. Our goal is to create a fully open-source programming community, and this project started from that vision. However, significant progress was made only when Sun Wuyuan was in the second year of middle school.

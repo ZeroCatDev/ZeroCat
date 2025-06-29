@@ -150,6 +150,26 @@ function projectSelectionFields() {
     description: true,
     tags: true,
     star_count: true,
+    fork: true,
+    author: {
+      select: {
+        id: true,
+        username: true,
+        display_name: true,
+        status: true,
+                bio: true,
+        motto: true,
+
+        avatar: true,
+        regTime: true,
+      },
+    },
+    project_tags: {
+      select: {
+        id: true,
+        name: true,
+      },
+    },
   };
 }
 
@@ -164,8 +184,10 @@ function authorSelectionFields() {
     display_name: true,
     status: true,
     regTime: true,
-    motto: true,
-    images: true,
+            bio: true,
+        motto: true,
+
+    avatar: true,
   };
 }
 

@@ -156,7 +156,7 @@ export async function checkRateLimit(identifier, type = 'default') {
     if (count >= 5) {
       return {
         success: false,
-        message: '发送验证码过于频繁，请稍后再试'
+        message: '发送验证码过于频繁，请稍后再试 #1'
       };
     }
 

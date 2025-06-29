@@ -11,7 +11,7 @@ import zcconfig from '../services/config/zcconfig.js';
 export async function configureRoutes(app) {
   // 加载配置信息到全局
   await zcconfig.loadConfigsFromDB();
-  logger.info('配置信息已加载到全局');
+  logger.info('[routes] 配置信息已加载到全局');
 
   // 设置视图目录和引擎
   app.set("env", process.cwd());
@@ -19,7 +19,7 @@ export async function configureRoutes(app) {
   app.set("views", paths.VIEWS_DIR);
   app.set("view engine", "ejs");
 
-  logger.debug(paths.VIEWS_DIR);
+  logger.debug('[routes] 视图目录:', paths.VIEWS_DIR);
   // 首页路由
   app.get("/", (req, res) => {
     res.render("index");
@@ -64,13 +64,14 @@ async function registerBusinessRoutes(app) {
 
     const eventModule = await import('../routes/router_event.js');
     app.use("/events", eventModule.default);
-    // app.use("/users", userRoutes);
+
+    // 统计分析路由
+    const analyticsModule = await import('../routes/router_analytics.js');
+    app.use("/analytics", analyticsModule.default);
 
     // 使用新的通知路由 (获取绝对路径版本)
     const notificationModule = await import('../routes/router_notifications.js');
     app.use("/notifications", notificationModule.default);
-
-    // 以下路由暂时保持原有导入方式，等待迁移完成
 
     // 个人中心路由
     const myModule = await import('../routes/router_my.js');
@@ -87,6 +88,10 @@ async function registerBusinessRoutes(app) {
     // API路由
     const apiModule = await import('../routes/router_api.js');
     app.use("/api", apiModule.default);
+
+    // 管理后台路由
+    const adminModule = await import('../routes/router_admin.js');
+    app.use("/admin", adminModule.default);
 
     // 项目列表路由
     const projectlistModule = await import('../routes/router_projectlist.js');
@@ -112,9 +117,13 @@ async function registerBusinessRoutes(app) {
     const followsModule = await import('../routes/router_follows.js');
     app.use("/follows", followsModule.default);
 
-    logger.info('所有业务路由注册成功');
+    // OAuth路由
+    const oauthModule = await import('../routes/router_oauth.js');
+    app.use("/oauth", oauthModule.default);
+
+    logger.info('[routes] 所有业务路由注册成功');
   } catch (error) {
-    logger.error('Error registering business routes:', error);
+    logger.error('[routes] 注册业务路由失败:', error);
     throw error;
   }
 }

@@ -12,11 +12,8 @@ class RedisService {
   async initConnection() {
     try {
       const host = await zcconfig.get('redis.host')||'localhost';
-      logger.debug(host);
       const port = await zcconfig.get('redis.port')||6379;
-      logger.debug(port);
       const password = await zcconfig.get('redis.password')||'';
-      logger.debug(password);
       const db = 0;
 
       const options = {
@@ -37,19 +34,19 @@ class RedisService {
 
       this.client.on('connect', () => {
         this.isConnected = true;
-        logger.info('Redis连接成功');
+        logger.info('[redis] Redis连接成功');
       });
 
       this.client.on('error', (err) => {
         this.isConnected = false;
-        logger.error('Redis连接错误:', err);
+        logger.error('[redis] Redis连接错误:', err);
       });
 
       this.client.on('reconnecting', () => {
-        logger.info('正在重新连接Redis...');
+        logger.info('[redis] 正在重新连接Redis...');
       });
     } catch (error) {
-      logger.error('初始化Redis连接失败:', error);
+      logger.error('[redis] 初始化Redis连接失败:', error);
     }
   }
 
@@ -57,7 +54,7 @@ class RedisService {
   async set(key, value, ttlSeconds = null) {
     try {
       if (!this.client || !this.isConnected) {
-        throw new Error('Redis未连接');
+        throw new Error('[redis] Redis未连接');
       }
 
       if (typeof value !== 'string') {
@@ -71,7 +68,7 @@ class RedisService {
       }
       return true;
     } catch (error) {
-      logger.error(`Redis set错误 [${key}]:`, error);
+      logger.error(`[redis] Redis set错误 [${key}]:`, error);
       return false;
     }
   }
@@ -80,7 +77,7 @@ class RedisService {
   async get(key) {
     try {
       if (!this.client || !this.isConnected) {
-        throw new Error('Redis未连接');
+        throw new Error('[redis] Redis未连接');
       }
 
       const value = await this.client.get(key);
@@ -92,7 +89,7 @@ class RedisService {
         return value; // 如果不是JSON则返回原始值
       }
     } catch (error) {
-      logger.error(`Redis get错误 [${key}]:`, error);
+      logger.error(`[redis] Redis get错误 [${key}]:`, error);
       return null;
     }
   }
@@ -101,13 +98,13 @@ class RedisService {
   async delete(key) {
     try {
       if (!this.client || !this.isConnected) {
-        throw new Error('Redis未连接');
+        throw new Error('[redis] Redis未连接');
       }
 
       await this.client.del(key);
       return true;
     } catch (error) {
-      logger.error(`Redis delete错误 [${key}]:`, error);
+      logger.error(`[redis] Redis delete错误 [${key}]:`, error);
       return false;
     }
   }
@@ -116,13 +113,13 @@ class RedisService {
   async exists(key) {
     try {
       if (!this.client || !this.isConnected) {
-        throw new Error('Redis未连接');
+        throw new Error('[redis] Redis未连接');
       }
 
       const exists = await this.client.exists(key);
       return exists === 1;
     } catch (error) {
-      logger.error(`Redis exists错误 [${key}]:`, error);
+      logger.error(`[redis] Redis exists错误 [${key}]:`, error);
       return false;
     }
   }
@@ -131,13 +128,13 @@ class RedisService {
   async expire(key, ttlSeconds) {
     try {
       if (!this.client || !this.isConnected) {
-        throw new Error('Redis未连接');
+        throw new Error('[redis] Redis未连接');
       }
 
       await this.client.expire(key, ttlSeconds);
       return true;
     } catch (error) {
-      logger.error(`Redis expire错误 [${key}]:`, error);
+      logger.error(`[redis] Redis expire错误 [${key}]:`, error);
       return false;
     }
   }
@@ -146,12 +143,12 @@ class RedisService {
   async ttl(key) {
     try {
       if (!this.client || !this.isConnected) {
-        throw new Error('Redis未连接');
+        throw new Error('[redis] Redis未连接');
       }
 
       return await this.client.ttl(key);
     } catch (error) {
-      logger.error(`Redis ttl错误 [${key}]:`, error);
+      logger.error(`[redis] Redis ttl错误 [${key}]:`, error);
       return -2; // -2表示键不存在
     }
   }
@@ -160,12 +157,12 @@ class RedisService {
   async incr(key) {
     try {
       if (!this.client || !this.isConnected) {
-        throw new Error('Redis未连接');
+        throw new Error('[redis] Redis未连接');
       }
 
       return await this.client.incr(key);
     } catch (error) {
-      logger.error(`Redis incr错误 [${key}]:`, error);
+      logger.error(`[redis] Redis incr错误 [${key}]:`, error);
       return null;
     }
   }
@@ -174,12 +171,12 @@ class RedisService {
   async incrby(key, increment) {
     try {
       if (!this.client || !this.isConnected) {
-        throw new Error('Redis未连接');
+        throw new Error('[redis] Redis未连接');
       }
 
       return await this.client.incrby(key, increment);
     } catch (error) {
-      logger.error(`Redis incrby错误 [${key}]:`, error);
+      logger.error(`[redis] Redis incrby错误 [${key}]:`, error);
       return null;
     }
   }

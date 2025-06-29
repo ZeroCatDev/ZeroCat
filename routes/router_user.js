@@ -29,13 +29,21 @@ router.get("/id/:id", async function (req, res, next) {
       select: {
         id: true,
         display_name: true,
+        bio: true,
         motto: true,
-        images: true,
+
+        avatar: true,
         regTime: true,
         sex: true,
         username: true,
         type: true,
         status: true,
+        location: true,
+        region: true,
+        birthday: true,
+        featured_projects: true,
+        custom_status: true,
+        url: true,
       },
     });
 
@@ -74,13 +82,21 @@ router.get("/username/:username", async function (req, res, next) {
       select: {
         id: true,
         display_name: true,
+        bio: true,
         motto: true,
-        images: true,
+
+        avatar: true,
         regTime: true,
         sex: true,
         username: true,
         type: true,
         status: true,
+        location: true,
+        region: true,
+        birthday: true,
+        featured_projects: true,
+        custom_status: true,
+        url: true,
       },
     });
 
@@ -135,13 +151,21 @@ router.post("/batch/:type", async function (req, res, next) {
       select: {
         id: true,
         display_name: true,
+        bio: true,
         motto: true,
-        images: true,
+
+        avatar: true,
         regTime: true,
         sex: true,
         username: true,
         type: true,
         status: true,
+        location: true,
+        region: true,
+        birthday: true,
+        featured_projects: true,
+        custom_status: true,
+        url: true,
       },
     });
 
@@ -170,13 +194,22 @@ router.get("/me", needLogin, async function (req, res, next) {
         id: true,
         display_name: true,
         motto: true,
-        images: true,
+        avatar: true,
         regTime: true,
         sex: true,
         username: true,
         email: true,
         type: true,
         status: true,
+        bio: true,
+        motto: true,
+
+        location: true,
+        region: true,
+        birthday: true,
+        featured_projects: true,
+        custom_status: true,
+        url: true,
       },
     });
 
@@ -476,7 +509,7 @@ router.post("/change-password", needLogin, async function (req, res, next) {
 router.patch("/profile/update", needLogin, async function (req, res, next) {
   try {
     const userId = res.locals.userid;
-    const { display_name, motto, images, settings } = req.body;
+    const { display_name, bio, avatar, settings } = req.body;
 
     // 获取原有用户信息
     const oldUser = await prisma.ow_users.findUnique({
@@ -495,8 +528,8 @@ router.patch("/profile/update", needLogin, async function (req, res, next) {
     const updateData = {};
 
     if (display_name !== undefined) updateData.display_name = display_name;
-    if (motto !== undefined) updateData.motto = motto;
-    if (images !== undefined) updateData.images = images;
+    if (bio !== undefined) updateData.bio = bio;
+    if (avatar !== undefined) updateData.avatar = avatar;
     if (settings !== undefined) updateData.settings = settings;
 
     // 更新用户信息
@@ -507,11 +540,19 @@ router.patch("/profile/update", needLogin, async function (req, res, next) {
         id: true,
         username: true,
         display_name: true,
+        bio: true,
         motto: true,
-        images: true,
+
+        avatar: true,
         regTime: true,
         type: true,
         status: true,
+        location: true,
+        region: true,
+        birthday: true,
+        featured_projects: true,
+        custom_status: true,
+        url: true,
       },
     });
 
@@ -528,15 +569,15 @@ router.patch("/profile/update", needLogin, async function (req, res, next) {
       });
     }
 
-    if (motto !== undefined && motto !== oldUser.motto) {
+    if (bio !== undefined && bio !== oldUser.bio) {
       await createEvent("user_profile_update", userId, "user", userId, {
         event_type: "user_profile_update",
         actor_id: userId,
         target_type: "user",
         target_id: userId,
-        update_type: "motto",
-        old_value: oldUser.motto,
-        new_value: motto,
+        update_type: "bio",
+        old_value: oldUser.bio,
+        new_value: bio,
       });
     }
 
