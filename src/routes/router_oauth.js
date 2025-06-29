@@ -2,7 +2,7 @@ import logger from "../services/logger.js";
 import zcconfig from "../services/config/zcconfig.js";
 import { Router } from "express";
 import { prisma } from "../services/global.js";
-import { needLogin, strictTokenCheck, needAdmin } from "../middleware/auth.js";
+import { needLogin } from "../middleware/auth.js";
 import { oauthRateLimit } from "../middleware/rateLimit.js";
 import crypto from "crypto";
 import {
@@ -21,7 +21,7 @@ import { S3update } from "../services/global.js";
 import multer from "multer";
 
 const router = Router();
-const upload = multer({ dest: "./usercontent" });
+const upload = multer({ dest: "../../cache/usercontent" });
 
 // OAuth错误处理函数
 const OAuthErrors = {

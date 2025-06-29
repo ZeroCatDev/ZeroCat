@@ -8,6 +8,36 @@ import "dotenv/config";
 import logger from './src/services/logger.js';
 import { serverConfig } from './src/index.js';
 import { execSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+
+// 定义需要检查的目录列表
+const REQUIRED_DIRECTORIES = [
+  'cache',
+  'cache/ip',
+  'cache/usercontent'
+];
+
+/**
+ * 检查并创建必需的目录
+ */
+async function ensureDirectories() {
+  logger.info('[server] 检查必需目录...');
+
+  for (const dir of REQUIRED_DIRECTORIES) {
+    try {
+      if (!fs.existsSync(dir)) {
+        logger.info(`[server] 创建目录: ${dir}`);
+        fs.mkdirSync(dir, { recursive: true });
+      }
+    } catch (error) {
+      logger.error(`[server] 创建目录失败 ${dir}:`, error);
+      throw error;
+    }
+  }
+
+  logger.info('[server] 目录检查完成');
+}
 
 /**
  * 运行Prisma迁移和生成
@@ -40,6 +70,9 @@ async function main() {
   try {
     // 打印启动Banner
     printBanner();
+
+    // 检查必需目录
+    await ensureDirectories();
 
     // 运行Prisma迁移和生成
     await runPrismaMigrations();

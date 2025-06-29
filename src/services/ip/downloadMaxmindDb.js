@@ -25,7 +25,7 @@ const streamPipeline = promisify(pipeline);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // 固定的数据库目录和文件名
-const DATA_DIR = path.resolve(__dirname, "../../data");
+const DATA_DIR = path.resolve(__dirname, "../../../cache/ip");
 const DB_FILE = path.join(DATA_DIR, "GeoLite2-City.mmdb");
 
 // 基础下载配置（硬编码不易变的部分）

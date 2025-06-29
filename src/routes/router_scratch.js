@@ -11,7 +11,7 @@ import { prisma, S3update } from "../services/global.js";
 import { needLogin, strictTokenCheck, needAdmin } from "../middleware/auth.js";
 import { getProjectFile, getProjectById } from "../controllers/projects.js";
 import multer from "multer";
-const upload = multer({ dest: "./usercontent" });
+const upload = multer({ dest: "../../cache/usercontent" });
 
 // Migrated to use the global parseToken middleware
 

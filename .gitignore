@@ -135,13 +135,9 @@ dist
 .idea
 .vscode
 
-usercontent/*
-!usercontent/.gitkeep
-
-# MaxMind GeoIP database files
-data/*.mmdb
-
-redis/data/*
-redis/redis.conf
+docker/redis/data/*
+docker/redis/redis.conf
 
 meili_data
+
+cache

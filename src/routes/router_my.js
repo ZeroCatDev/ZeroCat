@@ -1,6 +1,4 @@
 import logger from "../services/logger.js";
-import { needLogin, strictTokenCheck } from "../middleware/auth.js";
-import zcconfig from "../services/config/zcconfig.js";
 import fs from "fs";
 
 //个人中心
@@ -11,11 +9,10 @@ import { createHash } from "crypto";
 //功能函数集
 import { S3update, checkhash, hash, prisma } from "../services/global.js";
 //数据库
-import geetestMiddleware from "../middleware/geetest.js";
 import multer from "multer";
 import { createEvent } from "../controllers/events.js";
 
-const upload = multer({ dest: "./usercontent" });
+const upload = multer({ dest: "../../cache/usercontent" });
 
 // Migrated to use the global parseToken middleware
 

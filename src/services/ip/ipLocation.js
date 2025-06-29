@@ -7,7 +7,7 @@ import zcconfig from "../config/zcconfig.js";
 import downloadMaxmindDb from "./downloadMaxmindDb.js";
 // 固定的数据库文件路径
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DB_FILE = path.resolve(__dirname, "../../data/GeoLite2-City.mmdb");
+const DB_FILE = path.resolve(__dirname, "../../../cache/ip/GeoLite2-City.mmdb");
 
 // 配置参数
 var CONFIG = {
@@ -92,7 +92,7 @@ const getIPLocation = async (ipAddress) => {
 
   if (CONFIG.enabled && geoipReader) {
     try {
-      const response = geoipReader.city("128.101.101.101");
+      const response = geoipReader.city(ipAddress);
       if (!response) {
         logger.debug(`[ip] MaxMind查询IP(${ipAddress})位置失败: 返回空响应`);
         return defaultResponse;
