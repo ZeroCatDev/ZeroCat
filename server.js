@@ -5,7 +5,7 @@
  */
 
 import "dotenv/config";
-import logger from './services/logger.js';
+import logger from './src/services/logger.js';
 import { serverConfig } from './src/index.js';
 import { execSync } from 'child_process';
 

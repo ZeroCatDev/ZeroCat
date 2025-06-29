@@ -2,18 +2,18 @@ import "dotenv/config";
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import logger from "../services/logger.js";
+import logger from "./services/logger.js";
 
 // 导入配置模块
 import { configureMiddleware } from "./index.js";
 import { configureRoutes } from "./routes.js";
-import zcconfigInstance from "../services/config/zcconfig.js";
+import zcconfigInstance from "./services/config/zcconfig.js";
 
 // 导入服务
-import geoIpService from "../services/ip/ipLocation.js";
-import schedulerService from "../services/scheduler.js";
-import errorHandlerService from "../services/errorHandler.js";
-import sitemapService from '../services/sitemap.js';
+import geoIpService from "./services/ip/ipLocation.js";
+import schedulerService from "./services/scheduler.js";
+import errorHandlerService from "./services/errorHandler.js";
+import sitemapService from './services/sitemap.js';
 
 // 全局初始化标志，防止重复初始化
 global.appInitialized = global.appInitialized || false;

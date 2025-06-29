@@ -3,9 +3,9 @@ import expressWinston from 'express-winston';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import compress from 'compression';
-import logger from '../services/logger.js';
-import zcconfig from '../services/config/zcconfig.js';
-import ipMiddleware from '../middleware/ipMiddleware.js';
+import logger from './services/logger.js';
+import zcconfig from './services/config/zcconfig.js';
+import ipMiddleware from './middleware/ipMiddleware.js';
 
 /**
  * 配置Express应用的中间件
@@ -103,7 +103,7 @@ export async function configureMiddleware(app) {
 
     try {
       // 动态导入auth工具，避免循环依赖
-      const authModule = await import('../services/auth/auth.js');
+      const authModule = await import('./services/auth/auth.js');
       const authUtils = authModule.default;
 
       // 使用令牌验证系统，传递IP地址用于追踪

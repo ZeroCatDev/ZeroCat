@@ -1,4 +1,4 @@
-import logger from '../services/logger.js';
+import logger from './services/logger.js';
 import http from 'http';
 import app from './app.js';
 

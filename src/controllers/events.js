@@ -4,7 +4,7 @@ import { createNotification } from "./notifications.js";
 import {
   EventConfig,
   AudienceDataDependencies,
-} from "../src/config/eventConfig.js";
+} from "../config/eventConfig.js";
 
 // 重新导出这些常量供外部使用
 export {  EventConfig };

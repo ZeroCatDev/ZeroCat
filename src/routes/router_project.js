@@ -2,7 +2,7 @@ import logger from "../services/logger.js";
 import zcconfig from "../services/config/zcconfig.js";
 import { Router } from "express";
 import { prisma } from "../services/global.js";
-import default_project from "../src/default_project.js";
+import default_project from "../default_project.js";
 import {
   extractProjectData,
   projectSelectionFields,

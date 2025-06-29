@@ -3,7 +3,7 @@
  */
 import { prisma } from "../services/global.js";
 import logger from "../services/logger.js";
-import NotificationTemplates from "../src/config/notificationTemplates.json" assert { type: "json" };
+import NotificationTemplates from "../config/notificationTemplates.json" assert { type: "json" };
 
 
 
