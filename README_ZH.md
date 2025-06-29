@@ -13,6 +13,7 @@ ZeroCat 是一个轻量级的在线编程、分享平台
 - [ZeroCat 编程社区](#zerocat-编程社区)
   - [](#)
   - [内容列表](#内容列表)
+- [感谢](#感谢)
   - [背景](#背景)
   - [交流](#交流)
   - [示例](#示例)
@@ -27,8 +28,15 @@ ZeroCat 是一个轻量级的在线编程、分享平台
   - [](#-2)
     - [贡献者](#贡献者)
   - [许可协议](#许可协议)
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat?ref=badge_large)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ZeroCatDev/ZeroCat)
+- [感谢](#感谢-1)
+
+
+# 感谢
+
+本项目 CDN 加速及安全防护由 Tencent EdgeOne 赞助
+[立即访问 EdgeOne](https://edgeone.ai/zh?from=github)
+
+[![EdgeOne](./public/34fe3a45-492d-4ea4-ae5d-ea1087ca7b4b.png)](https://edgeone.ai/zh?from=github)
 
 ## 背景
 
@@ -114,3 +122,10 @@ Copyright (C) 2020-2024  Sun Wuyuan.
 如需闭源使用授权，请联系 QQ1847261658。
 
 感谢 [scratch-cn/lite](https://gitee.com/scratch-cn/lite) 项目对本项目的启发。
+
+# 感谢
+
+本项目 CDN 加速及安全防护由 Tencent EdgeOne 赞助
+[立即访问 EdgeOne](https://edgeone.ai/zh?from=github)
+
+[![EdgeOne](./public/34fe3a45-492d-4ea4-ae5d-ea1087ca7b4b.png)](https://edgeone.ai/zh?from=github)

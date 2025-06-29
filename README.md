@@ -1,8 +1,11 @@
 # ZeroCat Programming Community
+
 [中文](./README_ZH.md) | [English](./README.md)
 
 If you like this project, please give me a star.
+
 ##
+
 ZeroCat is a lightweight online programming and sharing platform.
 
 This repository contains the backend code for ZeroCat.
@@ -25,10 +28,11 @@ This repository contains the backend code for ZeroCat.
   - [Contributor Covenant Code of Conduct](#contributor-covenant-code-of-conduct)
     - [Contributors](#contributors)
   - [License](#license)
-
+- [感谢](#感谢)
 
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat?ref=badge_large)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ZeroCatDev/ZeroCat)
+
 ## Background
 
 `ZeroCat` was originally proposed by [@sunwuyuan](https://github.com/sunwuyuan) a long time ago. Our goal is to create a fully open-source programming community, and this project started from that vision. However, significant progress was made only when Sun Wuyuan was in the second year of middle school.
@@ -47,6 +51,7 @@ QQ: 964979747
 To see the community in action, please refer to [ZeroCat](https://zerocat.houlangs.com).
 
 ## Installation
+
 ![Developed with Node.js](public/Node.js.png)
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FZeroCatDev%2Fzerocat?ref=badge_shield)
 
@@ -91,7 +96,7 @@ $ docker compose up -d
 ## How to Contribute
 
 - [ZeroCat](https://zerocat.houlangs.com)
-We warmly welcome your contributions! Please [submit an Issue](https://github.com/ZeroCatDev/ZeroCat/issues/new) or submit a Pull Request. For beginner-level questions, it's best to ask in the QQ group, and we will try to help.
+  We warmly welcome your contributions! Please [submit an Issue](https://github.com/ZeroCatDev/ZeroCat/issues/new) or submit a Pull Request. For beginner-level questions, it's best to ask in the QQ group, and we will try to help.
 
 ## Contributor Covenant Code of Conduct
 
@@ -113,3 +118,10 @@ You are free to use the ZeroCat community under an open-source license, but you 
 For closed-source usage licenses, please contact QQ 1847261658.
 
 Thanks to the [scratch-cn/lite](https://gitee.com/scratch-cn/lite) project for inspiring this project.
+
+# 感谢
+
+本项目 CDN 加速及安全防护由 Tencent EdgeOne 赞助
+[立即访问 EdgeOne](https://edgeone.ai/zh?from=github)
+
+[![EdgeOne](./public/34fe3a45-492d-4ea4-ae5d-ea1087ca7b4b.png)](https://edgeone.ai/zh?from=github)
