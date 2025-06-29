@@ -1,6 +1,6 @@
 import { prisma } from "./global.js";
 import logger from "./logger.js";
-import { EventConfig } from "../config/eventConfig.js";
+import { EventConfig } from "../src/config/eventConfig.js";
 
 // 控制是否显示非公开事件的变量，默认为false
 const SHOW_PRIVATE_EVENTS = false;

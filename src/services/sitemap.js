@@ -53,7 +53,6 @@ class SitemapService {
   }
 
   async getUrls() {
-    const frontendUrl = await zcconfig.get('urls.frontend');
     const urls = [];
 
     try {
