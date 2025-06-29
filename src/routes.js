@@ -121,6 +121,10 @@ async function registerBusinessRoutes(app) {
     const oauthModule = await import('./routes/router_oauth.js');
     app.use("/oauth", oauthModule.default);
 
+    // CacheKV路由
+    const cachekvModule = await import('./routes/router_cachekv.js');
+    app.use("/cachekv", cachekvModule.default);
+
     logger.info('[routes] 所有业务路由注册成功');
   } catch (error) {
     logger.error('[routes] 注册业务路由失败:', error);

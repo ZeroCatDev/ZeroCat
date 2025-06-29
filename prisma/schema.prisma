@@ -114,6 +114,7 @@ model ow_users {
   oauth_applications      ow_oauth_applications[]
   oauth_authorizations    ow_oauth_authorizations[]
   oauth_access_tokens     ow_oauth_access_tokens[]
+  kv_store               ow_cache_kv[]
 
   @@id([id, username])
 }
@@ -598,4 +599,21 @@ model ow_oauth_scopes {
 
   @@index([category])
   @@index([risk_level])
+}
+
+// User KV Store表
+model ow_cache_kv {
+  user_id    Int      @db.UnsignedInt
+  key        String   @db.VarChar(255)
+  value      Json
+  creator_ip String?  @default("") @db.VarChar(100)
+  created_at DateTime @default(now()) @db.Timestamp(0)
+  updated_at DateTime @updatedAt @db.Timestamp(0)
+
+  // Relations
+  user ow_users @relation(fields: [user_id], references: [id])
+
+  @@id([user_id, key])
+  @@index([user_id])
+  @@index([key])
 }
