@@ -35,11 +35,11 @@ ZeroCat 是一个轻量级的在线编程、分享平台
 
 ## 背景
 
-`ZeroCat` 最开始由 [@sunwuyuan](https://github.com/sunwuyuan) 在很早以前提出，我们希望搭建一个全开源的编程社区，这个项目也就从此开始了。但实际上项目在孙悟元初二的时候才有了很大进展。
+`ZeroCat` 最开始由孙悟元在很早以前提出，我们希望搭建一个全开源的编程社区，这个项目也就从此开始了。但实际上项目在孙悟元初二的时候才有了很大进展。
 <br/>维护一个编程社区从某种程度上来说相当不易，但我相信，这个项目会一直开发下去。
 
 这个仓库的目标是：
-<br/>开发一个完整的支持 Scratch、Python 与其他适合编程初学者的编成社区
+<br/>开发一个完整的支持 Scratch、Python 与其他适合编程初学者的编程社区
 
 ## 交流
 
@@ -47,7 +47,7 @@ QQ：964979747
 
 ## 示例
 
-想了解社区效果，请参考 [ZeroCat](https://zerocat.houlangs.com)。
+想了解社区效果，请参考 [ZeroCat](https://zerocat.dev)。
 
 ## 安装
 ![使用Nodejs开发](public/Node.js.png)
@@ -56,10 +56,8 @@ QQ：964979747
 
 ```sh
 $ npm install
-# 或者使用cnpm
-$ cnpm install
-# 或者使用任意奇奇怪怪的npm工具(笑
-$ XXX install
+# 或者
+$ pnpm install
 ```
 
 ### 配置数据库
@@ -76,6 +74,8 @@ $ XXX install
 
 ```sh
 $ npm run start
+# 或者
+$ pnpm run start
 ```
 
 ### 使用 Docker
