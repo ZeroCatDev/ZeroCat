@@ -255,21 +255,12 @@ export const getBoundOAuthAccounts = async (req, res) => {
  */
 export const unlinkOAuth = async (req, res) => {
   try {
-    const { email, code, provider } = req.body;
+    const { provider } = req.body;
 
-    if (!email || !code || !provider) {
+    if (!provider) {
       return res.status(200).json({
         status: "error",
-        message: "邮箱、验证码和 OAuth 提供商是必需的",
-      });
-    }
-
-    // 验证验证码
-    const isValid = await verifyContact(email, code);
-    if (!isValid) {
-      return res.status(200).json({
-        status: "error",
-        message: "验证码无效",
+        message: "OAuth 提供商是必需的",
       });
     }
 

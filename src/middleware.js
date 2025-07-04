@@ -126,3 +126,77 @@ export async function configureMiddleware(app) {
     next();
   });
 }
+
+/**
+ * 从请求中提取token
+ * @param {express.Request} req
+ * @returns {string|null}
+ */
+export function extractTokenFromRequest(req) {
+  let token = null;
+
+  // 检查Authorization header
+  const authHeader = req.headers["authorization"];
+  if (authHeader) {
+    // 支持"Bearer token"格式或直接提供token
+    const parts = authHeader.split(" ");
+    if (parts.length === 2 && parts[0].toLowerCase() === "bearer") {
+      token = parts[1];
+    } else {
+      token = authHeader;
+    }
+  }
+
+  // 如果header中没有token，检查query参数
+  if (!token && req.query.token) {
+    token = req.query.token;
+  }
+
+  // 如果query中没有token，检查cookies
+  if (!token && req.cookies && req.cookies.token) {
+    token = req.cookies.token;
+  }
+
+  return token;
+}
+
+/**
+ * Token验证中间件
+ * @param {express.Request} req
+ * @param {express.Response} res
+ * @param {express.NextFunction} next
+ */
+export async function tokenAuthMiddleware(req, res, next) {
+  const token = extractTokenFromRequest(req);
+
+  if (!token) {
+    return res.status(401).json({
+      status: "error",
+      message: "未登录",
+    });
+  }
+
+  try {
+    const authModule = await import('./services/auth/auth.js');
+    const authUtils = authModule.default;
+
+    const { valid, user, message } = await authUtils.verifyToken(token, req.ip);
+
+    if (!valid || !user) {
+      return res.status(401).json({
+        status: "error",
+        message: "未登录",
+      });
+    }
+
+    // 设置验证后的用户信息
+    res.locals.tokeninfo = user;
+    next();
+  } catch (error) {
+    logger.error("Token验证失败:", error);
+    return res.status(401).json({
+      status: "error",
+      message: "Token验证失败",
+    });
+  }
+}

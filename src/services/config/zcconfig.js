@@ -65,7 +65,18 @@ class ZCConfig {
       this.publicCache.clear();
       this.configInfo = configs || [];
 
-      // Populate caches with validation
+      // First, load all configs marked as public in CONFIG_TYPES with their default values
+      for (const [key, config] of Object.entries(CONFIG_TYPES)) {
+        if (config.public) {
+          const defaultValue = getDefaultValue(key);
+          if (defaultValue !== undefined) {
+            this.cache.set(key, defaultValue);
+            this.publicCache.set(key, defaultValue);
+          }
+        }
+      }
+
+      // Then populate caches with database values, overriding defaults if they exist
       if (Array.isArray(configs)) {
         for (const { key, value, is_public } of configs) {
           try {
@@ -86,8 +97,8 @@ class ZCConfig {
             // Store in cache
             this.cache.set(key, parsedValue);
 
-            // Store in public cache if marked as public
-            if (is_public === true) {
+            // Store in public cache if marked as public in CONFIG_TYPES or database
+            if (is_public === true || CONFIG_TYPES[key]?.public === true) {
               this.publicCache.set(key, parsedValue);
             }
           } catch (validationError) {
@@ -96,7 +107,7 @@ class ZCConfig {
             const defaultValue = getDefaultValue(key);
             if (defaultValue !== undefined) {
               this.cache.set(key, defaultValue);
-              if (is_public === true) {
+              if (is_public === true || CONFIG_TYPES[key]?.public === true) {
                 this.publicCache.set(key, defaultValue);
               }
             }

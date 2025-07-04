@@ -167,17 +167,17 @@ router.get("/projectinfo", async function (req, res, next) {
 });
 
 router.get("/config", async function (req, res, next) {
-  const result = await prisma.ow_config.findMany({
-    where: { is_public: true },
-    select: { key: true, value: true },
-  });
+  try {
+    // Ensure zcconfig is initialized
+    await zcconfig.initialize();
 
-  res.status(200).send(
-    result.reduce((acc, { key, value }) => {
-      acc[key] = value;
-      return acc;
-    }, {})
-  );
+    // Get all public configurations
+    const publicConfigs = zcconfig.getPublicConfigs();
+
+    res.status(200).json(publicConfigs);
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.get("/config/:key", async function (req, res, next) {

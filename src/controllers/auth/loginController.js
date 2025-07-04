@@ -622,18 +622,8 @@ export const validateMagicLinkAndLogin = async (req, res) => {
  */
 export const logout = async (req, res) => {
   try {
-    const userId = res.locals.userid;
-    const tokenId = res.locals.tokenid;
-
-    if (!userId || !tokenId) {
-      return res.status(200).json({
-        status: "error",
-        message: "未登录",
-      });
-    }
-
-    // 撤销令牌
-    const result = await authUtils.revokeToken(tokenId);
+    // 使用中间件验证后的用户信息
+    const result = await authUtils.revokeToken(req.user.token_id);
 
     if (result.success) {
       return res.status(200).json({
@@ -660,18 +650,8 @@ export const logout = async (req, res) => {
  */
 export const logoutAllDevices = async (req, res) => {
   try {
-    const userId = res.locals.userid;
-    const currentTokenId = res.locals.tokenid;
-
-    if (!userId) {
-      return res.status(200).json({
-        status: "error",
-        message: "未登录",
-      });
-    }
-
-    // 撤销用户所有令牌(除了当前令牌)
-    const result = await authUtils.logout(userId, currentTokenId);
+    // 使用中间件验证后的用户信息
+    const result = await authUtils.revokeAllUserTokens(res.locals.userid, res.locals.tokeninfo.token_id);
 
     if (result.success) {
       return res.status(200).json({

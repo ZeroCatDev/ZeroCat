@@ -141,6 +141,7 @@ export const CONFIG_TYPES = {
     type: "string",
     required: true,
     description: "S3静态资源访问URL前缀",
+    public: true,
   },
   "redis.host": {
     type: "string",
@@ -251,12 +252,6 @@ export const CONFIG_TYPES = {
     description: "服务条款URL",
     public: true,
   },
-  "waline.url": {
-    type: "string",
-    required: false,
-    description: "Waline评论系统URL",
-    public: true,
-  },
   "captcha.GEE_API_SERVER": {
     type: "string",
     required: false,
@@ -266,6 +261,7 @@ export const CONFIG_TYPES = {
     type: "string",
     required: false,
     description: "极验验证ID",
+    public: true,
   },
   "captcha.GEE_CAPTCHA_KEY": {
     type: "string",
@@ -433,6 +429,54 @@ export const CONFIG_TYPES = {
     type: "string",
     required: false,
     description: "最后一次增量更新时间",
+  },
+  "search.enabled": {
+    type: "boolean",
+    required: false,
+    default: false,
+    description: "是否启用搜索功能",
+    transform: typeTransformers.boolean,
+    public: true,
+  },
+  "search.meilisearch.url": {
+    type: "string",
+    required: false,
+    description: "Meilisearch服务器地址",
+    public: true,
+  },
+  "search.meilisearch.api_key": {
+    type: "string",
+    required: false,
+    description: "Meilisearch API密钥",
+    public: true,
+  },
+  "search.meilisearch.index_name": {
+    type: "string",
+    required: false,
+    description: "Meilisearch索引名称",
+    public: true,
+  },
+  "scratchproxy.enabled": {
+    type: "boolean",
+    required: false,
+    default: false,
+    description: "是否启用ScratchProxy",
+    transform: typeTransformers.boolean,
+    public: true,
+  },
+  "scratchproxy.url": {
+    type: "string",
+    required: false,
+    description: "ScratchProxy服务器地址",
+    public: true,
+    validate: (value) => value.startsWith("http://") || value.startsWith("https://"),
+  },
+  "scratchproxy.gui": {
+    type: "string",
+    required: false,
+    description: "ScratchProxy GUI地址",
+    public: true,
+    validate: (value) => value.startsWith("http://") || value.startsWith("https://"),
   },
   cors: {
     type: "array",

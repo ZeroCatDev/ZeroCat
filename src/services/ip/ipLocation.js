@@ -109,7 +109,7 @@ const getIPLocation = async (ipAddress) => {
           response.country?.names?.["zh-CN"] ||
           response.country?.names?.en ||
           "未知"
-        }(${response.country?.isoCode || ""}) ${
+        } (${response.country?.isoCode || ""}) ${
           response.continent?.names?.["zh-CN"] ||
           response.continent?.names?.en ||
           ""

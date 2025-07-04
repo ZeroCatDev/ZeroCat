@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { needLogin, strictTokenCheck, needAdmin } from "../middleware/auth.js";
+import { tokenAuthMiddleware } from "../middleware.js";
 import geetestMiddleware from "../middleware/geetest.js";
 import {
   loginController,
@@ -29,8 +30,8 @@ router.post("/send-login-code", geetestMiddleware, loginController.sendLoginCode
 router.post("/login-with-code", loginController.loginWithCode);
 router.post("/magiclink/generate", geetestMiddleware, loginController.sendMagicLinkForLogin);
 router.get("/magiclink/validate", loginController.validateMagicLinkAndLogin);
-router.post("/logout", strictTokenCheck, loginController.logout);
-router.post("/logout-all-devices", strictTokenCheck, loginController.logoutAllDevices);
+router.post("/logout", tokenAuthMiddleware, loginController.logout);
+router.post("/logout-all-devices", tokenAuthMiddleware, loginController.logoutAllDevices);
 router.get("/logout", (req, res) => {
   res.locals.userid = null;
   res.redirect("/");
@@ -199,7 +200,7 @@ router.get("/oauth/validate-token/:token", async (req, res) => {
   }
 });
 router.post("/oauth/bound", needLogin, oauthController.getBoundOAuthAccounts);
-router.post("/confirm-unlink-oauth", oauthController.unlinkOAuth);
+router.post("/unlink-oauth", oauthController.unlinkOAuth);
 
 // 令牌管理相关路由
 router.post("/refresh-token", tokenController.refreshToken);
