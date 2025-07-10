@@ -93,8 +93,7 @@ $ docker compose up -d
 ##
 ## 如何贡献
 
-- [ZeroCat](https://zerocat.houlangs.com)
-非常欢迎你的加入！[提一个 Issue](https://github.com/ZeroCatDev/ZeroCat/issues/new) 或者提交一个 Pull Request。对于小白问题，最好在 qq 群里问，我们会尽量回答。
+ZeroCat 非常欢迎你的加入！[提一个 Issue](https://github.com/ZeroCatDev/ZeroCat/issues/new) 或者提交一个 Pull Request。对于小白问题，最好在 qq 群里问，我们会尽量回答。
 
 ##
 ZeroCat 的项目 遵循 [Contributor Covenant](http://contributor-covenant.org/version/1/3/0/) 行为规范
@@ -103,6 +102,8 @@ ZeroCat 的项目 遵循 [Contributor Covenant](http://contributor-covenant.org/
 ### 贡献者
 
 感谢所有参与项目的人，他们的信息可以在右侧看到，这是实时的且便于查看
+
+
 ## 许可协议
 
 ZeroCat 社区项目遵循 [AGPL-3.0 许可证](LICENSE)。

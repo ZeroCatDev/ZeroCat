@@ -1,14 +1,14 @@
 import { Router } from "express";
-import { needAdmin } from "../middleware/auth.js";
 import logger from "../services/logger.js";
 import configRouter from "./admin/config.js";
-import { needLogin } from '../middleware/auth.js';
+import usersRouter from "./admin/users.js";
+import { needLogin,needAdmin } from '../middleware/auth.js';
 
 import sitemapService from '../services/sitemap.js';
 import zcconfig from '../services/config/zcconfig.js';
 
 const router = Router();
-
+router.use(needAdmin);
 /**
  * Admin Router
  * 管理后台路由模块，包含：
@@ -21,7 +21,7 @@ const router = Router();
 
 // 使用统一的配置管理路由
 router.use("/config", configRouter);
-
+router.use("/users", usersRouter);
 // ==================== 系统信息路由 ====================
 
 /**
@@ -33,7 +33,7 @@ router.use("/config", configRouter);
  * @apiSuccess {String} status 请求状态
  * @apiSuccess {Object} data 系统信息
  */
-router.get("/system/info", needAdmin, async (req, res) => {
+router.get("/system/info", async (req, res) => {
   try {
     const systemInfo = {
       node_version: process.version,
@@ -57,10 +57,6 @@ router.get("/system/info", needAdmin, async (req, res) => {
     });
   }
 });
-
-// Admin authentication middleware
-router.use(needLogin);
-router.use(needAdmin);
 
 // Sitemap management routes
 router.get('/sitemap/status', async (req, res) => {

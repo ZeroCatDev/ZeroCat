@@ -8,15 +8,8 @@ import ipLocation from "../services/ip/ipLocation.js";
 import { Router } from "express";
 const router = Router();
 import { prisma } from "../services/global.js";
-import { getUsersByList } from "../controllers/users.js";
 import { createEvent } from "../controllers/events.js";
 // 中间件，确保所有请求均经过该处理
-
-// 统一的错误处理函数
-const handleError = (res, err, message) => {
-  logger.error(err);
-  res.status(500).send({ errno: 1, errmsg: message, data: err });
-};
 
 // 获取排序条件
 const getSortCondition = (req) => {
@@ -63,10 +56,28 @@ router.get("/api/comment", async (req, res, next) => {
     const sort = getSortCondition(req);
     logger.debug(req.query);
     const comments = await prisma.ow_comment.findMany({
-      where: { page_type: path.split("-")[0], page_id: path.split("-")[1], pid: null, rid: null, type: "comment" },
+      where: {
+        page_type: path.split("-")[0],
+        page_id: path.split("-")[1],
+        pid: null,
+        rid: null,
+        type: "comment",
+      },
       orderBy: sort,
       take: Number(pageSize) || 10,
       skip: Number((page - 1) * pageSize),
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            display_name: true,
+            avatar: true,
+            type: true,
+            motto: true,
+          },
+        },
+      },
     });
 
     const transformedComments = await transformComment(comments);
@@ -74,23 +85,30 @@ router.get("/api/comment", async (req, res, next) => {
     const ids = transformedComments.map((comment) => comment.id);
 
     const childrenComments = await prisma.ow_comment.findMany({
-      where: { page_type  : path.split("-")[0], page_id: path.split("-")[1], rid: { in: ids }, type: "comment" },
+      where: {
+        page_type: path.split("-")[0],
+        page_id: path.split("-")[1],
+        rid: { in: ids },
+        type: "comment",
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            display_name: true,
+            avatar: true,
+            type: true,
+            motto: true,
+          },
+        },
+      },
     });
 
     const transformedChildrenComments = await transformComment(
       childrenComments
     );
-    // 获取评论的用户id
 
-    var user_ids = transformedComments.map((comment) => comment.user_id);
-    user_ids = user_ids.concat(
-      transformedChildrenComments.map((comment) => comment.user_id)
-    );
-    //去重
-    user_ids = Array.from(new Set(user_ids));
-
-    logger.debug(user_ids);
-    const users = await getUsersByList(user_ids);
     const result = transformedComments.map((comment) => {
       const children = transformedChildrenComments.filter(
         (child) => child.rid == comment.id
@@ -99,7 +117,13 @@ router.get("/api/comment", async (req, res, next) => {
     });
 
     const count = await prisma.ow_comment.count({
-      where: { page_type: path.split("-")[0], page_id: path.split("-")[1], pid: null, rid: null, type: "comment" },
+      where: {
+        page_type: path.split("-")[0],
+        page_id: path.split("-")[1],
+        pid: null,
+        rid: null,
+        type: "comment",
+      },
     });
 
     res.status(200).send({
@@ -112,7 +136,6 @@ router.get("/api/comment", async (req, res, next) => {
         count,
         data: result,
       },
-      users,
     });
   } catch (err) {
     next(err);
@@ -180,25 +203,25 @@ router.post("/api/comment", needLogin, async (req, res, next) => {
     // 创建事件 - 区分新评论和回复评论
     if (rid) {
       // 如果有 rid，说明是回复评论
-      await createEvent("comment_reply", userid, "comment", rid, {
+      //await createEvent("comment_reply", userid, "comment", rid, { comment_text: comment, target_user: user_id });
+      await createEvent("comment_reply", userid, targetType, targetId, {
         comment_text: comment,
-        target_user: user_id
+        target_user: user_id,
       });
     } else {
       // 如果没有 rid，说明是新评论
       await createEvent("comment_create", userid, targetType, targetId, {
         comment_text: comment,
-        target_user: user_id
+        target_user: user_id,
       });
     }
-
   } catch (err) {
     next(err);
   }
 });
 
 // 删除评论
-router.delete("/api/comment/:id", async (req, res, next) => {
+router.delete("/api/comment/:id", strictTokenCheck, async (req, res, next) => {
   try {
     const { id } = req.params;
     const { user_id } = res.locals;

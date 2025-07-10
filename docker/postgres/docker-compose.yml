@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: zerocat-postgres
+    restart: unless-stopped
+    ports:
+      - "5431:5432"
+    environment:
+      POSTGRES_USER: root               # 使用 root 用户名
+      POSTGRES_PASSWORD: 123456     # 设置 root 密码
+      POSTGRES_DB: zerocat           # 初始化数据库
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+volumes:
+  pgdata:

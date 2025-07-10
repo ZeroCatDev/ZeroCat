@@ -28,7 +28,11 @@ model ow_comment {
   updatedAt  DateTime? @default(now()) @db.Timestamp(0)
   page_key   String?   @db.VarChar(128)
 
+  // Relations
+  user       ow_users? @relation(fields: [user_id], references: [id])
+
   @@index([page_type, page_id, insertedAt], map: "idx_projects_comments")
+  @@index([user_id], map: "idx_comment_user")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -109,6 +113,7 @@ model ow_users {
   relationships_as_target ow_user_relationships[] @relation("RelationshipTarget")
   notifications_acted     ow_notifications[]      @relation("NotificationActor")
   events_acted           ow_events[]             @relation("EventActor")
+  comments               ow_comment[]
 
   // OAuth relations
   oauth_applications      ow_oauth_applications[]
