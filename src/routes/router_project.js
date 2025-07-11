@@ -635,7 +635,7 @@ router.get("/commits", async (req, res, next) => {
 router.post("/branches", async (req, res, next) => {
   try {
     const { name, branch, projectid } = req.body;
-    await checkProjectPermission(projectid, res.locals.userid, "read");
+    await checkProjectPermission(projectid, res.locals.userid, "write");
     const result = await prisma.ow_projects_commits.findFirst({
       where: { project_id: Number(projectid), branch },
       orderBy: { commit_date: "desc" },

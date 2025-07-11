@@ -2,6 +2,7 @@ import { Router } from "express";
 import logger from "../services/logger.js";
 import configRouter from "./admin/config.js";
 import usersRouter from "./admin/users.js";
+import projectsRouter from "./admin/projects.js";
 import { needLogin,needAdmin } from '../middleware/auth.js';
 
 import sitemapService from '../services/sitemap.js';
@@ -13,7 +14,7 @@ router.use(needAdmin);
  * Admin Router
  * 管理后台路由模块，包含：
  * 1. 配置管理
- * 2. 用户管理（待实现）
+ * 2. 用户管理
  * 3. 内容管理（待实现）
  * 4. 系统监控（待实现）
  * 5. 日志查看（待实现）
@@ -22,6 +23,7 @@ router.use(needAdmin);
 // 使用统一的配置管理路由
 router.use("/config", configRouter);
 router.use("/users", usersRouter);
+router.use("/projects", projectsRouter);
 // ==================== 系统信息路由 ====================
 
 /**

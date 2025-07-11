@@ -16,6 +16,7 @@ export async function configureRoutes(app) {
   // 设置视图目录和引擎
   app.set("env", process.cwd());
   app.set("data", paths.DATA_DIR);
+  //logger.debug(paths.VIEWS_DIR)
   app.set("views", paths.VIEWS_DIR);
   app.set("view engine", "ejs");
 
