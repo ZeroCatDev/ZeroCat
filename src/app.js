@@ -14,6 +14,7 @@ import geoIpService from "./services/ip/ipLocation.js";
 import schedulerService from "./services/scheduler.js";
 import errorHandlerService from "./services/errorHandler.js";
 import sitemapService from './services/sitemap.js';
+import codeRunManager from './services/coderunManager.js';
 
 // 全局初始化标志，防止重复初始化
 global.appInitialized = global.appInitialized || false;
@@ -118,6 +119,9 @@ class Application {
 
       // 初始化调度服务
       schedulerService.initialize();
+
+      // Initialize CodeRunManager
+      await codeRunManager.initialize();
 
       logger.info('[app] 所有服务初始化完成');
 

@@ -3,6 +3,7 @@ import logger from "../services/logger.js";
 import configRouter from "./admin/config.js";
 import usersRouter from "./admin/users.js";
 import projectsRouter from "./admin/projects.js";
+import coderunRouter from "./admin/coderun.js";
 import { needLogin,needAdmin } from '../middleware/auth.js';
 
 import sitemapService from '../services/sitemap.js';
@@ -24,6 +25,7 @@ router.use(needAdmin);
 router.use("/config", configRouter);
 router.use("/users", usersRouter);
 router.use("/projects", projectsRouter);
+router.use("/coderun", coderunRouter);
 // ==================== 系统信息路由 ====================
 
 /**

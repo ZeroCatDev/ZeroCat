@@ -252,6 +252,38 @@ export const CONFIG_TYPES = {
     description: "服务条款URL",
     public: true,
   },
+  // CodeRun Configuration
+  "coderun.authtoken": {
+    type: "string",
+    required: false,
+    description: "CodeRun设备注册认证令牌",
+    default: Math.random().toString(36).substring(2, 15) +
+    Math.random().toString(36).substring(2, 15)+'请删掉这个后缀后保存',
+  validate: (value) => value && value.length > 0,
+  },
+  "coderun.enabled": {
+    type: "boolean",
+    required: false,
+    default: true,
+    description: "是否启用CodeRun服务",
+    transform: typeTransformers.boolean,
+  },
+  "coderun.pool_size": {
+    type: "number",
+    required: false,
+    default: 5,
+    description: "CodeRun容器池大小",
+    transform: typeTransformers.number,
+    validate: (value) => value >= 0 && value <= 100,
+  },
+  "coderun.report_interval": {
+    type: "number",
+    required: false,
+    default: 60000,
+    description: "CodeRun设备状态上报间隔（毫秒）",
+    transform: typeTransformers.number,
+    validate: (value) => value >= 5000 && value <= 3600000,
+  },
   "captcha.GEE_API_SERVER": {
     type: "string",
     required: false,

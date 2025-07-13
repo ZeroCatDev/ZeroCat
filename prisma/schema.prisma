@@ -622,3 +622,17 @@ model ow_cache_kv {
   @@index([user_id])
   @@index([key])
 }
+
+model ow_coderun_devices {
+  id                String    @id @default(uuid())
+  device_name       String    @db.VarChar(255)
+  runner_token      String    @unique @db.VarChar(255)
+  request_url       String?   @db.VarChar(1024)
+  status            String    @default("active") @db.VarChar(32)
+  device_config     Json?     // Custom device configuration
+  created_at        DateTime  @default(now()) @db.DateTime(0)
+  updated_at        DateTime  @updatedAt @db.DateTime(0)
+
+  @@index([status])
+  @@index([runner_token])
+}
