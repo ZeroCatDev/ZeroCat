@@ -285,30 +285,71 @@ router.post("/", needLogin, async (req, res, next) => {
 router.post("/savefile", needLogin, async (req, res, next) => {
   try {
     let source;
-    if (req.is("multipart/form-data")) {
-      source = req.body.source;
-    } else if (req.is("application/json")) {
-      source = req.body;
-    } else if (req.is("application/x-www-form-urlencoded")) {
-      source = req.body.source;
+    const shouldFormatJson = req.query.json === 'true';
+    const sourcePath = req.query.source || 'index';
+
+    // 处理 form-data 类型的文件上传
+    if (req.is('multipart/form-data')) {
+      if (!req.files || !req.files.source) {
+        return res.status(400).send({
+          status: "error",
+          message: "未找到上传的文件",
+        });
+      }
+      source = req.files.source.data.toString();
+    }
+    // 处理 JSON 类型的请求
+    else if (req.is('application/json')) {
+      // 如果指定了 json=true，则处理压缩/格式化的 JSON
+      if (shouldFormatJson) {
+        try {
+          const jsonData = req.body
+          if (typeof jsonData !== "object") {
+            throw new Error("Invalid JSON data");
+          }
+          source = JSON.stringify(jsonData); // 格式化的 JSON
+        } catch (err) {
+          logger.error("Error processing JSON source:", err);
+          return res.status(400).send({
+            status: "error",
+            message: "无效的 JSON 格式",
+          });
+        }
+      }
+      // 否则从指定路径读取源代码
+      else {
+        try {
+          const data = req.body;
+          // 根据 sourcePath 解析 JSON 路径
+          const pathParts = sourcePath.split('.');
+          let currentData = data;
+          for (const part of pathParts) {
+            if (currentData === undefined || currentData === null) {
+              throw new Error(`Invalid path: ${sourcePath}`);
+            }
+            currentData = currentData[part];
+          }
+          if (typeof currentData !== "string") {
+            throw new Error("Source code must be a string");
+          }
+          source = currentData;
+        } catch (err) {
+          logger.error("Error extracting source from JSON:", err);
+          return res.status(400).send({
+            status: "error",
+            message: "无法从指定路径获取源代码",
+          });
+        }
+      }
     } else {
       return res.status(400).send({
         status: "error",
-        message: "无效的内容类型",
+        message: "不支持的内容类型",
       });
     }
 
-    if (typeof source === "object") {
-      try {
-        source = JSON.stringify(source);
-      } catch (err) {
-        logger.error("Error stringifying source code:", err);
-        return res.status(400).send({
-          status: "error",
-          message: "无效的源代码格式",
-        });
-      }
-    } else if (typeof source !== "string") {
+    // 确保 source 是字符串类型
+    if (typeof source !== "string") {
       source = String(source);
     }
 
@@ -342,6 +383,7 @@ router.post("/savefile", needLogin, async (req, res, next) => {
     res.status(200).send({
       status: "success",
       message: "保存成功",
+      sha256,
       accessFileToken,
     });
   } catch (err) {
@@ -952,7 +994,7 @@ router.post("/initlize", needLogin, async (req, res, next) => {
   }
 
   try {
-    const { projectid } = req.query;
+    const { projectid ,type} = req.query;
     await checkProjectPermission(projectid, res.locals.userid, "write");
 
     // 检查项目是否在任何分支都没有任何提交
@@ -970,7 +1012,7 @@ router.post("/initlize", needLogin, async (req, res, next) => {
       where: { id: Number(projectid) },
     });
     // 获取默认作品
-    const defaultSource = default_project[project.type];
+    const defaultSource = default_project[type||project.type];
     if (!defaultSource) {
       return res.status(200).send({
         status: "error",
