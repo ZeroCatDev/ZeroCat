@@ -6,7 +6,7 @@ import { randomBytes } from 'crypto';
 import zcconfig from '../../services/config/zcconfig.js';
 import logger from '../../services/logger.js';
 import codeRunManager from '../../services/coderunManager.js';
-
+import {getValue} from '../../services/cachekv.js'
 // Get active runners endpoint
 router.get('/getrunners', async (req, res) => {
   try {
@@ -132,7 +132,8 @@ router.get('/config', async (req, res) => {
       enabled: await zcconfig.get('coderun.enabled', true),
       poolSize: await zcconfig.get('coderun.pool_size', 5),
       reportInterval: await zcconfig.get('coderun.report_interval'),
-      jwtSecret: await zcconfig.get('security.jwttoken')
+      jwtSecret: await zcconfig.get('security.jwttoken'),
+      cloudconfig: await getValue(1,`coderun.cloudconfig`)||{}
     };
 
     // Merge with device-specific config

@@ -26,6 +26,29 @@ export async function get(userId, key) {
 }
 
 /**
+ * Get value by key for a specific user
+ * @param {number} userId - The user ID
+ * @param {string} key - The key to get
+ * @returns {Promise<any>} The value stored for the key
+ */
+export async function getValue(userId, key) {
+  try{
+const item = await prisma.ow_cache_kv.findUnique({
+  where: {
+    user_id_key: {
+      user_id: userId,
+      key: key
+    }
+  }
+});
+
+  return item.value;
+} catch (error) {
+  console.error('获取失败:', error);
+  return undefined;
+}
+}
+/**
  * Set value for key for a specific user
  * @param {number} userId - The user ID
  * @param {string} key - The key to set
