@@ -82,7 +82,41 @@ async function updateBranchLatestCommit(projectid, branch, commitId) {
     },
   });
 }
+// 获取项目分析数据
+router.get("/analytics/:id", needLogin, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { start_date, end_date } = req.query;
 
+    // 验证日期格式
+    if (!start_date || !end_date || !Date.parse(start_date) || !Date.parse(end_date)) {
+      return res.status(400).send({
+        status: "error",
+        message: "无效的日期格式",
+      });
+    }
+
+    // 验证项目权限
+    const hasPermission = await hasProjectPermission(id, res.locals.userid, "read");
+    if (!hasPermission) {
+      return res.status(403).send({
+        status: "error",
+        message: "无权访问此项目",
+      });
+    }
+
+    const analytics = await getAnalytics("project", Number(id), start_date, end_date);
+
+    res.status(200).send({
+      status: "success",
+      message: "获取成功",
+      data: analytics,
+    });
+  } catch (err) {
+    logger.error("Error fetching project analytics:", err);
+    next(err);
+  }
+});
 // 根据类型查询项目
 router.get("/query", async (req, res, next) => {
   try {
