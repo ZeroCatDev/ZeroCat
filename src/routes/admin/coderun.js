@@ -66,10 +66,11 @@ router.get("/devices/:id", needAdmin, async (req, res) => {
 // Update device configuration
 router.put("/devices/:id", needAdmin, async (req, res) => {
   try {
-    const { request_url, device_config, status } = req.body;
+    const { device_name, request_url, device_config, status } = req.body;
     const device = await prisma.ow_coderun_devices.update({
       where: { id: req.params.id },
       data: {
+        device_name,
         request_url,
         device_config,
         status,
