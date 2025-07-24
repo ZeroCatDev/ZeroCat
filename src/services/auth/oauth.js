@@ -7,19 +7,19 @@ import crypto from "crypto";
  * @returns {boolean}
  */
 export function validateRedirectUri(redirectUri, allowedUris) {
-  try {
-    const requestedUrl = new URL(redirectUri);
-    return allowedUris.some((allowed) => {
-      const allowedUrl = new URL(allowed);
-      return (
-        requestedUrl.protocol === allowedUrl.protocol &&
-        requestedUrl.host === allowedUrl.host &&
-        requestedUrl.pathname === allowedUrl.pathname
-      );
-    });
-  } catch (error) {
-    return false;
-  }
+    try {
+        const requestedUrl = new URL(redirectUri);
+        return allowedUris.some((allowed) => {
+            const allowedUrl = new URL(allowed);
+            return (
+                requestedUrl.protocol === allowedUrl.protocol &&
+                requestedUrl.host === allowedUrl.host &&
+                requestedUrl.pathname === allowedUrl.pathname
+            );
+        });
+    } catch (error) {
+        return false;
+    }
 }
 
 /**
@@ -27,8 +27,8 @@ export function validateRedirectUri(redirectUri, allowedUris) {
  * @returns {Promise<string>}
  */
 export async function generateAuthCode() {
-  const bytes = await crypto.randomBytes(32);
-  return bytes.toString("base64url");
+    const bytes = await crypto.randomBytes(32);
+    return bytes.toString("base64url");
 }
 
 /**
@@ -36,16 +36,16 @@ export async function generateAuthCode() {
  * @returns {Promise<{accessToken: string, refreshToken: string, expiresIn: number}>}
  */
 export async function generateTokens() {
-  const [accessTokenBytes, refreshTokenBytes] = await Promise.all([
-    crypto.randomBytes(32),
-    crypto.randomBytes(32),
-  ]);
+    const [accessTokenBytes, refreshTokenBytes] = await Promise.all([
+        crypto.randomBytes(32),
+        crypto.randomBytes(32),
+    ]);
 
-  return {
-    accessToken: accessTokenBytes.toString("base64url"),
-    refreshToken: refreshTokenBytes.toString("base64url"),
-    expiresIn: 3600, // 1小时过期
-  };
+    return {
+        accessToken: accessTokenBytes.toString("base64url"),
+        refreshToken: refreshTokenBytes.toString("base64url"),
+        expiresIn: 3600, // 1小时过期
+    };
 }
 
 /**
@@ -55,7 +55,7 @@ export async function generateTokens() {
  * @returns {boolean}
  */
 export function validateScopes(requestedScopes, allowedScopes) {
-  return requestedScopes.every((scope) => allowedScopes.includes(scope));
+    return requestedScopes.every((scope) => allowedScopes.includes(scope));
 }
 
 /**
@@ -66,23 +66,23 @@ export function validateScopes(requestedScopes, allowedScopes) {
  * @returns {boolean}
  */
 export function validatePKCE(codeVerifier, codeChallenge, codeChallengeMethod) {
-  if (!codeVerifier || !codeChallenge || !codeChallengeMethod) {
-    return false;
-  }
+    if (!codeVerifier || !codeChallenge || !codeChallengeMethod) {
+        return false;
+    }
 
-  let challenge;
-  if (codeChallengeMethod === "S256") {
-    challenge = crypto
-      .createHash("sha256")
-      .update(codeVerifier)
-      .digest("base64url");
-  } else if (codeChallengeMethod === "plain") {
-    challenge = codeVerifier;
-  } else {
-    return false;
-  }
+    let challenge;
+    if (codeChallengeMethod === "S256") {
+        challenge = crypto
+            .createHash("sha256")
+            .update(codeVerifier)
+            .digest("base64url");
+    } else if (codeChallengeMethod === "plain") {
+        challenge = codeVerifier;
+    } else {
+        return false;
+    }
 
-  return challenge === codeChallenge;
+    return challenge === codeChallenge;
 }
 
 /**
@@ -92,15 +92,15 @@ export function validatePKCE(codeVerifier, codeChallenge, codeChallengeMethod) {
  * @returns {Promise<boolean>}
  */
 export async function validateClientCredentials(clientId, clientSecret) {
-  if (!clientId || !clientSecret) {
-    return false;
-  }
+    if (!clientId || !clientSecret) {
+        return false;
+    }
 
-  // 使用恒定时间比较以防止时序攻击
-  return crypto.timingSafeEqual(
-    Buffer.from(clientSecret),
-    Buffer.from(clientSecret)
-  );
+    // 使用恒定时间比较以防止时序攻击
+    return crypto.timingSafeEqual(
+        Buffer.from(clientSecret),
+        Buffer.from(clientSecret)
+    );
 }
 
 /**
@@ -108,13 +108,13 @@ export async function validateClientCredentials(clientId, clientSecret) {
  * @returns {Promise<{clientId: string, clientSecret: string}>}
  */
 export async function generateAppCredentials() {
-  const [clientIdBytes, clientSecretBytes] = await Promise.all([
-    crypto.randomBytes(16),
-    crypto.randomBytes(32),
-  ]);
+    const [clientIdBytes, clientSecretBytes] = await Promise.all([
+        crypto.randomBytes(16),
+        crypto.randomBytes(32),
+    ]);
 
-  return {
-    clientId: clientIdBytes.toString("hex"),
-    clientSecret: clientSecretBytes.toString("hex"),
-  };
+    return {
+        clientId: clientIdBytes.toString("hex"),
+        clientSecret: clientSecretBytes.toString("hex"),
+    };
 }

@@ -8,10 +8,10 @@ import * as oauthController from './oauthController.js';
 
 // 集中导出所有控制器
 export {
-  loginController,
-  registerController,
-  emailController,
-  tokenController,
-  totpController,
-  oauthController
+    loginController,
+    registerController,
+    emailController,
+    tokenController,
+    totpController,
+    oauthController
 };

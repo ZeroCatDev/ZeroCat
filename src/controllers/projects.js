@@ -1,96 +1,95 @@
 import logger from "../services/logger.js";
-import { prisma } from "../services/global.js";
+import {prisma} from "../services/global.js";
 
-import { createHash } from "crypto";
-import { getUsersByList } from "./users.js";
-import { name } from "ejs";
+import {createHash} from "crypto";
+import {getUsersByList} from "./users.js";
 
 async function getProjectsByList(list, userid = null) {
-  const select = projectSelectionFields();
-  const projectIds = list.map(Number);
-  const projects = await prisma.ow_projects.findMany({
-    where: { id: { in: projectIds } },
-    select,
-  });
-  if (userid) {
-    return projects.filter(
-      (project) => !(project.state === "private" && project.authorid !== userid)
-    );
-  }
-  return projects;
+    const select = projectSelectionFields();
+    const projectIds = list.map(Number);
+    const projects = await prisma.ow_projects.findMany({
+        where: {id: {in: projectIds}},
+        select,
+    });
+    if (userid) {
+        return projects.filter(
+            (project) => !(project.state === "private" && project.authorid !== userid)
+        );
+    }
+    return projects;
 }
 
 async function getProjectById(projectId, userid = null) {
-  const select = projectSelectionFields();
-  const project = await prisma.ow_projects.findFirst({
-    where: { id: Number(projectId) },
-    select,
-  });
-  if (!project) {
-    return null;
-  }
-  if (userid && project.state === "private" && project.authorid !== userid) {
-    return null;
-  }
-  return project;
+    const select = projectSelectionFields();
+    const project = await prisma.ow_projects.findFirst({
+        where: {id: Number(projectId)},
+        select,
+    });
+    if (!project) {
+        return null;
+    }
+    if (userid && project.state === "private" && project.authorid !== userid) {
+        return null;
+    }
+    return project;
 }
 
 async function getProjectsAndUsersByProjectsList(list, userid = null) {
-  const projects = await getProjectsByList(list, userid);
-  const userslist = [...new Set(projects.map((project) => project.authorid))];
-  const users = await getUsersByList(userslist);
-  return { projects, users };
+    const projects = await getProjectsByList(list, userid);
+    const userslist = [...new Set(projects.map((project) => project.authorid))];
+    const users = await getUsersByList(userslist);
+    return {projects, users};
 }
 
 function extractProjectData(body) {
-  const fields = [
-    "type",
-    "license",
-    "state",
-    "title",
-    "description",
-    "history",
-  ];
-  return fields.reduce(
-    (acc, field) => (body[field] ? { ...acc, [field]: body[field] } : acc),
-    {}
-  );
+    const fields = [
+        "type",
+        "license",
+        "state",
+        "title",
+        "description",
+        "history",
+    ];
+    return fields.reduce(
+        (acc, field) => (body[field] ? {...acc, [field]: body[field]} : acc),
+        {}
+    );
 }
 
 const extractProjectTags = (tags) =>
-  // 如果某项为空，则删除
-  Array.isArray(tags)
-    ? tags.map(String).filter((tag) => tag)
-    : tags
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter((tag) => tag);
+    // 如果某项为空，则删除
+    Array.isArray(tags)
+        ? tags.map(String).filter((tag) => tag)
+        : tags
+            .split(",")
+            .map((tag) => tag.trim())
+            .filter((tag) => tag);
 
 async function handleTagsChange(projectId, tags) {
-  const existingTags = await prisma.ow_projects_tags.findMany({
-    where: { projectid: projectId },
-    select: { id: true, name: true },
-  });
-  tags = extractProjectTags(tags);
+    const existingTags = await prisma.ow_projects_tags.findMany({
+        where: {projectid: projectId},
+        select: {id: true, name: true},
+    });
+    tags = extractProjectTags(tags);
 
-  const tagNames = new Set(tags);
-  await Promise.all(
-    existingTags.map(async (tag) => {
-      if (!tagNames.has(tag.name)) {
-        await prisma.ow_projects_tags.delete({ where: { id: tag.id } });
-      } else {
-        tagNames.delete(tag.name);
-      }
-    })
-  );
+    const tagNames = new Set(tags);
+    await Promise.all(
+        existingTags.map(async (tag) => {
+            if (!tagNames.has(tag.name)) {
+                await prisma.ow_projects_tags.delete({where: {id: tag.id}});
+            } else {
+                tagNames.delete(tag.name);
+            }
+        })
+    );
 
-  await Promise.all(
-    [...tagNames].map(async (name) => {
-      await prisma.ow_projects_tags.create({
-        data: { projectid: projectId, name },
-      });
-    })
-  );
+    await Promise.all(
+        [...tagNames].map(async (name) => {
+            await prisma.ow_projects_tags.create({
+                data: {projectid: projectId, name},
+            });
+        })
+    );
 }
 
 /**
@@ -99,12 +98,12 @@ async function handleTagsChange(projectId, tags) {
  * @returns {Promise<string>} - SHA256 of the source
  */
 function setProjectFile(source) {
-  const sourcedata = isJson(source) ? JSON.stringify(source) : source;
-  const sha256 = createHash("sha256").update(sourcedata).digest("hex");
-  prisma.ow_projects_file
-    .create({ data: { sha256, source: sourcedata }})
-    .catch(logger.error);
-  return sha256;
+    const sourcedata = isJson(source) ? JSON.stringify(source) : source;
+    const sha256 = createHash("sha256").update(sourcedata).digest("hex");
+    prisma.ow_projects_file
+        .create({data: {sha256, source: sourcedata}})
+        .catch(logger.error);
+    return sha256;
 }
 
 /**
@@ -113,10 +112,10 @@ function setProjectFile(source) {
  * @returns {Promise<{ source: string }>} - Project source
  */
 async function getProjectFile(sha256) {
-  return prisma.ow_projects_file.findFirst({
-    where: { sha256 },
-    select: { source: true },
-  });
+    return prisma.ow_projects_file.findFirst({
+        where: {sha256},
+        select: {source: true},
+    });
 }
 
 /**
@@ -127,8 +126,8 @@ async function getProjectFile(sha256) {
  * @returns {void}
  */
 function handleError(res, err, msg) {
-  logger.error(err);
-  res.status(500).send({ status: "error", msg, error: err });
+    logger.error(err);
+    res.status(500).send({status: "error", msg, error: err});
 }
 
 /**
@@ -136,41 +135,41 @@ function handleError(res, err, msg) {
  * @returns {Object} - Selected fields
  */
 function projectSelectionFields() {
-  return {
-    id: true,
-    name: true,
-    default_branch: true,
-    type: true,
-    license: true,
-    authorid: true,
-    state: true,
-    view_count: true,
-    time: true,
-    title: true,
-    description: true,
-    tags: true,
-    star_count: true,
-    fork: true,
-    author: {
-      select: {
-        id: true,
-        username: true,
-        display_name: true,
-        status: true,
-                bio: true,
-        motto: true,
-
-        avatar: true,
-        regTime: true,
-      },
-    },
-    project_tags: {
-      select: {
+    return {
         id: true,
         name: true,
-      },
-    },
-  };
+        default_branch: true,
+        type: true,
+        license: true,
+        authorid: true,
+        state: true,
+        view_count: true,
+        time: true,
+        title: true,
+        description: true,
+        tags: true,
+        star_count: true,
+        fork: true,
+        author: {
+            select: {
+                id: true,
+                username: true,
+                display_name: true,
+                status: true,
+                bio: true,
+                motto: true,
+
+                avatar: true,
+                regTime: true,
+            },
+        },
+        project_tags: {
+            select: {
+                id: true,
+                name: true,
+            },
+        },
+    };
 }
 
 /**
@@ -178,41 +177,41 @@ function projectSelectionFields() {
  * @returns {Object} - Selected fields
  */
 function authorSelectionFields() {
-  return {
-    id: true,
-    username: true,
-    display_name: true,
-    status: true,
-    regTime: true,
-            bio: true,
+    return {
+        id: true,
+        username: true,
+        display_name: true,
+        status: true,
+        regTime: true,
+        bio: true,
         motto: true,
 
-    avatar: true,
-  };
+        avatar: true,
+    };
 }
 
 // 工具函数：判断是否为有效 JSON
 function isJson(str) {
-  try {
-    JSON.stringify(str);
-    return true;
-  } catch (error) {
-    logger.debug(error);
-    return false;
-  }
+    try {
+        JSON.stringify(str);
+        return true;
+    } catch (error) {
+        logger.debug(error);
+        return false;
+    }
 }
 
 export {
-  getProjectsByList,
-  getUsersByList,
-  getProjectsAndUsersByProjectsList,
-  extractProjectData,
-  isJson,
-  setProjectFile,
-  getProjectFile,
-  projectSelectionFields,
-  authorSelectionFields,
-  extractProjectTags,
-  handleTagsChange,
-  getProjectById,
+    getProjectsByList,
+    getUsersByList,
+    getProjectsAndUsersByProjectsList,
+    extractProjectData,
+    isJson,
+    setProjectFile,
+    getProjectFile,
+    projectSelectionFields,
+    authorSelectionFields,
+    extractProjectTags,
+    handleTagsChange,
+    getProjectById,
 };

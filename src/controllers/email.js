@@ -1,40 +1,40 @@
 import crypto from 'crypto';
 import base32Encode from 'base32-encode';
-import { prisma } from "../services/global.js";
-import { sendEmail } from "../services/email/emailService.js";
-import { TOTP } from "otpauth";
+import {prisma} from "../services/global.js";
+import {sendEmail} from "../services/email/emailService.js";
+import {TOTP} from "otpauth";
 import logger from '../services/logger.js';
 import memoryCache from '../services/memoryCache.js';
 import zcconfig from "../services/config/zcconfig.js";
 
 // 创建TOTP实例的通用函数
 function createTotpInstance(secret) {
-  return new TOTP({
-    secret: secret,
-    algorithm: "SHA256",
-    digits: 6,
-    period: 300, // 5分钟有效期
-    issuer: "ZeroCat",
-    label: "邮箱验证"
-  });
+    return new TOTP({
+        secret: secret,
+        algorithm: "SHA256",
+        digits: 6,
+        period: 300, // 5分钟有效期
+        issuer: "ZeroCat",
+        label: "邮箱验证"
+    });
 }
 
 // 生成验证码
 function generateEmailToken(secret) {
-  const totp = createTotpInstance(secret);
-  return totp.generate();
+    const totp = createTotpInstance(secret);
+    return totp.generate();
 }
 
 // 验证验证码
 function validateEmailToken(secret, token) {
-  try {
-    const totp = createTotpInstance(secret);
-    // window: 1 表示允许前后一个时间窗口的验证码
-    return totp.validate({ token, window: 1 }) !== null;
-  } catch (error) {
-    logger.error('验证码验证失败:', error);
-    return false;
-  }
+    try {
+        const totp = createTotpInstance(secret);
+        // window: 1 表示允许前后一个时间窗口的验证码
+        return totp.validate({token, window: 1}) !== null;
+    } catch (error) {
+        logger.error('验证码验证失败:', error);
+        return false;
+    }
 }
 
 // Generate a Base32 hash for TOTP
@@ -42,7 +42,7 @@ const generateContactHash = () => {
     // 生成16字节的随机数据
     const buffer = crypto.randomBytes(16);
     // 使用 base32-encode 库将随机字节转换为 Base32 格式
-    return base32Encode(buffer, 'RFC4648', { padding: false });
+    return base32Encode(buffer, 'RFC4648', {padding: false});
 };
 
 // Add a contact for a user
@@ -72,20 +72,20 @@ const addUserContact = async (userId, contactValue, contactType, isPrimary = fal
 
 // 添加速率限制
 const rateLimitEmailVerification = async (email) => {
-  const key = `email_verification:${email}`;
-  const count = memoryCache.get(key) || 0;
+    const key = `email_verification:${email}`;
+    const count = memoryCache.get(key) || 0;
 
-  if (count >= 3) {
-    throw new Error('发送验证码过于频繁，请稍后再试 #2');
-  }
+    if (count >= 3) {
+        throw new Error('发送验证码过于频繁，请稍后再试 #2');
+    }
 
-  memoryCache.set(key, count + 1, 3600); // 1小时过期
+    memoryCache.set(key, count + 1, 3600); // 1小时过期
 };
 
 // 定义不同场景的邮件模板
 const EMAIL_TEMPLATES = {
-  // 验证邮箱模板
-  VERIFY: (code, verifyUrl) => `
+    // 验证邮箱模板
+    VERIFY: (code, verifyUrl) => `
 验证您的邮箱
 
 您的验证码是: ${code}
@@ -97,8 +97,8 @@ ${verifyUrl}
 如果这不是您的操作，请忽略此邮件。
   `,
 
-  // 重置密码模板
-  RESET_PASSWORD: (code, verifyUrl) => `
+    // 重置密码模板
+    RESET_PASSWORD: (code, verifyUrl) => `
 重置密码验证
 
 您正在重置密码，验证码是: ${code}
@@ -107,8 +107,8 @@ ${verifyUrl}
 如果这不是您的操作，请忽略此邮件并考虑修改您的密码。
   `,
 
-  // 添加邮箱模板
-  ADD_EMAIL: (code, verifyUrl) => `
+    // 添加邮箱模板
+    ADD_EMAIL: (code, verifyUrl) => `
 验证新邮箱
 
 您正在添加新的邮箱地址，验证码是: ${code}
@@ -120,8 +120,8 @@ ${verifyUrl}
 如果这不是您的操作，请忽略此邮件。
   `,
 
-  // 默认模板
-  DEFAULT: (code, verifyUrl) => `
+    // 默认模板
+    DEFAULT: (code, verifyUrl) => `
 验证码
 
 您的验证码是: ${code}
@@ -130,8 +130,8 @@ ${verifyUrl}
 如果这不是您的操作，请忽略此邮件。
   `,
 
-  // 登录验证模板
-  LOGIN: (code) => `
+    // 登录验证模板
+    LOGIN: (code) => `
 登录验证
 
 您正在使用邮箱验证码登录，验证码是: ${code}
@@ -140,8 +140,8 @@ ${verifyUrl}
 如果这不是您的操作，请忽略此邮件并考虑修改您的密码。
   `,
 
-  // 解绑 OAuth 验证模板
-  UNLINK_OAUTH: (code) => `
+    // 解绑 OAuth 验证模板
+    UNLINK_OAUTH: (code) => `
 解绑 OAuth 验证
 
 您正在请求解绑 OAuth 账号，验证码是: ${code}
@@ -153,11 +153,11 @@ ${verifyUrl}
 
 // 邮件主题映射
 const EMAIL_SUBJECTS = {
-  VERIFY: '验证您的邮箱',
-  RESET_PASSWORD: '重置密码验证',
-  ADD_EMAIL: '验证新邮箱',
-  DEFAULT: '验证码',
-  LOGIN: '登录验证码'
+    VERIFY: '验证您的邮箱',
+    RESET_PASSWORD: '重置密码验证',
+    ADD_EMAIL: '验证新邮箱',
+    DEFAULT: '验证码',
+    LOGIN: '登录验证码'
 };
 
 // Send verification email

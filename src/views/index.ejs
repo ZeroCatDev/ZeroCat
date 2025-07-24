@@ -2,43 +2,47 @@
 <html lang="zh-cmn-Hans" class="mdui-theme-dark">
 
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>
-    <%= global.config['site.name'] %>
-  </title>
-  <link rel="stylesheet" href="https://unpkg.com/mdui@2/mdui.css" id="mdui_css">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>
+        <%= global.config['site.name'] %>
+    </title>
+    <link rel="stylesheet" href="https://unpkg.com/mdui@2/mdui.css" id="mdui_css">
 </head>
 <style>
-  :not(:defined) {
-    visibility: hidden;
-  }
+    :not(:defined) {
+        visibility: hidden;
+    }
 </style>
 
 <body>
-  <mdui-layout>
+<mdui-layout>
     <mdui-layout-main>
-      <mdui-list>
-        <% const config = global.publicconfig || {}; %>
-          <% Object.entries(config).forEach(([key, value])=> { %>
-            <mdui-list-item rounded headline="<%= key %>"
-              description="<%= typeof value === 'object' ? JSON.stringify(value) : value %>"></mdui-list-item>
-          <% }); %>
-      </mdui-list>
-      <mdui-button variant="filled" href="<%= global.config['urls.frontend'] %>">打开网站</mdui-button>
-      <mdui-button variant="elevated" href="#">了解更多</mdui-button><mdui-list>
-        <% if (global.publicconfig['feedback.qq.group']) { %>
-        <mdui-list-item icon="people" description="qq群<%= global.config['feedback.qq.group'] %>" <% if (global.publicconfig['feedback.qq.link']) { %>href="<%= global.config['feedback.qq.link'] %>"<% } %> active
-          rounded><%= global.config['feedback.qq.description'] %></mdui-list-item>
-        <% } %>
-      </mdui-list>
-      </div>
+        <mdui-list>
+            <% const config = global.publicconfig || {}; %>
+            <% Object.entries(config).forEach(([key, value])=> { %>
+                <mdui-list-item rounded headline="<%= key %>"
+                                description="<%= typeof value === 'object' ? JSON.stringify(value) : value %>"></mdui-list-item>
+            <% }); %>
+        </mdui-list>
+        <mdui-button variant="filled" href="<%= global.config['urls.frontend'] %>">打开网站</mdui-button>
+        <mdui-button variant="elevated" href="#">了解更多</mdui-button>
+        <mdui-list>
+            <% if (global.publicconfig['feedback.qq.group']) { %>
+                <mdui-list-item icon="people" description="qq群<%= global.config['feedback.qq.group'] %>"
+                                <% if (global.publicconfig['feedback.qq.link']) { %>href="<%= global.config['feedback.qq.link'] %>"
+                        <% } %>
+                                active
+                                rounded><%= global.config['feedback.qq.description'] %></mdui-list-item>
+            <% } %>
+        </mdui-list>
+        </div>
     </mdui-layout-main>
-  </mdui-layout>
+</mdui-layout>
 </body>
 <script src="https://unpkg.com/mdui@2/mdui.global.js"></script>
 <script>
-  mdui.setColorScheme("<%= global.config['theme.mdui.color.primary'] %>");
+    mdui.setColorScheme("<%= global.config['theme.mdui.color.primary'] %>");
 </script>
 
 </html>

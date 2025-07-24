@@ -1,245 +1,244 @@
 import logger from "../services/logger.js";
-import { needLogin, strictTokenCheck } from "../middleware/auth.js";
-import zcconfig from "../services/config/zcconfig.js";
-import notificationUtils from "../controllers/notifications.js";
-import { UAParser } from "ua-parser-js";
+import {needLogin, strictTokenCheck} from "../middleware/auth.js";
+import {UAParser} from "ua-parser-js";
 import ipLocation from "../services/ip/ipLocation.js";
 
-import { Router } from "express";
+import {Router} from "express";
+import {prisma} from "../services/global.js";
+import {createEvent} from "../controllers/events.js";
+
 const router = Router();
-import { prisma } from "../services/global.js";
-import { createEvent } from "../controllers/events.js";
 // 中间件，确保所有请求均经过该处理
 
 // 获取排序条件
 const getSortCondition = (req) => {
-  const sortBy = req.query.sortBy;
-  if (sortBy == "insertedAt_desc") return { id: "desc" };
-  if (sortBy == "insertedAt_asc") return { id: "asc" };
-  if (sortBy == "like_desc") return { like: "desc" };
-  return {};
+    const sortBy = req.query.sortBy;
+    if (sortBy == "insertedAt_desc") return {id: "desc"};
+    if (sortBy == "insertedAt_asc") return {id: "asc"};
+    if (sortBy == "like_desc") return {like: "desc"};
+    return {};
 };
 
 // 转换评论数据
 const transformComment = async (comments) => {
-  return Promise.all(
-    comments.map(async (comment) => {
-      const time = new Date(comment.insertedAt).getTime();
-      const objectId = comment.id;
+    return Promise.all(
+        comments.map(async (comment) => {
+            const time = new Date(comment.insertedAt).getTime();
+            const objectId = comment.id;
 
-      // 使用 UAParser 解析 UA
-      const parser = new UAParser(comment.user_ua || "");
-      const result = parser.getResult();
-      const browser = result.browser.name || "未知";
-      const os = result.os.name || "未知";
+            // 使用 UAParser 解析 UA
+            const parser = new UAParser(comment.user_ua || "");
+            const result = parser.getResult();
+            const browser = result.browser.name || "未知";
+            const os = result.os.name || "未知";
 
-      // 获取 IP 地址位置信息
-      let ipInfo = await ipLocation.getIPLocation(comment.user_ip);
+            // 获取 IP 地址位置信息
+            let ipInfo = await ipLocation.getIPLocation(comment.user_ip);
 
-      return {
-        ...comment,
-        time,
-        objectId,
-        browser,
-        os,
-        addr: ipInfo.address,
-        most_specific_country_or_region: ipInfo.most_specific_country_or_region,
-      };
-    })
-  );
+            return {
+                ...comment,
+                time,
+                objectId,
+                browser,
+                os,
+                addr: ipInfo.address,
+                most_specific_country_or_region: ipInfo.most_specific_country_or_region,
+            };
+        })
+    );
 };
 
 // 读取评论
 router.get("/api/comment", async (req, res, next) => {
-  try {
-    const { path, page, pageSize } = req.query;
-    const sort = getSortCondition(req);
-    logger.debug(req.query);
-    const comments = await prisma.ow_comment.findMany({
-      where: {
-        page_type: path.split("-")[0],
-        page_id: path.split("-")[1],
-        pid: null,
-        rid: null,
-        type: "comment",
-      },
-      orderBy: sort,
-      take: Number(pageSize) || 10,
-      skip: Number((page - 1) * pageSize),
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            display_name: true,
-            avatar: true,
-            type: true,
-            motto: true,
-          },
-        },
-      },
-    });
+    try {
+        const {path, page, pageSize} = req.query;
+        const sort = getSortCondition(req);
+        logger.debug(req.query);
+        const comments = await prisma.ow_comment.findMany({
+            where: {
+                page_type: path.split("-")[0],
+                page_id: path.split("-")[1],
+                pid: null,
+                rid: null,
+                type: "comment",
+            },
+            orderBy: sort,
+            take: Number(pageSize) || 10,
+            skip: Number((page - 1) * pageSize),
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        username: true,
+                        display_name: true,
+                        avatar: true,
+                        type: true,
+                        motto: true,
+                    },
+                },
+            },
+        });
 
-    const transformedComments = await transformComment(comments);
+        const transformedComments = await transformComment(comments);
 
-    const ids = transformedComments.map((comment) => comment.id);
+        const ids = transformedComments.map((comment) => comment.id);
 
-    const childrenComments = await prisma.ow_comment.findMany({
-      where: {
-        page_type: path.split("-")[0],
-        page_id: path.split("-")[1],
-        rid: { in: ids },
-        type: "comment",
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            display_name: true,
-            avatar: true,
-            type: true,
-            motto: true,
-          },
-        },
-      },
-    });
+        const childrenComments = await prisma.ow_comment.findMany({
+            where: {
+                page_type: path.split("-")[0],
+                page_id: path.split("-")[1],
+                rid: {in: ids},
+                type: "comment",
+            },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        username: true,
+                        display_name: true,
+                        avatar: true,
+                        type: true,
+                        motto: true,
+                    },
+                },
+            },
+        });
 
-    const transformedChildrenComments = await transformComment(
-      childrenComments
-    );
+        const transformedChildrenComments = await transformComment(
+            childrenComments
+        );
 
-    const result = transformedComments.map((comment) => {
-      const children = transformedChildrenComments.filter(
-        (child) => child.rid == comment.id
-      );
-      return { ...comment, children };
-    });
+        const result = transformedComments.map((comment) => {
+            const children = transformedChildrenComments.filter(
+                (child) => child.rid == comment.id
+            );
+            return {...comment, children};
+        });
 
-    const count = await prisma.ow_comment.count({
-      where: {
-        page_type: path.split("-")[0],
-        page_id: path.split("-")[1],
-        pid: null,
-        rid: null,
-        type: "comment",
-      },
-    });
+        const count = await prisma.ow_comment.count({
+            where: {
+                page_type: path.split("-")[0],
+                page_id: path.split("-")[1],
+                pid: null,
+                rid: null,
+                type: "comment",
+            },
+        });
 
-    res.status(200).send({
-      errno: 0,
-      errmsg: "",
-      data: {
-        page,
-        totalPages: Math.ceil(count / pageSize),
-        pageSize,
-        count,
-        data: result,
-      },
-    });
-  } catch (err) {
-    next(err);
-  }
+        res.status(200).send({
+            errno: 0,
+            errmsg: "",
+            data: {
+                page,
+                totalPages: Math.ceil(count / pageSize),
+                pageSize,
+                count,
+                data: result,
+            },
+        });
+    } catch (err) {
+        next(err);
+    }
 });
 
 // 创建评论
 router.post("/api/comment", needLogin, async (req, res, next) => {
-  try {
-    const { url, comment, pid, rid } = req.body;
-    const { userid } = res.locals;
-    const user_ua = req.headers["user-agent"] || "";
+    try {
+        const {url, comment, pid, rid} = req.body;
+        const {userid} = res.locals;
+        const user_ua = req.headers["user-agent"] || "";
 
-    const newComment = await prisma.ow_comment.create({
-      data: {
-        user_id: userid,
-        type: "comment",
-        user_ip: req.ipInfo?.clientIP || req.ip,
-        page_type: url.split("-")[0],
-        page_id: url.split("-")[1] || null,
-        text: comment,
-        link: `/user/${userid}`,
-        user_ua,
-        pid: pid || null,
-        rid: rid || null,
-      },
-    });
+        const newComment = await prisma.ow_comment.create({
+            data: {
+                user_id: userid,
+                type: "comment",
+                user_ip: req.ipInfo?.clientIP || req.ip,
+                page_type: url.split("-")[0],
+                page_id: url.split("-")[1] || null,
+                text: comment,
+                link: `/user/${userid}`,
+                user_ua,
+                pid: pid || null,
+                rid: rid || null,
+            },
+        });
 
-    const transformedComment = (await transformComment([newComment]))[0];
-    res.status(200).send({
-      errno: 0,
-      errmsg: "",
-      data: transformedComment,
-    });
+        const transformedComment = (await transformComment([newComment]))[0];
+        res.status(200).send({
+            errno: 0,
+            errmsg: "",
+            data: transformedComment,
+        });
 
-    let user_id, targetType, targetId;
-    if (url.split("-")[0] == "user") {
-      targetType = "user";
-      targetId = url.split("-")[1];
-      user_id = targetId;
-    } else if (url.split("-")[0] == "project") {
-      const project = await prisma.ow_projects.findUnique({
-        where: {
-          id: Number(url.split("-")[1]),
-        },
-      });
-      user_id = project.authorid;
-      targetType = "project";
-      targetId = url.split("-")[1];
-    } else if (url.split("-")[0] == "projectlist") {
-      targetType = "projectlist";
-      targetId = url.split("-")[1];
-      const projectlist = await prisma.ow_projectlists.findUnique({
-        where: {
-          id: Number(url.split("-")[1]),
-        },
-      });
-      user_id = projectlist.authorid;
-    } else {
-      user_id = userid;
-      targetType = "user";
-      targetId = userid;
+        let user_id, targetType, targetId;
+        if (url.split("-")[0] == "user") {
+            targetType = "user";
+            targetId = url.split("-")[1];
+            user_id = targetId;
+        } else if (url.split("-")[0] == "project") {
+            const project = await prisma.ow_projects.findUnique({
+                where: {
+                    id: Number(url.split("-")[1]),
+                },
+            });
+            user_id = project.authorid;
+            targetType = "project";
+            targetId = url.split("-")[1];
+        } else if (url.split("-")[0] == "projectlist") {
+            targetType = "projectlist";
+            targetId = url.split("-")[1];
+            const projectlist = await prisma.ow_projectlists.findUnique({
+                where: {
+                    id: Number(url.split("-")[1]),
+                },
+            });
+            user_id = projectlist.authorid;
+        } else {
+            user_id = userid;
+            targetType = "user";
+            targetId = userid;
+        }
+
+        // 创建事件 - 区分新评论和回复评论
+        if (rid) {
+            // 如果有 rid，说明是回复评论
+            //await createEvent("comment_reply", userid, "comment", rid, { comment_text: comment, target_user: user_id });
+            await createEvent("comment_reply", userid, targetType, targetId, {
+                comment_text: comment,
+                target_user: user_id,
+            });
+        } else {
+            // 如果没有 rid，说明是新评论
+            await createEvent("comment_create", userid, targetType, targetId, {
+                comment_text: comment,
+                target_user: user_id,
+            });
+        }
+    } catch (err) {
+        next(err);
     }
-
-    // 创建事件 - 区分新评论和回复评论
-    if (rid) {
-      // 如果有 rid，说明是回复评论
-      //await createEvent("comment_reply", userid, "comment", rid, { comment_text: comment, target_user: user_id });
-      await createEvent("comment_reply", userid, targetType, targetId, {
-        comment_text: comment,
-        target_user: user_id,
-      });
-    } else {
-      // 如果没有 rid，说明是新评论
-      await createEvent("comment_create", userid, targetType, targetId, {
-        comment_text: comment,
-        target_user: user_id,
-      });
-    }
-  } catch (err) {
-    next(err);
-  }
 });
 
 // 删除评论
 router.delete("/api/comment/:id", strictTokenCheck, async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const { user_id } = res.locals;
+    try {
+        const {id} = req.params;
+        const {user_id} = res.locals;
 
-    const comment = await prisma.ow_comment.findFirst({
-      where: { id: Number(id) },
-    });
+        const comment = await prisma.ow_comment.findFirst({
+            where: {id: Number(id)},
+        });
 
-    if (comment.user_id == user_id || true) {
-      await prisma.ow_comment.delete({
-        where: { id: Number(id) },
-      });
+        if (comment.user_id == user_id || true) {
+            await prisma.ow_comment.delete({
+                where: {id: Number(id)},
+            });
+        }
+
+        res.status(200).send({errno: 0, errmsg: "", data: ""});
+    } catch (err) {
+        next(err);
     }
-
-    res.status(200).send({ errno: 0, errmsg: "", data: "" });
-  } catch (err) {
-    next(err);
-  }
 });
 
 export default router;

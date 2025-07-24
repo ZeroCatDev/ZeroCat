@@ -2,13 +2,13 @@
  * @fileoverview Event routes
  */
 import express from "express";
-import { needLogin } from "../middleware/auth.js";
+import {needLogin} from "../middleware/auth.js";
 import {
-  createEvent,
-  getTargetEvents,
-  getActorEvents,
-  getProjectFollowersExternal,
-  getUserFollowersExternal,
+    createEvent,
+    getActorEvents,
+    getProjectFollowersExternal,
+    getTargetEvents,
+    getUserFollowersExternal,
 } from "../controllers/events.js";
 
 const router = express.Router();
@@ -19,26 +19,26 @@ const router = express.Router();
  * @access Public/Private (depends on event privacy)
  */
 router.get("/target/:targetType/:targetId", async (req, res, next) => {
-  try {
-    const { targetType, targetId } = req.params;
-    const { limit = 10, offset = 0 } = req.query;
-    const includePrivate = req.user ? true : false;
+    try {
+        const {targetType, targetId} = req.params;
+        const {limit = 10, offset = 0} = req.query;
+        const includePrivate = req.user ? true : false;
 
-    const events = await getTargetEvents(
-      targetType,
-      targetId,
-      Number(limit),
-      Number(offset),
-      includePrivate
-    );
+        const events = await getTargetEvents(
+            targetType,
+            targetId,
+            Number(limit),
+            Number(offset),
+            includePrivate
+        );
 
-    res.json({
-      status: "success",
-      data: events,
-    });
-  } catch (error) {
-    next(error);
-  }
+        res.json({
+            status: "success",
+            data: events,
+        });
+    } catch (error) {
+        next(error);
+    }
 });
 
 /**
@@ -47,26 +47,26 @@ router.get("/target/:targetType/:targetId", async (req, res, next) => {
  * @access Public/Private (depends on event privacy)
  */
 router.get("/actor/:actorId", async (req, res, next) => {
-  try {
-    const { actorId } = req.params;
-    const { limit = 10, offset = 0 } = req.query;
-    const includePrivate =
-      req.user && (req.user.id === Number(actorId) || req.user.isAdmin);
+    try {
+        const {actorId} = req.params;
+        const {limit = 10, offset = 0} = req.query;
+        const includePrivate =
+            req.user && (req.user.id === Number(actorId) || req.user.isAdmin);
 
-    const events = await getActorEvents(
-      actorId,
-      Number(limit),
-      Number(offset),
-      includePrivate
-    );
+        const events = await getActorEvents(
+            actorId,
+            Number(limit),
+            Number(offset),
+            includePrivate
+        );
 
-    res.json({
-      status: "success",
-      data: events,
-    });
-  } catch (error) {
-    next(error);
-  }
+        res.json({
+            status: "success",
+            data: events,
+        });
+    } catch (error) {
+        next(error);
+    }
 });
 
 /**
@@ -75,34 +75,34 @@ router.get("/actor/:actorId", async (req, res, next) => {
  * @access Private
  */
 router.post("/", needLogin, async (req, res, next) => {
-  try {
-    const { eventType, targetType, targetId, ...eventData } = req.body;
+    try {
+        const {eventType, targetType, targetId, ...eventData} = req.body;
 
-    // Use current user as actor if not specified
-    const actorId = eventData.actor_id || req.user.id;
+        // Use current user as actor if not specified
+        const actorId = eventData.actor_id || req.user.id;
 
-    const event = await createEvent(
-      eventType,
-      actorId,
-      targetType,
-      targetId,
-      eventData
-    );
+        const event = await createEvent(
+            eventType,
+            actorId,
+            targetType,
+            targetId,
+            eventData
+        );
 
-    if (!event) {
-      return res.status(400).json({
-        status: "error",
-        message: "Failed to create event",
-      });
+        if (!event) {
+            return res.status(400).json({
+                status: "error",
+                message: "Failed to create event",
+            });
+        }
+
+        res.status(201).json({
+            status: "success",
+            data: event,
+        });
+    } catch (error) {
+        next(error);
     }
-
-    res.status(201).json({
-      status: "success",
-      data: event,
-    });
-  } catch (error) {
-    next(error);
-  }
 });
 
 /**
@@ -111,17 +111,17 @@ router.post("/", needLogin, async (req, res, next) => {
  * @access Public
  */
 router.get("/project-followers/:projectId", async (req, res, next) => {
-  try {
-    const { projectId } = req.params;
-    const followers = await getProjectFollowersExternal(projectId);
+    try {
+        const {projectId} = req.params;
+        const followers = await getProjectFollowersExternal(projectId);
 
-    res.json({
-      status: "success",
-      data: followers,
-    });
-  } catch (error) {
-    next(error);
-  }
+        res.json({
+            status: "success",
+            data: followers,
+        });
+    } catch (error) {
+        next(error);
+    }
 });
 
 /**
@@ -130,17 +130,17 @@ router.get("/project-followers/:projectId", async (req, res, next) => {
  * @access Public
  */
 router.get("/user-followers/:userId", async (req, res, next) => {
-  try {
-    const { userId } = req.params;
-    const followers = await getUserFollowersExternal(userId);
+    try {
+        const {userId} = req.params;
+        const followers = await getUserFollowersExternal(userId);
 
-    res.json({
-      status: "success",
-      data: followers,
-    });
-  } catch (error) {
-    next(error);
-  }
+        res.json({
+            status: "success",
+            data: followers,
+        });
+    } catch (error) {
+        next(error);
+    }
 });
 
 export default router;

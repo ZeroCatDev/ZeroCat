@@ -1,4 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import {PrismaClient} from '@prisma/client';
+
 const prisma = new PrismaClient();
 
 /**
@@ -8,21 +9,21 @@ const prisma = new PrismaClient();
  * @returns {Promise<any>} The value stored for the key
  */
 export async function get(userId, key) {
-    try{
-  const item = await prisma.ow_cache_kv.findUnique({
-    where: {
-      user_id_key: {
-        user_id: userId,
-        key: key
-      }
-    }
-  });
+    try {
+        const item = await prisma.ow_cache_kv.findUnique({
+            where: {
+                user_id_key: {
+                    user_id: userId,
+                    key: key
+                }
+            }
+        });
 
-    return item;
-  } catch (error) {
-    console.error('获取失败:', error);
-    return undefined;
-  }
+        return item;
+    } catch (error) {
+        console.error('获取失败:', error);
+        return undefined;
+    }
 }
 
 /**
@@ -32,22 +33,23 @@ export async function get(userId, key) {
  * @returns {Promise<any>} The value stored for the key
  */
 export async function getValue(userId, key) {
-  try{
-const item = await prisma.ow_cache_kv.findUnique({
-  where: {
-    user_id_key: {
-      user_id: userId,
-      key: key
-    }
-  }
-});
+    try {
+        const item = await prisma.ow_cache_kv.findUnique({
+            where: {
+                user_id_key: {
+                    user_id: userId,
+                    key: key
+                }
+            }
+        });
 
-  return item.value;
-} catch (error) {
-  console.error('获取失败:', error);
-  return undefined;
+        return item.value;
+    } catch (error) {
+        console.error('获取失败:', error);
+        return undefined;
+    }
 }
-}
+
 /**
  * Set value for key for a specific user
  * @param {number} userId - The user ID
@@ -57,24 +59,24 @@ const item = await prisma.ow_cache_kv.findUnique({
  * @returns {Promise<Object>} The created or updated KV pair
  */
 export async function set(userId, key, value, creatorIp = '') {
-  return prisma.ow_cache_kv.upsert({
-    where: {
-      user_id_key: {
-        user_id: userId,
-        key: key
-      }
-    },
-    update: {
-      value: value,
-      creator_ip: creatorIp
-    },
-    create: {
-      user_id: userId,
-      key: key,
-      value: value,
-      creator_ip: creatorIp
-    }
-  });
+    return prisma.ow_cache_kv.upsert({
+        where: {
+            user_id_key: {
+                user_id: userId,
+                key: key
+            }
+        },
+        update: {
+            value: value,
+            creator_ip: creatorIp
+        },
+        create: {
+            user_id: userId,
+            key: key,
+            value: value,
+            creator_ip: creatorIp
+        }
+    });
 }
 
 /**
@@ -84,22 +86,22 @@ export async function set(userId, key, value, creatorIp = '') {
  * @returns {Promise<boolean>} True if deleted, false if not found
  */
 export async function remove(userId, key) {
-  try {
-    await prisma.ow_cache_kv.delete({
-      where: {
-        user_id_key: {
-          user_id: userId,
-          key: key
+    try {
+        await prisma.ow_cache_kv.delete({
+            where: {
+                user_id_key: {
+                    user_id: userId,
+                    key: key
+                }
+            }
+        });
+        return true;
+    } catch (error) {
+        if (error.code === 'P2025') {
+            return false;
         }
-      }
-    });
-    return true;
-  } catch (error) {
-    if (error.code === 'P2025') {
-      return false;
+        throw error;
     }
-    throw error;
-  }
 }
 
 /**
@@ -110,39 +112,39 @@ export async function remove(userId, key) {
  * @param {number} [options.limit=20] - Items per page
  * @returns {Promise<Object>} Paginated list of KV pairs and pagination info
  */
-export async function list(userId, { page = 1, limit = 20, showValue = false } = {}) {
-  const items = await prisma.ow_cache_kv.findMany({
-    where: {
-      user_id: userId
-    },
-    select: {
-      key: true,
-      value: showValue ? true : false,
-      created_at: true,
-      updated_at: true
-    },
-    skip: (page - 1) * limit,
-    take: limit,
-    orderBy: {
-      created_at: 'desc'
-    }
-  });
+export async function list(userId, {page = 1, limit = 20, showValue = false} = {}) {
+    const items = await prisma.ow_cache_kv.findMany({
+        where: {
+            user_id: userId
+        },
+        select: {
+            key: true,
+            value: showValue ? true : false,
+            created_at: true,
+            updated_at: true
+        },
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: {
+            created_at: 'desc'
+        }
+    });
 
-  const total = await prisma.ow_cache_kv.count({
-    where: {
-      user_id: userId
-    }
-  });
+    const total = await prisma.ow_cache_kv.count({
+        where: {
+            user_id: userId
+        }
+    });
 
-  return {
-    items,
-    pagination: {
-      total,
-      page: Number(page),
-      limit: Number(limit),
-      total_pages: Math.ceil(total / limit)
-    }
-  };
+    return {
+        items,
+        pagination: {
+            total,
+            page: Number(page),
+            limit: Number(limit),
+            total_pages: Math.ceil(total / limit)
+        }
+    };
 }
 
 /**
@@ -152,13 +154,13 @@ export async function list(userId, { page = 1, limit = 20, showValue = false } =
  * @returns {Promise<boolean>} True if key exists, false otherwise
  */
 export async function exists(userId, key) {
-  const count = await prisma.ow_cache_kv.count({
-    where: {
-      user_id: userId,
-      key: key
-    }
-  });
-  return count > 0;
+    const count = await prisma.ow_cache_kv.count({
+        where: {
+            user_id: userId,
+            key: key
+        }
+    });
+    return count > 0;
 }
 
 /**
@@ -168,19 +170,19 @@ export async function exists(userId, key) {
  * @returns {Promise<Object>} Object with keys and their values
  */
 export async function getMultiple(userId, keys) {
-  const items = await prisma.ow_cache_kv.findMany({
-    where: {
-      user_id: userId,
-      key: {
-        in: keys
-      }
-    }
-  });
+    const items = await prisma.ow_cache_kv.findMany({
+        where: {
+            user_id: userId,
+            key: {
+                in: keys
+            }
+        }
+    });
 
-  return items.reduce((acc, item) => {
-    acc[item.key] = item.value;
-    return acc;
-  }, {});
+    return items.reduce((acc, item) => {
+        acc[item.key] = item.value;
+        return acc;
+    }, {});
 }
 
 /**
@@ -191,26 +193,26 @@ export async function getMultiple(userId, keys) {
  * @returns {Promise<Object[]>} Array of created or updated KV pairs
  */
 export async function setMultiple(userId, entries, creatorIp = '') {
-  const operations = Object.entries(entries).map(([key, value]) =>
-    prisma.ow_cache_kv.upsert({
-      where: {
-        user_id_key: {
-          user_id: userId,
-          key: key
-        }
-      },
-      update: {
-        value: value,
-        creator_ip: creatorIp
-      },
-      create: {
-        user_id: userId,
-        key: key,
-        value: value,
-        creator_ip: creatorIp
-      }
-    })
-  );
+    const operations = Object.entries(entries).map(([key, value]) =>
+        prisma.ow_cache_kv.upsert({
+            where: {
+                user_id_key: {
+                    user_id: userId,
+                    key: key
+                }
+            },
+            update: {
+                value: value,
+                creator_ip: creatorIp
+            },
+            create: {
+                user_id: userId,
+                key: key,
+                value: value,
+                creator_ip: creatorIp
+            }
+        })
+    );
 
-  return Promise.all(operations);
+    return Promise.all(operations);
 }

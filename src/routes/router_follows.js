@@ -1,7 +1,6 @@
 import express from 'express';
-import { needLogin } from "../middleware/auth.js";
+import {needLogin} from "../middleware/auth.js";
 import followsController from "../controllers/follows.js";
-import errorHandlerService from "../services/errorHandler.js";
 import logger from "../services/logger.js";
 
 const router = express.Router();
@@ -12,19 +11,19 @@ const router = express.Router();
  * @param {Error} error - Error object
  */
 function handleError(res, error) {
-  logger.error('API Error:', error);
-  const statusCode = error.status || 500;
-  const errorMessage = process.env.NODE_ENV === 'production'
-    ? '操作失败'
-    : error.message || '未知错误';
+    logger.error('API Error:', error);
+    const statusCode = error.status || 500;
+    const errorMessage = process.env.NODE_ENV === 'production'
+        ? '操作失败'
+        : error.message || '未知错误';
 
-  res.status(statusCode).json({
-    success: false,
-    error: {
-      message: errorMessage,
-      code: statusCode
-    }
-  });
+    res.status(statusCode).json({
+        success: false,
+        error: {
+            message: errorMessage,
+            code: statusCode
+        }
+    });
 }
 
 /**
@@ -64,16 +63,16 @@ function handleError(res, error) {
  * }
  */
 router.post('/:userId', needLogin, async (req, res) => {
-  try {
-    const followerId = res.locals.userid;
-    const followedId = parseInt(req.params.userId);
-    const note = '';
+    try {
+        const followerId = res.locals.userid;
+        const followedId = parseInt(req.params.userId);
+        const note = '';
 
-    const result = await followsController.followUser(followerId, followedId, note);
-    res.json({ success: true, data: result });
-  } catch (error) {
-    handleError(res, error);
-  }
+        const result = await followsController.followUser(followerId, followedId, note);
+        res.json({success: true, data: result});
+    } catch (error) {
+        handleError(res, error);
+    }
 });
 
 /**
@@ -105,15 +104,15 @@ router.post('/:userId', needLogin, async (req, res) => {
  * }
  */
 router.delete('/:userId', needLogin, async (req, res) => {
-  try {
-    const followerId = res.locals.userid;
-    const followedId = parseInt(req.params.userId);
+    try {
+        const followerId = res.locals.userid;
+        const followedId = parseInt(req.params.userId);
 
-    const result = await followsController.unfollowUser(followerId, followedId);
-    res.json({ success: true, data: result });
-  } catch (error) {
-    handleError(res, error);
-  }
+        const result = await followsController.unfollowUser(followerId, followedId);
+        res.json({success: true, data: result});
+    } catch (error) {
+        handleError(res, error);
+    }
 });
 
 /**
@@ -153,16 +152,16 @@ router.delete('/:userId', needLogin, async (req, res) => {
  * }
  */
 router.post('/block/:userId', needLogin, async (req, res) => {
-  try {
-    const blockerId = res.locals.userid;
-    const blockedId = parseInt(req.params.userId);
-    const reason = req.body.reason || '';
+    try {
+        const blockerId = res.locals.userid;
+        const blockedId = parseInt(req.params.userId);
+        const reason = req.body.reason || '';
 
-    const result = await followsController.blockUser(blockerId, blockedId, reason);
-    res.json({ success: true, data: result });
-  } catch (error) {
-    handleError(res, error);
-  }
+        const result = await followsController.blockUser(blockerId, blockedId, reason);
+        res.json({success: true, data: result});
+    } catch (error) {
+        handleError(res, error);
+    }
 });
 
 /**
@@ -194,15 +193,15 @@ router.post('/block/:userId', needLogin, async (req, res) => {
  * }
  */
 router.delete('/block/:userId', needLogin, async (req, res) => {
-  try {
-    const blockerId = res.locals.userid;
-    const blockedId = parseInt(req.params.userId);
+    try {
+        const blockerId = res.locals.userid;
+        const blockedId = parseInt(req.params.userId);
 
-    const result = await followsController.unblockUser(blockerId, blockedId);
-    res.json({ success: true, data: result });
-  } catch (error) {
-    handleError(res, error);
-  }
+        const result = await followsController.unblockUser(blockerId, blockedId);
+        res.json({success: true, data: result});
+    } catch (error) {
+        handleError(res, error);
+    }
 });
 
 /**
@@ -246,16 +245,16 @@ router.delete('/block/:userId', needLogin, async (req, res) => {
  * }
  */
 router.get('/followers/:userId', async (req, res) => {
-  try {
-    const userId = parseInt(req.params.userId);
-    const limit = parseInt(req.query.limit) || 20;
-    const offset = parseInt(req.query.offset) || 0;
+    try {
+        const userId = parseInt(req.params.userId);
+        const limit = parseInt(req.query.limit) || 20;
+        const offset = parseInt(req.query.offset) || 0;
 
-    const result = await followsController.getUserFollowers(userId, limit, offset);
-    res.json({ success: true, data: result });
-  } catch (error) {
-    handleError(res, error);
-  }
+        const result = await followsController.getUserFollowers(userId, limit, offset);
+        res.json({success: true, data: result});
+    } catch (error) {
+        handleError(res, error);
+    }
 });
 
 /**
@@ -299,16 +298,16 @@ router.get('/followers/:userId', async (req, res) => {
  * }
  */
 router.get('/following/:userId', async (req, res) => {
-  try {
-    const userId = parseInt(req.params.userId);
-    const limit = parseInt(req.query.limit) || 20;
-    const offset = parseInt(req.query.offset) || 0;
+    try {
+        const userId = parseInt(req.params.userId);
+        const limit = parseInt(req.query.limit) || 20;
+        const offset = parseInt(req.query.offset) || 0;
 
-    const result = await followsController.getUserFollowing(userId, limit, offset);
-    res.json({ success: true, data: result });
-  } catch (error) {
-    handleError(res, error);
-  }
+        const result = await followsController.getUserFollowing(userId, limit, offset);
+        res.json({success: true, data: result});
+    } catch (error) {
+        handleError(res, error);
+    }
 });
 
 /**
@@ -351,16 +350,16 @@ router.get('/following/:userId', async (req, res) => {
  * }
  */
 router.get('/blocked', needLogin, async (req, res) => {
-  try {
-    const userId = res.locals.userid;
-    const limit = parseInt(req.query.limit) || 20;
-    const offset = parseInt(req.query.offset) || 0;
+    try {
+        const userId = res.locals.userid;
+        const limit = parseInt(req.query.limit) || 20;
+        const offset = parseInt(req.query.offset) || 0;
 
-    const result = await followsController.getUserBlocked(userId, limit, offset);
-    res.json({ success: true, data: result });
-  } catch (error) {
-    handleError(res, error);
-  }
+        const result = await followsController.getUserBlocked(userId, limit, offset);
+        res.json({success: true, data: result});
+    } catch (error) {
+        handleError(res, error);
+    }
 });
 
 /**
@@ -385,15 +384,15 @@ router.get('/blocked', needLogin, async (req, res) => {
  * }
  */
 router.get('/check/:userId', needLogin, async (req, res) => {
-  try {
-    const followerId = res.locals.userid;
-    const followedId = parseInt(req.params.userId);
+    try {
+        const followerId = res.locals.userid;
+        const followedId = parseInt(req.params.userId);
 
-    const isFollowing = await followsController.isFollowing(followerId, followedId);
-    res.json({ success: true, data: { isFollowing } });
-  } catch (error) {
-    handleError(res, error);
-  }
+        const isFollowing = await followsController.isFollowing(followerId, followedId);
+        res.json({success: true, data: {isFollowing}});
+    } catch (error) {
+        handleError(res, error);
+    }
 });
 
 /**
@@ -418,15 +417,15 @@ router.get('/check/:userId', needLogin, async (req, res) => {
  * }
  */
 router.get('/check-block/:userId', needLogin, async (req, res) => {
-  try {
-    const blockerId = res.locals.userid;
-    const blockedId = parseInt(req.params.userId);
+    try {
+        const blockerId = res.locals.userid;
+        const blockedId = parseInt(req.params.userId);
 
-    const isBlocking = await followsController.isBlocking(blockerId, blockedId);
-    res.json({ success: true, data: { isBlocking } });
-  } catch (error) {
-    handleError(res, error);
-  }
+        const isBlocking = await followsController.isBlocking(blockerId, blockedId);
+        res.json({success: true, data: {isBlocking}});
+    } catch (error) {
+        handleError(res, error);
+    }
 });
 
 /**
@@ -457,15 +456,15 @@ router.get('/check-block/:userId', needLogin, async (req, res) => {
  * }
  */
 router.get('/relationships/:userId', needLogin, async (req, res) => {
-  try {
-    const userId1 = res.locals.userid;
-    const userId2 = parseInt(req.params.userId);
+    try {
+        const userId1 = res.locals.userid;
+        const userId2 = parseInt(req.params.userId);
 
-    const relationships = await followsController.getRelationshipsBetweenUsers(userId1, userId2);
-    res.json({ success: true, data: relationships });
-  } catch (error) {
-    handleError(res, error);
-  }
+        const relationships = await followsController.getRelationshipsBetweenUsers(userId1, userId2);
+        res.json({success: true, data: relationships});
+    } catch (error) {
+        handleError(res, error);
+    }
 });
 
 /**
@@ -510,26 +509,26 @@ router.get('/relationships/:userId', needLogin, async (req, res) => {
  * }
  */
 router.patch('/note/:userId', needLogin, async (req, res) => {
-  try {
-    const followerId = res.locals.userid;
-    const followedId = parseInt(req.params.userId);
-    const { note } = req.body;
+    try {
+        const followerId = res.locals.userid;
+        const followedId = parseInt(req.params.userId);
+        const {note} = req.body;
 
-    if (!note && note !== '') {
-      return res.status(400).json({
-        success: false,
-        error: {
-          message: '备注不能为空',
-          code: 400
+        if (!note && note !== '') {
+            return res.status(400).json({
+                success: false,
+                error: {
+                    message: '备注不能为空',
+                    code: 400
+                }
+            });
         }
-      });
-    }
 
-    const result = await followsController.updateFollowNote(followerId, followedId, note);
-    res.json({ success: true, data: result });
-  } catch (error) {
-    handleError(res, error);
-  }
+        const result = await followsController.updateFollowNote(followerId, followedId, note);
+        res.json({success: true, data: result});
+    } catch (error) {
+        handleError(res, error);
+    }
 });
 
 /**
@@ -574,26 +573,26 @@ router.patch('/note/:userId', needLogin, async (req, res) => {
  * }
  */
 router.patch('/block-reason/:userId', needLogin, async (req, res) => {
-  try {
-    const blockerId = res.locals.userid;
-    const blockedId = parseInt(req.params.userId);
-    const { reason } = req.body;
+    try {
+        const blockerId = res.locals.userid;
+        const blockedId = parseInt(req.params.userId);
+        const {reason} = req.body;
 
-    if (!reason && reason !== '') {
-      return res.status(400).json({
-        success: false,
-        error: {
-          message: '拉黑原因不能为空',
-          code: 400
+        if (!reason && reason !== '') {
+            return res.status(400).json({
+                success: false,
+                error: {
+                    message: '拉黑原因不能为空',
+                    code: 400
+                }
+            });
         }
-      });
-    }
 
-    const result = await followsController.updateBlockReason(blockerId, blockedId, reason);
-    res.json({ success: true, data: result });
-  } catch (error) {
-    handleError(res, error);
-  }
+        const result = await followsController.updateBlockReason(blockerId, blockedId, reason);
+        res.json({success: true, data: result});
+    } catch (error) {
+        handleError(res, error);
+    }
 });
 
 /**
@@ -650,15 +649,15 @@ router.patch('/block-reason/:userId', needLogin, async (req, res) => {
  * }
  */
 router.get('/notes/:userId', needLogin, async (req, res) => {
-  try {
-    const userId = res.locals.userid;
-    const targetUserId = parseInt(req.params.userId);
+    try {
+        const userId = res.locals.userid;
+        const targetUserId = parseInt(req.params.userId);
 
-    const notes = await followsController.getRelationshipNotes(userId, targetUserId);
-    res.json({ success: true, data: notes });
-  } catch (error) {
-    handleError(res, error);
-  }
+        const notes = await followsController.getRelationshipNotes(userId, targetUserId);
+        res.json({success: true, data: notes});
+    } catch (error) {
+        handleError(res, error);
+    }
 });
 
 export default router;
