@@ -68,7 +68,6 @@ router.post("/set/userinfo", async (req, res) => {
         const updateData = {
             display_name: req.body.display_name,
             bio: req.body.bio,
-            bio: req.body.bio,
             location: req.body.location,
             region: req.body.region,
             sex: req.body.sex,

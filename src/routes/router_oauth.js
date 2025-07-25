@@ -66,7 +66,7 @@ const OAuthErrors = {
  * 构建错误重定向URL
  * @param {string} error - 错误代码
  * @param {string} description - 错误描述
- * @param {string} [state] - OAuth state参数
+ * @param {null} [state] - OAuth state参数
  * @returns {Promise<string>} 重定向URL
  */
 async function buildErrorRedirectUrl(error, description, state = null) {
@@ -84,7 +84,7 @@ async function buildErrorRedirectUrl(error, description, state = null) {
  * 处理授权端点错误 - 直接重定向
  * @param {Object} res - Express response对象
  * @param {Object} errorInfo - 错误信息对象
- * @param {string} [state] - OAuth state参数
+ * @param {null} [state] - OAuth state参数
  */
 async function handleAuthorizationError(res, errorInfo, state = null) {
     const redirectUrl = await buildErrorRedirectUrl(
@@ -99,7 +99,7 @@ async function handleAuthorizationError(res, errorInfo, state = null) {
  * 处理API端点错误 - 返回重定向URL
  * @param {Object} res - Express response对象
  * @param {Object} errorInfo - 错误信息对象
- * @param {string} [state] - OAuth state参数
+ * @param {null} [state] - OAuth state参数
  */
 async function handleApiError(res, errorInfo, state = null) {
     const redirectUrl = await buildErrorRedirectUrl(

@@ -7,7 +7,7 @@ services:
     networks:
       - meilisync-net
     ports:
-      - 7701:8000
+      - "7701:8000"
     environment:
       - DB_URL=mysql://root:123456@host.docker.internal:3557/meilisync_admin  # 可选：如果你后续不使用 MySQL 可移除
       - REDIS_URL=redis://redis:6379/0

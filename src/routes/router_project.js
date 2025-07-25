@@ -1462,16 +1462,19 @@ router.get("/:id/:branch/:ref", async (req, res, next) => {
                 code: "404",
             });
         }
-
+// 首先验证分支是否属于目标项目 const branchExists = await prisma.ow_projects_branch.findFirst({ where: { projectid: Number(id), name: branch } }); if (!branchExists) { return res.status(200).send({ status: "error", message: "分支不存在", code: "404", }); }
         let commit;
         if (ref === "latest") {
-            commit = await prisma.ow_projects_commits.findFirst({
-                where: {project_id: Number(id), branch},
-                orderBy: {commit_date: "desc"},
-            });
+            // 对于最新提交，我们使用分支记录中存储的最新提交哈希
+            if (branchExists.latest_commit_hash) {
+                commit = await prisma.ow_projects_commits.findFirst({
+                    where: { id: branchExists.latest_commit_hash }
+                });
+            }
         } else {
+            // 对于特定提交，我们只需要验证提交ID
             commit = await prisma.ow_projects_commits.findFirst({
-                where: {id: ref, project_id: Number(id), branch},
+                where: { id: ref }
             });
         }
 

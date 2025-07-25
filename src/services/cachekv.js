@@ -119,7 +119,7 @@ export async function list(userId, {page = 1, limit = 20, showValue = false} = {
         },
         select: {
             key: true,
-            value: showValue ? true : false,
+            value: showValue,
             created_at: true,
             updated_at: true
         },

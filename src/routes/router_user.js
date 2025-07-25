@@ -193,7 +193,6 @@ router.get("/me", needLogin, async function (req, res, next) {
             select: {
                 id: true,
                 display_name: true,
-                motto: true,
                 avatar: true,
                 regTime: true,
                 sex: true,

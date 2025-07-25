@@ -18,7 +18,7 @@ export function generateToken(length = 32) {
 /**
  * 创建JWT令牌
  * @param {object} payload JWT payload
- * @param {number|string} expiresIn 过期时间（秒）
+ * @param {null} expiresIn 过期时间（秒）
  * @returns {Promise<string>} 签名后的JWT令牌
  */
 export async function createJWT(payload, expiresIn = null) {
@@ -524,7 +524,7 @@ export async function revokeToken(tokenId, reason = "user_logout") {
 /**
  * 撤销用户的所有令牌
  * @param {number} userId 用户ID
- * @param {string} excludeTokenId 排除的令牌ID
+ * @param {null} excludeTokenId 排除的令牌ID
  * @param {string} reason 撤销原因
  * @returns {Promise<object>} 撤销结果
  */
@@ -780,7 +780,7 @@ export async function refreshAccessToken(refreshToken, ipAddress, userAgent) {
 /**
  * 获取并标准化用户信息，用于创建令牌
  * @param {object} user 用户对象
- * @param {string} email 用户邮箱
+ * @param {null} email 用户邮箱
  * @returns {object} 标准化的用户信息
  */
 export async function getUserInfoForToken(user, email = null) {

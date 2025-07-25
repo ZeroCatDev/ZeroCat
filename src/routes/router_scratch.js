@@ -62,7 +62,7 @@ router.get("/projectinfo", async function (req, res, next) {
             },
         });
 
-        res.locals.is_author = project.authorid == res.locals.userid ? true : false;
+        res.locals.is_author = project.authorid == res.locals.userid;
 
         res.json({
             ...project,
@@ -87,7 +87,7 @@ router.get("/projectinfo2", async function (req, res, next) {
                 id: result.authorid,
             },
         });
-        res.locals.is_author = result.authorid == res.locals.userid ? true : false;
+        res.locals.is_author = result.authorid == res.locals.userid;
         logger.debug(result);
         var project_token = jsonwebtoken.sign(
             {
@@ -109,14 +109,14 @@ router.get("/projectinfo2", async function (req, res, next) {
             description: result.description,
             instructions: "ZeroCat社区",
             visibility: "visible",
-            public: result.state == "public" ? true : false,
+            public: result.state == "public",
             comments_allowed: true,
-            is_published: result.state == "public" ? true : false,
+            is_published: result.state == "public",
             author: {
                 id: result.authorid,
                 username: author.display_name,
                 description: author.bio,
-                scratchteam: author.id == 1 ? true : false,
+                scratchteam: author.id == 1,
                 history: {
                     joined: author.createdAt,
                 },
