@@ -61,7 +61,6 @@ model ow_projects {
   author       ow_users?                 @relation("ProjectAuthor", fields: [authorid], references: [id])
   stars        ow_projects_stars[]
   lists        ow_projects_list_items[]
-  commits      ow_projects_commits[]
   branches     ow_projects_branch[]
   project_tags ow_projects_tags[]
 
@@ -85,7 +84,7 @@ model ow_users {
   bio          String?   @db.LongText  // Markdown biography
   location     String?   @db.VarChar(100)
   region       String?   @db.VarChar(100)
-  birthday     DateTime? @default(dbgenerated("'2000-03-31 08:00:00'")) @db.Timestamp(0)
+  birthday     DateTime? @default("2000-03-31T00:00:00.000Z") @db.Timestamp(0)
   sex          String?   @default("0") @db.VarChar(16)
   url          String?   @db.VarChar(255)
   custom_status Json?    // Contains emoji and status text
@@ -225,7 +224,7 @@ model ow_projects_lists {
 }
 
 model ow_projects_commits {
-  id                 String   @db.VarChar(256)
+  id                 String   @id @db.VarChar(256)
   project_id         Int
   author_id          Int
   branch             String   @default("main") @db.VarChar(255)
@@ -234,12 +233,14 @@ model ow_projects_commits {
   commit_date        DateTime @db.DateTime(0)
   commit_file        String   @db.VarChar(256)
   commit_description String?  @db.Text
+  depth              Int?     // Optional depth field to track chain length
 
   // Relations
-  project ow_projects @relation(fields: [project_id], references: [id])
+  parent_commit     ow_projects_commits?       @relation("CommitTree", fields: [parent_commit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  child_commits     ow_projects_commits[]      @relation("CommitTree")
 
-  @@id([id, project_id])
   @@index([project_id, commit_date], map: "idx_projects_commits_project_date")
+  @@index([parent_commit_id], map: "idx_parent_commit")
 }
 
 model ow_users_magiclink {
