@@ -1,5 +1,6 @@
 import {Router} from "express";
 import {prisma} from "../services/global.js"; // 功能函数集
+import logger from "../services/logger.js";
 
 const router = Router();
 
@@ -31,7 +32,7 @@ router.get("/", async (req, res, next) => {
                         ? ["private"]
                         : ["public"]
                     : [stateQuery];
-
+        let tagsArray = tags ? tags.split(",") : [];
         // 处理排序
         const [orderbyField, orderDirection] = orderbyQuery.split("_");
         const orderbyMap = {view: "view_count", time: "time", id: "id", star: "star_count"};
@@ -47,7 +48,13 @@ router.get("/", async (req, res, next) => {
             type: type ? {equals: type} : undefined,
             state: state ? {in: state} : undefined,
             authorid: userid ? {equals: Number(userid)} : undefined,
-            tags: tags ? {contains: tags} : undefined,
+            project_tags: {
+                some: {
+                    name: {
+                        in: tagsArray.length > 0 ? tagsArray : undefined
+                    }
+                }
+            }
         };
 
         // 直接查询表
