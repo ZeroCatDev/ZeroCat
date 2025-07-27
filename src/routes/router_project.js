@@ -813,8 +813,10 @@ router.get("/commits", async (req, res, next) => {
             id: true,
             username: true,
             avatar: true,
+            display_name: true,
           },
         },
+
       },
       orderBy: {
         commit_date: "desc",
