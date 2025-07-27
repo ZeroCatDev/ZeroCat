@@ -113,7 +113,7 @@ model ow_users {
   notifications_acted     ow_notifications[]      @relation("NotificationActor")
   events_acted           ow_events[]             @relation("EventActor")
   comments               ow_comment[]
-
+  commits                ow_projects_commits[]
   // OAuth relations
   oauth_applications      ow_oauth_applications[]
   oauth_authorizations    ow_oauth_authorizations[]
@@ -238,6 +238,7 @@ model ow_projects_commits {
   // Relations
   parent_commit     ow_projects_commits?       @relation("CommitTree", fields: [parent_commit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   child_commits     ow_projects_commits[]      @relation("CommitTree")
+  author            ow_users?                 @relation(fields: [author_id], references: [id])
 
   @@index([project_id, commit_date], map: "idx_projects_commits_project_date")
   @@index([parent_commit_id], map: "idx_parent_commit")

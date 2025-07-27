@@ -54,13 +54,25 @@ async function createBranchIfNotExists(projectid, branch, userid) {
   return branchRecord;
 }
 
-async function getCommitParentId(projectid, userid, parent_commit) {
+async function getCommitParentId(projectid, userid, parent_commit, branch) {
   let parent_commit_id = null;
   if (/^[a-fA-F0-9]{64}$/.test(parent_commit)) {
-    parent_commit_id = parent_commit;
+    // 如果提供了特定的父提交ID，验证它是否属于同一分支
+    const parentCommit = await prisma.ow_projects_commits.findFirst({
+      where: {
+        project_id: Number(projectid),
+        id: parent_commit,
+        branch: branch
+      },
+    });
+    parent_commit_id = parentCommit ? parentCommit.id : null;
   } else {
+    // 获取当前分支的最新提交
     const latestCommit = await prisma.ow_projects_commits.findFirst({
-      where: { project_id: Number(projectid), author_id: userid },
+      where: {
+        project_id: Number(projectid),
+        branch: branch
+      },
       orderBy: { commit_date: "desc" },
     });
     parent_commit_id = latestCommit ? latestCommit.id : null;
@@ -540,7 +552,8 @@ router.put("/commit/id/:id", needLogin, async (req, res, next) => {
     const parent_commit_id = await getCommitParentId(
       projectid,
       res.locals.userid,
-      parent_commit
+      parent_commit,
+      branch // 传入分支信息
     );
     const timestamp = Date.now();
     // 计算提交的哈希值作为 id
@@ -689,17 +702,28 @@ router.get("/branches", async (req, res, next) => {
 });
 router.get("/commits", async (req, res, next) => {
   try {
-    const { projectid } = req.query;
+    const { projectid, branch } = req.query;
     await checkProjectPermission(projectid, res.locals.userid, "read");
 
-    // 1. 获取项目所有分支的最新提交
+    // 1. 获取分支信息
+    const branchQuery = branch
+      ? { where: { projectid: Number(projectid), name: branch } }
+      : { where: { projectid: Number(projectid) } };
+
     const branches = await prisma.ow_projects_branch.findMany({
-      where: { projectid: Number(projectid) },
+      ...branchQuery,
       select: {
         name: true,
         latest_commit_hash: true,
       },
     });
+
+    if (branch && branches.length === 0) {
+      return res.status(404).send({
+        status: "error",
+        message: "分支不存在",
+      });
+    }
 
     // 2. 使用 Set 存储所有需要获取的提交
     const commits = new Set();
@@ -744,7 +768,7 @@ router.get("/commits", async (req, res, next) => {
       if (hasAllCommits) {
         return res.status(200).send({
           status: "success",
-          message: "获取成功",
+          message: "获取成功 使用depth",
           data: depthResults,
         });
       }
@@ -776,14 +800,30 @@ router.get("/commits", async (req, res, next) => {
           in: Array.from(commits),
         },
       },
+      select: {
+        id: true,
+        commit_date: true,
+        commit_message: true,
+        commit_file: true,
+        commit_description: true,
+        depth: true,
+        parent_commit_id: true,
+        author: {
+          select: {
+            id: true,
+            username: true,
+            avatar: true,
+          },
+        },
+      },
       orderBy: {
-        commit_date: 'desc',
+        commit_date: "desc",
       },
     });
 
     res.status(200).send({
       status: "success",
-      message: "获取成功",
+      message: "获取成功 使用BFS",
       data: result,
     });
   } catch (err) {
@@ -821,24 +861,6 @@ router.post("/branches", async (req, res, next) => {
     });
   } catch (err) {
     logger.error("Error getting project information:", err);
-    next(err);
-  }
-});
-router.get("/commits", async (req, res, next) => {
-  try {
-    const { projectid } = req.query;
-    await checkProjectPermission(projectid, res.locals.userid, "read");
-
-    const result = await prisma.ow_projects_commits.findMany({
-      where: { project_id: Number(projectid) },
-    });
-    res.status(200).send({
-      status: "success",
-      message: "获取成功",
-      data: result,
-    });
-  } catch (err) {
-    logger.debug("Error getting project information:", err);
     next(err);
   }
 });
@@ -1029,6 +1051,7 @@ router.get("/files/:sha256", async (req, res, next) => {
         message: "文件不存在",
       });
     }
+    res.contentType("text/plain");
     if (content == "true") {
       res.status(200).send(file.source);
     } else {
