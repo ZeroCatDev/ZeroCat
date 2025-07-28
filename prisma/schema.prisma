@@ -63,6 +63,8 @@ model ow_projects {
   lists        ow_projects_list_items[]
   branches     ow_projects_branch[]
   project_tags ow_projects_tags[]
+  extensions   ow_scratch_extensions[]   @relation("ProjectExtensions")
+  sample_extensions ow_scratch_extensions[] @relation("SampleProject")
 
   @@index([state], map: "idx_projects_state")
   @@index([authorid], map: "idx_project_author")
@@ -637,4 +639,25 @@ model ow_coderun_devices {
 
   @@index([status])
   @@index([runner_token])
+}
+
+model ow_scratch_extensions {
+  id          Int       @id @default(autoincrement())
+  projectid   Int
+  branch      String    @default("") @db.VarChar(128)
+  commit      String    @default("latest") @db.VarChar(64)
+  image       String    @db.VarChar(255)
+  samples     Int?      // Optional project ID for samples
+  docs        String?   @db.VarChar(1024)
+  status      String    @default("pending") @db.VarChar(32)
+  created_at  DateTime  @default(now()) @db.Timestamp(0)
+  updated_at  DateTime  @updatedAt @db.Timestamp(0)
+
+  // Relations
+  project     ow_projects @relation("ProjectExtensions", fields: [projectid], references: [id])
+  sample_project ow_projects? @relation("SampleProject", fields: [samples], references: [id])
+
+  @@index([projectid], map: "idx_extension_project")
+  @@index([status], map: "idx_extension_status")
+  @@index([samples], map: "idx_extension_samples")
 }

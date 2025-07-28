@@ -43,13 +43,13 @@ class SitemapService {
                 try {
                     await this.generateIncrementalSitemap();
                 } catch (error) {
-                    logger.error('[sitemap] Auto update task error:', error);
+                    logger.error('[sitemap] 自动更新任务错误:', error);
                 }
             },
             runImmediately: false
         });
 
-        logger.info(`[sitemap] Auto update task scheduled with interval: ${interval}ms`);
+        logger.info(`[sitemap] 自动更新任务已设置，间隔: ${interval}ms`);
     }
 
     async getUrls() {
