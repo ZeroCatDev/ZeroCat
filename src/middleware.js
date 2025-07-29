@@ -7,6 +7,75 @@ import zcconfig from './services/config/zcconfig.js';
 import ipMiddleware from './middleware/ipMiddleware.js';
 
 /**
+ * 统一的令牌验证函数
+ * 支持JWT令牌和账户令牌
+ * @param {string} token 令牌字符串
+ * @param {string} ipAddress IP地址
+ * @returns {Promise<{valid: boolean, user: object|null, message: string, tokenType: string|null}>}
+ */
+async function verifyTokenUnified(token, ipAddress) {
+    try {
+        logger.debug(token);
+        // 根据令牌前缀决定验证方式
+        if (token.startsWith('zc_')) {
+            // 验证账户令牌
+            const accountTokenModule = await import('./services/auth/accountTokenService.js');
+            const accountTokenResult = await accountTokenModule.verifyAccountToken(token);
+
+            if (accountTokenResult.valid && accountTokenResult.user) {
+                // 异步更新账户令牌使用记录
+                accountTokenModule.updateAccountTokenUsage(accountTokenResult.user.token_id, ipAddress)
+                    .catch(err => logger.error("更新账户令牌使用记录时出错:", err));
+
+                return {
+                    valid: true,
+                    user: accountTokenResult.user,
+                    message: "账户令牌验证成功",
+                    tokenType: "account"
+                };
+            }
+
+            return {
+                valid: false,
+                user: null,
+                message: accountTokenResult.message || "账户令牌验证失败",
+                tokenType: null
+            };
+        } else {
+            // 验证JWT令牌
+            const authModule = await import('./services/auth/auth.js');
+            const authUtils = authModule.default;
+
+            const jwtResult = await authUtils.verifyToken(token, ipAddress);
+
+            if (jwtResult.valid && jwtResult.user) {
+                return {
+                    valid: true,
+                    user: jwtResult.user,
+                    message: "JWT令牌验证成功",
+                    tokenType: "jwt"
+                };
+            }
+
+            return {
+                valid: false,
+                user: null,
+                message: jwtResult.message || "JWT令牌验证失败",
+                tokenType: null
+            };
+        }
+    } catch (error) {
+        logger.error("统一令牌验证时出错:", error);
+        return {
+            valid: false,
+            user: null,
+            message: "令牌验证时发生错误",
+            tokenType: null
+        };
+    }
+}
+
+/**
  * 配置Express应用的中间件
  * @param {express.Application} app Express应用实例
  */
@@ -101,22 +170,19 @@ export async function configureMiddleware(app) {
         }
 
         try {
-            // 动态导入auth工具，避免循环依赖
-            const authModule = await import('./services/auth/auth.js');
-            const authUtils = authModule.default;
+            // 使用统一的令牌验证函数
+            const result = await verifyTokenUnified(token, req.ipInfo?.clientIP || req.ip);
 
-            // 使用令牌验证系统，传递IP地址用于追踪
-            const {valid, user, message} = await authUtils.verifyToken(token, req.ip);
-
-            if (valid && user) {
+            if (result.valid && result.user) {
                 // 设置用户信息
-                res.locals.userid = user.userid;
-                res.locals.username = user.username;
-                res.locals.display_name = user.display_name;
-                res.locals.email = user.email;
-                res.locals.tokenId = user.token_id;
+                res.locals.userid = result.user.userid;
+                res.locals.username = result.user.username;
+                res.locals.display_name = result.user.display_name;
+                res.locals.email = result.user.email;
+                res.locals.tokenId = result.user.token_id;
+                res.locals.tokenType = result.tokenType;
             } else {
-                logger.debug(`令牌验证失败: ${message}`);
+                logger.debug(`令牌验证失败: ${result.message}`);
             }
         } catch (err) {
             logger.error("解析令牌时出错:", err);
@@ -176,12 +242,10 @@ export async function tokenAuthMiddleware(req, res, next) {
     }
 
     try {
-        const authModule = await import('./services/auth/auth.js');
-        const authUtils = authModule.default;
+        // 使用统一的令牌验证函数
+        const result = await verifyTokenUnified(token, req.ipInfo?.clientIP || req.ip);
 
-        const {valid, user, message} = await authUtils.verifyToken(token, req.ip);
-
-        if (!valid || !user) {
+        if (!result.valid || !result.user) {
             return res.status(401).json({
                 status: "error",
                 message: "未登录",
@@ -189,7 +253,7 @@ export async function tokenAuthMiddleware(req, res, next) {
         }
 
         // 设置验证后的用户信息
-        res.locals.tokeninfo = user;
+        res.locals.tokeninfo = result.user;
         next();
     } catch (error) {
         logger.error("Token验证失败:", error);

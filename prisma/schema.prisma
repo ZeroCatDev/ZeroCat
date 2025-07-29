@@ -121,6 +121,7 @@ model ow_users {
   oauth_authorizations    ow_oauth_authorizations[]
   oauth_access_tokens     ow_oauth_access_tokens[]
   kv_store               ow_cache_kv[]
+  account_tokens          ow_account_tokens[] @relation("AccountTokens")
 
   @@id([id, username])
 }
@@ -662,3 +663,30 @@ model ow_scratch_extensions {
   @@index([status], map: "idx_extension_status")
   @@index([samples], map: "idx_extension_samples")
 }
+
+// 用户账户令牌表
+model ow_account_tokens {
+  id              Int       @id @default(autoincrement())
+  user_id         Int       // 用户ID
+  name            String    @db.VarChar(255) // 令牌名称/备注
+  token           String    @unique @db.VarChar(255) // 令牌值
+  expires_at      DateTime? // 过期时间，null表示永不过期
+  is_revoked      Boolean   @default(false) // 是否被吊销
+  revoked_at      DateTime? // 吊销时间
+  last_used_at    DateTime? // 最后使用时间
+  last_used_ip    String?   @db.VarChar(100) // 最后使用的IP地址
+  created_at      DateTime  @default(now()) @db.Timestamp(0)
+  updated_at      DateTime  @updatedAt @db.Timestamp(0)
+
+  // 关联用户
+  user            ow_users  @relation("AccountTokens", fields: [user_id], references: [id])
+
+  @@index([user_id])
+  @@index([token])
+  @@index([is_revoked])
+  @@index([expires_at])
+}
+
+
+
+

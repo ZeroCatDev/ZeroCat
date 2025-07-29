@@ -125,6 +125,10 @@ async function registerBusinessRoutes(app) {
         const cachekvModule = await import('./routes/router_cachekv.js');
         app.use("/cachekv", cachekvModule.default);
 
+        // 账户令牌路由
+        const accountTokenModule = await import('./routes/router_accounttoken.js');
+        app.use("/accounttoken", accountTokenModule.default);
+
         // CodeRun Runner路由
         const coderunRunnerModule = await import('./routes/admin/coderun_runner.js');
         app.use("/coderun", coderunRunnerModule.default);

@@ -2,6 +2,7 @@ import zcconfig from "../services/config/zcconfig.js";
 import logger from "../services/logger.js";
 import {updateTokenActivity, verifyToken,} from "../services/auth/tokenUtils.js";
 import {prisma} from "../services/global.js";
+import {verifyAccountToken, updateAccountTokenUsage} from "../services/auth/accountTokenService.js";
 
 /**
  * 验证令牌在数据库中的有效性
@@ -101,18 +102,36 @@ export const parseToken = async (req, res, next) => {
     }
 
     try {
-        // 使用新的令牌验证系统，传递IP地址用于追踪
-        const {valid, user, message} = await verifyToken(token, req.ipInfo?.clientIP || req.ip);
+        // 首先尝试验证账户令牌
+        const accountTokenResult = await verifyAccountToken(token);
 
-        if (valid && user) {
+        if (accountTokenResult.valid && accountTokenResult.user) {
             // 设置用户信息
-            res.locals.userid = user.userid;
-            res.locals.username = user.username;
-            res.locals.display_name = user.display_name;
-            res.locals.email = user.email;
-            res.locals.tokenId = user.token_id;
+            res.locals.userid = accountTokenResult.user.userid;
+            res.locals.username = accountTokenResult.user.username;
+            res.locals.display_name = accountTokenResult.user.display_name;
+            res.locals.email = accountTokenResult.user.email;
+            res.locals.tokenId = accountTokenResult.user.token_id;
+            res.locals.tokenType = "account";
+
+            // 异步更新账户令牌使用记录
+            updateAccountTokenUsage(accountTokenResult.user.token_id, req.ipInfo?.clientIP || req.ip)
+                .catch(err => logger.error("更新账户令牌使用记录时出错:", err));
         } else {
-            logger.debug(`令牌验证失败: ${message}`);
+            // 如果账户令牌验证失败，尝试验证JWT令牌
+            const {valid, user, message} = await verifyToken(token, req.ipInfo?.clientIP || req.ip);
+
+            if (valid && user) {
+                // 设置用户信息
+                res.locals.userid = user.userid;
+                res.locals.username = user.username;
+                res.locals.display_name = user.display_name;
+                res.locals.email = user.email;
+                res.locals.tokenId = user.token_id;
+                res.locals.tokenType = "jwt";
+            } else {
+                logger.debug(`令牌验证失败: ${message}`);
+            }
         }
     } catch (err) {
         logger.debug("解析令牌时出错:", err);
@@ -156,6 +175,16 @@ export const strictTokenCheck = async (req, res, next) => {
             });
         }
 
+        // 首先尝试验证账户令牌
+        const accountTokenResult = await verifyAccountToken(token);
+
+        if (accountTokenResult.valid && accountTokenResult.user) {
+            // 账户令牌验证成功
+            next();
+            return;
+        }
+
+        // 如果账户令牌验证失败，尝试验证JWT令牌
         const {valid, message} = await verifyToken(token, req.ipInfo?.clientIP || req.ip);
 
         if (!valid) {
@@ -208,14 +237,22 @@ export const needLogin = async (req, res, next) => {
 
         if (token) {
             try {
-                const {valid, message} = await verifyToken(token, req.ipInfo?.clientIP || req.ip);
-                if (!valid) {
-                    logger.debug(`用户 ${res.locals.userid} 使用无效令牌: ${message}`);
-                    return res.status(401).json({
-                        status: "error",
-                        message: "无效的认证令牌",
-                        code: "ZC_ERROR_INVALID_TOKEN",
-                    });
+                // 首先尝试验证账户令牌
+                const accountTokenResult = await verifyAccountToken(token);
+
+                if (accountTokenResult.valid && accountTokenResult.user) {
+                    // 账户令牌验证成功，无需进一步验证
+                } else {
+                    // 如果账户令牌验证失败，尝试验证JWT令牌
+                    const {valid, message} = await verifyToken(token, req.ipInfo?.clientIP || req.ip);
+                    if (!valid) {
+                        logger.debug(`用户 ${res.locals.userid} 使用无效令牌: ${message}`);
+                        return res.status(401).json({
+                            status: "error",
+                            message: "无效的认证令牌",
+                            code: "ZC_ERROR_INVALID_TOKEN",
+                        });
+                    }
                 }
             } catch (err) {
                 logger.debug("验证令牌时出错:", err);
