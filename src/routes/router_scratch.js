@@ -41,7 +41,7 @@ router.get("/projectinfo", async function (req, res, next) {
                 star_count: true,
             },
         });
-
+        logger.debug(project)
         if (!project) {
             res.status(404).send({
                 code: 404,
@@ -160,6 +160,7 @@ router.get("/projectinfo2", async function (req, res, next) {
         ////logger.logger.debug(SCRATCH[0]);
         res.json(jsonscratch);
     } catch (err) {
+        logger.error(err);
         next(err);
     }
 });

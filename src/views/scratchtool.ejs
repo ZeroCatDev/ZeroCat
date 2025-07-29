@@ -520,6 +520,7 @@ function uploadProjectAssets() {
 
 function fetchProjectInfo() {
   if (_pid !== 0 && Number.isInteger(_pid)) {
+    updateLoadingDescription("正在获取项目详细信息...");
     TokenManager.apiRequest({
       url: `${ZCConfig.api.getPath("/scratch/projectinfo2")}?id=${_pid}`,
       type: "GET",
@@ -730,11 +731,21 @@ function zctabopen() {
 
 let isLoading = false;
 
+// 更新loading对话框描述的函数
+function updateLoadingDescription(description) {
+  const loadingDialog = document.querySelector(".loading-dialog");
+  if (loadingDialog) {
+    loadingDialog.description = description;
+  }
+}
+
 function loadProject() {
   if (isLoading) return;
   isLoading = true;
 
   console.log("Loading project...");
+  updateLoadingDescription("正在初始化项目加载...");
+
   const queryId = getQueryStringParameter("id");
   if (queryId) {
     _pid = Number(queryId);
@@ -747,10 +758,12 @@ function loadProject() {
   }
   if (_pid !== 0) {
     console.log(`Fetching project info for ID: ${_pid}`);
+    updateLoadingDescription("正在获取项目信息...");
     fetchProjectInfo();
     if (zcvm) {
       downloadAndLoadProject(_pid);
     } else {
+      updateLoadingDescription("正在等待Scratch引擎初始化...");
       setTimeout(loadProject, 100);
     }
   }
@@ -758,6 +771,8 @@ function loadProject() {
 
 function downloadAndLoadProject(pid) {
   console.log(`Downloading project with ID: ${pid}`);
+  updateLoadingDescription("正在连接服务器获取项目数据...");
+
   const loadingDialog = document.querySelector(".loading-dialog");
   if (loadingDialog) {
     loadingDialog.open = true;
@@ -772,16 +787,19 @@ function downloadAndLoadProject(pid) {
     success: function (response) {
       if (response.status === "error") {
         if (response.commit.commit_message === "NoFirstCommit") {
+          updateLoadingDescription("检测到未初始化的项目，准备初始化...");
           const alertOptions = {
             headline: "作品未初始化",
             description: "你可以以Scratch模板初始化此作品",
             confirmText: "继续",
             onConfirm: () => {
+              updateLoadingDescription("正在初始化项目模板...");
               TokenManager.apiRequest({
                 url: `${ZCConfig.api.getPath("/project/edit/")}${pid}/init`,
                 type: "POST",
                 success: function (response) {
                   showSnackbar(response.message);
+                  updateLoadingDescription("项目初始化完成，重新加载...");
                   downloadAndLoadProject(pid);
                 },
                 error: function (xhr) {
@@ -821,6 +839,8 @@ function downloadAndLoadProject(pid) {
       const { commit, accessFileToken } = response;
       commitInfo = commit;
 
+      updateLoadingDescription("正在获取项目文件数据...");
+
       if (!isEmbed) {
         const commitDate = new Date(commitInfo.commit_date).toLocaleString();
         const commitInfoList = document.getElementById("commit-info");
@@ -836,20 +856,27 @@ function downloadAndLoadProject(pid) {
       }
 
       TokenManager.apiRequest({
-        url: `${ZCConfig.api.getPath("/project/files/")}${commit.commit_file}?content=true`,
+        url: `${ZCConfig.api.getPath("/project/files/")}${
+          commit.commit_file
+        }?content=true`,
         type: "GET",
         data: { accessFileToken },
 
         success: function (fileResponse) {
+          updateLoadingDescription("正在解析项目数据...");
+
           zcvm
             .loadProject(JSON.parse(fileResponse))
             .then(() => {
               console.log("Project loaded into VM successfully.");
+              updateLoadingDescription("正在初始化Scratch引擎...");
               setTimeout(() => {
                 if (loadingDialog) {
                   loadingDialog.open = false;
                 }
+                zcvm.renderer.draw();
               }, 10);
+              zcvm.renderer.draw();
               isLoading = false;
             })
             .catch((err) => {
@@ -870,6 +897,7 @@ function downloadAndLoadProject(pid) {
         },
         error: function (xhr) {
           console.error("Error fetching project file:", xhr);
+          updateLoadingDescription("获取项目文件失败，正在重试...");
           if (loadingDialog) {
             loadingDialog.open = false;
           }
@@ -887,6 +915,7 @@ function downloadAndLoadProject(pid) {
     },
     error: function (xhr) {
       console.error("Error downloading project data:", xhr);
+      updateLoadingDescription("连接服务器失败，正在重试...");
       if (loadingDialog) {
         loadingDialog.open = false;
       }
