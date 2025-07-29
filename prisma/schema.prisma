@@ -649,7 +649,8 @@ model ow_scratch_extensions {
   image       String    @db.VarChar(255)
   samples     Int?      // Optional project ID for samples
   docs        String?   @db.VarChar(1024)
-  status      String    @default("pending") @db.VarChar(32)
+  scratchCompatible Boolean   @default(false)
+  status      String    @default("developing") @db.VarChar(32)
   created_at  DateTime  @default(now()) @db.Timestamp(0)
   updated_at  DateTime  @updatedAt @db.Timestamp(0)
 
