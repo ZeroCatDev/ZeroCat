@@ -409,7 +409,7 @@ enum ow_user_relationship_type {
 }
 
 view ow_projects_search_view {
-  id                  Int       @unique @db.UnsignedInt
+  id                  Int       @id @db.UnsignedInt
   name                String    @db.VarChar(128)
   title               String?   @db.VarChar(1000)
   description         String?   @db.VarChar(1000)
