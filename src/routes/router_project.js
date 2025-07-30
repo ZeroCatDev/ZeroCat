@@ -38,6 +38,9 @@ async function checkProjectPermission(projectid, userid, permission) {
 }
 
 async function createBranchIfNotExists(projectid, branch, userid) {
+  logger.debug(projectid);
+  logger.debug(branch);
+  logger.debug(userid);
   let branchRecord = await prisma.ow_projects_branch.findFirst({
     where: { projectid: Number(projectid), name: branch },
   });
@@ -48,6 +51,12 @@ async function createBranchIfNotExists(projectid, branch, userid) {
         name: branch,
         creator: userid,
         description: "",
+        latest_commit_hash: null,
+        project: {
+          connect: {
+            id: Number(projectid)
+          }
+        }
       },
     });
   }
@@ -67,6 +76,7 @@ async function getCommitParentId(projectid, userid, parent_commit, branch) {
     });
     parent_commit_id = parentCommit ? parentCommit.id : null;
   } else {
+    logger.debug("获取当前分支的最新提交");
     // 获取当前分支的最新提交
     const latestCommit = await prisma.ow_projects_commits.findFirst({
       where: {
@@ -76,6 +86,7 @@ async function getCommitParentId(projectid, userid, parent_commit, branch) {
       orderBy: { commit_date: "desc" },
     });
     parent_commit_id = latestCommit ? latestCommit.id : null;
+    logger.debug("获取当前分支的最新提交", parent_commit_id);
   }
   return parent_commit_id;
 }
@@ -340,6 +351,12 @@ router.post("/savefile", needLogin, async (req, res, next) => {
       }
       source = req.files.source.data.toString();
     }
+    if(req.is("application/x-www-form-urlencoded")){
+      source = req.body.source;
+    }
+    if(req.is("text/plain")){
+      source = req.body;
+    }
     // 处理 JSON 类型的请求
     else if (req.is("application/json")) {
       // 如果指定了 json=true，则处理压缩/格式化的 JSON
@@ -496,7 +513,7 @@ router.put("/commit/id/:id", needLogin, async (req, res, next) => {
       parent_commit,
       commit_description,
     } = req.body;
-
+    logger.debug(req.body);
     if (!projectid || !accessFileToken) {
       return res.status(400).send({
         status: "error",
