@@ -16,9 +16,6 @@ RUN npm install
 # 复制项目文件
 COPY . .
 
-# 预编译 Prisma（可选）
-RUN npx prisma generate
-
 # 设置环境变量（可选）
 ENV NODE_ENV=production
 
