@@ -351,10 +351,10 @@ router.post("/savefile", needLogin, async (req, res, next) => {
       }
       source = req.files.source.data.toString();
     }
-    if(req.is("application/x-www-form-urlencoded")){
+    else if(req.is("application/x-www-form-urlencoded")){
       source = req.body.source;
     }
-    if(req.is("text/plain")){
+    else if(req.is("text/plain")){
       source = req.body;
     }
     // 处理 JSON 类型的请求

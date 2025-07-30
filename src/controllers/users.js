@@ -43,7 +43,6 @@ export async function getUserByUsername(username) {
                 regTime: true,
                 bio: true,
                 motto: true,
-
                 avatar: true,
             }
         });
