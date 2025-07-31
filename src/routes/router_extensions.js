@@ -913,7 +913,7 @@ router.get("/", async (req, res, next) => {
         id: String(ext.id),
         name: ext.project.title,
         description: ext.project.description,
-        image: `${s3staticurl}/scratch_slt/${ext.project.id}`,
+        image: `${s3staticurl}/assets/${ext.image.substring(0, 2)}/${ext.image.substring(2, 4)}/${ext.image}.webp`,
         by: [
           {
             name: ext.project.author.display_name,
