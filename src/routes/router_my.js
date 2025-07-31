@@ -9,10 +9,18 @@ import {checkhash, hash, prisma, S3update} from "../services/global.js";
 //数据库
 import multer from "multer";
 import {createEvent} from "../controllers/events.js";
+import { validateFileTypeFromContent, uploadFile } from "../services/assets.js";
 
 var router = Router();
 
-const upload = multer({dest: "../../cache/usercontent"});
+// 配置multer用于内存存储
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB限制
+    files: 1
+  }
+});
 
 // Migrated to use the global parseToken middleware
 
@@ -24,32 +32,80 @@ router.post("/set/avatar", upload.single("zcfile"), async (req, res) => {
     }
 
     try {
-        const file = req.file;
-        const hash = createHash("md5");
-        const chunks = createReadStream(file.path);
-
-        chunks.on("data", (chunk) => {
-            if (chunk) hash.update(chunk);
-        });
-
-        chunks.on("end", async () => {
-            const hashValue = hash.digest("hex");
-            const fileBuffer = await fs.promises.readFile(file.path);
-            await S3update(`user/${hashValue}`, fileBuffer);
-            await prisma.ow_users.update({
-                where: {id: res.locals.userid},
-                data: {avatar: hashValue},
+        // 验证文件类型
+        const fileTypeValidation = await validateFileTypeFromContent(req.file.buffer, req.file.mimetype);
+        
+        if (!fileTypeValidation.isValid) {
+            logger.warn("头像文件类型验证失败:", {
+                originalname: req.file.originalname,
+                frontendMimeType: req.file.mimetype,
+                detectedMimeType: fileTypeValidation.mimeType,
+                error: fileTypeValidation.error
             });
-            res.status(200).send({status: "success", message: "头像上传成功"});
+            return res.status(400).send({
+                status: "error", 
+                message: fileTypeValidation.error || "不支持的文件类型"
+            });
+        }
+
+        // 确保是图片文件
+        if (!fileTypeValidation.mimeType.startsWith('image/')) {
+            return res.status(400).send({
+                status: "error", 
+                message: "头像必须是图片文件"
+            });
+        }
+
+        // 使用检测到的文件类型信息更新文件对象
+        req.file.detectedMimeType = fileTypeValidation.mimeType;
+        req.file.detectedExtension = fileTypeValidation.extension;
+
+        // 使用统一的文件上传函数，purpose 设为 'avatar'
+        const result = await uploadFile(
+            req.file,
+            { 
+                purpose: 'avatar',
+                category: 'avatars',
+                tags: 'avatar'
+            },
+            res,
+            req.ip,
+            req.headers['user-agent']
+        );
+
+        if (!result.success) {
+            return res.status(500).send({
+                status: "error", 
+                message: "头像上传失败"
+            });
+        }
+
+        // 更新用户头像字段（使用asset的MD5作为标识）
+        await prisma.ow_users.update({
+            where: {id: res.locals.userid},
+            data: {avatar: result.asset.md5},
         });
 
-        chunks.on("error", (err) => {
-            logger.error("Error processing file upload:", err);
-            res.status(500).send({status: "error", message: "图片上传失败"});
+        logger.info("头像上传成功:", {
+            userId: res.locals.userid,
+            assetId: result.asset.id,
+            md5: result.asset.md5,
+            processing: result.processing
         });
+
+        res.status(200).send({
+            status: "success", 
+            message: "头像上传成功",
+            avatar: {
+                md5: result.asset.md5,
+                url: result.asset.url,
+                processing: result.processing
+            }
+        });
+
     } catch (err) {
-        logger.error("Unexpected error:", err);
-        res.status(500).send({status: "error", message: "图片上传失败"});
+        logger.error("Avatar upload error:", err);
+        res.status(500).send({status: "error", message: "头像上传失败"});
     }
 });
 

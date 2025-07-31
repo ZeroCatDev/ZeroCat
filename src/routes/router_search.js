@@ -20,8 +20,17 @@ router.get("/", async (req, res, next) => {
       search_state: stateQuery = "",
     } = req.query;
 
+    // 处理 search_userid，支持列表和单个值
+    let useridArray = [];
+    if (userid) {
+      useridArray = userid.split(",").map(id => Number(id.trim())).filter(id => !isNaN(id));
+    }
+
     const isCurrentUser =
-      userid && res.locals.userid && userid == res.locals.userid;
+      useridArray.length > 0 &&
+      res.locals.userid &&
+      useridArray.includes(Number(res.locals.userid));
+
     let state =
       stateQuery == ""
         ? isCurrentUser
@@ -53,7 +62,11 @@ router.get("/", async (req, res, next) => {
       description: description ? { contains: description } : undefined,
       type: type ? { equals: type } : undefined,
       state: state ? { in: state } : undefined,
-      authorid: userid ? { equals: Number(userid) } : undefined,
+      authorid: useridArray.length > 0
+        ? useridArray.length === 1
+          ? { equals: useridArray[0] }
+          : { in: useridArray }
+        : undefined,
       project_tags:
         tagsArray.length > 0
           ? { some: { name: { in: tagsArray } } }
@@ -73,6 +86,7 @@ router.get("/", async (req, res, next) => {
         title: true,
         description: true,
         view_count: true,
+        thumbnail: true,
         star_count: true,
         time: true,
         tags: true,

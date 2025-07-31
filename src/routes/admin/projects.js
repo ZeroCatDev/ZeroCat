@@ -111,8 +111,8 @@ router.put('/:id', async (req, res) => {
 
         // Validate the update data against the schema
         const allowedFields = [
-            'name', 'default_branch', 'type', 'license',
-            'authorid', 'teacherid', 'state', 'view_count',
+            'name', 'default_branch', 'type', 'license', 'thumbnail',
+            'authorid',  'state', 'view_count',
             'like_count', 'favo_count', 'time', 'title',
             'description', 'history', 'devenv', 'tags',
             'fork', 'star_count'
@@ -120,7 +120,6 @@ router.put('/:id', async (req, res) => {
 
         // Convert specific fields to their correct types
         if (updateData.authorid) updateData.authorid = parseInt(updateData.authorid);
-        if (updateData.teacherid) updateData.teacherid = parseInt(updateData.teacherid);
         if (updateData.view_count) updateData.view_count = parseInt(updateData.view_count);
         if (updateData.like_count) updateData.like_count = parseInt(updateData.like_count);
         if (updateData.favo_count) updateData.favo_count = parseInt(updateData.favo_count);

@@ -119,6 +119,7 @@ router.get("/projectinfo", async function (req, res, next) {
             select: {
                 id: true,
                 authorid: true,
+                thumbnail: true,
                 time: true,
                 default_branch: true,
                 view_count: true,

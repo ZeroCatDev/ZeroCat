@@ -1,0 +1,845 @@
+import logger from "./logger.js";
+import { prisma } from "./global.js";
+import zcconfig from "./config/zcconfig.js";
+import { createHash } from "crypto";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import sharp from "sharp";
+import ffmpeg from "fluent-ffmpeg";
+import { fileTypeFromBuffer } from "file-type";
+
+// 配置S3客户端
+const s3Client = new S3Client({
+  endpoint: await zcconfig.get("s3.endpoint"),
+  region: await zcconfig.get("s3.region"),
+  credentials: {
+    accessKeyId: await zcconfig.get("s3.AWS_ACCESS_KEY_ID"),
+    secretAccessKey: await zcconfig.get("s3.AWS_SECRET_ACCESS_KEY"),
+  },
+});
+
+// 支持的文件类型
+const SUPPORTED_IMAGE_TYPES = [
+  "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp", "image/svg+xml"
+];
+
+const SUPPORTED_AUDIO_TYPES = [
+  "audio/mpeg", "audio/mp3", "audio/wav", "audio/ogg", "audio/aac", "audio/flac"
+];
+
+const SUPPORTED_TYPES = [...SUPPORTED_IMAGE_TYPES, ...SUPPORTED_AUDIO_TYPES];
+
+/**
+ * 使用 file-type 库检测文件类型
+ * @param {Buffer} buffer 文件缓冲区
+ * @returns {Promise<Object>} 包含 mimeType 和 extension 的对象
+ */
+export async function detectFileType(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 4) {
+    return { mimeType: null, extension: null };
+  }
+
+  try {
+    const fileType = await fileTypeFromBuffer(buffer);
+
+    if (fileType) {
+      return {
+        mimeType: fileType.mime,
+        extension: fileType.ext
+      };
+    }
+
+    // 如果 file-type 无法识别，尝试检测 SVG
+    const textContent = buffer.toString('utf8', 0, Math.min(buffer.length, 200));
+    if (textContent.includes('<svg') || textContent.includes('<?xml')) {
+        return { mimeType: 'image/svg+xml', extension: 'svg' };
+    }
+
+    return { mimeType: null, extension: null };
+  } catch (error) {
+    logger.error("文件类型检测失败:", error);
+    return { mimeType: null, extension: null };
+  }
+}
+
+
+/**
+ * 验证文件类型（基于文件内容检测和前端MIME类型匹配）
+ * @param {Buffer} buffer 文件缓冲区
+ * @param {string} frontendMimeType 前端提供的MIME类型
+ * @returns {Promise<Object>} 包含检测结果的对象 { isValid: boolean, mimeType: string, extension: string }
+ */
+export async function validateFileTypeFromContent(buffer, frontendMimeType = null) {
+  const detected = await detectFileType(buffer);
+
+  if (!detected.mimeType) {
+    return {
+      isValid: false,
+      mimeType: null,
+      extension: null,
+      error: '无法识别文件类型 #1'
+    };
+  }
+
+  // 检查检测到的MIME类型是否在支持列表中
+  const isSupportedType = SUPPORTED_TYPES.includes(detected.mimeType);
+  if (!isSupportedType) {
+    return {
+      isValid: false,
+      mimeType: detected.mimeType,
+      extension: detected.extension,
+      error: `不支持的文件类型: ${detected.mimeType}`
+    };
+  }
+
+
+  return {
+    isValid: true,
+    mimeType: detected.mimeType,
+    extension: detected.extension,
+    error: null
+  };
+}
+
+/**
+ * 生成MD5哈希
+ * @param {Buffer} buffer 文件缓冲区
+ * @returns {string} MD5哈希值
+ */
+export function generateMD5(buffer) {
+  return createHash('md5').update(buffer).digest('hex');
+}
+
+/**
+ * 获取文件扩展名
+ * @param {string} filename 文件名
+ * @returns {string} 扩展名
+ */
+export function getFileExtension(filename) {
+  return filename.split('.').pop().toLowerCase();
+}
+
+/**
+ * 获取MIME类型
+ * @param {string} filename 文件名
+ * @returns {string} MIME类型
+ */
+export function getMimeType(filename) {
+  const ext = getFileExtension(filename);
+  const mimeTypes = {
+    // 图片
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'gif': 'image/gif',
+    'webp': 'image/webp',
+    'svg': 'image/svg+xml',
+    // 音频
+    'mp3': 'audio/mpeg',
+    'wav': 'audio/wav',
+    'ogg': 'audio/ogg',
+    'aac': 'audio/aac',
+    'flac': 'audio/flac'
+  };
+  return mimeTypes[ext] || 'application/octet-stream';
+}
+
+/**
+ * 上传文件到S3
+ * @param {Buffer} buffer 文件缓冲区
+ * @param {string} key S3键
+ * @param {string} contentType 内容类型
+ * @returns {Promise<string>} S3 URL
+ */
+export async function uploadToS3(buffer, key, contentType) {
+  const command = new PutObjectCommand({
+    Bucket: await zcconfig.get("s3.bucket"),
+    Key: key,
+    Body: buffer,
+    ContentType: contentType,
+    ACL: 'public-read',
+  });
+
+  await s3Client.send(command);
+  return `${await zcconfig.get("s3.staticurl")}/${key}`;
+}
+
+
+/**
+ * 统一的图片压制函数
+ * @param {Buffer} buffer 原始图片缓冲区
+ * @param {Object} options 处理选项
+ * @returns {Promise<Object>} 处理结果
+ */
+export async function processImage(buffer, options = {}) {
+  const {
+    // 尺寸限制
+    maxWidth = null,
+    maxHeight = null,
+    width = null,
+    height = null,
+    // 质量和格式
+    quality = 85,
+    format = 'webp', // 默认转换为 webp
+    // 优化选项
+    progressive = true,
+    mozjpeg = true,
+    // 安全选项
+    sanitize = true,
+    // 文件大小限制
+    maxFileSize = null
+  } = options;
+
+  // 确保输入是Buffer
+  if (!Buffer.isBuffer(buffer)) {
+    throw new Error("图片数据必须是Buffer类型");
+  }
+
+  if (buffer.length === 0) {
+    throw new Error("图片数据为空");
+  }
+
+  let sharpInstance = sharp(buffer);
+
+  try {
+    // 获取图片信息
+    const metadata = await sharpInstance.metadata();
+
+    // 验证图片格式
+    if (!metadata.format) {
+      throw new Error("无法识别图片格式");
+    }
+
+    // 检查图片尺寸是否合理
+    if (metadata.width > 10000 || metadata.height > 10000) {
+      logger.warn("检测到异常大尺寸图片:", { width: metadata.width, height: metadata.height });
+    }
+
+    // 安全处理：强制移除所有元数据
+    if (sanitize) {
+      sharpInstance = sharpInstance.removeAlpha(false);
+    }
+
+    // 尺寸处理
+    if (width && height) {
+      // 精确尺寸
+      sharpInstance = sharpInstance.resize(width, height, {
+        fit: 'cover',
+        position: 'center'
+      });
+    } else if (maxWidth || maxHeight) {
+      // 按最大尺寸缩放，保持纵横比
+      sharpInstance = sharpInstance.resize(maxWidth, maxHeight, {
+        fit: 'inside',
+        withoutEnlargement: true
+      });
+    }
+
+    // 格式转换和质量设置
+    switch (format) {
+      case 'webp':
+        sharpInstance = sharpInstance.webp({
+          quality: Math.min(Math.max(quality, 1), 100),
+          effort: 6, // 高质量压缩
+          smartSubsample: true
+        });
+        break;
+      case 'jpeg':
+      case 'jpg':
+        sharpInstance = sharpInstance.jpeg({
+          quality: Math.min(Math.max(quality, 1), 100),
+          progressive,
+          mozjpeg,
+          optimiseCoding: true
+        });
+        break;
+      case 'png':
+        sharpInstance = sharpInstance.png({
+          quality: Math.min(Math.max(quality, 1), 100),
+          compressionLevel: 9,
+          adaptiveFiltering: true,
+          palette: true
+        });
+        break;
+      case 'avif':
+        sharpInstance = sharpInstance.avif({
+          quality: Math.min(Math.max(quality, 1), 100),
+          effort: 6
+        });
+        break;
+      default:
+        // 如果不支持的格式，默认转为 webp
+        sharpInstance = sharpInstance.webp({
+          quality: Math.min(Math.max(quality, 1), 100),
+          effort: 6
+        });
+        break;
+    }
+
+    let processedBuffer = await sharpInstance.toBuffer();
+
+    // 验证输出Buffer
+    if (!Buffer.isBuffer(processedBuffer) || processedBuffer.length === 0) {
+      throw new Error("图片处理失败，输出数据无效");
+    }
+
+    // 文件大小检查
+    if (maxFileSize && processedBuffer.length > maxFileSize) {
+      // 如果超过限制，降低质量重新压缩
+      let retryQuality = quality - 10;
+      let retries = 0;
+
+      while (processedBuffer.length > maxFileSize && retryQuality > 10 && retries < 5) {
+        logger.info(`文件大小超限(${processedBuffer.length}>${maxFileSize})，降低质量重试: ${retryQuality}`);
+
+        let retryInstance = sharp(buffer);
+        if (sanitize) {
+          retryInstance = retryInstance.removeAlpha(false);
+        }
+
+        // 重新应用尺寸设置
+        if (width && height) {
+          retryInstance = retryInstance.resize(width, height, {
+            fit: 'cover',
+            position: 'center'
+          });
+        } else if (maxWidth || maxHeight) {
+          retryInstance = retryInstance.resize(maxWidth, maxHeight, {
+            fit: 'inside',
+            withoutEnlargement: true
+          });
+        }
+
+        // 重新应用格式设置
+        switch (format) {
+          case 'webp':
+            retryInstance = retryInstance.webp({
+              quality: retryQuality,
+              effort: 6
+            });
+            break;
+          case 'jpeg':
+          case 'jpg':
+            retryInstance = retryInstance.jpeg({
+              quality: retryQuality,
+              progressive,
+              mozjpeg
+            });
+            break;
+          case 'png':
+            retryInstance = retryInstance.png({
+              quality: retryQuality,
+              compressionLevel: 9
+            });
+            break;
+          case 'avif':
+            retryInstance = retryInstance.avif({
+              quality: retryQuality,
+              effort: 6
+            });
+            break;
+        }
+
+        processedBuffer = await retryInstance.toBuffer();
+        retryQuality -= 10;
+        retries++;
+      }
+
+      if (processedBuffer.length > maxFileSize) {
+        throw new Error(`无法将文件压缩到指定大小限制: ${maxFileSize} bytes`);
+      }
+    }
+
+    // 获取最终图片信息
+    const finalMetadata = await sharp(processedBuffer).metadata();
+
+    return {
+      buffer: processedBuffer,
+      format: format,
+      width: finalMetadata.width,
+      height: finalMetadata.height,
+      size: processedBuffer.length,
+      originalSize: buffer.length,
+      compressionRatio: (buffer.length - processedBuffer.length) / buffer.length,
+      metadataRemoved: sanitize
+    };
+  } catch (error) {
+    logger.error("图片处理失败:", error);
+    throw new Error(`图片处理失败: ${error.message}`);
+  }
+}
+
+/**
+ * 处理音频转换
+ * @param {string} inputPath 输入文件路径
+ * @param {string} outputPath 输出文件路径
+ * @param {Object} options 转换选项
+ * @returns {Promise<void>}
+ */
+export async function processAudio(inputPath, outputPath, options = {}) {
+  const { format = 'mp3', bitrate = '128k' } = options;
+
+  return new Promise((resolve, reject) => {
+    ffmpeg(inputPath)
+      .toFormat(format)
+      .audioBitrate(bitrate)
+      .on('end', () => resolve())
+      .on('error', (err) => reject(err))
+      .save(outputPath);
+  });
+}
+
+/**
+ * 检查素材是否已存在
+ * @param {string} md5 MD5哈希值
+ * @returns {Promise<Object|null>} 素材记录
+ */
+export async function checkAssetExists(md5) {
+  return await prisma.ow_assets.findUnique({
+    where: { md5 }
+  });
+}
+
+/**
+ * 创建素材记录
+ * @param {Object} data 素材数据
+ * @returns {Promise<Object>} 创建的素材记录
+ */
+export async function createAssetRecord(data) {
+  return await prisma.ow_assets.create({
+    data: {
+      md5: data.md5,
+      filename: data.filename,
+      extension: data.extension,
+      mime_type: data.mimeType,
+      file_size: data.fileSize,
+      uploader_id: data.uploaderId,
+      uploader_ip: data.uploaderIp,
+      uploader_ua: data.uploaderUa,
+      metadata: data.metadata,
+      tags: data.tags,
+      category: data.category
+    }
+  });
+}
+
+/**
+ * 更新素材使用统计
+ * @param {number} assetId 素材ID
+ * @returns {Promise<void>}
+ */
+export async function updateAssetUsage(assetId) {
+  await prisma.ow_assets.update({
+    where: { id: assetId },
+    data: {
+      usage_count: {
+        increment: 1
+      },
+      last_used_at: new Date()
+    }
+  });
+}
+
+/**
+ * 获取素材列表
+ * @param {Object} options 查询选项
+ * @returns {Promise<Object>} 素材列表和分页信息
+ */
+export async function getAssetsList(options = {}) {
+  const { page = 1, limit = 20, category, search, sortBy = "created_at", sortOrder = "desc" } = options;
+
+  const where = {};
+
+  if (category) {
+    where.category = category;
+  }
+
+  if (search) {
+    where.OR = [
+      { filename: { contains: search } },
+      { tags: { contains: search } }
+    ];
+  }
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+
+  const [assets, total] = await Promise.all([
+    prisma.ow_assets.findMany({
+      where,
+      skip,
+      take: parseInt(limit),
+      orderBy: { [sortBy]: sortOrder },
+      include: {
+        uploader: {
+          select: {
+            id: true,
+            username: true,
+            display_name: true
+          }
+        }
+      }
+    }),
+    prisma.ow_assets.count({ where })
+  ]);
+
+  return {
+    assets,
+    pagination: {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total,
+      pages: Math.ceil(total / parseInt(limit))
+    }
+  };
+}
+
+/**
+ * 获取素材详情
+ * @param {number} assetId 素材ID
+ * @returns {Promise<Object|null>} 素材详情
+ */
+export async function getAssetDetails(assetId) {
+  const asset = await prisma.ow_assets.findUnique({
+    where: { id: parseInt(assetId) },
+    include: {
+      uploader: {
+        select: {
+          id: true,
+          username: true,
+          display_name: true
+        }
+      }
+    }
+  });
+
+  if (!asset) {
+    return null;
+  }
+
+  // 生成S3访问URL
+  const s3Key = `assets/${asset.md5.substring(0, 2)}/${asset.md5.substring(2, 4)}/${asset.md5}.${asset.extension}`;
+  const url = `${await zcconfig.get("s3.staticurl")}/${s3Key}`;
+
+  return {
+    ...asset,
+    url
+  };
+}
+
+/**
+ * 获取素材统计信息
+ * @returns {Promise<Object>} 统计信息
+ */
+export async function getAssetStats() {
+  const stats = await prisma.ow_assets.groupBy({
+    by: ['category'],
+    _count: {
+      id: true
+    },
+    _sum: {
+      file_size: true
+    }
+  });
+
+  const totalAssets = await prisma.ow_assets.count();
+  const totalSize = await prisma.ow_assets.aggregate({
+    _sum: {
+      file_size: true
+    }
+  });
+
+  return {
+    totalAssets,
+    totalSize: totalSize._sum.file_size || 0,
+    byCategory: stats.map(stat => ({
+      category: stat.category,
+      count: stat._count.id,
+      size: stat._sum.file_size
+    }))
+  };
+}
+
+/**
+ * 简化的图片上传处理（仅支持图片，自动转换为PNG）
+ * @param {Object} file 上传的文件
+ * @param {Object} options 处理选项
+ * @param {Object} res Express响应对象
+ * @param {string} ip IP地址
+ * @param {string} userAgent User Agent
+ * @returns {Promise<Object>} 处理结果
+ */
+export async function processSimpleImageUpload(file, options, res, ip, userAgent) {
+  const { quality = 80, tags, category } = options;
+
+  // 使用Sharp检测和处理图片
+  let sharpInstance;
+  try {
+    sharpInstance = sharp(file.buffer);
+    const metadata = await sharpInstance.metadata();
+
+    if (!metadata.format) {
+      throw new Error("不是有效的图片文件");
+    }
+  } catch (error) {
+    throw new Error("不是有效的图片文件");
+  }
+
+  // 生成MD5
+  const md5 = generateMD5(file.buffer);
+
+  // 检查素材是否已存在
+  const existingAsset = await checkAssetExists(md5);
+  if (existingAsset) {
+    return {
+      success: true,
+      message: "素材已存在",
+      asset: existingAsset
+    };
+  }
+
+  // 转换为PNG
+  const result = await processImage(file.buffer, {
+    compress: true,
+    convertToPng: true,
+    quality: parseInt(quality),
+    sanitize: true
+  });
+
+  const processedBuffer = result.buffer;
+  const finalExtension = 'png';
+  const finalMimeType = 'image/png';
+
+  const metadata = {
+    width: result.width,
+    height: result.height,
+    originalFormat: result.format
+  };
+
+  // 生成S3存储路径
+  const s3Key = `assets/${md5.substring(0, 2)}/${md5.substring(2, 4)}/${md5}.${finalExtension}`;
+
+  // 上传到S3
+  const s3Url = await uploadToS3(processedBuffer, s3Key, finalMimeType);
+
+  // 创建数据库记录
+  const assetData = {
+    md5,
+    filename: file.originalname,
+    extension: finalExtension,
+    mimeType: finalMimeType,
+    fileSize: processedBuffer.length,
+    uploaderId: res.locals.userid,
+    uploaderIp: ip,
+    uploaderUa: userAgent,
+    metadata,
+    tags: tags || '',
+    category: category || 'images'
+  };
+
+  const asset = await createAssetRecord(assetData);
+
+  return {
+    success: true,
+    message: "图片上传成功",
+    asset: {
+      ...asset,
+      url: s3Url
+    }
+  };
+}
+
+/**
+ * 统一的文件上传函数（根据用途进行不同处理）
+ * @param {Object} file 上传的文件
+ * @param {Object} options 处理选项
+ * @param {Object} res Express响应对象
+ * @param {string} ip IP地址
+ * @param {string} userAgent User Agent
+ * @returns {Promise<Object>} 处理结果
+ */
+export async function uploadFile(file, options, res, ip, userAgent) {
+  const {
+    tags,
+    category,
+    purpose = 'general', // 'general', 'scratch', 'avatar'
+    imageOptions = {}
+  } = options;
+
+  // 如果文件对象包含检测到的类型信息，使用检测到的类型
+  // 否则检测文件类型
+  let detectedMimeType, detectedExtension;
+
+  if (file.detectedMimeType && file.detectedExtension) {
+    // 使用已检测的类型信息
+    detectedMimeType = file.detectedMimeType;
+    detectedExtension = file.detectedExtension;
+  } else {
+    // 重新检测文件类型
+    const detection = await detectFileType(file.buffer);
+    if (!detection.mimeType) {
+      throw new Error("无法识别文件类型");
+    }
+    detectedMimeType = detection.mimeType;
+    detectedExtension = detection.extension;
+  }
+
+  // 生成MD5（基于原始文件）
+  const md5 = generateMD5(file.buffer);
+
+  // 检查素材是否已存在
+  const existingAsset = await checkAssetExists(md5);
+  if (existingAsset) {
+    return {
+      success: true,
+      message: "素材已存在",
+      asset: existingAsset,
+      isExisting: true
+    };
+  }
+
+  let processedBuffer = file.buffer;
+  let finalExtension = detectedExtension;
+  let finalMimeType = detectedMimeType;
+  let metadata = {
+    detectedType: {
+      mimeType: detectedMimeType,
+      extension: detectedExtension
+    },
+    frontendType: {
+      mimeType: file.mimetype || 'unknown'
+    },
+    purpose: purpose
+  };
+
+  // 根据用途进行不同处理
+  switch (purpose) {
+    case 'scratch':
+      // scratch 上传不做任何处理，保持原始文件
+      logger.info("Scratch上传，保持原始文件");
+      break;
+
+    case 'avatar':
+      // 头像处理：压缩为512x512，转换为webp，保持高质量
+      if (detectedMimeType.startsWith('image/')) {
+        try {
+          const result = await processImage(file.buffer, {
+            width: 512,
+            height: 512,
+            format: 'webp',
+            quality: 95, // 保持原始质量
+            sanitize: true,
+            maxFileSize: 500 * 1024 // 500KB限制
+          });
+
+          processedBuffer = result.buffer;
+          finalExtension = 'webp';
+          finalMimeType = 'image/webp';
+          metadata.imageProcessing = {
+            originalFormat: detectedMimeType,
+            processedFormat: 'webp',
+            originalSize: file.buffer.length,
+            processedSize: result.size,
+            compressionRatio: result.compressionRatio,
+            dimensions: {
+              width: result.width,
+              height: result.height
+            }
+          };
+          logger.info("头像处理完成", metadata.imageProcessing);
+        } catch (error) {
+          logger.error("头像处理失败:", error);
+          throw new Error(`头像处理失败: ${error.message}`);
+        }
+      } else {
+        throw new Error("头像必须是图片格式");
+      }
+      break;
+
+    case 'general':
+    default:
+      // 一般上传：图片转为webp，音频不处理
+      if (detectedMimeType.startsWith('image/')) {
+        try {
+          const result = await processImage(file.buffer, {
+            format: 'webp',
+            quality: imageOptions.quality || 85,
+            maxWidth: imageOptions.maxWidth,
+            maxHeight: imageOptions.maxHeight,
+            sanitize: true
+          });
+
+          processedBuffer = result.buffer;
+          finalExtension = 'webp';
+          finalMimeType = 'image/webp';
+          metadata.imageProcessing = {
+            originalFormat: detectedMimeType,
+            processedFormat: 'webp',
+            originalSize: file.buffer.length,
+            processedSize: result.size,
+            compressionRatio: result.compressionRatio,
+            dimensions: {
+              width: result.width,
+              height: result.height
+            }
+          };
+        } catch (error) {
+          logger.warn("图片处理失败，使用原文件:", error);
+          // 如果处理失败，使用原文件
+        }
+      } else if (detectedMimeType.startsWith('audio/')) {
+        // 音频文件不做处理，保持原始格式
+        logger.info("音频文件不做处理，保持原始格式");
+        metadata.audioInfo = {
+          originalFormat: detectedMimeType,
+          size: file.buffer.length
+        };
+      }
+      break;
+  }
+
+  // 生成S3存储路径（使用原始文件的MD5）
+  const s3Key = `assets/${md5.substring(0, 2)}/${md5.substring(2, 4)}/${md5}.${finalExtension}`;
+
+  // 上传到S3
+  const s3Url = await uploadToS3(processedBuffer, s3Key, finalMimeType);
+
+  // 创建数据库记录
+  const assetData = {
+    md5,
+    filename: file.originalname,
+    extension: finalExtension,
+    mimeType: finalMimeType,
+    fileSize: processedBuffer.length,
+    uploaderId: res.locals.userid,
+    uploaderIp: ip,
+    uploaderUa: userAgent,
+    metadata,
+    tags: tags || '',
+    category: category || (purpose === 'avatar' ? 'avatars' : 'general')
+  };
+
+  const asset = await createAssetRecord(assetData);
+
+  return {
+    success: true,
+    message: "文件上传成功",
+    asset: {
+      ...asset,
+      url: s3Url
+    },
+    isExisting: false,
+    processing: metadata.imageProcessing || metadata.audioInfo || null
+  };
+}
+
+/**
+ * 向后兼容的文件上传函数（使用scratch模式）
+ * @param {Object} file 上传的文件
+ * @param {Object} options 处理选项
+ * @param {Object} res Express响应对象
+ * @param {string} ip IP地址
+ * @param {string} userAgent User Agent
+ * @returns {Promise<Object>} 处理结果
+ */
+export async function processFileUpload(file, options, res, ip, userAgent) {
+  return uploadFile(file, { ...options, purpose: 'scratch' }, res, ip, userAgent);
+}

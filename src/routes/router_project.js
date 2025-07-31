@@ -294,6 +294,7 @@ router.post("/", needLogin, async (req, res, next) => {
       state: req.body.state || "public",
       description: req.body.description || "",
       license: req.body.license || "None",
+      thumbnail: req.body.thumbnail || "",
     };
 
     const result = await prisma.ow_projects.create({ data: outputJson });
@@ -952,7 +953,7 @@ router.put("/id/:id", needLogin, async (req, res, next) => {
     });
 
     // 其他可能变更的字段
-    ["description", "license", "tags"].forEach((field) => {
+    ["description", "license", "tags", "thumbnail"].forEach((field) => {
       if (
         updatedData[field] !== undefined &&
         updatedData[field] !== project[field]
@@ -1425,6 +1426,7 @@ router.post("/fork", needLogin, async (req, res, next) => {
         description: project.description,
         fork: projectid,
         default_branch: project.default_branch,
+        thumbnail: project.thumbnail,
       },
     });
 

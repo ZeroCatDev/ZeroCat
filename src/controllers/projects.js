@@ -49,6 +49,7 @@ function extractProjectData(body) {
         "title",
         "description",
         "history",
+        "thumbnail",
     ];
     return fields.reduce(
         (acc, field) => (body[field] ? {...acc, [field]: body[field]} : acc),
@@ -142,6 +143,7 @@ function projectSelectionFields() {
         type: true,
         license: true,
         authorid: true,
+        thumbnail: true,
         state: true,
         view_count: true,
         time: true,

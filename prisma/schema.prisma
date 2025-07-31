@@ -43,14 +43,14 @@ model ow_projects {
   type           String?   @default("text") @db.VarChar(32)
   license        String?   @db.VarChar(32)
   authorid       Int
-  teacherid      Int?      @default(0) @db.UnsignedInt
+  thumbnail      String?   @db.VarChar(37) @default("")
   state          String?   @default("private") @db.VarChar(32)
   view_count     Int?      @default(0) @db.UnsignedInt
   like_count     Int?      @default(0)
   favo_count     Int?      @default(0)
   time           DateTime? @default(now()) @db.Timestamp(0)
-  title          String?   @default("Scratch新项目") @db.VarChar(1000)
-  description    String?   @default("OurWorld上的Scratch项目") @db.VarChar(1000)
+  title          String?   @default("ZeroCat新项目") @db.VarChar(1000)
+  description    String?   @default("ZeroCat上的项目") @db.VarChar(1000)
   history        Boolean   @default(true)
   devenv         Boolean   @default(true)
   tags           String    @default("") @db.VarChar(100)
@@ -65,10 +65,10 @@ model ow_projects {
   project_tags ow_projects_tags[]
   extensions   ow_scratch_extensions[]   @relation("ProjectExtensions")
   sample_extensions ow_scratch_extensions[] @relation("SampleProject")
+  assets       ow_projects_assets[]      @relation("ProjectAssets")
 
   @@index([state], map: "idx_projects_state")
   @@index([authorid], map: "idx_project_author")
-  @@index([teacherid], map: "idx_project_teacher")
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -77,7 +77,7 @@ model ow_users {
   username     String    @unique(map: "user_UNIQUE") @db.Char(20)
   email        String?   @db.Char(100)
   password     String?   @db.VarChar(255)
-  display_name String    @default("OurWorld创作者") @db.Char(20)
+  display_name String    @default("ZeroCat创作者") @db.Char(20)
   /// User account status: pending = newly registered, active = normal user, suspended = temporarily disabled, banned = permanently disabled
   status       String    @default("active") @db.VarChar(20)
 
@@ -122,6 +122,9 @@ model ow_users {
   oauth_access_tokens     ow_oauth_access_tokens[]
   kv_store               ow_cache_kv[]
   account_tokens          ow_account_tokens[] @relation("AccountTokens")
+  // Asset relations
+  uploaded_assets         ow_assets[] @relation("AssetUploader")
+  banned_assets           ow_assets[] @relation("AssetBannedBy")
 
   @@id([id, username])
 }
@@ -685,6 +688,75 @@ model ow_account_tokens {
   @@index([token])
   @@index([is_revoked])
   @@index([expires_at])
+}
+
+// 项目素材关联表
+model ow_projects_assets {
+  id              Int       @id @default(autoincrement())
+  project_id      Int       @db.UnsignedInt
+  asset_id        Int
+  usage_context   String?   @db.VarChar(255) // 使用上下文（如：背景、角色、音效等）
+  usage_order     Int?      @default(0) // 使用顺序
+  created_at      DateTime  @default(now()) @db.Timestamp(0)
+  updated_at      DateTime  @updatedAt @db.Timestamp(0)
+
+  // 关联
+  project         ow_projects @relation("ProjectAssets", fields: [project_id], references: [id])
+  asset           ow_assets   @relation("AssetProjects", fields: [asset_id], references: [id])
+
+  @@unique([project_id, asset_id])
+  @@index([project_id])
+  @@index([asset_id])
+  @@index([usage_context])
+}
+
+// 素材管理表
+model ow_assets {
+  id              Int       @id @default(autoincrement())
+  md5             String    @unique @db.VarChar(32) // 标准MD5值
+  filename        String    @db.VarChar(255) // 原始文件名
+  extension       String    @db.VarChar(20) // 文件扩展名
+  mime_type       String    @db.VarChar(100) // MIME类型
+  file_size       Int       // 文件大小（字节）
+
+  // 上传者信息
+  uploader_id     Int       // 首次上传者ID
+  uploader_ip     String?   @db.VarChar(100) // 上传者IP地址
+  uploader_ua     String?   @db.MediumText // 上传者User Agent
+
+  // 时间信息
+  created_at      DateTime  @default(now()) @db.Timestamp(0) // 首次上传时间
+  updated_at      DateTime  @updatedAt @db.Timestamp(0) // 最后更新时间
+
+  // 封禁信息
+  is_banned       Boolean   @default(false) // 是否被封禁
+  banned_at       DateTime? @db.Timestamp(0) // 封禁时间
+  banned_by       Int?      // 封禁操作者ID
+  ban_reason      String?   @db.VarChar(500) // 封禁原因
+
+  // 使用统计
+  usage_count     Int       @default(0) // 使用次数
+  last_used_at    DateTime? @db.Timestamp(0) // 最后使用时间
+
+  // 文件元数据
+  metadata        Json?     // 其他元数据（JSON格式）
+
+  // 标签和分类
+  tags            String?   @db.VarChar(500) // 标签（逗号分隔）
+  category        String?   @db.VarChar(50) // 分类
+
+  // 关联
+  uploader        ow_users  @relation("AssetUploader", fields: [uploader_id], references: [id])
+  banned_by_user  ow_users? @relation("AssetBannedBy", fields: [banned_by], references: [id])
+  projects        ow_projects_assets[] @relation("AssetProjects")
+
+  @@index([md5])
+  @@index([uploader_id])
+  @@index([created_at])
+  @@index([is_banned])
+  @@index([extension])
+  @@index([category])
+  @@index([usage_count])
 }
 
 

@@ -9,10 +9,18 @@ import {prisma, S3update} from "../services/global.js";
 import {needLogin} from "../middleware/auth.js";
 import {getProjectById, getProjectFile} from "../controllers/projects.js";
 import multer from "multer";
+import { validateFileTypeFromContent, uploadFile } from "../services/assets.js";
 
 var router = Router();
 
-const upload = multer({dest: "../../cache/usercontent"});
+// 配置multer用于内存存储（scratch上传）
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB限制
+    files: 1
+  }
+});
 
 // Migrated to use the global parseToken middleware
 
@@ -35,6 +43,7 @@ router.get("/projectinfo", async function (req, res, next) {
                 state: true,
                 description: true,
                 license: true,
+                thumbnail: true,
                 default_branch: true,
                 tags: true,
                 name: true,
@@ -256,6 +265,7 @@ router.get("/project/:id", async (req, res, next) => {
 //保存作品：缩略图
 router.post(
     "/thumbnail/:projectid",
+    needLogin,
     upload.single("file"),
     async (req, res, next) => {
         if (!req.file) {
@@ -281,32 +291,84 @@ router.post(
                     });
             }
 
-            const file = req.file;
-            const hash = createHash("md5");
-            const chunks = createReadStream(file.path);
+            // 验证文件类型
+            const fileTypeValidation = await validateFileTypeFromContent(req.file.buffer, req.file.mimetype);
 
-            chunks.on("data", (chunk) => {
-                if (chunk) hash.update(chunk);
+            if (!fileTypeValidation.isValid) {
+                logger.warn("缩略图文件类型验证失败:", {
+                    originalname: req.file.originalname,
+                    projectid: req.params.projectid,
+                    frontendMimeType: req.file.mimetype,
+                    detectedMimeType: fileTypeValidation.mimeType,
+                    error: fileTypeValidation.error
+                });
+                return res.status(400).send({
+                    status: "error",
+                    message: fileTypeValidation.error || "不支持的文件类型，请上传图片"
+                });
+            }
+
+            // 检查是否为图片类型
+            if (!fileTypeValidation.mimeType.startsWith('image/')) {
+                return res.status(400).send({
+                    status: "error",
+                    message: "缩略图必须是图片格式"
+                });
+            }
+
+            // 使用新的图片处理逻辑，压缩为758x576，转webp，最高质量
+            const { processImage, generateMD5, uploadToS3 } = await import("../services/assets.js");
+
+            const imageResult = await processImage(req.file.buffer, {
+                width: 758,
+                height: 576,
+                format: 'webp',
+                quality: 100, // 最高质量
+                sanitize: true
             });
 
-            chunks.on("end", async () => {
-                const hashValue = hash.digest("hex");
-                const fileBuffer = await fs.promises.readFile(file.path);
-                await S3update(`scratch_slt/${req.params.projectid}`, fileBuffer);
-                res.status(200).send({status: "success"});
+            // 生成MD5哈希
+            const md5Hash = generateMD5(imageResult.buffer);
+            const thumbnailFilename = `${md5Hash}.webp`;
+
+            // 上传到S3（新路径结构）
+            const s3Key = `assets/${md5Hash.substring(0, 2)}/${md5Hash.substring(2, 4)}/${thumbnailFilename}`;
+            await uploadToS3(imageResult.buffer, s3Key, 'image/webp');
+
+            // 更新数据库项目的thumbnail字段
+            await prisma.ow_projects.update({
+                where: { id: Number(req.params.projectid) },
+                data: { thumbnail: thumbnailFilename }
             });
 
-            chunks.on("error", (err) => {
-                logger.error("Error processing file upload:", err);
-                res
-                    .status(500)
-                    .send({status: "error", message: "File processing error"});
+            logger.debug("作品缩略图保存成功:"+ JSON.stringify({
+                projectId: req.params.projectid,
+                userId: res.locals.userid,
+                thumbnailHash: md5Hash,
+                originalSize: req.file.buffer.length,
+                processedSize: imageResult.size,
+                compressionRatio: imageResult.compressionRatio,
+                dimensions: `${imageResult.width}x${imageResult.height}`
+            }));
+
+            res.status(200).send({
+                status: "success",
+                thumbnail: {
+                    filename: thumbnailFilename,
+                    hash: md5Hash,
+                    size: imageResult.size,
+                    dimensions: {
+                        width: imageResult.width,
+                        height: imageResult.height
+                    }
+                }
             });
+
         } catch (err) {
-            logger.error("Unexpected error:", err);
+            logger.error("缩略图上传失败:", err);
             res
                 .status(500)
-                .send({status: "error", message: "Internal server error"});
+                .send({status: "error", message: "缩略图处理失败"});
         }
     }
 );
@@ -324,34 +386,72 @@ router.post(
         }
 
         try {
-            const file = req.file;
-            const hash = createHash("md5");
-            const chunks = createReadStream(file.path);
+            // 验证文件类型
+            const fileTypeValidation = await validateFileTypeFromContent(req.file.buffer, req.file.mimetype);
 
-            chunks.on("data", (chunk) => {
-                if (chunk) hash.update(chunk);
+            if (!fileTypeValidation.isValid) {
+                logger.warn("Scratch素材文件类型验证失败:", {
+                    originalname: req.file.originalname,
+                    filename: req.params.filename,
+                    frontendMimeType: req.file.mimetype,
+                    detectedMimeType: fileTypeValidation.mimeType,
+                    error: fileTypeValidation.error
+                });
+                return res.status(400).send({
+                    status: "error",
+                    message: fileTypeValidation.error || "不支持的文件类型"
+                });
+            }
+
+            // 使用检测到的文件类型信息更新文件对象
+            req.file.detectedMimeType = fileTypeValidation.mimeType;
+            req.file.detectedExtension = fileTypeValidation.extension;
+
+            // 使用统一的文件上传函数，purpose 设为 'scratch'（不做任何处理）
+            const result = await uploadFile(
+                req.file,
+                {
+                    purpose: 'scratch',
+                    category: 'scratch-assets',
+                    tags: 'scratch'
+                },
+                res,
+                req.ip,
+                req.headers['user-agent']
+            );
+
+            if (!result.success) {
+                return res.status(500).send({
+                    status: "error",
+                    message: "文件上传失败"
+                });
+            }
+
+            logger.info("Scratch素材上传成功:", {
+                userId: res.locals.userid,
+                filename: req.params.filename,
+                assetId: result.asset.id,
+                md5: result.asset.md5,
+                originalFormat: fileTypeValidation.mimeType,
+                isExisting: result.isExisting
             });
 
-            chunks.on("end", async () => {
-                const hashValue = hash.digest("hex");
-                const ext = req.params.filename.split(".").pop();
-                const newFilename = `${hashValue}.${ext}`;
-                const fileBuffer = await fs.promises.readFile(file.path);
-                await S3update(`material/asset/${newFilename}`, fileBuffer);
-                res.status(200).send({status: "success"});
+            res.status(200).send({
+                status: "success",
+                asset: {
+                    md5: result.asset.md5,
+                    url: result.asset.url,
+                    filename: req.params.filename,
+                    mimeType: result.asset.mime_type,
+                    size: result.asset.file_size
+                }
             });
 
-            chunks.on("error", (err) => {
-                logger.error("Error processing file upload:", err);
-                res
-                    .status(500)
-                    .send({status: "error", message: "File processing error"});
-            });
         } catch (err) {
-            logger.error("Unexpected error:", err);
+            logger.error("Scratch asset upload error:", err);
             res
                 .status(500)
-                .send({status: "error", message: "Internal server error"});
+                .send({status: "error", message: "文件上传失败"});
         }
     }
 );

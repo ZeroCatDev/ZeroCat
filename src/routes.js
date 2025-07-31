@@ -137,6 +137,10 @@ async function registerBusinessRoutes(app) {
         const extensionsModule = await import('./routes/router_extensions.js');
         app.use("/extensions", extensionsModule.default);
 
+        // 素材管理路由
+        const assetsModule = await import('./routes/router_assets.js');
+        app.use("/assets", assetsModule.default);
+
         logger.info('[routes] 所有业务路由注册成功');
     } catch (error) {
         logger.error('[routes] 注册业务路由失败:', error);
