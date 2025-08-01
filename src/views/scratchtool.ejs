@@ -19,20 +19,33 @@ const ZCConfig = {
   },
 };
 
-// Application Management
+// --- Refactored Application Management & Resource Loading ---
 const App = {
   initialize: async function () {
-    loadResources();
-    return Promise.resolve();
-  },
-};
+    try {
+      loadStyle(ZCConfig.frontend.getPath("/scratchtool/mdui.css"));
+      await this.loadScript(ZCConfig.frontend.getPath("/scratchtool/jquery.3.7.1.js"));
+      await this.loadScript(ZCConfig.frontend.getPath("/scratchtool/mdui.global.js"));
 
-// 加载外部资源
-const loadScript = (src, callback) => {
-  const script = document.createElement("script");
-  script.src = src;
-  script.onload = callback;
-  document.head.appendChild(script);
+      $(document).ready(() => {
+        initUIComponents();
+        initialize(); // This is the main application logic initialization
+      });
+    } catch (error) {
+      console.error("Application initialization failed:", error);
+      alert(`应用初始化失败: ${error.message}`);
+    }
+  },
+
+  loadScript: (src) => {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = src;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error(`Script load error for ${src}`));
+      document.head.appendChild(script);
+    });
+  },
 };
 
 const loadStyle = (href) => {
@@ -42,20 +55,10 @@ const loadStyle = (href) => {
   document.head.appendChild(link);
 };
 
-function loadResources() {
-  loadStyle(ZCConfig.frontend.getPath("/scratchtool/mdui.css"));
+window.onload = () => {
+  App.initialize();
+};
 
-  loadScript(ZCConfig.frontend.getPath("/scratchtool/jquery.3.7.1.js"), () => {
-    loadScript(ZCConfig.frontend.getPath("/scratchtool/mdui.global.js"), () => {
-      // 确保 $ 和 mdui 加载成功后执行初始化
-      $(document).ready(() => {
-        // mdui 和 jQuery 都已加载完成，初始化UI
-        initUIComponents();
-        initialize();
-      });
-    });
-  });
-}
 
 // 将依赖mdui的UI操作封装到这个函数中
 function initUIComponents() {
@@ -71,17 +74,10 @@ function initUIComponents() {
   };
 }
 
-window.onload = () => {
-  App.initialize().catch((error) => {
-    console.error("Application initialization failed:", error);
-    // 不使用mdui，使用原生alert
-    alert("应用初始化失败");
-  });
-};
-
 // 令牌管理工具
 const TokenManager = {
-  // 存储刷新令牌
+  // ... (keeping the existing TokenManager as it's already using async/await)
+  // Stays the same
   refreshToken: null,
 
   // 从JWT中获取过期时间
@@ -253,6 +249,7 @@ const TokenManager = {
   },
 };
 
+
 // Description: ZeroCat Scratch Tool
 let zcvm, zcgui;
 let _pid = 0;
@@ -376,7 +373,8 @@ function handleInvalidLogin(message) {
     });
   } else {
     // mdui未加载时的备选方案
-    if (confirm(`登录问题: ${message}\n是否打开登录页面?`)) {
+    if (confirm(`登录问题: ${message}
+是否打开登录页面?`)) {
       const returnUrl = encodeURIComponent(window.location.href);
       window.open(
         `${ZCConfig.frontend.getPath(
@@ -479,100 +477,100 @@ function setButton(id, text, onclick) {
   }
 }
 
-function uploadProjectAssets() {
-  let files = zcvm.assets.map((asset) => asset.assetId);
-  let uploadedfiles = [];
-  TokenManager.apiRequest({
-    url: `${ZCConfig.api.getPath("/assets/scratch/check")}`,
-    type: "POST",
-    dataType: "json",
-    contentType: "application/json",
-    data: JSON.stringify({ files: files }),
-    success: function (result) {
-      console.log(result);
-      uploadedfiles = result.data;
-      console.log(uploadedfiles);
-      let toUploadFiles = zcvm.assets.filter(
-        (file) => !uploadedfiles.includes(file.assetId)
-      );
-      console.log(toUploadFiles);
-      $.each(toUploadFiles, function (index, file) {
+// --- Refactored uploadProjectAssets ---
+async function uploadProjectAssets() {
+  try {
+    const allAssetIds = zcvm.assets.map((asset) => asset.assetId);
+
+    const checkResult = await TokenManager.apiRequest({
+      url: `${ZCConfig.api.getPath("/assets/scratch/check")}`,
+      type: "POST",
+      dataType: "json",
+      contentType: "application/json",
+      data: JSON.stringify({ files: allAssetIds }),
+    });
+
+    const uploadedFiles = checkResult.data;
+    const toUploadFiles = zcvm.assets.filter(
+      (asset) => !uploadedFiles.includes(asset.assetId)
+    );
+
+    logText.innerText += `[${getCurrentTime()}] 需要上传 ${toUploadFiles.length} 个文件。
+`;
+
+    for (const asset of toUploadFiles) {
+      try {
         const formData = new FormData();
         formData.append(
           "file",
-          new Blob([file.data], { type: file.assetType.contentType }),
-          `${file.assetId}.${file.dataFormat}`
+          new Blob([asset.data], { type: asset.assetType.contentType }),
+          `${asset.assetId}.${asset.dataFormat}`
         );
 
-        TokenManager.apiRequest({
-          url: `${ZCConfig.api.getPath("/assets/upload")}`,
+        await TokenManager.apiRequest({
+          url: `${ZCConfig.api.getPath("/scratch/assets/" + asset.assetId + "." + asset.dataFormat)}`,
           type: "POST",
           data: formData,
           processData: false,
           contentType: false,
-          success: function () {
-            logText.innerText += `[${getCurrentTime()}]文件上传成功${
-              file.assetId
-            }.${file.dataFormat}\n`;
-            file.clean = true;
-          },
-          error: function (xhr, status, error) {
-            logText.innerText += `[${getCurrentTime()}]文件上传失败${
-              file.assetId
-            }.${file.dataFormat}\nerror:${error}\n`;
-          },
         });
-      });
-      showSnackbar("媒体库保存完成");
-    },
-  });
-}
 
-function fetchProjectInfo() {
-  if (_pid !== 0 && Number.isInteger(_pid)) {
-    updateLoadingDescription("正在获取项目详细信息...");
-    TokenManager.apiRequest({
-      url: `${ZCConfig.api.getPath("/scratch/projectinfo2")}?id=${_pid}`,
-      type: "GET",
-      success: function (result) {
-        if (result.status == "404") {
-          location.href = `${ZCConfig.frontend.getPath(
-            "/editor.html"
-          )}?msg=404`;
-          return;
-        }
-        projectinfo = result;
-        if (!isEmbed) {
-          authorinfocard.headline = result.author.username;
-          authorinfocard.description = result.author.description;
-          authorinfocard.onclick = () =>
-            window.open(
-              `${ZCConfig.frontend.getPath("/user/")}${result.author.id}`
-            );
-          authorinfocard.style.cursor = "pointer";
-          authorinfoavatar.src = `${ZCConfig.s3.staticUrl}/user/${result.author.profile.id}`;
-          zctab.headline = `${result.title} #${result.id}`;
-          zctab.description = `${
-            String(result.author.id) === String(userinfo.userid)
-              ? "是你的作品"
-              : "不是你的作品"
-          }`;
-
-          if (String(result.author.id) !== String(userinfo.userid)) {
-            setButton("push-button", "改编", () =>
-              window.open(
-                `${ZCConfig.frontend.getPath("/projects/")}${_pid}/fork`
-              )
-            );
-          }
-        }
-      },
-      error: function (xhr) {
-        alert(xhr);
-      },
-    });
+        logText.innerText += `[${getCurrentTime()}] 文件上传成功: ${asset.assetId}.${asset.dataFormat}
+`;
+        asset.clean = true;
+      } catch (error) {
+        logText.innerText += `[${getCurrentTime()}] 文件上传失败: ${asset.assetId}.${asset.dataFormat}
+Error: ${error.responseJSON?.message || error.statusText}
+`;
+      }
+    }
+    showSnackbar("媒体库保存完成");
+  } catch (error) {
+    console.error("Error checking or uploading assets:", error);
+    showErrorAlert("媒体库保存失败", `错误: ${error.responseJSON?.message || error.statusText}`);
   }
 }
+
+// --- Refactored fetchProjectInfo ---
+async function fetchProjectInfo() {
+  if (_pid === 0 || !Number.isInteger(_pid)) return;
+
+  updateLoadingDescription("正在获取项目详细信息...");
+  try {
+    const result = await TokenManager.apiRequest({
+      url: `${ZCConfig.api.getPath("/scratch/projectinfo2")}?id=${_pid}`,
+      type: "GET",
+    });
+
+    if (result.status == "404") {
+      location.href = `${ZCConfig.frontend.getPath("/editor.html")}?msg=404`;
+      return;
+    }
+
+    projectinfo = result;
+    if (!isEmbed) {
+      authorinfocard.headline = result.author.username;
+      authorinfocard.description = result.author.description;
+      authorinfocard.onclick = () => window.open(`${ZCConfig.frontend.getPath("/user/")}${result.author.id}`);
+      authorinfocard.style.cursor = "pointer";
+      authorinfoavatar.src = `${ZCConfig.s3.staticUrl}/user/${result.author.profile.id}`;
+      zctab.headline = `${result.title} #${result.id}`;
+      zctab.description = `${
+        String(result.author.id) === String(userinfo.userid)
+          ? "是你的作品"
+          : "不是你的作品"
+      }`;
+
+      if (String(result.author.id) !== String(userinfo.userid)) {
+        setButton("push-button", "改编", () => window.open(`${ZCConfig.frontend.getPath("/projects/")}${_pid}/fork`));
+      }
+    }
+  } catch (error) {
+    console.error("Error fetching project info:", error);
+    showErrorAlert("获取项目信息失败", `错误: ${error.responseJSON?.message || error.statusText}`);
+  }
+}
+
 
 function updateZerocatTab() {
   if (zctab) {
@@ -580,26 +578,26 @@ function updateZerocatTab() {
   }
 }
 
-function getZerocatUserInfo(userid) {
-  let result;
-  $.ajax({
-    url: `${ZCConfig.api.getPath("/user/id/")}${userid}`,
-    type: "GET",
-    async: false,
-    success: function (data) {
-      result = data.data;
-    },
-    error: function (xhr) {
-      const data = xhr.responseJSON;
-      if (data && data.code === "AUTH_ERROR_LOGIN") {
-        handleInvalidLogin(data.message);
-      } else {
-        alert(xhr);
-      }
-    },
-  });
-  return result;
+// --- Refactored getZerocatUserInfo ---
+async function getZerocatUserInfo(userid) {
+  try {
+    const result = await $.ajax({
+      url: `${ZCConfig.api.getPath("/user/id/")}${userid}`,
+      type: "GET",
+    });
+    return result.data;
+  } catch (error) {
+    const data = error.responseJSON;
+    if (data && data.code === "AUTH_ERROR_LOGIN") {
+      handleInvalidLogin(data.message);
+    } else {
+      console.error(`Failed to get user info for ${userid}:`, error);
+      showErrorAlert("获取用户信息失败", `无法加载用户 ${userid} 的信息。`);
+    }
+    return null; // Return null on failure
+  }
 }
+
 
 // 在initialize函数开始处添加检查URL参数中是否有token信息
 function checkUrlForTokens() {
@@ -749,7 +747,7 @@ function updateLoadingDescription(description) {
   }
 }
 
-function loadProject() {
+async function loadProject() {
   if (isLoading) return;
   isLoading = true;
 
@@ -764,22 +762,24 @@ function loadProject() {
   if (_pid === 0) {
     console.log("No project ID found, redirecting to new project page.");
     //window.location.href = `${CONFIG.API_HOST}/newproject`;
+    isLoading = false;
     return;
   }
-  if (_pid !== 0) {
-    console.log(`Fetching project info for ID: ${_pid}`);
-    updateLoadingDescription("正在获取项目信息...");
-    fetchProjectInfo();
-    if (zcvm) {
-      downloadAndLoadProject(_pid);
-    } else {
-      updateLoadingDescription("正在等待Scratch引擎初始化...");
-      setTimeout(loadProject, 100);
-    }
+
+  console.log(`Fetching project info for ID: ${_pid}`);
+  updateLoadingDescription("正在获取项目信息...");
+  await fetchProjectInfo();
+
+  if (zcvm) {
+    await downloadAndLoadProject(_pid);
+  } else {
+    updateLoadingDescription("正在等待Scratch引擎初始化...");
+    setTimeout(loadProject, 100);
   }
 }
 
-function downloadAndLoadProject(pid) {
+// --- Refactored downloadAndLoadProject & helpers ---
+async function downloadAndLoadProject(pid) {
   console.log(`Downloading project with ID: ${pid}`);
   updateLoadingDescription("正在连接服务器获取项目数据...");
 
@@ -791,156 +791,118 @@ function downloadAndLoadProject(pid) {
   const branch = getQueryStringParameter("branch") || "main";
   const ref = getQueryStringParameter("ref") || "latest";
 
-  TokenManager.apiRequest({
-    url: `${ZCConfig.api.getPath("/project/")}${pid}/${branch}/${ref}`,
-    type: "GET",
-    success: function (response) {
-      if (response.status === "error") {
-        if (response.commit.commit_message === "NoFirstCommit") {
-          updateLoadingDescription("检测到未初始化的项目，准备初始化...");
-          const alertOptions = {
-            headline: "作品未初始化",
-            description: "你可以以Scratch模板初始化此作品",
-            confirmText: "继续",
-            onConfirm: () => {
-              updateLoadingDescription("正在初始化项目模板...");
-              TokenManager.apiRequest({
-                url: `${ZCConfig.api.getPath("/project/edit/")}${pid}/init`,
-                type: "POST",
-                success: function (response) {
-                  showSnackbar(response.message);
-                  updateLoadingDescription("项目初始化完成，重新加载...");
-                  downloadAndLoadProject(pid);
-                },
-                error: function (xhr) {
-                  console.error("Error initializing project:", xhr);
-                  showErrorAlert(
-                    "初始化失败",
-                    `作品初始化失败: ${xhr.responseText}`,
-                    "重新加载",
-                    () => {
-                      window.location.reload();
-                    }
-                  );
-                },
-              });
-            },
-          };
+  try {
+    const response = await TokenManager.apiRequest({
+      url: `${ZCConfig.api.getPath("/project/")}${pid}/${branch}/${ref}`,
+      type: "GET",
+    });
 
-          if (window.UIManager) {
-            UIManager.showAlert(alertOptions);
-          } else {
-            if (
-              confirm(`${alertOptions.headline}: ${alertOptions.description}`)
-            ) {
-              alertOptions.onConfirm();
-            }
-          }
-        }
-
+    if (response.status === "error") {
+      if (response.commit && response.commit.commit_message === "NoFirstCommit") {
+        await handleUninitializedProject(pid);
+      } else {
         showErrorAlert("加载失败", response.message, "关闭");
-
-        if (loadingDialog) {
-          loadingDialog.open = false;
-        }
-        isLoading = false;
-        return;
       }
-      const { commit, accessFileToken } = response;
-      commitInfo = commit;
+      if (loadingDialog) loadingDialog.open = false;
+      isLoading = false;
+      return;
+    }
 
-      updateLoadingDescription("正在获取项目文件数据...");
+    const { commit, accessFileToken } = response;
+    commitInfo = commit;
+    updateLoadingDescription("正在获取项目文件数据...");
+    await updateCommitInfoUI(commit);
 
-      if (!isEmbed) {
-        const commitDate = new Date(commitInfo.commit_date).toLocaleString();
+    const fileResponse = await TokenManager.apiRequest({
+      url: `${ZCConfig.api.getPath("/project/files/")}${commit.commit_file}?content=true`,
+      type: "GET",
+      data: { accessFileToken },
+    });
+
+    updateLoadingDescription("正在解析项目数据...");
+    // The response is the file content itself, not a JSON object containing it
+    await zcvm.loadProject(JSON.parse(fileResponse));
+
+    console.log("Project loaded into VM successfully.");
+    updateLoadingDescription("正在初始化Scratch引擎...");
+    setTimeout(() => {
+      if (loadingDialog) loadingDialog.open = false;
+      zcvm.renderer.draw();
+    }, 10);
+    zcvm.renderer.draw();
+    isLoading = false;
+
+  } catch (error) {
+    console.error("Error downloading or loading project:", error);
+    if (loadingDialog) loadingDialog.open = false;
+    isLoading = false;
+    showErrorAlert(
+      "加载失败",
+      `作品加载失败: ${error.responseJSON?.message || error.statusText}`,
+      "重新加载",
+      () => window.location.reload()
+    );
+  }
+}
+
+async function handleUninitializedProject(pid) {
+    updateLoadingDescription("检测到未初始化的项目，准备初始化...");
+    const alertOptions = {
+        headline: "作品未初始化",
+        description: "你可以以Scratch模板初始化此作品",
+        confirmText: "继续",
+        onConfirm: async () => {
+            updateLoadingDescription("正在初始化项目模板...");
+            try {
+                const response = await TokenManager.apiRequest({
+                    url: `${ZCConfig.api.getPath("/project/edit/")}${pid}/init`,
+                    type: "POST",
+                });
+                showSnackbar(response.message);
+                updateLoadingDescription("项目初始化完成，重新加载...");
+                await downloadAndLoadProject(pid);
+            } catch (error) {
+                console.error("Error initializing project:", error);
+                showErrorAlert(
+                    "初始化失败",
+                    `作品初始化失败: ${error.responseJSON?.message || error.statusText}`,
+                    "重新加载",
+                    () => window.location.reload()
+                );
+            }
+        },
+    };
+
+    if (window.UIManager) {
+        UIManager.showAlert(alertOptions);
+    } else {
+        if (confirm(`${alertOptions.headline}: ${alertOptions.description}`)) {
+            await alertOptions.onConfirm();
+        }
+    }
+}
+
+async function updateCommitInfoUI(commit) {
+    if (isEmbed) return;
+    try {
+        const commitDate = new Date(commit.commit_date).toLocaleString();
         const commitInfoList = document.getElementById("commit-info");
         if (commitInfoList) {
-          commitInfoList.headline = commitInfo.commit_message;
-          const commitInfoAvatar = document.getElementById("commit-avatar");
-          commituser = getZerocatUserInfo(commitInfo.author_id);
-          if (commitInfoAvatar) {
-            commitInfoAvatar.src = `${ZCConfig.s3.staticUrl}/${commituser.images}`;
-          }
-          commitInfoList.description = `${commituser.display_name} 于 ${commitDate}`;
-        }
-      }
-
-      TokenManager.apiRequest({
-        url: `${ZCConfig.api.getPath("/project/files/")}${
-          commit.commit_file
-        }?content=true`,
-        type: "GET",
-        data: { accessFileToken },
-
-        success: function (fileResponse) {
-          updateLoadingDescription("正在解析项目数据...");
-
-          zcvm
-            .loadProject(JSON.parse(fileResponse))
-            .then(() => {
-              console.log("Project loaded into VM successfully.");
-              updateLoadingDescription("正在初始化Scratch引擎...");
-              setTimeout(() => {
-                if (loadingDialog) {
-                  loadingDialog.open = false;
-                }
-                zcvm.renderer.draw();
-              }, 10);
-              zcvm.renderer.draw();
-              isLoading = false;
-            })
-            .catch((err) => {
-              console.error("Error loading project into VM:", err);
-              if (loadingDialog) {
-                loadingDialog.open = false;
-              }
-              isLoading = false;
-              showErrorAlert(
-                "加载失败",
-                `作品加载失败: ${err.message}`,
-                "重新加载",
-                () => {
-                  window.location.reload();
-                }
-              );
-            });
-        },
-        error: function (xhr) {
-          console.error("Error fetching project file:", xhr);
-          updateLoadingDescription("获取项目文件失败，正在重试...");
-          if (loadingDialog) {
-            loadingDialog.open = false;
-          }
-          isLoading = false;
-          showErrorAlert(
-            "加载失败",
-            `作品加载失败: ${xhr.responseText}`,
-            "重新加载",
-            () => {
-              window.location.reload();
+            commitInfoList.headline = commit.commit_message;
+            const commitInfoAvatar = document.getElementById("commit-avatar");
+            const commitUser = await getZerocatUserInfo(commit.author_id);
+            if (commitInfoAvatar && commitUser && commitUser.images) {
+                commitInfoAvatar.src = `${ZCConfig.s3.staticUrl}/${commitUser.images}`;
             }
-          );
-        },
-      });
-    },
-    error: function (xhr) {
-      console.error("Error downloading project data:", xhr);
-      updateLoadingDescription("连接服务器失败，正在重试...");
-      if (loadingDialog) {
-        loadingDialog.open = false;
-      }
-      isLoading = false;
-      showErrorAlert(
-        "加载失败",
-        `作品加载失败: ${xhr.responseText}`,
-        "重新加载",
-        () => {
-          window.location.reload();
+            if(commitUser) {
+                commitInfoList.description = `${commitUser.display_name} 于 ${commitDate}`;
+            }
         }
-      );
-    },
-  });
+    } catch (error) {
+        console.error("Failed to update commit info UI", error);
+    }
 }
+
 
 // 通用错误提示函数
 function showErrorAlert(headline, description, confirmText, onConfirm) {
@@ -981,10 +943,11 @@ function openCommitDialog() {
 
   const currentBranch = getQueryStringParameter("branch") || "main";
   branchNameInput.value = currentBranch;
+  branchNameInput.disabled = true; // Disable by default
 
   branchRadioGroup.addEventListener("change", (event) => {
     if (event.target.value === "pr") {
-      const username = userinfo.username;
+      const username = userinfo.username || 'user';
       const timestamp = Date.now();
       branchNameInput.value = `${username}-patch-${timestamp}`;
       branchNameInput.disabled = false;
@@ -997,7 +960,8 @@ function openCommitDialog() {
   commitDialog.open = true;
 }
 
-function commitProject() {
+// --- Refactored commitProject ---
+async function commitProject() {
   const branchNameInput = document.getElementById("branch-name");
   const commitMessageInput = document.getElementById("commit-message");
   const commitDescriptionInput = document.getElementById("commit-description");
@@ -1016,77 +980,74 @@ function commitProject() {
     return;
   }
 
-  setButton("save-button", "保存中", () => openCommitDialog());
+  setButton("save-button", "保存中...", () => {});
+  const commitDialog = document.getElementById("commit-dialog");
+  if(commitDialog) commitDialog.open = false;
 
-  uploadProjectAssets();
 
-  if (zcvm.runtime.isRunning) {
-    zcvm.runtime.stopAll();
-  }
+  try {
+    await uploadProjectAssets();
 
-  if (projectjson == zcvm.toJSON()) {
-    showSnackbar("作品未修改");
+    if (zcvm.runtime.isRunning) {
+      zcvm.runtime.stopAll();
+    }
+
+    const currentProjectJson = zcvm.toJSON();
+    if (projectjson === currentProjectJson) {
+      showSnackbar("作品未修改");
+      setButton("save-button", "保存", () => openCommitDialog());
+      return;
+    }
+
+    if (String(projectinfo.author.id) !== String(userinfo.userid)) {
+      showSnackbar("无权限");
+      setButton("save-button", "无权限", () => {});
+      return;
+    }
+
+    projectjson = currentProjectJson;
+
+    const saveResponse = await TokenManager.apiRequest({
+      url: `${ZCConfig.api.getPath("/project/savefile")}?json=true`,
+      type: "post",
+      data: projectjson,
+      contentType: "application/json",
+    });
+
+    const newAccessFileToken = saveResponse.accessFileToken;
+
+    const commitResponse = await TokenManager.apiRequest({
+      url: `${ZCConfig.api.getPath("/project/commit/id/")}${_pid}`,
+      type: "put",
+      data: JSON.stringify({
+        projectid: _pid,
+        branch: branchName,
+        accessFileToken: newAccessFileToken,
+        message: commitMessage,
+        commit_description: commitDescription,
+      }),
+      contentType: "application/json",
+    });
+
+    showSnackbar(commitResponse.message);
+
+    setButton("save-button", "保存完成", () => openCommitDialog());
+    if (logText) {
+      logText.innerText += `[${getCurrentTime()}]保存完成
+`;
+    }
+
+    const url = new URL(window.location.href);
+    url.searchParams.set("branch", branchName);
+    window.history.replaceState({}, "", url);
+
+  } catch (error) {
+    console.error("Error committing project:", error);
+    showErrorAlert("提交作品出错", `错误: ${error.responseJSON?.message || error.statusText}`, "关闭");
     setButton("save-button", "保存", () => openCommitDialog());
-    return;
   }
-
-  if (String(projectinfo.author.id) !== String(userinfo.userid)) {
-    showSnackbar("无权限");
-    setButton("save-button", "无权限", () => openCommitDialog());
-    return;
-  }
-
-  projectjson = zcvm.toJSON();
-
-  // 先调用文件保存接口
-  TokenManager.apiRequest({
-    url: `${ZCConfig.api.getPath("/project/savefile")}?json=true`,
-    type: "post",
-    data: projectjson,
-    contentType: "application/json",
-    success: function (saveResponse) {
-      const newAccessFileToken = saveResponse.accessFileToken;
-
-      // 然后调用提交接口
-      TokenManager.apiRequest({
-        url: `${ZCConfig.api.getPath("/project/commit/id/")}${_pid}`,
-        type: "put",
-        data: JSON.stringify({
-          projectid: _pid,
-          branch: branchName,
-          accessFileToken: newAccessFileToken,
-          message: commitMessage,
-          commit_description: commitDescription,
-        }),
-        contentType: "application/json",
-        success: function (commitResponse) {
-          showSnackbar(commitResponse.message);
-          const commitDialog = document.getElementById("commit-dialog");
-          if (commitDialog) {
-            commitDialog.open = false;
-          }
-          setButton("save-button", "保存完成", () => openCommitDialog());
-          if (logText) {
-            logText.innerText += `[${getCurrentTime()}]保存完成\n`;
-          }
-
-          // 修改或添加 URL query 部分的 branch
-          const url = new URL(window.location.href);
-          url.searchParams.set("branch", branchName);
-          window.history.replaceState({}, "", url);
-        },
-        error: function (xhr) {
-          console.log(xhr);
-          showErrorAlert("提交作品出错", JSON.stringify(xhr), "关闭");
-        },
-      });
-    },
-    error: function (xhr) {
-      console.log(xhr);
-      showErrorAlert("保存文件出错", JSON.stringify(xhr), "关闭");
-    },
-  });
 }
+
 
 function saveProject({ force = false } = {}) {
   setButton("save-button", "保存中", () => openCommitDialog());
@@ -1114,7 +1075,8 @@ function saveProject({ force = false } = {}) {
   setButton("save-button", "保存完成", () => openCommitDialog());
 
   if (logText) {
-    logText.innerText += `[${getCurrentTime()}]保存完成\n`;
+    logText.innerText += `[${getCurrentTime()}]保存完成
+`;
   }
 }
 
@@ -1126,33 +1088,33 @@ function openBase64ImageInNewTab() {
   });
 }
 
-function setProjectThumbnail() {
+async function setProjectThumbnail() {
   if (!zcvm) return;
-  zcvm.renderer.requestSnapshot(async (dataURI) => {
-    try {
-      const blob = await (await fetch(dataURI)).blob();
-      const formData = new FormData();
-      formData.append("file", blob, "thumbnail.png");
+  try {
+    const dataURI = await new Promise(resolve => zcvm.renderer.requestSnapshot(resolve));
+    const blob = await (await fetch(dataURI)).blob();
+    const formData = new FormData();
+    formData.append("file", blob, "thumbnail.png");
 
-      const response = await TokenManager.apiRequest({
-        url: `${ZCConfig.api.getPath("/scratch/thumbnail/")}${_pid}`,
-        method: "POST",
-        data: formData,
-        processData: false,
-        contentType: false,
-      });
+    const response = await TokenManager.apiRequest({
+      url: `${ZCConfig.api.getPath("/scratch/thumbnail/")}${_pid}`,
+      method: "POST",
+      data: formData,
+      processData: false,
+      contentType: false,
+    });
 
-      if (response.status === "success") {
-        showSnackbar("封面设置成功");
-      } else {
-        showSnackbar("封面设置失败");
-      }
-    } catch (error) {
-      console.error("Error setting project thumbnail:", error);
-      showSnackbar("封面设置失败");
+    if (response.status === "success") {
+      showSnackbar("封面设置成功");
+    } else {
+      showSnackbar(`封面设置失败: ${response.message}`);
     }
-  });
+  } catch (error) {
+    console.error("Error setting project thumbnail:", error);
+    showSnackbar(`封面设置失败: ${error.responseJSON?.message || error.statusText}`);
+  }
 }
+
 
 buttons.push({
   id: "set-thumbnail-button",

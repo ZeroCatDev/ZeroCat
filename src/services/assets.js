@@ -586,19 +586,6 @@ export async function processSimpleImageUpload(file, options, res, ip, userAgent
     throw new Error("不是有效的图片文件");
   }
 
-  // 生成MD5
-  const md5 = generateMD5(file.buffer);
-
-  // 检查素材是否已存在
-  const existingAsset = await checkAssetExists(md5);
-  if (existingAsset) {
-    return {
-      success: true,
-      message: "素材已存在",
-      asset: existingAsset
-    };
-  }
-
   // 转换为PNG
   const result = await processImage(file.buffer, {
     compress: true,
@@ -610,6 +597,19 @@ export async function processSimpleImageUpload(file, options, res, ip, userAgent
   const processedBuffer = result.buffer;
   const finalExtension = 'png';
   const finalMimeType = 'image/png';
+
+  // 生成MD5（基于处理后的最终文件）
+  const md5 = generateMD5(processedBuffer);
+
+  // 检查素材是否已存在
+  const existingAsset = await checkAssetExists(md5);
+  if (existingAsset) {
+    return {
+      success: true,
+      message: "素材已存在",
+      asset: existingAsset
+    };
+  }
 
   const metadata = {
     width: result.width,
@@ -683,20 +683,6 @@ export async function uploadFile(file, options, res, ip, userAgent) {
     }
     detectedMimeType = detection.mimeType;
     detectedExtension = detection.extension;
-  }
-
-  // 生成MD5（基于原始文件）
-  const md5 = generateMD5(file.buffer);
-
-  // 检查素材是否已存在
-  const existingAsset = await checkAssetExists(md5);
-  if (existingAsset) {
-    return {
-      success: true,
-      message: "素材已存在",
-      asset: existingAsset,
-      isExisting: true
-    };
   }
 
   let processedBuffer = file.buffer;
@@ -799,7 +785,21 @@ export async function uploadFile(file, options, res, ip, userAgent) {
       break;
   }
 
-  // 生成S3存储路径（使用原始文件的MD5）
+  // 生成MD5（基于处理后的最终文件）
+  const md5 = generateMD5(processedBuffer);
+
+  // 检查素材是否已存在
+  const existingAsset = await checkAssetExists(md5);
+  if (existingAsset) {
+    return {
+      success: true,
+      message: "素材已存在",
+      asset: existingAsset,
+      isExisting: true
+    };
+  }
+
+  // 生成S3存储路径（使用处理后文件的MD5）
   const s3Key = `assets/${md5.substring(0, 2)}/${md5.substring(2, 4)}/${md5}.${finalExtension}`;
 
   // 上传到S3

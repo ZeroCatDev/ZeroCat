@@ -78,7 +78,8 @@ router.post("/upload", needLogin, upload.single("file"), async (req, res) => {
     tags: tags || '',
     errorMessage: '素材上传失败',
     successCallback: async (req, res, result) => {
-      logger.debug("文件上传信息:", {
+      logger.debug("文件上传信息:")
+      logger.debug( {
         originalname: req.file.originalname,
         frontendMimeType: req.file.mimetype,
         detectedMimeType: req.file.detectedMimeType,
