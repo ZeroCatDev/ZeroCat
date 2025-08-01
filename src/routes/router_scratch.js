@@ -302,9 +302,9 @@ router.post(
             const md5Hash = generateMD5(imageResult.buffer);
             const thumbnailFilename = `${md5Hash}.webp`;
             const s3Key = `assets/${md5Hash.substring(0, 2)}/${md5Hash.substring(2, 4)}/${thumbnailFilename}`;
-            
+
             await uploadToS3(imageResult.buffer, s3Key, 'image/webp');
-            
+
             // 更新数据库项目的thumbnail字段
             await prisma.ow_projects.update({
                 where: { id: Number(req.params.projectid) },
@@ -374,7 +374,8 @@ router.post(
     async (req, res, next) => {
         // Scratch素材成功回调
         const scratchSuccessCallback = async (req, res, result) => {
-            logger.info("Scratch素材上传成功:", {
+            logger.info("Scratch素材上传成功:")
+            logger.info({
                 userId: res.locals.userid,
                 filename: req.params.filename,
                 assetId: result.asset.id,

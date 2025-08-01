@@ -64,7 +64,6 @@ export async function detectFileType(buffer) {
   }
 }
 
-
 /**
  * 验证文件类型（基于文件内容检测和前端MIME类型匹配）
  * @param {Buffer} buffer 文件缓冲区
@@ -79,7 +78,7 @@ export async function validateFileTypeFromContent(buffer, frontendMimeType = nul
       isValid: false,
       mimeType: null,
       extension: null,
-      error: '无法识别文件类型 #1'
+      error: '无法识别文件类型'
     };
   }
 
@@ -93,7 +92,6 @@ export async function validateFileTypeFromContent(buffer, frontendMimeType = nul
       error: `不支持的文件类型: ${detected.mimeType}`
     };
   }
-
 
   return {
     isValid: true,
@@ -166,9 +164,8 @@ export async function uploadToS3(buffer, key, contentType) {
   return `${await zcconfig.get("s3.staticurl")}/${key}`;
 }
 
-
 /**
- * 统一的图片压制函数
+ * 统一的图片处理函数
  * @param {Buffer} buffer 原始图片缓冲区
  * @param {Object} options 处理选项
  * @returns {Promise<Object>} 处理结果
@@ -219,7 +216,12 @@ export async function processImage(buffer, options = {}) {
 
     // 安全处理：强制移除所有元数据
     if (sanitize) {
-      sharpInstance = sharpInstance.removeAlpha(false);
+      sharpInstance = sharpInstance.withMetadata({
+        // 保留基本元数据，移除敏感信息
+        density: metadata.density,
+        icc: false, // 移除ICC配置文件
+        exif: {} // 清空EXIF数据
+      });
     }
 
     // 尺寸处理
@@ -296,7 +298,10 @@ export async function processImage(buffer, options = {}) {
 
         let retryInstance = sharp(buffer);
         if (sanitize) {
-          retryInstance = retryInstance.removeAlpha(false);
+          retryInstance = retryInstance.withMetadata({
+            icc: false,
+            exif: {}
+          });
         }
 
         // 重新应用尺寸设置
