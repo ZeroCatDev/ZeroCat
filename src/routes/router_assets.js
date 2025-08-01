@@ -9,8 +9,10 @@ import {
   processSimpleImageUpload,
   getAssetsList,
   getAssetDetails,
-  getAssetStats
+  getAssetStats,
+  handleAssetUpload
 } from "../services/assets.js";
+import { prisma } from "../services/global.js";
 
 const router = Router();
 
@@ -68,116 +70,44 @@ const upload = multer({
 
 // 上传素材
 router.post("/upload", needLogin, upload.single("file"), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: "没有上传文件" });
-    }
+  const { tags, category } = req.body;
 
-    // 验证文件buffer是否为二进制数据
-    if (!Buffer.isBuffer(req.file.buffer)) {
-      logger.error("文件不是Buffer类型:", typeof req.file.buffer);
-      return res.status(400).json({ error: "文件格式错误" });
-    }
-
-    // 验证文件大小
-    if (req.file.buffer.length === 0) {
-      return res.status(400).json({ error: "文件为空" });
-    }
-
-    // 从文件内容检测真实的文件类型，同时验证与前端MIME类型的匹配
-    const fileTypeValidation = await validateFileTypeFromContent(req.file.buffer, req.file.mimetype);
-
-    if (!fileTypeValidation.isValid) {
-      logger.warn("文件类型验证失败:", {
+  const uploadResult = await handleAssetUpload(req, res, {
+    purpose: 'general',
+    category: category || 'general',
+    tags: tags || '',
+    errorMessage: '素材上传失败',
+    successCallback: async (req, res, result) => {
+      logger.debug("文件上传信息:", {
         originalname: req.file.originalname,
         frontendMimeType: req.file.mimetype,
-        detectedMimeType: fileTypeValidation.mimeType,
-        error: fileTypeValidation.error,
-        bufferStart: req.file.buffer.subarray(0, 16).toString('hex')
+        detectedMimeType: req.file.detectedMimeType,
+        detectedExtension: req.file.detectedExtension,
+        size: req.file.buffer.length,
+        encoding: req.file.encoding
       });
-      return res.status(400).json({ error: fileTypeValidation.error });
+      return null;
     }
+  });
 
-    // 使用检测到的文件类型信息更新文件对象
-    req.file.detectedMimeType = fileTypeValidation.mimeType;
-    req.file.detectedExtension = fileTypeValidation.extension;
-
-
-    logger.debug("文件类型检测成功:", {
-      originalname: req.file.originalname,
-      frontendMimeType: req.file.mimetype,
-      detectedMimeType: fileTypeValidation.mimeType,
-      detectedExtension: fileTypeValidation.extension,
+  if (!uploadResult.success) {
+    return res.status(uploadResult.status).json({
+      error: uploadResult.error,
+      ...(uploadResult.details && { details: uploadResult.details })
     });
-
-    const { tags, category } = req.body;
-    const file = req.file;
-
-    // 记录文件信息用于调试
-    logger.debug("文件上传信息:", {
-      originalname: file.originalname,
-      frontendMimeType: file.mimetype,
-      detectedMimeType: file.detectedMimeType,
-      detectedExtension: file.detectedExtension,
-      size: file.buffer.length,
-      encoding: file.encoding
-    });
-
-    const result = await uploadFile(
-      file,
-      { tags, category, purpose: 'general' },
-      res,
-      req.ip,
-      req.headers['user-agent']
-    );
-
-    res.json(result);
-
-  } catch (error) {
-    logger.error("素材上传失败:", error);
-
-    // 根据错误类型返回不同的错误信息
-    if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(413).json({ error: "文件大小超过限制" });
-    } else if (error.code === 'LIMIT_UNEXPECTED_FILE') {
-      return res.status(400).json({ error: "意外的文件字段" });
-    } else if (error.message.includes('不支持的文件类型')) {
-      return res.status(400).json({ error: error.message });
-    }
-
-    res.status(500).json({ error: "素材上传失败", details: error.message });
   }
+
+  res.json(uploadResult.result);
 });
 
 // 简化的图片上传接口（仅支持图片，自动转PNG，无安全检查）
 router.post("/image-upload", needLogin, upload.single("file"), async (req, res) => {
+  const { quality = 80, tags, category } = req.body;
+
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: "没有上传文件" });
-    }
-
-    // 验证文件buffer是否为二进制数据
-    if (!Buffer.isBuffer(req.file.buffer)) {
-      logger.error("文件不是Buffer类型:", typeof req.file.buffer);
-      return res.status(400).json({ error: "文件格式错误" });
-    }
-
-    // 验证文件大小
-    if (req.file.buffer.length === 0) {
-      return res.status(400).json({ error: "文件为空" });
-    }
-
-    const { quality = 80, tags, category } = req.body;
-    const file = req.file;
-
-    logger.debug("简化图片上传信息:", {
-      originalname: file.originalname,
-      size: file.buffer.length,
-      encoding: file.encoding
-    });
-
+    // 使用processSimpleImageUpload保持原有的简化图片处理逻辑
     const result = await processSimpleImageUpload(
-      file,
+      req.file,
       { quality, tags, category },
       res,
       req.ip,
@@ -185,7 +115,6 @@ router.post("/image-upload", needLogin, upload.single("file"), async (req, res) 
     );
 
     res.json(result);
-
   } catch (error) {
     logger.error("简化图片上传失败:", error);
 
@@ -260,5 +189,28 @@ router.get("/stats/overview", async (req, res) => {
     res.status(500).json({ error: "获取素材统计失败" });
   }
 });
-
+router.post("/scratch/check", async (req, res) => {
+  try {
+    let files = [];
+    if (req.body.files) {
+      files = req.body.files
+    } else {
+      files = req.body;
+    }
+    const result = await prisma.ow_assets.findMany({
+      where: {
+        md5: {
+          in: files
+        }
+      }
+    })
+    res.json({
+      success: true,
+      data: result.map(item => item.md5)
+    })
+  } catch (error) {
+    logger.error("检查scratch文件失败:", error);
+    res.status(500).json({ error: "检查scratch文件失败" });
+  }
+});
 export default router;

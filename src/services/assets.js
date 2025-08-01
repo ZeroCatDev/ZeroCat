@@ -25,8 +25,11 @@ const SUPPORTED_IMAGE_TYPES = [
 const SUPPORTED_AUDIO_TYPES = [
   "audio/mpeg", "audio/mp3", "audio/wav", "audio/ogg", "audio/aac", "audio/flac"
 ];
+const SUPPORTED_FONTS_TYPES = [
+  "font/ttf", "font/otf", "font/woff", "font/woff2", "font/eot", "font/svg"
+];
 
-const SUPPORTED_TYPES = [...SUPPORTED_IMAGE_TYPES, ...SUPPORTED_AUDIO_TYPES];
+const SUPPORTED_TYPES = [...SUPPORTED_IMAGE_TYPES, ...SUPPORTED_AUDIO_TYPES, ...SUPPORTED_FONTS_TYPES];
 
 /**
  * 使用 file-type 库检测文件类型
@@ -842,4 +845,148 @@ export async function uploadFile(file, options, res, ip, userAgent) {
  */
 export async function processFileUpload(file, options, res, ip, userAgent) {
   return uploadFile(file, { ...options, purpose: 'scratch' }, res, ip, userAgent);
+}
+
+/**
+ * 通用的上传处理中间件逻辑
+ * @param {Object} req Express请求对象
+ * @param {Object} res Express响应对象
+ * @param {Object} config 配置对象
+ * @returns {Promise<Object>} 处理结果
+ */
+export async function handleAssetUpload(req, res, config = {}) {
+  const {
+    purpose = 'general',
+    category = 'general',
+    tags = '',
+    requireFile = true,
+    validateAuth = false,
+    authCheck = null,
+    imageOptions = {},
+    successCallback = null,
+    errorMessage = '文件上传失败'
+  } = config;
+
+  try {
+    // 检查文件是否存在
+    if (requireFile && !req.file) {
+      return {
+        success: false,
+        status: 400,
+        error: "没有上传文件"
+      };
+    }
+
+    // 验证文件buffer
+    if (req.file && (!Buffer.isBuffer(req.file.buffer) || req.file.buffer.length === 0)) {
+      return {
+        success: false,
+        status: 400,
+        error: req.file.buffer.length === 0 ? "文件为空" : "文件格式错误"
+      };
+    }
+
+    // 权限验证
+    if (validateAuth && authCheck) {
+      const authResult = await authCheck(req, res);
+      if (!authResult.success) {
+        return {
+          success: false,
+          status: authResult.status || 403,
+          error: authResult.error || "权限验证失败"
+        };
+      }
+    }
+
+    // 文件类型验证
+    if (req.file) {
+      const fileTypeValidation = await validateFileTypeFromContent(req.file.buffer, req.file.mimetype);
+
+      if (!fileTypeValidation.isValid) {
+        logger.warn("文件类型验证失败:", {
+          originalname: req.file.originalname,
+          frontendMimeType: req.file.mimetype,
+          detectedMimeType: fileTypeValidation.mimeType,
+          error: fileTypeValidation.error
+        });
+        return {
+          success: false,
+          status: 400,
+          error: fileTypeValidation.error
+        };
+      }
+
+      // 更新文件对象
+      req.file.detectedMimeType = fileTypeValidation.mimeType;
+      req.file.detectedExtension = fileTypeValidation.extension;
+    }
+
+    // 执行文件上传
+    const uploadOptions = {
+      purpose,
+      category,
+      tags,
+      imageOptions
+    };
+
+    const result = await uploadFile(
+      req.file,
+      uploadOptions,
+      res,
+      req.ip,
+      req.headers['user-agent']
+    );
+
+    if (!result.success) {
+      return {
+        success: false,
+        status: 500,
+        error: errorMessage
+      };
+    }
+
+    // 执行成功回调
+    if (successCallback) {
+      const callbackResult = await successCallback(req, res, result);
+      if (callbackResult) {
+        Object.assign(result, callbackResult);
+      }
+    }
+
+    return {
+      success: true,
+      result
+    };
+
+  } catch (error) {
+    logger.error(`${errorMessage}:`, error);
+
+    // 处理特定错误类型
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return {
+        success: false,
+        status: 413,
+        error: "文件大小超过限制"
+      };
+    } else if (error.code === 'LIMIT_UNEXPECTED_FILE') {
+      return {
+        success: false,
+        status: 400,
+        error: "意外的文件字段"
+      };
+    } else if (error.message.includes('不支持的文件类型') || error.message.includes('不是有效的图片文件')) {
+      return {
+        success: false,
+        status: 400,
+        error: error.message
+      };
+    }
+
+    return {
+      success: false,
+      status: 500,
+      error: errorMessage,
+      details: error.message
+    };
+  }
 }

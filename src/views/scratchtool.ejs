@@ -480,42 +480,52 @@ function setButton(id, text, onclick) {
 }
 
 function uploadProjectAssets() {
-  $.each(zcvm.assets, function (index, asset) {
-    if (!asset.clean) {
-      const formData = new FormData();
-      formData.append(
-        "file",
-        new Blob([asset.data], { type: asset.assetType.contentType }),
-        `${asset.assetId}.${asset.dataFormat}`
+  let files = zcvm.assets.map((asset) => asset.assetId);
+  let uploadedfiles = [];
+  TokenManager.apiRequest({
+    url: `${ZCConfig.api.getPath("/assets/scratch/check")}`,
+    type: "POST",
+    dataType: "json",
+    contentType: "application/json",
+    data: JSON.stringify({ files: files }),
+    success: function (result) {
+      console.log(result);
+      uploadedfiles = result.data;
+      console.log(uploadedfiles);
+      let toUploadFiles = zcvm.assets.filter(
+        (file) => !uploadedfiles.includes(file.assetId)
       );
+      console.log(toUploadFiles);
+      $.each(toUploadFiles, function (index, file) {
+        const formData = new FormData();
+        formData.append(
+          "file",
+          new Blob([file.data], { type: file.assetType.contentType }),
+          `${file.assetId}.${file.dataFormat}`
+        );
 
-      TokenManager.apiRequest({
-        url: `${ZCConfig.api.getPath("/scratch/assets/")}${asset.assetId}.${
-          asset.dataFormat
-        }`,
-        type: "POST",
-        data: formData,
-        processData: false,
-        contentType: false,
-        success: function () {
-          logText.innerText += `[${getCurrentTime()}]文件上传成功${
-            asset.assetId
-          }.${asset.dataFormat}\n`;
-          asset.clean = true;
-        },
-        error: function (xhr, status, error) {
-          logText.innerText += `[${getCurrentTime()}]文件上传失败${
-            asset.assetId
-          }.${asset.dataFormat}\nerror:${error}\n`;
-        },
+        TokenManager.apiRequest({
+          url: `${ZCConfig.api.getPath("/assets/upload")}`,
+          type: "POST",
+          data: formData,
+          processData: false,
+          contentType: false,
+          success: function () {
+            logText.innerText += `[${getCurrentTime()}]文件上传成功${
+              file.assetId
+            }.${file.dataFormat}\n`;
+            file.clean = true;
+          },
+          error: function (xhr, status, error) {
+            logText.innerText += `[${getCurrentTime()}]文件上传失败${
+              file.assetId
+            }.${file.dataFormat}\nerror:${error}\n`;
+          },
+        });
       });
-    } else {
-      logText.innerText += `[${getCurrentTime()}]文件未修改${asset.assetId}.${
-        asset.dataFormat
-      }\n`;
-    }
+      showSnackbar("媒体库保存完成");
+    },
   });
-  showSnackbar("媒体库保存完成");
 }
 
 function fetchProjectInfo() {

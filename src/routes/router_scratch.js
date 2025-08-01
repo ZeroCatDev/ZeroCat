@@ -9,7 +9,7 @@ import {prisma, S3update} from "../services/global.js";
 import {needLogin} from "../middleware/auth.js";
 import {getProjectById, getProjectFile} from "../controllers/projects.js";
 import multer from "multer";
-import { validateFileTypeFromContent, uploadFile } from "../services/assets.js";
+import { validateFileTypeFromContent, uploadFile, handleAssetUpload, processImage, generateMD5, uploadToS3 } from "../services/assets.js";
 
 var router = Router();
 
@@ -268,80 +268,50 @@ router.post(
     needLogin,
     upload.single("file"),
     async (req, res, next) => {
-        if (!req.file) {
-            return res
-                .status(400)
-                .send({status: "error", message: "No file uploaded"});
-        }
-
-        try {
+        // 项目权限验证函数
+        const validateProjectAuth = async (req, res) => {
             const project = await getProjectById(Number(req.params.projectid));
             if (!project) {
-                return res
-                    .status(404)
-                    .send({status: "error", code: "404", message: "作品不存在"});
+                return {
+                    success: false,
+                    status: 404,
+                    error: "作品不存在"
+                };
             }
             if (project.authorid !== res.locals.userid) {
-                return res
-                    .status(200)
-                    .send({
-                        status: "error",
-                        message: "无权访问此项目",
-                        code: "AUTH_ERROR_LOGIN",
-                    });
+                return {
+                    success: false,
+                    status: 403,
+                    error: "无权访问此项目"
+                };
             }
+            return { success: true, project };
+        };
 
-            // 验证文件类型
-            const fileTypeValidation = await validateFileTypeFromContent(req.file.buffer, req.file.mimetype);
-
-            if (!fileTypeValidation.isValid) {
-                logger.warn("缩略图文件类型验证失败:", {
-                    originalname: req.file.originalname,
-                    projectid: req.params.projectid,
-                    frontendMimeType: req.file.mimetype,
-                    detectedMimeType: fileTypeValidation.mimeType,
-                    error: fileTypeValidation.error
-                });
-                return res.status(400).send({
-                    status: "error",
-                    message: fileTypeValidation.error || "不支持的文件类型，请上传图片"
-                });
-            }
-
-            // 检查是否为图片类型
-            if (!fileTypeValidation.mimeType.startsWith('image/')) {
-                return res.status(400).send({
-                    status: "error",
-                    message: "缩略图必须是图片格式"
-                });
-            }
-
-            // 使用新的图片处理逻辑，压缩为758x576，转webp，最高质量
-            const { processImage, generateMD5, uploadToS3 } = await import("../services/assets.js");
-
+        // 缩略图处理成功回调
+        const thumbnailSuccessCallback = async (req, res, result) => {
+            // 使用assets服务中的图片处理功能
             const imageResult = await processImage(req.file.buffer, {
                 width: 758,
                 height: 576,
                 format: 'webp',
-                quality: 100, // 最高质量
+                quality: 100,
                 sanitize: true
             });
 
-            // 生成MD5哈希
             const md5Hash = generateMD5(imageResult.buffer);
             const thumbnailFilename = `${md5Hash}.webp`;
-
-            // 上传到S3（新路径结构）
             const s3Key = `assets/${md5Hash.substring(0, 2)}/${md5Hash.substring(2, 4)}/${thumbnailFilename}`;
+            
             await uploadToS3(imageResult.buffer, s3Key, 'image/webp');
-
+            
             // 更新数据库项目的thumbnail字段
             await prisma.ow_projects.update({
                 where: { id: Number(req.params.projectid) },
                 data: { thumbnail: thumbnailFilename }
             });
 
-            logger.debug("作品缩略图保存成功:"+ JSON.stringify({
+            logger.debug("作品缩略图保存成功:" + JSON.stringify({
                 projectId: req.params.projectid,
                 userId: res.locals.userid,
                 thumbnailHash: md5Hash,
@@ -351,8 +321,7 @@ router.post(
                 dimensions: `${imageResult.width}x${imageResult.height}`
             }));
 
-            res.status(200).send({
-                status: "success",
+            return {
                 thumbnail: {
                     filename: thumbnailFilename,
                     hash: md5Hash,
@@ -362,14 +331,38 @@ router.post(
                         height: imageResult.height
                     }
                 }
-            });
+            };
+        };
 
-        } catch (err) {
-            logger.error("缩略图上传失败:", err);
-            res
-                .status(500)
-                .send({status: "error", message: "缩略图处理失败"});
+        // 使用统一的上传处理
+        const uploadResult = await handleAssetUpload(req, res, {
+            validateAuth: true,
+            authCheck: validateProjectAuth,
+            successCallback: thumbnailSuccessCallback,
+            errorMessage: '缩略图处理失败'
+        });
+
+        if (!uploadResult.success) {
+            return res.status(uploadResult.status).send({
+                status: "error",
+                message: uploadResult.error,
+                ...(uploadResult.status === 404 && { code: "404" }),
+                ...(uploadResult.status === 403 && { code: "AUTH_ERROR_LOGIN" })
+            });
         }
+
+        // 检查是否包含缩略图信息（由successCallback添加）
+        if (!uploadResult.result.result.detectedMimeType?.startsWith('image/')) {
+            return res.status(400).send({
+                status: "error",
+                message: "缩略图必须是图片格式"
+            });
+        }
+
+        res.status(200).send({
+            status: "success",
+            ...uploadResult.result.thumbnail
+        });
     }
 );
 
@@ -379,65 +372,18 @@ router.post(
     needLogin,
     upload.single("file"),
     async (req, res, next) => {
-        if (!req.file) {
-            return res
-                .status(400)
-                .send({status: "error", message: "No file uploaded"});
-        }
-
-        try {
-            // 验证文件类型
-            const fileTypeValidation = await validateFileTypeFromContent(req.file.buffer, req.file.mimetype);
-
-            if (!fileTypeValidation.isValid) {
-                logger.warn("Scratch素材文件类型验证失败:", {
-                    originalname: req.file.originalname,
-                    filename: req.params.filename,
-                    frontendMimeType: req.file.mimetype,
-                    detectedMimeType: fileTypeValidation.mimeType,
-                    error: fileTypeValidation.error
-                });
-                return res.status(400).send({
-                    status: "error",
-                    message: fileTypeValidation.error || "不支持的文件类型"
-                });
-            }
-
-            // 使用检测到的文件类型信息更新文件对象
-            req.file.detectedMimeType = fileTypeValidation.mimeType;
-            req.file.detectedExtension = fileTypeValidation.extension;
-
-            // 使用统一的文件上传函数，purpose 设为 'scratch'（不做任何处理）
-            const result = await uploadFile(
-                req.file,
-                {
-                    purpose: 'scratch',
-                    category: 'scratch-assets',
-                    tags: 'scratch'
-                },
-                res,
-                req.ip,
-                req.headers['user-agent']
-            );
-
-            if (!result.success) {
-                return res.status(500).send({
-                    status: "error",
-                    message: "文件上传失败"
-                });
-            }
-
+        // Scratch素材成功回调
+        const scratchSuccessCallback = async (req, res, result) => {
             logger.info("Scratch素材上传成功:", {
                 userId: res.locals.userid,
                 filename: req.params.filename,
                 assetId: result.asset.id,
                 md5: result.asset.md5,
-                originalFormat: fileTypeValidation.mimeType,
+                originalFormat: req.file.detectedMimeType,
                 isExisting: result.isExisting
             });
 
-            res.status(200).send({
-                status: "success",
+            return {
                 asset: {
                     md5: result.asset.md5,
                     url: result.asset.url,
@@ -445,14 +391,29 @@ router.post(
                     mimeType: result.asset.mime_type,
                     size: result.asset.file_size
                 }
-            });
+            };
+        };
 
-        } catch (err) {
-            logger.error("Scratch asset upload error:", err);
-            res
-                .status(500)
-                .send({status: "error", message: "文件上传失败"});
+        // 使用统一的上传处理
+        const uploadResult = await handleAssetUpload(req, res, {
+            purpose: 'scratch',
+            category: 'scratch-assets',
+            tags: 'scratch',
+            successCallback: scratchSuccessCallback,
+            errorMessage: '文件上传失败'
+        });
+
+        if (!uploadResult.success) {
+            return res.status(uploadResult.status).send({
+                status: "error",
+                message: uploadResult.error
+            });
         }
+
+        res.status(200).send({
+            status: "success",
+            ...uploadResult.result.asset
+        });
     }
 );
 
