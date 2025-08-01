@@ -495,7 +495,7 @@ async function uploadProjectAssets() {
       (asset) => !uploadedFiles.includes(asset.assetId)
     );
 
-    logText.innerText += `[${getCurrentTime()}] 需要上传 ${toUploadFiles.length} 个文件。
+    logText.value += `[${getCurrentTime()}] 需要上传 ${toUploadFiles.length} 个文件。
 `;
 
     for (const asset of toUploadFiles) {
@@ -515,11 +515,11 @@ async function uploadProjectAssets() {
           contentType: false,
         });
 
-        logText.innerText += `[${getCurrentTime()}] 文件上传成功: ${asset.assetId}.${asset.dataFormat}
+        logText.value += `[${getCurrentTime()}] 文件上传成功: ${asset.assetId}.${asset.dataFormat}
 `;
         asset.clean = true;
       } catch (error) {
-        logText.innerText += `[${getCurrentTime()}] 文件上传失败: ${asset.assetId}.${asset.dataFormat}
+        logText.value += `[${getCurrentTime()}] 文件上传失败: ${asset.assetId}.${asset.dataFormat}
 Error: ${error.responseJSON?.message || error.statusText}
 `;
       }
@@ -550,10 +550,10 @@ async function fetchProjectInfo() {
     projectinfo = result;
     if (!isEmbed) {
       authorinfocard.headline = result.author.username;
-      authorinfocard.description = result.author.description;
-      authorinfocard.onclick = () => window.open(`${ZCConfig.frontend.getPath("/user/")}${result.author.id}`);
+      authorinfocard.description = result.author.zcusername;
+      authorinfocard.onclick = () => window.open(`${ZCConfig.frontend.getPath("/")}${result.author.zcusername}`);
       authorinfocard.style.cursor = "pointer";
-      authorinfoavatar.src = `${ZCConfig.s3.staticUrl}/user/${result.author.profile.id}`;
+      authorinfoavatar.src = `${ZCConfig.s3.staticUrl}/assets/${result.author.profile.id.slice(0,2)}/${result.author.profile.id.slice(2,4)}/${result.author.profile.id}.webp`;
       zctab.headline = `${result.title} #${result.id}`;
       zctab.description = `${
         String(result.author.id) === String(userinfo.userid)
@@ -657,8 +657,8 @@ function initialize() {
     <br/>
     <mdui-button id="savestatic" onclick="uploadProjectAssets()">保存媒体库</mdui-button>
     <mdui-button onclick="openCommitDialog()">保存作品</mdui-button>
-    <mdui-button onclick="logText.innerText = ''">清空log</mdui-button>
-    <div id="log-text"></div>
+    <mdui-button onclick="logText.value = ''">清空log</mdui-button>
+    <mdui-text-field autosize readonly  max-rows="5" variant="outlined" id="log-text"></mdui-text-field>
 </mdui-dialog>
 `;
       document.body.insertAdjacentHTML("beforeend", zerocatTabHTML);
@@ -810,6 +810,15 @@ async function downloadAndLoadProject(pid) {
 
     const { commit, accessFileToken } = response;
     commitInfo = commit;
+
+    // 更新URL查询参数，将commit.id和branch写入URL
+    if (commit) {
+      const url = new URL(window.location.href);
+      url.searchParams.set("ref", commit.id);
+      url.searchParams.set("branch", branch);
+      window.history.replaceState({}, "", url);
+    }
+
     updateLoadingDescription("正在获取项目文件数据...");
     await updateCommitInfoUI(commit);
 
@@ -949,11 +958,22 @@ function openCommitDialog() {
     if (event.target.value === "pr") {
       const username = userinfo.username || 'user';
       const timestamp = Date.now();
-      branchNameInput.value = `${username}-patch-${timestamp}`;
+      const newBranchName = `${username}-patch-${timestamp}`;
+      branchNameInput.value = newBranchName;
       branchNameInput.disabled = false;
+
+      // 更新URL的branch参数
+      const url = new URL(window.location.href);
+      url.searchParams.set("branch", newBranchName);
+      window.history.replaceState({}, "", url);
     } else {
       branchNameInput.value = currentBranch;
       branchNameInput.disabled = true;
+
+      // 恢复URL的branch参数为当前分支
+      const url = new URL(window.location.href);
+      url.searchParams.set("branch", currentBranch);
+      window.history.replaceState({}, "", url);
     }
   });
 
@@ -1033,12 +1053,21 @@ async function commitProject() {
 
     setButton("save-button", "保存完成", () => openCommitDialog());
     if (logText) {
-      logText.innerText += `[${getCurrentTime()}]保存完成
+      logText.value += `[${getCurrentTime()}]保存完成
 `;
     }
 
+    // 更新URL参数
     const url = new URL(window.location.href);
     url.searchParams.set("branch", branchName);
+
+    // 如果提交响应包含commit信息，则更新URL的commit参数
+    if (commitResponse.commit && commitResponse.commit.commit_id) {
+      url.searchParams.set("ref", commitResponse.commit.commit_id);
+    } else if (commitResponse.commit_id) {
+      url.searchParams.set("ref", commitResponse.commit_id);
+    }
+
     window.history.replaceState({}, "", url);
 
   } catch (error) {
@@ -1075,7 +1104,7 @@ function saveProject({ force = false } = {}) {
   setButton("save-button", "保存完成", () => openCommitDialog());
 
   if (logText) {
-    logText.innerText += `[${getCurrentTime()}]保存完成
+    logText.value += `[${getCurrentTime()}]保存完成
 `;
   }
 }

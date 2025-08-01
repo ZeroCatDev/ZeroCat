@@ -7,11 +7,11 @@ import {oauthRateLimit} from "../middleware/rateLimit.js";
 import crypto from "crypto";
 import {generateAuthCode, validateRedirectUri, validateScopes,} from "../services/auth/oauth.js";
 import {generateOAuthTokens, refreshOAuthTokens, verifyOAuthClientCredentials,} from "../services/auth/tokenManager.js";
-import fs from "fs";
 import multer from "multer";
+import { handleAssetUpload } from "../services/assets.js";
 
 const router = Router();
-const upload = multer({dest: "../../cache/usercontent"});
+const upload = multer({ storage: multer.memoryStorage() });
 
 // OAuth错误处理函数
 const OAuthErrors = {
@@ -252,45 +252,17 @@ router.get("/applications/:client_id", async (req, res) => {
 router.post(
     "/applications/:client_id/logo",
     needLogin,
-    (req, res, next) => {
-        upload.single("zcfile")(req, res, (err) => {
-            if (err instanceof multer.MulterError) {
-                return handleApiError(res, {
-                    error: OAuthErrors.INVALID_REQUEST.error,
-                    description: "文件上传失败：" + (
-                        err.code === "LIMIT_FILE_SIZE" ? "文件太大" :
-                            err.code === "LIMIT_FILE_COUNT" ? "文件数量超限" :
-                                err.code === "LIMIT_FIELD_KEY" ? "字段名无效" :
-                                    err.code === "LIMIT_FIELD_VALUE" ? "字段值无效" :
-                                        err.code === "LIMIT_FIELD_COUNT" ? "字段数量超限" :
-                                            err.code === "LIMIT_UNEXPECTED_FILE" ? "未预期的文件字段" :
-                                                "上传参数错误"
-                    )
-                });
-            } else if (err) {
-                logger.error("File upload error:", err);
-                return handleApiError(res, OAuthErrors.SERVER_ERROR);
-            }
-            next();
-        });
-    },
+    upload.single("zcfile"),
     async (req, res) => {
         try {
-            if (!req.file) {
-                return handleApiError(res, {
-                    error: OAuthErrors.INVALID_REQUEST.error,
-                    description: "请选择要上传的文件"
-                });
-            }
-
-            const {client_id} = req.params;
+            const { client_id } = req.params;
 
             // 查找应用并验证所有权
             const application = await prisma.ow_oauth_applications.findFirst({
                 where: {
                     client_id,
                     owner_id: res.locals.userid,
-                    status: {not: "deleted"},
+                    status: { not: "deleted" },
                 },
             });
 
@@ -298,65 +270,51 @@ router.post(
                 return handleApiError(res, OAuthErrors.INVALID_CLIENT);
             }
 
-            // 处理文件上传
-            const file = req.file;
-            const hash = crypto.createHash("md5");
-            const chunks = fs.createReadStream(file.path);
+            // 权限验证函数
+            const authCheck = async (req, res) => {
+                return { success: true };
+            };
 
-            chunks.on("data", (chunk) => {
-                if (chunk) hash.update(chunk);
-            });
-
-            chunks.on("end", async () => {
-                const hashValue = hash.digest("hex");
-                const fileBuffer = await fs.promises.readFile(file.path);
-
-                try {
-                    // 上传到S3
-                    await S3update(`material/asset/${hashValue}`, fileBuffer);
-
-                    // 更新应用信息
-                    await prisma.ow_oauth_applications.update({
-                        where: {id: application.id},
-                        data: {
-                            logo_url: hashValue,
-                            updated_at: new Date(),
-                        },
-                    });
-
-                    // 清理临时文件
-                    fs.unlink(file.path, (err) => {
-                        if (err) logger.error("Error deleting temp file:", err);
-                    });
-
-                    res.json({
-                        code: 'success',
-                        message: "徽标上传成功",
-                        logo_url: `${await zcconfig.get("s3.staticurl")}/material/asset/${hashValue}`,
-                    });
-                } catch (error) {
-                    // 清理临时文件
-                    fs.unlink(file.path, (err) => {
-                        if (err) logger.error("Error deleting temp file:", err);
-                    });
-
-                    logger.error("S3 upload or database update error:", error);
-                    return handleApiError(res, OAuthErrors.SERVER_ERROR);
-                }
-            });
-
-            chunks.on("error", (err) => {
-                // 清理临时文件
-                fs.unlink(file.path, (err) => {
-                    if (err) logger.error("Error deleting temp file:", err);
+            // 成功回调函数
+            const successCallback = async (req, res, result) => {
+                // 更新应用信息
+                await prisma.ow_oauth_applications.update({
+                    where: { id: application.id },
+                    data: {
+                        logo_url: result.asset.md5,
+                        updated_at: new Date(),
+                    },
                 });
 
-                logger.error("Error processing file upload:", err);
+                return {
+                    code: 'success',
+                    message: "徽标上传成功",
+                    logo_url: result.asset.url,
+                    asset_id: result.asset.id
+                };
+            };
+
+            // 使用新的上传处理
+            const uploadResult = await handleAssetUpload(req, res, {
+                purpose: 'avatar', // 使用avatar处理模式：512x512，webp格式
+                category: 'application_logo',
+                tags: `application:${client_id}`,
+                requireFile: true,
+                validateAuth: true,
+                authCheck,
+                successCallback,
+                errorMessage: '徽标上传失败'
+            });
+
+            if (!uploadResult.success) {
                 return handleApiError(res, {
                     error: OAuthErrors.INVALID_REQUEST.error,
-                    description: "文件处理失败"
+                    description: uploadResult.error
                 });
-            });
+            }
+
+            return res.json(uploadResult.result);
+
         } catch (error) {
             logger.error("Upload OAuth application logo error:", error);
             return handleApiError(res, OAuthErrors.SERVER_ERROR);

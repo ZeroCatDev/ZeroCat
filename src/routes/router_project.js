@@ -47,11 +47,10 @@ async function createBranchIfNotExists(projectid, branch, userid) {
   if (!branchRecord) {
     branchRecord = await prisma.ow_projects_branch.create({
       data: {
-        projectid: Number(projectid),
         name: branch,
         creator: userid,
         description: "",
-        latest_commit_hash: null,
+        latest_commit_hash: "",
         project: {
           connect: {
             id: Number(projectid)
