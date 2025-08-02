@@ -38,6 +38,7 @@ async function formatEvents(events, actorMap) {
                         id: actor.id,
                         username: actor.username,
                         display_name: actor.display_name,
+                        avatar: actor.avatar,
                     },
                     target: {
                         type: event.target_type,
@@ -99,7 +100,7 @@ export async function getUserTimeline(userId, page = 1, limit = 20, isOwner = fa
         const actorIds = [...new Set(events.map((event) => Number(event.actor_id)))];
         const actors = await prisma.ow_users.findMany({
             where: {id: {in: actorIds}},
-            select: {id: true, username: true, display_name: true},
+            select: {id: true, username: true, display_name: true, avatar: true},
         });
 
         const actorMap = new Map(actors.map((actor) => [actor.id, actor]));
@@ -166,7 +167,7 @@ export async function getFollowingTimeline(userId, page = 1, limit = 20) {
         const actorIds = [...new Set(events.map((event) => Number(event.actor_id)))];
         const actors = await prisma.ow_users.findMany({
             where: {id: {in: actorIds}},
-            select: {id: true, username: true, display_name: true},
+            select: {id: true, username: true, display_name: true, avatar: true},
         });
 
         const actorMap = new Map(actors.map((actor) => [actor.id, actor]));
@@ -224,7 +225,7 @@ export async function getMyTimeline(userId, page = 1, limit = 20) {
         const actorIds = [...new Set(events.map((event) => Number(event.actor_id)))];
         const actors = await prisma.ow_users.findMany({
             where: {id: {in: actorIds}},
-            select: {id: true, username: true, display_name: true},
+            select: {id: true, username: true, display_name: true, avatar: true},
         });
 
         const actorMap = new Map(actors.map((actor) => [actor.id, actor]));
