@@ -3,7 +3,16 @@
  */
 import {prisma} from "../services/global.js";
 import logger from "../services/logger.js";
-import NotificationTemplates from "../config/notificationTemplates.json" assert {type: "json"};
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const NotificationTemplates = JSON.parse(
+    readFileSync(join(__dirname, '../config/notificationTemplates.json'), 'utf8')
+);
 
 
 /**
