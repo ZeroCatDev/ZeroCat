@@ -219,7 +219,7 @@ export async function processImage(buffer, options = {}) {
       sharpInstance = sharpInstance.withMetadata({
         // 保留基本元数据，移除敏感信息
         density: metadata.density,
-        icc: false, // 移除ICC配置文件
+        // 不设置icc参数，让Sharp自动处理ICC配置文件
         exif: {} // 清空EXIF数据
       });
     }
@@ -299,7 +299,7 @@ export async function processImage(buffer, options = {}) {
         let retryInstance = sharp(buffer);
         if (sanitize) {
           retryInstance = retryInstance.withMetadata({
-            icc: false,
+            // 不设置icc参数，让Sharp自动处理ICC配置文件
             exif: {}
           });
         }
