@@ -6,10 +6,9 @@ import {needLogin} from "../middleware/auth.js";
 import {
     createEvent,
     getActorEvents,
-    getProjectFollowersExternal,
     getTargetEvents,
-    getUserFollowersExternal,
 } from "../controllers/events.js";
+import logger from "../services/logger.js";
 
 const router = express.Router();
 
@@ -18,26 +17,30 @@ const router = express.Router();
  * @desc Get events for a specific target
  * @access Public/Private (depends on event privacy)
  */
-router.get("/target/:targetType/:targetId", async (req, res, next) => {
+router.get("/target/:targetType/:targetId", async (req, res) => {
     try {
         const {targetType, targetId} = req.params;
         const {limit = 10, offset = 0} = req.query;
-        const includePrivate = req.user ? true : false;
+        const includePrivate = !!res.locals.userid;
 
         const events = await getTargetEvents(
             targetType,
-            targetId,
-            Number(limit),
-            Number(offset),
+            parseInt(targetId, 10),
+            parseInt(limit, 10),
+            parseInt(offset, 10),
             includePrivate
         );
 
         res.json({
-            status: "success",
-            data: events,
+            success: true,
+            events,
+            total: events.length
         });
     } catch (error) {
-        next(error);
+        logger.error("获取目标事件失败:", error);
+        res.status(500).json({
+            error: "获取事件列表失败"
+        });
     }
 });
 
@@ -46,26 +49,30 @@ router.get("/target/:targetType/:targetId", async (req, res, next) => {
  * @desc Get events for a specific actor
  * @access Public/Private (depends on event privacy)
  */
-router.get("/actor/:actorId", async (req, res, next) => {
+router.get("/actor/:actorId", async (req, res) => {
     try {
         const {actorId} = req.params;
         const {limit = 10, offset = 0} = req.query;
-        const includePrivate =
-            req.user && (req.user.id === Number(actorId) || req.user.isAdmin);
+        const currentUserId = res.locals.userid;
+        const includePrivate = currentUserId && (currentUserId === parseInt(actorId, 10));
 
         const events = await getActorEvents(
-            actorId,
-            Number(limit),
-            Number(offset),
+            parseInt(actorId, 10),
+            parseInt(limit, 10),
+            parseInt(offset, 10),
             includePrivate
         );
 
         res.json({
-            status: "success",
-            data: events,
+            success: true,
+            events,
+            total: events.length
         });
     } catch (error) {
-        next(error);
+        logger.error("获取用户事件失败:", error);
+        res.status(500).json({
+            error: "获取事件列表失败"
+        });
     }
 });
 
@@ -74,72 +81,42 @@ router.get("/actor/:actorId", async (req, res, next) => {
  * @desc Create a new event
  * @access Private
  */
-router.post("/", needLogin, async (req, res, next) => {
+router.post("/", needLogin, async (req, res) => {
     try {
         const {eventType, targetType, targetId, ...eventData} = req.body;
 
-        // Use current user as actor if not specified
-        const actorId = eventData.actor_id || req.user.id;
+        if (!eventType || !targetType || !targetId) {
+            return res.status(400).json({
+                error: "缺少必要参数: eventType, targetType, targetId"
+            });
+        }
+
+        // Use current user as actor
+        const actorId = res.locals.userid;
 
         const event = await createEvent(
             eventType,
             actorId,
             targetType,
-            targetId,
+            parseInt(targetId, 10),
             eventData
         );
 
         if (!event) {
             return res.status(400).json({
-                status: "error",
-                message: "Failed to create event",
+                error: "事件创建失败"
             });
         }
 
         res.status(201).json({
-            status: "success",
-            data: event,
+            success: true,
+            event
         });
     } catch (error) {
-        next(error);
-    }
-});
-
-/**
- * @route GET /events/project-followers/:projectId
- * @desc Get followers of a project
- * @access Public
- */
-router.get("/project-followers/:projectId", async (req, res, next) => {
-    try {
-        const {projectId} = req.params;
-        const followers = await getProjectFollowersExternal(projectId);
-
-        res.json({
-            status: "success",
-            data: followers,
+        logger.error("创建事件失败:", error);
+        res.status(500).json({
+            error: "创建事件失败"
         });
-    } catch (error) {
-        next(error);
-    }
-});
-
-/**
- * @route GET /events/user-followers/:userId
- * @desc Get followers of a user
- * @access Public
- */
-router.get("/user-followers/:userId", async (req, res, next) => {
-    try {
-        const {userId} = req.params;
-        const followers = await getUserFollowersExternal(userId);
-
-        res.json({
-            status: "success",
-            data: followers,
-        });
-    } catch (error) {
-        next(error);
     }
 });
 

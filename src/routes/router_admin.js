@@ -5,6 +5,7 @@ import usersRouter from "./admin/users.js";
 import projectsRouter from "./admin/projects.js";
 import coderunRouter from "./admin/coderun.js";
 import extensionsRouter from "./admin/extensions.js";
+import notificationsRouter from "./admin/notifications.js";
 import {needAdmin} from '../middleware/auth.js';
 
 import sitemapService from '../services/sitemap.js';
@@ -20,6 +21,7 @@ router.use(needAdmin);
  * 3. 内容管理（待实现）
  * 4. 系统监控（待实现）
  * 5. 日志查看（待实现）
+ * 6. 通知管理
  */
 
 // 使用统一的配置管理路由
@@ -28,6 +30,33 @@ router.use("/users", usersRouter);
 router.use("/projects", projectsRouter);
 router.use("/coderun", coderunRouter);
 router.use("/extensions", extensionsRouter);
+router.use("/notifications", notificationsRouter);
+
+// ==================== 通知管理页面 ====================
+
+/**
+ * @api {get} /admin/notifications 通知管理页面
+ * @apiName AdminNotificationsPage
+ * @apiGroup AdminNotifications
+ * @apiPermission admin
+ * @apiDescription 展示管理员通知管理界面
+ */
+router.get("/notifications", async (req, res) => {
+    try {
+        res.render("admin_notifications", {
+            global: {
+                config: global.config || {}
+            }
+        });
+    } catch (error) {
+        logger.error("渲染通知管理页面失败:", error);
+        res.status(500).json({
+            status: "error",
+            message: "页面加载失败",
+            error: error.message
+        });
+    }
+});
 // ==================== 系统信息路由 ====================
 
 /**

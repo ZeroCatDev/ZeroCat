@@ -8,6 +8,12 @@ export {EventConfig};
 
 /**
  * 创建事件并异步发送通知
+ * @param {string} eventType - 事件类型
+ * @param {number} actorId - 行为者ID
+ * @param {string} targetType - 目标类型
+ * @param {number} targetId - 目标ID
+ * @param {Object} eventData - 事件数据
+ * @returns {Promise<Object|null>} 创建的事件对象
  */
 export async function createEvent(eventType, actorId, targetType, targetId, eventData = {}) {
     try {
@@ -23,26 +29,24 @@ export async function createEvent(eventType, actorId, targetType, targetId, even
         const event = await prisma.ow_events.create({
             data: {
                 event_type: normalizedEventType,
-                actor_id: actorId,
+                actor_id: Number(actorId),
                 target_type: targetType,
-                target_id: targetId,
+                target_id: Number(targetId),
                 event_data: {
                     ...eventData,
-                    actor_id: actorId,
+                    actor_id: Number(actorId),
                     target_type: targetType,
-                    target_id: targetId
+                    target_id: Number(targetId)
                 },
                 public: eventConfig.public ? 1 : 0
             }
         });
 
-        // 异步处理通知
+        // 异步处理通知 - 使用 setImmediate 确保事件创建完成后再处理通知
         if (eventConfig.notifyTargets && eventConfig.notifyTargets.length > 0) {
-            // 使用 Promise.resolve().then() 使其异步执行
-            Promise.resolve().then(() => {
-                processNotifications(event, eventConfig, eventData);
-            }).catch(error => {
-                logger.error('异步通知处理错误:', error);
+            setImmediate(() => {
+                processNotifications(event, eventConfig, eventData)
+                    .catch(error => logger.error('异步通知处理错误:', error));
             });
         }
 
@@ -177,64 +181,69 @@ async function getTarget(targetType, targetId) {
 }
 
 /**
- * 处理事件的通知
+ * 处理事件通知
+ * 根据事件配置向相关用户发送通知
+ * @param {Object} event - 事件对象
+ * @param {Object} eventConfig - 事件配置
+ * @param {Object} eventData - 事件数据
  */
 async function processNotifications(event, eventConfig, eventData) {
     try {
         const actorId = Number(event.actor_id);
         const targetId = Number(event.target_id);
 
-        // 收集所有受众用户ID
-        const usersMap = new Map(); // 使用Map去重
-
-        // 用于存储中间结果的对象，供依赖关系使用
+        // 收集所有需要通知的用户ID
+        const notificationUsers = new Set();
         const audienceResults = {};
 
-        // 为每个受众类型获取用户并合并
+        // 为每个受众类型获取用户
         for (const audienceType of eventConfig.notifyTargets) {
             try {
                 const audienceUsers = await getAudienceUsers(audienceType, event, eventData, audienceResults);
-                logger.error(audienceUsers);
                 audienceResults[audienceType] = audienceUsers;
-                logger.error(audienceResults);
-                // 将用户添加到Map中以去重
-                for (const userId of audienceUsers) {
-                    if (userId && userId !== actorId) { // 排除空值和事件创建者自己
-                        usersMap.set(userId, true);
+                
+                // 添加用户到通知列表（排除事件创建者）
+                audienceUsers.forEach(userId => {
+                    if (userId && userId !== actorId) {
+                        notificationUsers.add(userId);
                     }
-                }
+                });
             } catch (err) {
                 logger.error(`获取受众 ${audienceType} 用户出错:`, err);
-                // 继续处理其他受众类型
             }
         }
 
-        // 没有用户需要通知则直接返回
-        if (usersMap.size === 0) return;
+        if (notificationUsers.size === 0) {
+            logger.debug(`事件 ${event.event_type} 无需要通知的用户`);
+            return;
+        }
 
-        // 转换为数组
-        let userIds = Array.from(usersMap.keys());
+        // 过滤黑名单用户
+        const userIds = await filterBlacklistedUsers(actorId, Array.from(notificationUsers));
+        if (userIds.length === 0) {
+            logger.debug(`事件 ${event.event_type} 所有用户都在黑名单中`);
+            return;
+        }
 
-        // 排除在黑名单中的用户
-        userIds = await filterBlacklistedUsers(actorId, userIds);
-        if (userIds.length === 0) return;
-
-        // 获取对应的通知类型
-        const notificationType = event.event_type;
-
-        // 创建通知
+        // 批量创建通知
         const notificationPromises = userIds.map(userId =>
             createNotification({
                 userId,
-                notificationType,
+                notificationType: event.event_type,
                 actorId,
                 targetType: event.target_type,
                 targetId,
                 data: eventData
+            }).catch(error => {
+                logger.error(`为用户 ${userId} 创建通知失败:`, error);
+                return null;
             })
         );
 
-        await Promise.all(notificationPromises);
+        const results = await Promise.allSettled(notificationPromises);
+        const successCount = results.filter(r => r.status === 'fulfilled' && r.value).length;
+        
+        logger.debug(`事件 ${event.event_type} 通知发送完成: ${successCount}/${userIds.length} 成功`);
     } catch (error) {
         logger.error('通知处理错误:', error);
     }
@@ -302,7 +311,6 @@ async function filterBlacklistedUsers(actorId, userIds) {
  * @returns {Promise<number[]>} 用户ID数组
  */
 async function getAudienceUsers(audienceType, event, eventData, audienceResults = {}) {
-    logger.error(audienceResults);
     try {
         const audienceConfig = AudienceDataDependencies[audienceType];
         if (!audienceConfig) {
@@ -312,8 +320,10 @@ async function getAudienceUsers(audienceType, event, eventData, audienceResults 
 
         const actorId = Number(event.actor_id);
         const targetId = Number(event.target_id);
+        
+        // 如果事件数据中指定了通知对象，直接返回
         if (eventData.NotificationTo) {
-            return eventData.NotificationTo
+            return eventData.NotificationTo;
         }
 
         // Handle direct target user notification
@@ -428,11 +438,25 @@ async function getAudienceUsers(audienceType, event, eventData, audienceResults 
  */
 async function getRelatedUsers(config, relationId) {
     try {
-        // 构建查询
-        const where = {
-            [config.relationField]: relationId,
-            ...config.additionalFilters
-        };
+        let where = {};
+
+        // 处理特殊过滤器
+        if (config.specialFilter === 'thread') {
+            // 对于线程参与者，需要根据评论线程查询
+            where = {
+                pid: relationId,
+                ...config.additionalFilters
+            };
+        } else if (config.relationField) {
+            // 标准关联字段查询
+            where = {
+                [config.relationField]: relationId,
+                ...config.additionalFilters
+            };
+        } else {
+            logger.error(`配置缺少 relationField 或 specialFilter: ${JSON.stringify(config)}`);
+            return [];
+        }
 
         // 执行查询
         const relations = await prisma[config.query].findMany({
@@ -448,32 +472,4 @@ async function getRelatedUsers(config, relationId) {
         logger.error(`获取相关用户错误:`, error);
         return [];
     }
-}
-
-/**
- * 获取项目关注者 - 导出供外部使用
- */
-export async function getProjectFollowersExternal(projectId) {
-    const followers = await prisma.ow_user_relationships.findMany({
-        where: {
-            target_user_id: Number(projectId),
-            relationship_type: 'follow'
-        },
-        select: {source_user_id: true}
-    });
-    return followers.map(f => f.source_user_id);
-}
-
-/**
- * 获取用户关注者 - 导出供外部使用
- */
-export async function getUserFollowersExternal(userId) {
-    const followers = await prisma.ow_user_relationships.findMany({
-        where: {
-            target_user_id: Number(userId),
-            relationship_type: 'follow'
-        },
-        select: {source_user_id: true}
-    });
-    return followers.map(f => f.source_user_id);
 }

@@ -3,10 +3,11 @@
  * 统一的通知系统路由
  */
 import express from "express";
-import {needAdmin, needLogin} from "../middleware/auth.js";
+import {needLogin} from "../middleware/auth.js";
 import logger from "../services/logger.js";
 import notificationUtils from "../controllers/notifications.js";
 import {prisma} from "../services/global.js";
+import { registerPushSubscription, unregisterPushSubscription, getUserPushSubscriptions } from "../services/pushNotification.js";
 
 const router = express.Router();
 
@@ -160,77 +161,214 @@ router.put("/read_all", needLogin, async (req, res) => {
 });
 
 /**
- * @route DELETE /notifications
- * @desc 删除通知
+ * @route POST /notifications/send-enhanced
+ * @desc 发送增强通知（支持隐藏通知和多渠道推送）
  * @access Private
  */
-router.delete("/", needLogin, async (req, res) => {
+router.post("/send-enhanced", needLogin, async (req, res) => {
     try {
-        const userId = res.locals.userid;
-        const {notification_ids} = req.body;
+        const {
+            user_id,
+            title,
+            content,
+            link,
+            push_channels = ['browser'],
+            hidden = false,
+            actor_id,
+            target_type,
+            target_id,
+            metadata = {}
+        } = req.body;
 
-        if (!notification_ids || !Array.isArray(notification_ids)) {
-            return res.status(400).json({error: "需要提供notification_ids数组"});
+        // 验证必要字段
+        if (!user_id || !title || !content) {
+            return res.status(400).json({
+                error: "缺少必要字段: user_id, title, content"
+            });
         }
 
-        const count = await notificationUtils.deleteNotifications({
-            notificationIds: notification_ids,
-            userId,
+        // 验证推送渠道
+        const validChannels = ['browser', 'push', 'email'];
+        const invalidChannels = push_channels.filter(channel => !validChannels.includes(channel));
+        if (invalidChannels.length > 0) {
+            return res.status(400).json({
+                error: `无效的推送渠道: ${invalidChannels.join(', ')}`,
+                valid_channels: validChannels
+            });
+        }
+
+        // 发送增强通知
+        const result = await notificationUtils.sendEnhancedNotification({
+            userId: user_id,
+            title,
+            content,
+            link,
+            pushChannels: push_channels,
+            hidden,
+            actorId: actor_id || res.locals.userid,
+            targetType: target_type,
+            targetId: target_id,
+            metadata
         });
 
-        res.json({success: true, count});
+        res.json({
+            success: true,
+            result,
+            message: hidden ? "隐藏通知发送成功" : "通知发送成功"
+        });
     } catch (error) {
-        logger.error("删除通知出错:", error);
-        res.status(500).json({error: "删除通知失败"});
+        logger.error("发送增强通知出错:", error);
+        res.status(500).json({error: "发送增强通知失败"});
     }
 });
 
 /**
- * @route POST /notifications
- * @desc 创建通知
+ * @route POST /notifications/send
+ * @desc 发送通知（支持多种渠道）
  * @access Private
  */
-router.post("/", needAdmin, async (req, res) => {
+router.post("/send", needLogin, async (req, res) => {
     try {
         const {
-            object_type,
-            object_id,
-            notification_type,
-            high_priority = false,
-            acting_user = 0,
-            data = {},
+            user_id,
+            title,
+            content,
+            link,
+            channel = 'browser',
+            actor_id,
+            target_type,
+            target_id,
+            metadata = {}
         } = req.body;
 
-        // 确保必要字段存在
-        if (!object_type || !object_id || !notification_type) {
+        // 验证必要字段
+        if (!user_id || !title || !content) {
             return res.status(400).json({
-                status: "error",
-                message: "缺少必要字段: object_type, object_id, notification_type",
+                error: "缺少必要字段: user_id, title, content"
             });
         }
 
-        // 在数据库中创建通知
-        const notification = await notificationUtils.createNotification({
-            userId: res.locals.userid,
-            notificationType: notification_type,
-            targetType: object_type,
-            targetId: object_id,
-            highPriority: high_priority,
-            actorId: acting_user,
-            data,
+        // 发送通知
+        const result = await notificationUtils.sendNotification({
+            userId: user_id,
+            title,
+            content,
+            link,
+            channel,
+            actorId: actor_id || res.locals.userid,
+            targetType: target_type,
+            targetId: target_id,
+            metadata
         });
 
-        // 格式化通知
-        const formattedNotification =
-            await notificationUtils.formatNotificationForClient(notification);
-
-        res.status(201).json({
-            status: "success",
-            data: formattedNotification,
+        res.json({
+            success: true,
+            result
         });
     } catch (error) {
-        logger.error("创建通知出错:", error);
-        res.status(500).json({error: "创建通知失败"});
+        logger.error("发送通知出错:", error);
+        res.status(500).json({error: "发送通知失败"});
+    }
+});
+
+/**
+ * @route POST /notifications/register-browser
+ * @desc 注册浏览器推送通知
+ * @access Private
+ */
+router.post("/register-browser", needLogin, async (req, res) => {
+    try {
+        const userId = res.locals.userid;
+        const { subscription, device_info } = req.body;
+
+        if (!subscription || !subscription.endpoint || !subscription.keys) {
+            return res.status(400).json({
+                error: "缺少推送订阅信息",
+                required: {
+                    subscription: {
+                        endpoint: "string",
+                        keys: {
+                            p256dh: "string",
+                            auth: "string"
+                        }
+                    }
+                }
+            });
+        }
+
+        const userAgent = req.get('User-Agent') || '';
+        const result = await registerPushSubscription(userId, subscription, device_info, userAgent);
+
+        if (result.success) {
+            res.json({
+                success: true,
+                message: result.isNew ? "浏览器推送通知注册成功" : "浏览器推送通知更新成功",
+                subscription_id: result.subscription.id,
+                is_new: result.isNew
+            });
+        } else {
+            res.status(500).json({
+                error: "注册浏览器推送通知失败",
+                details: result.error
+            });
+        }
+    } catch (error) {
+        logger.error("注册浏览器推送通知出错:", error);
+        res.status(500).json({error: "注册浏览器推送通知失败"});
+    }
+});
+
+/**
+ * @route DELETE /notifications/register-browser
+ * @desc 取消浏览器推送通知
+ * @access Private
+ */
+router.delete("/register-browser", needLogin, async (req, res) => {
+    try {
+        const userId = res.locals.userid;
+        const { endpoint } = req.body;
+
+        if (!endpoint) {
+            return res.status(400).json({error: "缺少推送端点信息"});
+        }
+
+        const result = await unregisterPushSubscription(userId, endpoint);
+
+        if (result.success) {
+            res.json({
+                success: true,
+                message: "浏览器推送通知取消成功",
+                count: result.count
+            });
+        } else {
+            res.status(500).json({
+                error: "取消浏览器推送通知失败",
+                details: result.error
+            });
+        }
+    } catch (error) {
+        logger.error("取消浏览器推送通知出错:", error);
+        res.status(500).json({error: "取消浏览器推送通知失败"});
+    }
+});
+
+/**
+ * @route GET /notifications/push-subscriptions
+ * @desc 获取用户的推送订阅列表
+ * @access Private
+ */
+router.get("/push-subscriptions", needLogin, async (req, res) => {
+    try {
+        const userId = res.locals.userid;
+        const subscriptions = await getUserPushSubscriptions(userId);
+
+        res.json({
+            success: true,
+            subscriptions: subscriptions
+        });
+    } catch (error) {
+        logger.error("获取推送订阅列表出错:", error);
+        res.status(500).json({error: "获取推送订阅列表失败"});
     }
 });
 
@@ -255,90 +393,121 @@ router.get("/templates", async (req, res) => {
 });
 
 /**
- * @route POST /notifications/test
- * @desc 发送测试通知
+ * @route GET /notifications/push-status/:id
+ * @desc 获取通知的推送状态
  * @access Private
  */
-router.post("/test", needAdmin, async (req, res) => {
+router.get("/push-status/:id", needLogin, async (req, res) => {
     try {
         const userId = res.locals.userid;
-        const actorId = res.locals.userid; // 以自己为行为者进行测试
+        const notificationId = parseInt(req.params.id, 10);
 
-        // 获取用户信息用于测试通知
-        const user = await prisma.ow_users.findUnique({
-            where: {id: userId},
-            select: {
-                id: true,
-                username: true,
-                display_name: true,
-            },
-        });
-
-        if (!user) {
-            return res.status(404).json({error: "用户未找到"});
+        if (isNaN(notificationId)) {
+            return res.status(400).json({error: "无效的通知ID"});
         }
 
-        const results = [];
-
-        // 创建项目评论通知
-        const projectCommentNotification =
-            await notificationUtils.createNotification({
-                userId,
-                notificationType: "project_comment",
-                actorId,
-                targetType: "project",
-                targetId: 1,
-                data: {
-                    project_title: "测试项目",
-                    comment_text: "这是对您项目的测试评论",
-                    comment_id: 123,
-                },
-            });
-        results.push(projectCommentNotification);
-
-        // 创建星标通知
-        const starNotification = await notificationUtils.createNotification({
-            userId,
-            notificationType: "project_star",
-            actorId,
-            targetType: "project",
-            targetId: 1,
-            data: {
-                project_title: "测试项目",
-                star_count: 42,
+        const notification = await prisma.ow_notifications.findFirst({
+            where: {
+                id: notificationId,
+                user_id: userId, // 确保用户只能访问自己的通知
+            },
+            select: {
+                id: true,
+                push_channels: true,
+                push_results: true,
+                push_error: true,
+                created_at: true,
             },
         });
-        results.push(starNotification);
 
-        // 创建关注通知
-        const followNotification = await notificationUtils.createNotification({
-            userId,
-            notificationType: "user_follow",
-            actorId,
-            targetType: "user",
-            targetId: userId,
-            data: {
-                follower_count: 100,
-            },
-        });
-        results.push(followNotification);
-
-        // 返回按客户端格式创建的通知
-        const formattedNotifications = await Promise.all(
-            results.map((notification) =>
-                notificationUtils.formatNotificationForClient(notification)
-            )
-        );
+        if (!notification) {
+            return res.status(404).json({error: "通知不存在"});
+        }
 
         res.json({
             success: true,
-            count: results.length,
-            notifications: formattedNotifications,
+            notification_id: notification.id,
+            push_channels: notification.push_channels,
+            push_results: notification.push_results,
+            push_error: notification.push_error,
+            created_at: notification.created_at
         });
     } catch (error) {
-        logger.error("创建测试通知出错:", error);
-        res.status(500).json({error: "创建测试通知失败"});
+        logger.error("获取推送状态出错:", error);
+        res.status(500).json({error: "获取推送状态失败"});
     }
 });
+
+/**
+ * @route GET /notifications/:id
+ * @desc 获取单个通知详情
+ * @access Private
+ */
+router.get("/:id", needLogin, async (req, res) => {
+    try {
+        const userId = res.locals.userid;
+        const notificationId = parseInt(req.params.id, 10);
+
+        if (isNaN(notificationId)) {
+            return res.status(400).json({error: "无效的通知ID"});
+        }
+
+        const notification = await prisma.ow_notifications.findFirst({
+            where: {
+                id: notificationId,
+                user_id: userId, // 确保用户只能访问自己的通知
+            },
+            select: {
+                id: true,
+                title: true,
+                content: true,
+                link: true,
+                metadata: true,
+                notification_type: true,
+                read: true,
+                created_at: true,
+                read_at: true,
+                high_priority: true,
+                data: true,
+                actor_id: true,
+                actor: {
+                    select: {
+                        id: true,
+                        username: true,
+                        display_name: true,
+                        avatar: true,
+                    },
+                },
+                target_type: true,
+                target_id: true,
+            },
+        });
+
+        if (!notification) {
+            return res.status(404).json({error: "通知不存在"});
+        }
+
+        // 自动标记为已读
+        if (!notification.read) {
+            await notificationUtils.markNotificationsAsRead({
+                notificationIds: [notificationId],
+                userId,
+            });
+            notification.read = true;
+            notification.read_at = new Date();
+        }
+
+        const formattedNotification = await notificationUtils.formatNotificationForClient(notification);
+        res.json(formattedNotification);
+    } catch (error) {
+        logger.error("获取通知详情出错:", error);
+        res.status(500).json({error: "获取通知详情失败"});
+    }
+});
+
+
+
+
+
 
 export default router;

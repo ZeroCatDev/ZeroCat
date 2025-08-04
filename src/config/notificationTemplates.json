@@ -60,11 +60,12 @@
   },
   "system_announcement": {
     "title": "系统公告",
-    "template": "系统公告: {{content}}",
+    "template": "{{custom_title}} - {{custom_content}}",
     "icon": "announcement",
     "requiresActor": false,
     "requiresData": [
-      "content"
+      "custom_title",
+      "custom_content"
     ]
   },
   "comment_reply": {
@@ -78,11 +79,31 @@
   },
   "custom_notification": {
     "title": "自定义通知",
-    "template": "{{content}}",
+    "template": "{{custom_title}} - {{custom_content}}",
     "icon": "notification",
     "requiresActor": false,
     "requiresData": [
-      "content"
+      "custom_title",
+      "custom_content"
+    ]
+  },
+  "comment_create": {
+    "title": "新评论",
+    "template": "{{actor_name}} 评论说：{{comment_text}}",
+    "icon": "comment",
+    "requiresActor": true,
+    "requiresData": [
+      "comment_text"
+    ]
+  },
+  "admin_notification": {
+    "title": "管理员通知",
+    "template": "{{custom_title}} - {{custom_content}}",
+    "icon": "admin",
+    "requiresActor": true,
+    "requiresData": [
+      "custom_title",
+      "custom_content"
     ]
   }
 }

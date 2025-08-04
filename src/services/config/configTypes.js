@@ -528,6 +528,24 @@ export const CONFIG_TYPES = {
         },
         public: true,
     },
+    "webpush.vapid_public_key": {
+        type: "string",
+        required: false,
+        description: "Web Push VAPID公钥",
+        public: true,
+    },
+    "webpush.vapid_private_key": {
+        type: "string",
+        required: false,
+        description: "Web Push VAPID私钥",
+        public: false,
+    },
+    "webpush.vapid_subject": {
+        type: "string",
+        required: false,
+        description: "Web Push VAPID主题",
+        public: true,
+    },
 };
 
 // 从数据库加载的动态配置

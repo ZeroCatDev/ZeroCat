@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-cmn-Hans" class="mdui-theme-light">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>通知管理 - <%= global.config['site.name'] %></title>
+    <link rel="stylesheet" href="https://unpkg.com/mdui@2/mdui.css">
+    <style>
+        .notification-card {
+            margin-bottom: 16px;
+        }
+        .stats-card {
+            margin-bottom: 16px;
+        }
+        .user-search-item {
+            cursor: pointer;
+        }
+        .user-search-item:hover {
+            background-color: rgba(0, 0, 0, 0.04);
+        }
+        .notification-type-select {
+            margin-bottom: 16px;
+        }
+        .hidden {
+            display: none !important;
+        }
+        .notification-meta {
+            font-size: 12px;
+            color: #666;
+            margin-top: 8px;
+        }
+        .priority-high {
+            border-left: 4px solid #f44336;
+        }
+        .notification-unread {
+            background-color: #f3f4f6;
+        }
+        .filter-form {
+            background: #f9f9f9;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+        }
+        .send-form {
+            background: #e3f2fd;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+        }
+        .form-section {
+            margin-bottom: 24px;
+        }
+        .form-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 16px;
+            color: #1976d2;
+        }
+    </style>
+</head>
+
+<body>
+<mdui-layout>
+    <mdui-navigation-bar>
+        <mdui-navigation-bar-title>通知管理系统</mdui-navigation-bar-title>
+    </mdui-navigation-bar>
+
+    <mdui-layout-main style="padding: 24px;">
+        <mdui-tabs value="stats" id="main-tabs">
+            <mdui-tab value="stats">统计概览</mdui-tab>
+            <mdui-tab value="send">发送通知</mdui-tab>
+            <mdui-tab value="list">通知列表</mdui-tab>
+        </mdui-tabs>
+
+        <!-- 统计概览 -->
+        <mdui-tab-panel slot="panel" value="stats">
+            <div class="form-section">
+                <div class="form-title">通知统计</div>
+                <mdui-grid>
+                    <mdui-grid-item xs="12" sm="6" md="3">
+                        <mdui-card class="stats-card">
+                            <div style="padding: 16px; text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #1976d2;" id="total-count">-</div>
+                                <div style="color: #666;">总通知数</div>
+                            </div>
+                        </mdui-card>
+                    </mdui-grid-item>
+                    <mdui-grid-item xs="12" sm="6" md="3">
+                        <mdui-card class="stats-card">
+                            <div style="padding: 16px; text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #f44336;" id="unread-count">-</div>
+                                <div style="color: #666;">未读通知</div>
+                            </div>
+                        </mdui-card>
+                    </mdui-grid-item>
+                    <mdui-grid-item xs="12" sm="6" md="3">
+                        <mdui-card class="stats-card">
+                            <div style="padding: 16px; text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #4caf50;" id="today-count">-</div>
+                                <div style="color: #666;">今日新增</div>
+                            </div>
+                        </mdui-card>
+                    </mdui-grid-item>
+                    <mdui-grid-item xs="12" sm="6" md="3">
+                        <mdui-card class="stats-card">
+                            <div style="padding: 16px; text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #ff9800;" id="week-count">-</div>
+                                <div style="color: #666;">本周新增</div>
+                            </div>
+                        </mdui-card>
+                    </mdui-grid-item>
+                </mdui-grid>
+                
+                <mdui-card style="margin-top: 16px;">
+                    <div style="padding: 16px;">
+                        <div style="font-weight: bold; margin-bottom: 12px;">按类型统计</div>
+                        <div id="type-stats"></div>
+                    </div>
+                </mdui-card>
+            </div>
+        </mdui-tab-panel>
+
+        <!-- 发送通知 -->
+        <mdui-tab-panel slot="panel" value="send">
+            <div class="form-section">
+                <div class="send-form">
+                    <div class="form-title">发送通知</div>
+                    <form id="send-form">
+                        <mdui-tabs value="single" id="send-tabs">
+                            <mdui-tab value="single">单个用户</mdui-tab>
+                            <mdui-tab value="broadcast">群发通知</mdui-tab>
+                        </mdui-tabs>
+
+                        <!-- 单个用户发送 -->
+                        <mdui-tab-panel slot="panel" value="single">
+                            <div style="margin-top: 16px;">
+                                <mdui-text-field
+                                    label="用户名或ID"
+                                    name="recipient"
+                                    id="recipient-input"
+                                    helper="输入用户名或用户ID"
+                                    required>
+                                </mdui-text-field>
+                                <div id="user-search-results" class="hidden" style="margin-top: 8px;"></div>
+                            </div>
+                        </mdui-tab-panel>
+
+                        <!-- 群发通知 -->
+                        <mdui-tab-panel slot="panel" value="broadcast">
+                            <div style="margin-top: 16px;">
+                                <mdui-text-field
+                                    label="接收者列表"
+                                    name="recipients"
+                                    id="recipients-input"
+                                    helper="用逗号分隔多个用户名或ID，例如：user1,user2,123"
+                                    required>
+                                </mdui-text-field>
+                            </div>
+                        </mdui-tab-panel>
+
+                        <div style="margin-top: 16px;">
+                            <mdui-text-field
+                                label="通知标题"
+                                name="title"
+                                required>
+                            </mdui-text-field>
+                        </div>
+
+                        <div style="margin-top: 16px;">
+                            <mdui-text-field
+                                label="通知内容"
+                                name="content"
+                                rows="4"
+                                required>
+                            </mdui-text-field>
+                        </div>
+
+                        <div style="margin-top: 16px;">
+                            <mdui-text-field
+                                label="链接 (可选)"
+                                name="link"
+                                helper="用户点击通知时跳转的链接">
+                            </mdui-text-field>
+                        </div>
+
+                        <div style="margin-top: 16px;">
+                            <mdui-select
+                                label="通知类型"
+                                name="notification_type"
+                                value="system_announcement">
+                                <mdui-menu-item value="system_announcement">系统公告</mdui-menu-item>
+                                <mdui-menu-item value="custom_notification">自定义通知</mdui-menu-item>
+                                <mdui-menu-item value="project_update">项目更新</mdui-menu-item>
+                                <mdui-menu-item value="user_follow">用户关注</mdui-menu-item>
+                            </mdui-select>
+                        </div>
+
+                        <div style="margin-top: 16px;">
+                            <mdui-checkbox name="high_priority">高优先级通知</mdui-checkbox>
+                        </div>
+
+                        <div style="margin-top: 24px;">
+                            <mdui-button type="submit" variant="filled">发送通知</mdui-button>
+                            <mdui-button type="reset" variant="outlined" style="margin-left: 8px;">重置</mdui-button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </mdui-tab-panel>
+
+        <!-- 通知列表 -->
+        <mdui-tab-panel slot="panel" value="list">
+            <div class="form-section">
+                <div class="filter-form">
+                    <div class="form-title">筛选条件</div>
+                    <form id="filter-form">
+                        <mdui-grid>
+                            <mdui-grid-item xs="12" sm="6" md="3">
+                                <mdui-text-field
+                                    label="用户ID"
+                                    name="user_id"
+                                    helper="筛选特定用户的通知">
+                                </mdui-text-field>
+                            </mdui-grid-item>
+                            <mdui-grid-item xs="12" sm="6" md="3">
+                                <mdui-select
+                                    label="通知类型"
+                                    name="notification_type">
+                                    <mdui-menu-item value="">全部类型</mdui-menu-item>
+                                    <mdui-menu-item value="system_announcement">系统公告</mdui-menu-item>
+                                    <mdui-menu-item value="custom_notification">自定义通知</mdui-menu-item>
+                                    <mdui-menu-item value="project_comment">项目评论</mdui-menu-item>
+                                    <mdui-menu-item value="project_star">项目星标</mdui-menu-item>
+                                    <mdui-menu-item value="user_follow">用户关注</mdui-menu-item>
+                                </mdui-select>
+                            </mdui-grid-item>
+                            <mdui-grid-item xs="12" sm="6" md="3">
+                                <mdui-text-field
+                                    label="开始日期"
+                                    name="date_from"
+                                    type="date">
+                                </mdui-text-field>
+                            </mdui-grid-item>
+                            <mdui-grid-item xs="12" sm="6" md="3">
+                                <mdui-text-field
+                                    label="结束日期"
+                                    name="date_to"
+                                    type="date">
+                                </mdui-text-field>
+                            </mdui-grid-item>
+                        </mdui-grid>
+                        <div style="margin-top: 16px;">
+                            <mdui-checkbox name="unread_only">仅显示未读通知</mdui-checkbox>
+                        </div>
+                        <div style="margin-top: 16px;">
+                            <mdui-button type="submit" variant="filled">应用筛选</mdui-button>
+                            <mdui-button type="reset" variant="outlined" style="margin-left: 8px;">重置</mdui-button>
+                        </div>
+                    </form>
+                </div>
+
+                <div id="notifications-list" style="margin-top: 24px;">
+                    <div style="text-align: center; padding: 32px; color: #666;">
+                        点击"应用筛选"加载通知列表
+                    </div>
+                </div>
+
+                <div id="pagination" style="margin-top: 24px; text-align: center;" class="hidden">
+                    <mdui-button-group>
+                        <mdui-button id="prev-page" disabled>上一页</mdui-button>
+                        <mdui-button id="next-page" disabled>下一页</mdui-button>
+                    </mdui-button-group>
+                    <div style="margin-top: 8px; color: #666;" id="page-info"></div>
+                </div>
+            </div>
+        </mdui-tab-panel>
+    </mdui-layout-main>
+</mdui-layout>
+
+<!-- Snackbar for notifications -->
+<mdui-snackbar id="snackbar"></mdui-snackbar>
+
+<script src="https://unpkg.com/mdui@2/mdui.global.js"></script>
+<script>
+class NotificationManager {
+    constructor() {
+        this.currentPage = 0;
+        this.pageSize = 20;
+        this.totalCount = 0;
+        this.init();
+    }
+
+    init() {
+        this.loadStats();
+        this.bindEvents();
+        this.setupUserSearch();
+    }
+
+    async loadStats() {
+        try {
+            const response = await fetch('/notifications/admin/stats');
+            const data = await response.json();
+            
+            if (data.success) {
+                document.getElementById('total-count').textContent = data.stats.total;
+                document.getElementById('unread-count').textContent = data.stats.unread;
+                document.getElementById('today-count').textContent = data.stats.today;
+                document.getElementById('week-count').textContent = data.stats.week;
+
+                const typeStatsHtml = data.stats.byType.map(stat => 
+                    `<div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span>${stat.type}</span>
+                        <span style="font-weight: bold;">${stat.count}</span>
+                    </div>`
+                ).join('');
+                document.getElementById('type-stats').innerHTML = typeStatsHtml;
+            }
+        } catch (error) {
+            this.showMessage('加载统计信息失败', 'error');
+        }
+    }
+
+    bindEvents() {
+        // 发送通知表单
+        document.getElementById('send-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.sendNotification(e.target);
+        });
+
+        // 筛选表单
+        document.getElementById('filter-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.currentPage = 0;
+            this.loadNotifications(e.target);
+        });
+
+        // 分页按钮
+        document.getElementById('prev-page').addEventListener('click', () => {
+            if (this.currentPage > 0) {
+                this.currentPage--;
+                this.loadNotifications();
+            }
+        });
+
+        document.getElementById('next-page').addEventListener('click', () => {
+            if ((this.currentPage + 1) * this.pageSize < this.totalCount) {
+                this.currentPage++;
+                this.loadNotifications();
+            }
+        });
+
+        // Tab 切换时刷新数据
+        document.getElementById('main-tabs').addEventListener('change', (e) => {
+            if (e.target.value === 'stats') {
+                this.loadStats();
+            }
+        });
+    }
+
+    setupUserSearch() {
+        const recipientInput = document.getElementById('recipient-input');
+        const searchResults = document.getElementById('user-search-results');
+        let searchTimeout;
+
+        recipientInput.addEventListener('input', (e) => {
+            const query = e.target.value.trim();
+            
+            clearTimeout(searchTimeout);
+            
+            if (query.length < 2) {
+                searchResults.classList.add('hidden');
+                return;
+            }
+
+            searchTimeout = setTimeout(async () => {
+                try {
+                    const response = await fetch(`/notifications/admin/users/search?q=${encodeURIComponent(query)}&limit=10`);
+                    const data = await response.json();
+                    
+                    if (data.success && data.users.length > 0) {
+                        const resultsHtml = data.users.map(user => 
+                            `<div class="user-search-item" style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 4px;" data-username="${user.username}" data-id="${user.id}">
+                                <div style="font-weight: bold;">${user.display_name} (@${user.username})</div>
+                                <div style="font-size: 12px; color: #666;">ID: ${user.id} | 类型: ${user.type}</div>
+                            </div>`
+                        ).join('');
+                        
+                        searchResults.innerHTML = resultsHtml;
+                        searchResults.classList.remove('hidden');
+
+                        // 绑定点击事件
+                        searchResults.querySelectorAll('.user-search-item').forEach(item => {
+                            item.addEventListener('click', () => {
+                                recipientInput.value = item.dataset.username;
+                                searchResults.classList.add('hidden');
+                            });
+                        });
+                    } else {
+                        searchResults.classList.add('hidden');
+                    }
+                } catch (error) {
+                    console.error('搜索用户失败:', error);
+                }
+            }, 300);
+        });
+
+        // 点击其他地方隐藏搜索结果
+        document.addEventListener('click', (e) => {
+            if (!recipientInput.contains(e.target) && !searchResults.contains(e.target)) {
+                searchResults.classList.add('hidden');
+            }
+        });
+    }
+
+    async sendNotification(form) {
+        const formData = new FormData(form);
+        const sendTabs = document.getElementById('send-tabs');
+        const isBroadcast = sendTabs.value === 'broadcast';
+        
+        const data = {
+            title: formData.get('title'),
+            content: formData.get('content'),
+            link: formData.get('link') || undefined,
+            notification_type: formData.get('notification_type'),
+            high_priority: formData.has('high_priority')
+        };
+
+        if (isBroadcast) {
+            const recipients = formData.get('recipients').split(',').map(r => r.trim()).filter(r => r);
+            if (recipients.length === 0) {
+                this.showMessage('请输入至少一个接收者', 'error');
+                return;
+            }
+            data.recipients = recipients;
+        } else {
+            const recipient = formData.get('recipient');
+            if (!recipient) {
+                this.showMessage('请输入接收者', 'error');
+                return;
+            }
+            data.recipient = recipient;
+        }
+
+        try {
+            const endpoint = isBroadcast ? '/notifications/admin/broadcast' : '/notifications/admin/send';
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data),
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showMessage(result.message || '通知发送成功', 'success');
+                form.reset();
+                this.loadStats(); // 刷新统计
+            } else {
+                this.showMessage(result.error || '发送失败', 'error');
+            }
+        } catch (error) {
+            this.showMessage('网络错误，请重试', 'error');
+        }
+    }
+
+    async loadNotifications(form = null) {
+        const params = new URLSearchParams({
+            limit: this.pageSize,
+            offset: this.currentPage * this.pageSize
+        });
+
+        if (form) {
+            const formData = new FormData(form);
+            for (const [key, value] of formData.entries()) {
+                if (value) {
+                    if (key === 'unread_only') {
+                        params.set(key, 'true');
+                    } else {
+                        params.set(key, value);
+                    }
+                }
+            }
+        }
+
+        try {
+            const response = await fetch(`/notifications/admin/list?${params}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                this.renderNotifications(data.notifications);
+                this.updatePagination(data.total);
+            } else {
+                this.showMessage('加载通知列表失败', 'error');
+            }
+        } catch (error) {
+            this.showMessage('网络错误，请重试', 'error');
+        }
+    }
+
+    renderNotifications(notifications) {
+        const container = document.getElementById('notifications-list');
+        
+        if (notifications.length === 0) {
+            container.innerHTML = '<div style="text-align: center; padding: 32px; color: #666;">没有找到匹配的通知</div>';
+            return;
+        }
+
+        const html = notifications.map(notification => {
+            const createdAt = new Date(notification.created_at).toLocaleString('zh-CN');
+            const readAt = notification.read_at ? new Date(notification.read_at).toLocaleString('zh-CN') : null;
+            
+            return `
+                <mdui-card class="notification-card ${notification.high_priority ? 'priority-high' : ''} ${!notification.read ? 'notification-unread' : ''}">
+                    <div style="padding: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                            <div style="font-weight: bold; font-size: 16px;">${notification.title}</div>
+                            <div style="display: flex; gap: 8px;">
+                                ${notification.high_priority ? '<mdui-chip>高优先级</mdui-chip>' : ''}
+                                ${notification.read ? '<mdui-chip variant="outlined" style="color: green;">已读</mdui-chip>' : '<mdui-chip style="background: #f44336; color: white;">未读</mdui-chip>'}
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 8px; color: #333;">${notification.content}</div>
+                        
+                        ${notification.link ? `<div style="margin-bottom: 8px;"><a href="${notification.link}" target="_blank" style="color: #1976d2;">${notification.link}</a></div>` : ''}
+                        
+                        <div class="notification-meta">
+                            <div><strong>接收者:</strong> ${notification.user?.display_name || '未知用户'} (@${notification.user?.username || 'unknown'}) [ID: ${notification.user_id}]</div>
+                            <div><strong>类型:</strong> ${notification.type}</div>
+                            <div><strong>创建时间:</strong> ${createdAt}</div>
+                            ${readAt ? `<div><strong>读取时间:</strong> ${readAt}</div>` : ''}
+                            ${notification.actor ? `<div><strong>发送者:</strong> ${notification.actor.display_name} (@${notification.actor.username})</div>` : ''}
+                        </div>
+                    </div>
+                </mdui-card>
+            `;
+        }).join('');
+
+        container.innerHTML = html;
+    }
+
+    updatePagination(total) {
+        this.totalCount = total;
+        const pagination = document.getElementById('pagination');
+        const pageInfo = document.getElementById('page-info');
+        const prevBtn = document.getElementById('prev-page');
+        const nextBtn = document.getElementById('next-page');
+
+        if (total > this.pageSize) {
+            pagination.classList.remove('hidden');
+            
+            const startItem = this.currentPage * this.pageSize + 1;
+            const endItem = Math.min((this.currentPage + 1) * this.pageSize, total);
+            pageInfo.textContent = `显示 ${startItem}-${endItem} 项，共 ${total} 项`;
+
+            prevBtn.disabled = this.currentPage === 0;
+            nextBtn.disabled = (this.currentPage + 1) * this.pageSize >= total;
+        } else {
+            pagination.classList.add('hidden');
+        }
+    }
+
+    showMessage(message, type = 'info') {
+        const snackbar = document.getElementById('snackbar');
+        snackbar.innerHTML = message;
+        
+        // 设置不同类型的样式
+        if (type === 'error') {
+            snackbar.style.backgroundColor = '#f44336';
+        } else if (type === 'success') {
+            snackbar.style.backgroundColor = '#4caf50';
+        } else {
+            snackbar.style.backgroundColor = '#2196f3';
+        }
+        
+        snackbar.open = true;
+        
+        setTimeout(() => {
+            snackbar.open = false;
+        }, 3000);
+    }
+}
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', () => {
+    new NotificationManager();
+});
+</script>
+</body>
+</html>
