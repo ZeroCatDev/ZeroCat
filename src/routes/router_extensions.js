@@ -393,56 +393,6 @@ router.get("/manager/my", needLogin, async (req, res, next) => {
   }
 });
 
-router.get("/manager/:id", async (req, res, next) => {
-  try {
-    const { id } = req.params;
-
-    const extension = await prisma.ow_scratch_extensions.findFirst({
-      where: { id: Number(id) },
-      include: {
-        project: {
-          include: {
-            author: {
-              select: {
-                username: true,
-                display_name: true,
-              },
-            },
-          },
-        },
-        sample_project: {
-          include: {
-            author: {
-              select: {
-                username: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!extension) {
-      return res.status(404).send({
-        status: "error",
-        message: "扩展不存在",
-      });
-    }
-
-    res.status(200).send({
-      status: "success",
-      message: "获取成功",
-      data: extension,
-    });
-  } catch (err) {
-    logger.error("Error getting extension:", err);
-    res.status(500).send({
-      status: "error",
-      message: "获取扩展时出错",
-    });
-  }
-});
-
 router.delete("/manager/:id", needLogin, async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -716,40 +666,177 @@ router.get("/marketplace", async (req, res, next) => {
   }
 });
 
-// 获取单个扩展详情
-router.get("/marketplace/:id", async (req, res, next) => {
-  try {
-    const { id } = req.params;
 
-    const extension = await prisma.ow_scratch_extensions.findFirst({
-      where: {
-        id: Number(id),
-        status: "verified"
-      },
-      select: {
-        id: true,
+// 获取扩展市场统计信息
+// 统一的扩展信息查询接口 - 支持查询公开扩展和用户自己的扩展
+router.get("/search", async (req, res, next) => {
+  try {
+    const {
+      page = 1,
+      limit = 20,
+      sort = "created_at",
+      order = "desc",
+      search = "",
+      author = "",
+      has_docs = "",
+      has_samples = "",
+      tags = "",
+      scratchCompatible = "",
+      scope = "public", // "public" | "my" | "all"
+      status_filter = "" // 状态筛选：developing, pending, verified, rejected
+    } = req.query;
+
+    const pageNum = parseInt(page);
+    const limitNum = Math.min(parseInt(limit), 100);
+    const offset = (pageNum - 1) * limitNum;
+
+    // 构建基础查询条件
+    const where = {};
+
+    // 根据scope确定查询范围
+    if (scope === "my") {
+      // 查询用户自己的扩展 - 需要登录
+      if (!req.headers.authorization && !res.locals.userid) {
+        return res.status(401).send({
+          status: "error",
+          message: "需要登录才能查看自己的扩展"
+        });
+      }
+      where.project = {
+        authorid: res.locals.userid
+      };
+    } else if (scope === "public") {
+      // 查询公开扩展 - 仅已验证
+      where.status = "verified";
+    } else if (scope === "all") {
+      // 查询所有扩展 - 需要管理员权限或特殊权限
+      // 这里可以添加权限检查
+    }
+
+    // 状态筛选 - 仅在scope不是public时有效
+    if (status_filter && scope !== "public") {
+      const validStatuses = ["developing", "pending", "verified", "rejected"];
+      if (validStatuses.includes(status_filter)) {
+        where.status = status_filter;
+      }
+    }
+
+    // 构建项目查询条件
+    const projectWhere = {};
+
+    // 搜索条件
+    if (search) {
+      projectWhere.OR = [
+        { title: { contains: search } },
+        { description: { contains: search } },
+        { name: { contains: search } }
+      ];
+    }
+
+    // 作者筛选
+    if (author) {
+      projectWhere.author = {
+        username: { contains: author }
+      };
+    }
+
+    // 标签筛选
+    if (tags) {
+      const tagArray = tags.split(',').map(tag => tag.trim()).filter(tag => tag);
+      if (tagArray.length > 0) {
+        projectWhere.OR = projectWhere.OR || [];
+        tagArray.forEach(tag => {
+          projectWhere.OR.push({ tags: { contains: tag } });
+        });
+      }
+    }
+
+    // 合并项目查询条件
+    if (Object.keys(projectWhere).length > 0) {
+      if (where.project) {
+        where.project = { ...where.project, ...projectWhere };
+      } else {
+        where.project = projectWhere;
+      }
+    }
+
+    // 文档筛选
+    if (has_docs === "true") {
+      where.docs = { not: null };
+    } else if (has_docs === "false") {
+      where.docs = null;
+    }
+
+    // 示例项目筛选
+    if (has_samples === "true") {
+      where.samples = { not: null };
+    } else if (has_samples === "false") {
+      where.samples = null;
+    }
+
+    // Scratch兼容性筛选
+    if (scratchCompatible === "true") {
+      where.scratchCompatible = true;
+    } else if (scratchCompatible === "false") {
+      where.scratchCompatible = false;
+    }
+
+    // 排序选项
+    let orderBy = {};
+    switch (sort) {
+      case "created_at":
+        orderBy.created_at = order;
+        break;
+      case "updated_at":
+        orderBy.updated_at = order;
+        break;
+      case "stars":
+        orderBy.project = { star_count: order };
+        break;
+      case "views":
+        orderBy.project = { view_count: order };
+        break;
+      case "likes":
+        orderBy.project = { like_count: order };
+        break;
+      case "name":
+        orderBy.project = { title: order };
+        break;
+      case "author":
+        orderBy.project = { author: { username: order } };
+        break;
+      case "popularity":
+        orderBy.project = {
+          star_count: order,
+          view_count: order,
+          like_count: order
+        };
+        break;
+      default:
+        orderBy.created_at = "desc";
+    }
+
+    // 获取总数
+    const total = await prisma.ow_scratch_extensions.count({ where });
+
+    // 获取扩展列表
+    const extensions = await prisma.ow_scratch_extensions.findMany({
+      where,
+      include: {
         project: {
-          select: {
-            id: true,
-            title: true,
-            description: true,
-            tags: true,
-            name: true,
+          include: {
             author: {
               select: {
                 id: true,
-                avatar: true,
                 username: true,
-                display_name: true
+                display_name: true,
+                avatar: true
               }
             }
           }
         },
         sample_project: {
-          select: {
-            id: true,
-            title: true,
-            name: true,
+          include: {
             author: {
               select: {
                 username: true,
@@ -757,26 +844,207 @@ router.get("/marketplace/:id", async (req, res, next) => {
               }
             }
           }
+        }
+      },
+      orderBy,
+      skip: offset,
+      take: limitNum
+    });
+
+    const frontendUrl = await zcconfig.get("urls.frontend");
+
+    // 格式化返回数据
+    const formattedExtensions = extensions.map(ext => ({
+      id: ext.id,
+      name: ext.project.title,
+      description: ext.project.description,
+      image: ext.image || `${s3staticurl}/scratch_slt/${ext.project.id}`,
+      status: ext.status,
+      author: {
+        id: ext.project.author.id,
+        username: ext.project.author.username,
+        display_name: ext.project.author.display_name,
+        avatar: ext.project.author.avatar,
+        profile_url: `${frontendUrl}/${ext.project.author.username}`
+      },
+      project: {
+        id: ext.project.id,
+        name: ext.project.name,
+        url: `${frontendUrl}/${ext.project.author.username}/${ext.project.name}`,
+        star_count: ext.project.star_count || 0,
+        view_count: ext.project.view_count || 0,
+        like_count: ext.project.like_count || 0,
+        tags: ext.project.tags ? ext.project.tags.split(',').filter(tag => tag.trim()) : []
+      },
+      has_docs: !!ext.docs,
+      docs_url: ext.docs,
+      has_samples: !!ext.sample_project,
+      sample_project: ext.sample_project ? {
+        id: ext.sample_project.id,
+        name: ext.sample_project.name,
+        title: ext.sample_project.title,
+        author: {
+          username: ext.sample_project.author.username,
+          display_name: ext.sample_project.author.display_name
         },
-        docs: true,
-        scratchCompatible: true,
-        branch: true,
-        commit: true,
-        created_at: true,
-        updated_at: true
+        url: `${frontendUrl}/${ext.sample_project.author.username}/${ext.sample_project.name}`
+      } : null,
+      scratchCompatible: ext.scratchCompatible,
+      branch: ext.branch,
+      commit: ext.commit,
+      created_at: ext.created_at,
+      updated_at: ext.updated_at
+    }));
+
+    res.status(200).send({
+      status: "success",
+      data: {
+        extensions: formattedExtensions,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          total_pages: Math.ceil(total / limitNum),
+          has_next: pageNum < Math.ceil(total / limitNum),
+          has_prev: pageNum > 1
+        },
+        filters: {
+          search,
+          author,
+          has_docs,
+          has_samples,
+          tags,
+          scratchCompatible,
+          scope,
+          status_filter
+        },
+        sort: {
+          field: sort,
+          order: order
+        }
+      }
+    });
+  } catch (err) {
+    logger.error("Error searching extensions:", err);
+    res.status(500).send({
+      status: "error",
+      message: "搜索扩展时出错"
+    });
+  }
+});
+
+// 统一的单个扩展详情查询接口 - 支持查询公开扩展和用户自己的扩展
+router.get("/detail/:id", async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { scope = "public" } = req.query;
+
+    // 构建查询条件
+    const where = { id: Number(id) };
+
+    if (scope === "my") {
+      // 查询用户自己的扩展 - 需要登录
+      if (!req.headers.authorization && !res.locals.userid) {
+        return res.status(401).send({
+          status: "error",
+          message: "需要登录才能查看自己的扩展"
+        });
+      }
+      where.project = {
+        authorid: res.locals.userid
+      };
+    } else if (scope === "public") {
+      // 查询公开扩展 - 仅已验证
+      where.status = "verified";
+    } else if (scope === "all") {
+      // 查询所有扩展 - 需要管理员权限或特殊权限
+      // 这里可以添加权限检查
+    }
+
+    const extension = await prisma.ow_scratch_extensions.findFirst({
+      where,
+      include: {
+        project: {
+          include: {
+            author: {
+              select: {
+                id: true,
+                username: true,
+                display_name: true,
+                avatar: true
+              }
+            }
+          }
+        },
+        sample_project: {
+          include: {
+            author: {
+              select: {
+                username: true,
+                display_name: true
+              }
+            }
+          }
+        }
       }
     });
 
     if (!extension) {
       return res.status(404).send({
         status: "error",
-        message: "扩展不存在或未通过审核"
+        message: scope === "public" ? "扩展不存在或未通过审核" : "扩展不存在"
       });
     }
 
+    const frontendUrl = await zcconfig.get("urls.frontend");
+
+    // 格式化返回数据
+    const formattedExtension = {
+      id: extension.id,
+      name: extension.project.title,
+      description: extension.project.description,
+      image: extension.image || `${s3staticurl}/scratch_slt/${extension.project.id}`,
+      status: extension.status,
+      author: {
+        id: extension.project.author.id,
+        username: extension.project.author.username,
+        display_name: extension.project.author.display_name,
+        avatar: extension.project.author.avatar,
+        profile_url: `${frontendUrl}/${extension.project.author.username}`
+      },
+      project: {
+        id: extension.project.id,
+        name: extension.project.name,
+        title: extension.project.title,
+        url: `${frontendUrl}/${extension.project.author.username}/${extension.project.name}`,
+        star_count: extension.project.star_count || 0,
+        view_count: extension.project.view_count || 0,
+        like_count: extension.project.like_count || 0,
+        tags: extension.project.tags ? extension.project.tags.split(',').filter(tag => tag.trim()) : []
+      },
+      has_docs: !!extension.docs,
+      docs_url: extension.docs,
+      has_samples: !!extension.sample_project,
+      sample_project: extension.sample_project ? {
+        id: extension.sample_project.id,
+        name: extension.sample_project.name,
+        title: extension.sample_project.title,
+        author: {
+          username: extension.sample_project.author.username,
+          display_name: extension.sample_project.author.display_name
+        },
+        url: `${frontendUrl}/${extension.sample_project.author.username}/${extension.sample_project.name}`
+      } : null,
+      scratchCompatible: extension.scratchCompatible,
+      branch: extension.branch,
+      commit: extension.commit,
+      created_at: extension.created_at,
+      updated_at: extension.updated_at
+    };
+
     res.status(200).send({
       status: "success",
-      data: extension
+      data: formattedExtension
     });
   } catch (err) {
     logger.error("Error getting extension detail:", err);
@@ -787,7 +1055,6 @@ router.get("/marketplace/:id", async (req, res, next) => {
   }
 });
 
-// 获取扩展市场统计信息
 router.get("/marketplace/stats", async (req, res, next) => {
   try {
     // 总扩展数
