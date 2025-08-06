@@ -15,7 +15,7 @@ import {
     sendMagicLinkEmail,
     validateMagicLinkAndLogin as MagiclinkValidateMagicLinkAndLogin,
 } from "../../services/auth/magiclink.js";
-import {sendEmail} from "../../services/email/emailService.js";
+import { createNotification } from "../notifications.js";
 import tokenUtils from "../../services/auth/tokenUtils.js";
 
 /**
@@ -238,22 +238,26 @@ export const sendLoginCode = async (req, res) => {
             });
         }
 
-        // 发送验证码邮件
+        // 使用createNotification发送登录验证码通知
         const code = verificationResult.code;
-        const frontendUrl = await zcconfig.get("urls.frontend");
-
-        // 构建邮件内容
-        const emailSubject = "登录验证码";
-        const emailContent = `
-      <h2>登录验证码</h2>
-      <p>您好，您的登录验证码是：</p>
-      <p style="font-size: 24px; font-weight: bold; letter-spacing: 5px; text-align: center; margin: 20px 0; padding: 10px; background-color: #f5f5f5; border-radius: 5px;">${code}</p>
-      <p>此验证码将在5分钟内有效。</p>
-      <p>如果这不是您的操作，请忽略此邮件。</p>
-    `;
-
-        // 发送邮件
-        await sendEmail(email, emailSubject, emailContent);
+        
+        // 发送登录验证码邮件通知
+        await createNotification({
+            userId: contact.user_id,
+            title: '登录验证码',
+            content: `您的登录验证码：${code}\n\n请在登录页面输入此验证码完成登录。\n\n验证码5分钟内有效，请及时使用。`,
+            notificationType: 'login_code_email',
+            hidden: true,
+            pushChannels: ['email'],
+            data: {
+                email_to: email,
+                email_username: email.split('@')[0],
+                email_link: null,
+                email_buttons: null,
+                verification_code: code,
+                type: 'login_code'
+            }
+        });
 
         return res.status(200).json({
             status: "success",
@@ -448,6 +452,7 @@ export const sendMagicLinkForLogin = async (req, res) => {
         // 发送魔术链接邮件
         await sendMagicLinkEmail(email, magicLinkResult.magicLink, {
             templateType: "login",
+            userId: user.id
         });
 
         return res.status(200).json({

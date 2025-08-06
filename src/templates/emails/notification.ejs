@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .content {
+            padding: 30px;
+        }
+        .title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+        .message {
+            font-size: 16px;
+            line-height: 1.6;
+            color: #555;
+            margin-bottom: 25px;
+        }
+        .user-info {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 0 4px 4px 0;
+        }
+        .user-info strong {
+            color: #2c3e50;
+        }
+        .action-button {
+            display: inline-block;
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            margin: 10px 5px;
+            transition: transform 0.2s;
+        }
+        .action-button:hover {
+            transform: translateY(-2px);
+        }
+        .action-button.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .action-button.secondary {
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+        }
+        .action-button.success {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        }
+        .action-button.danger {
+            background: linear-gradient(135deg, #dc3545 0%, #e83e8c 100%);
+        }
+        .action-button.warning {
+            background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+            color: #212529;
+        }
+        .action-button.info {
+            background: linear-gradient(135deg, #17a2b8 0%, #6f42c1 100%);
+        }
+        .footer {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            border-top: 1px solid #eee;
+        }
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        .divider {
+            height: 1px;
+            background: #eee;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><%= siteName %></h1>
+        </div>
+        
+        <div class="content">
+            <div class="title"><%= title %></div>
+            
+            <div class="message">
+                <%= content %>
+            </div>
+            
+            <% if (locals.username || locals.email) { %>
+            <div class="user-info">
+                <% if (locals.username) { %>
+                <div><strong>用户:</strong> <%= username %></div>
+                <% } %>
+                <% if (locals.email) { %>
+                <div><strong>邮箱:</strong> <%= email %></div>
+                <% } %>
+                <% if (locals.userId) { %>
+                <div><strong>用户ID:</strong> <%= userId %></div>
+                <% } %>
+            </div>
+            <% } %>
+            
+            <% if (locals.link || locals.buttons) { %>
+            <div style="text-align: center; margin: 20px 0;">
+                <% if (locals.buttons && locals.buttons.length > 0) { %>
+                    <% locals.buttons.forEach(function(button) { %>
+                        <a href="<%= button.url %>" class="action-button <%= button.style || 'primary' %>"><%= button.text %></a>
+                    <% }); %>
+                <% } else if (locals.link) { %>
+                    <a href="<%= link %>" class="action-button">查看详情</a>
+                <% } %>
+            </div>
+            <% } %>
+            
+            <div class="divider"></div>
+            
+            <p style="color: #666; font-size: 14px;">
+                如果您没有请求此操作，请忽略此邮件。如有疑问，请联系我们的支持团队。
+            </p>
+        </div>
+        
+        <div class="footer">
+            <p>此邮件由 <a href="<%= frontendUrl %>"><%= siteName %></a> 自动发送</p>
+            <p>&copy; <%= year %> <%= siteName %>. 保留所有权利。</p>
+        </div>
+    </div>
+</body>
+</html>

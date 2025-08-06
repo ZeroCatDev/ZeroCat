@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import base32Encode from 'base32-encode';
 import {prisma} from "../services/global.js";
-import {sendEmail} from "../services/email/emailService.js";
+import { createNotification } from '../controllers/notifications.js';
 import {TOTP} from "otpauth";
 import logger from '../services/logger.js';
 import memoryCache from '../services/memoryCache.js';
@@ -167,14 +167,34 @@ const sendVerificationEmail = async (contactValue, contactHash, template = 'DEFA
     const token = generateEmailToken(contactHash);
     const verifyUrl = `${await zcconfig.get("urls.frontend")}/app/account/email/verify?email=${encodeURIComponent(contactValue)}&token=${encodeURIComponent(token)}`;
 
-    // 获取对应的邮件模板和主题
-    const emailTemplate = EMAIL_TEMPLATES[template] || EMAIL_TEMPLATES.DEFAULT;
-    const emailSubject = EMAIL_SUBJECTS[template] || EMAIL_SUBJECTS.DEFAULT;
+    // 查找用户ID以发送隐藏通知
+    const contact = await prisma.ow_users_contacts.findFirst({
+        where: {
+            contact_value: contactValue,
+            contact_type: 'email'
+        }
+    });
 
-    // 生成邮件内容
-    const emailContent = emailTemplate(token, verifyUrl);
+    const userId = contact?.user_id || null;
 
-    await sendEmail(contactValue, emailSubject, emailContent);
+    // 使用createNotification发送验证邮件通知
+    await createNotification({
+        userId,
+        title: '验证您的邮箱',
+        content: `您的验证码：${token}\n\n此验证码将在5分钟内有效。\n\n您也可以点击以下链接完成验证：\n${verifyUrl}`,
+        notificationType: 'email_verification',
+        hidden: true,
+        pushChannels: ['email'],
+        data: {
+            email_to: contactValue,
+            email_username: contactValue.split('@')[0],
+            email_link: verifyUrl,
+            email_buttons: null,
+            verification_code: token,
+            verify_url: verifyUrl,
+            type: 'email_verification'
+        }
+    });
 };
 
 // Verify contact

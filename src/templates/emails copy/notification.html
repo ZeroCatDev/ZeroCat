@@ -1,0 +1,19 @@
+<h2>{{title}}</h2>
+<p>你好 <strong>{{username}}</strong>，</p>
+
+<div style="background: #f8f9fa; border-left: 4px solid #1289d8; padding: 20px; margin: 20px 0; border-radius: 0 5px 5px 0;">
+    <p style="margin: 0; font-size: 16px; color: #333;">{{content}}</p>
+</div>
+
+{{#if actionUrl}}
+<p style="text-align: center;">
+    <a href="{{actionUrl}}" class="btn">{{actionText}}</a>
+</p>
+{{/if}}
+
+{{#if additionalInfo}}
+<div class="divider"></div>
+<p style="color: #6c757d;">{{additionalInfo}}</p>
+{{/if}}
+
+<p>这是一条来自 {{siteName}} 的自动通知。</p>

@@ -1,0 +1,31 @@
+<h2>邮箱验证</h2>
+<p>你好 <strong>{{username}}</strong>，</p>
+<p>请验证你的邮箱地址以完成账户设置。</p>
+
+<div class="code-box">
+    <p>你的邮箱验证码是：</p>
+    <div class="verification-code">{{verificationCode}}</div>
+    <p style="color: #6c757d; margin-top: 15px;">此验证码将在 5 分钟内有效</p>
+</div>
+
+{{#if verifyUrl}}
+<p>你也可以点击以下按钮完成验证：</p>
+<p style="text-align: center;">
+    <a href="{{verifyUrl}}" class="btn">验证邮箱</a>
+</p>
+
+<p>或者复制以下链接到浏览器地址栏：</p>
+<p style="word-break: break-all; background: #f8f9fa; padding: 15px; border-radius: 5px; font-family: monospace;">
+    {{verifyUrl}}
+</p>
+{{/if}}
+
+<p>验证邮箱后，你将能够：</p>
+<ul>
+    <li>接收重要的账户通知</li>
+    <li>使用邮箱登录功能</li>
+    <li>获得更好的安全保护</li>
+    <li>享受完整的服务体验</li>
+</ul>
+
+<p>如果你没有注册此邮箱，请忽略这封邮件。</p>

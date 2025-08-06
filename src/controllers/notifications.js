@@ -9,6 +9,7 @@ import { dirname, join } from 'path';
 import { sendEmail } from "../services/email/emailService.js";
 import zcconfig from "../services/config/zcconfig.js";
 import { sendPushNotificationToUser } from "../services/pushNotification.js";
+import emailTemplateService from "../services/email/emailTemplateService.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -135,7 +136,11 @@ async function executeMultiChannelPush(pushData) {
             switch (channel) {
                 case 'browser':
                 case 'push':
-                    // 浏览器推送通知
+                    // 浏览器推送通知 - 需要用户ID
+                    if (!userId) {
+                        logger.warn(`跳过 ${channel} 推送：没有用户ID`);
+                        continue;
+                    }
                     result = await sendPushNotificationToUser(userId, {
                         title: title,
                         body: content,
@@ -151,13 +156,44 @@ async function executeMultiChannelPush(pushData) {
 
                 case 'email':
                     // 邮件推送
-                    result = await sendEmailNotificationDirect({
-                        userId,
-                        title,
-                        content,
-                        link,
-                        notificationId: notification.id
-                    });
+                    if (notificationData.data && notificationData.data.email_to) {
+                        // 使用EmailTemplateService渲染和发送邮件
+                        const emailData_details = notificationData.data;
+                        const {
+                            email_to,
+                            email_username,
+                            email_link,
+                            email_buttons
+                        } = emailData_details;
+
+                        const rendered = await emailTemplateService.renderTemplate('notification', {
+                            title,
+                            content,
+                            email: email_to,
+                            username: email_username || email_to.split('@')[0],
+                            userId: userId,
+                            link: email_link,
+                            buttons: email_buttons
+                        });
+
+                        const { sendEmail } = await import('../services/email/emailService.js');
+                        await sendEmail(email_to, rendered.subject, rendered.html);
+                        
+                        result = {
+                            success: true,
+                            to: email_to,
+                            subject: rendered.subject
+                        };
+                    } else {
+                        // 原有逻辑，发送给已知用户
+                        result = await sendEmailNotificationDirect({
+                            userId,
+                            title,
+                            content,
+                            link,
+                            notificationId: notification.id
+                        });
+                    }
                     break;
 
                 default:
@@ -225,53 +261,40 @@ async function sendEmailNotificationDirect(emailData) {
         throw new Error('用户邮箱不存在');
     }
 
-    // 获取前端地址配置
-    const frontendUrl = await zcconfig.get("urls.frontend") || 'https://zerocat.top';
+    // 从通知的data中获取邮件相关信息
+    const notification = await prisma.ow_notifications.findUnique({
+        where: { id: notificationId },
+        select: { data: true }
+    });
 
-    // 构建邮件内容
-    const notificationLink = notificationId
-        ? `${frontendUrl}/app/notifications/${notificationId}`
-        : (link ? (link.startsWith('http') ? link : `${frontendUrl}${link}`) : null);
+    const emailData_details = notification?.data || {};
+    const {
+        email_to,
+        email_username,
+        email_link,
+        email_buttons,
+        has_link,
+        has_buttons
+    } = emailData_details;
 
-    const emailHtml = `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>${title}</title>
-    <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background: #007bff; color: white; padding: 20px; text-align: center; }
-        .content { padding: 20px; background: #f9f9f9; }
-        .footer { padding: 20px; text-align: center; font-size: 12px; color: #666; }
-        .btn { display: inline-block; padding: 10px 20px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>${title}</h1>
-        </div>
-        <div class="content">
-            <p>您好 ${user.display_name || user.username}，</p>
-            <p>${content}</p>
-            ${notificationLink ? `<p><a href="${notificationLink}" class="btn">查看详情</a></p>` : ''}
-        </div>
-        <div class="footer">
-            <p>此邮件由 ZeroCat 系统自动发送，请勿回复。</p>
-            ${notificationLink ? `<p><a href="${notificationLink}">在浏览器中查看</a></p>` : ''}
-        </div>
-    </div>
-</body>
-</html>`;
+    // 使用EmailTemplateService渲染邮件
+    const rendered = await emailTemplateService.renderTemplate('notification', {
+        title,
+        content,
+        email: user.email,
+        username: email_username || user.display_name || user.username,
+        userId: userId,
+        link: email_link,
+        buttons: email_buttons
+    });
 
-    await sendEmail(user.email, title, emailHtml);
+    // 发送邮件
+    await sendEmail(user.email, rendered.subject, rendered.html);
 
     return {
         success: true,
-        email: user.email,
-        notificationId
+        to: user.email,
+        subject: rendered.subject
     };
 }
 
@@ -347,29 +370,35 @@ export async function createNotification(notificationData) {
         let hasError = false;
 
         // 在数据库中创建通知
-        const notification = await prisma.ow_notifications.create({
-            data: {
-                user_id: notificationData.userId ? Number(notificationData.userId) : undefined,
-                title: title,
-                content: content,
-                link: link,
-                metadata: {
-                    template_used: notificationData.notificationType,
-                    template_vars: templateVars,
-                    ...notificationData.data,
-                },
-                notification_type: notificationData.notificationType ? String(notificationData.notificationType) : undefined,
-                actor_id: notificationData.actorId ? Number(notificationData.actorId) : null,
-                target_type: notificationData.targetType ? String(notificationData.targetType) : null,
-                target_id: notificationData.targetId ? Number(notificationData.targetId) : null,
-                data: notificationData.data || {},
-                high_priority: notificationData.highPriority || false,
-                hidden: notificationData.hidden || false,
-                push_channels: pushChannels,
-                push_results: {},
-                push_error: false,
-                read: false,
+        const notificationCreateData = {
+            title: title,
+            content: content,
+            link: link,
+            metadata: {
+                template_used: notificationData.notificationType,
+                template_vars: templateVars,
+                ...notificationData.data,
             },
+            notification_type: notificationData.notificationType ? String(notificationData.notificationType) : undefined,
+            actor_id: notificationData.actorId ? Number(notificationData.actorId) : null,
+            target_type: notificationData.targetType ? String(notificationData.targetType) : null,
+            target_id: notificationData.targetId ? Number(notificationData.targetId) : null,
+            data: notificationData.data || {},
+            high_priority: notificationData.highPriority || false,
+            hidden: notificationData.hidden || false,
+            push_channels: pushChannels,
+            push_results: {},
+            push_error: false,
+            read: false,
+        };
+
+        // 如果有userId，则设置user_id字段
+        if (notificationData.userId) {
+            notificationCreateData.user_id = Number(notificationData.userId);
+        }
+
+        const notification = await prisma.ow_notifications.create({
+            data: notificationCreateData
         });
 
         // 执行多渠道推送

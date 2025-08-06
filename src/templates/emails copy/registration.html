@@ -1,0 +1,30 @@
+<h2>欢迎注册 {{siteName}}！</h2>
+<p>你好 <strong>{{username}}</strong>，</p>
+<p>感谢你注册 {{siteName}}！你的账户已经创建成功。</p>
+
+<div class="code-box">
+    <p>你的账户信息：</p>
+    <p><strong>登录邮箱：</strong>{{email}}</p>
+    {{#if password}}
+    <p><strong>初始密码：</strong>{{password}}</p>
+    {{/if}}
+</div>
+
+<p>为了保证账户安全，建议你：</p>
+<ul>
+    <li>尽快修改初始密码</li>
+    <li>完善个人资料信息</li>
+    <li>验证邮箱地址以获得完整功能</li>
+</ul>
+
+<p style="text-align: center;">
+    <a href="{{loginUrl}}" class="btn">立即登录</a>
+</p>
+
+<p>如果你没有注册此账户，请忽略这封邮件或联系我们的支持团队。</p>
+
+<div class="divider"></div>
+<p style="text-align: center; color: #6c757d;">
+    <img src="https://cdn.wuyuan.dev/img/qrcode_for_gh_a55736ccbcb4_258_6dxqg3_.jpg" style="width:100px; height:100px; margin:10px auto; display:block;" alt="关注公众号">
+    关注公众号，快速了解社区活动
+</p>

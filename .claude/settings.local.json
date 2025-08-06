@@ -3,7 +3,8 @@
     "allow": [
       "Bash(npm install:*)",
       "Bash(pnpm add:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": []
   }

@@ -3,9 +3,9 @@ import jsonwebtoken from 'jsonwebtoken';
 import zcconfig from '../config/zcconfig.js';
 import redisClient from '../redis.js';
 import logger from '../logger.js';
-import {sendEmail} from '../email/emailService.js';
 import {checkRateLimit, VerificationType} from './verification.js';
 import {createJWT} from './tokenUtils.js';
+import { createNotification } from '../../controllers/notifications.js';
 
 // 生成魔术链接
 export async function generateMagicLinkForLogin(userId, email, options = {}) {
@@ -57,53 +57,56 @@ export async function generateMagicLinkForLogin(userId, email, options = {}) {
 export async function sendMagicLinkEmail(email, magicLink, options = {}) {
     try {
         const templateType = options.templateType || 'login';
-        let subject, content;
-
-        switch (templateType) {
-            case 'register':
-                subject = '完成您的账户注册';
-                content = `
-          <h2>完成您的账户注册</h2>
-          <p>您好，感谢您注册我们的服务！</p>
-          <p>请点击以下链接完成账户设置：</p>
-          <p><a href="${magicLink}" style="padding: 10px 15px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 4px;">完成注册</a></p>
-          <p>或者您可以复制以下链接到浏览器地址栏：</p>
-          <p>${magicLink}</p>
-          <p>此链接将在10分钟内有效。</p>
-          <p>如果这不是您的操作，请忽略此邮件。</p>
-        `;
-                break;
-
-            case 'password_reset':
-                subject = '重置您的密码';
-                content = `
-          <h2>密码重置请求</h2>
-          <p>您好，我们收到了重置您密码的请求。</p>
-          <p>请点击以下链接设置新密码：</p>
-          <p><a href="${magicLink}" style="padding: 10px 15px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 4px;">重置密码</a></p>
-          <p>或者您可以复制以下链接到浏览器地址栏：</p>
-          <p>${magicLink}</p>
-          <p>此链接将在10分钟内有效。</p>
-          <p>如果这不是您的操作，请忽略此邮件并考虑修改您的密码。</p>
-        `;
-                break;
-
-            default: // login
-                subject = '魔术链接登录';
-                content = `
-          <h2>魔术链接登录请求</h2>
-          <p>您好，您请求了使用魔术链接登录。</p>
-          <p>请点击以下链接登录：</p>
-          <p><a href="${magicLink}" style="padding: 10px 15px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 4px;">登录</a></p>
-          <p>或者您可以复制以下链接到浏览器地址栏：</p>
-          <p>${magicLink}</p>
-          <p>此链接将在10分钟内有效。</p>
-          <p>如果这不是您的操作，请忽略此邮件并考虑修改您的密码。</p>
-        `;
-                break;
+        const userId = options.userId || null;
+        
+        // 需要userId才能发送通知
+        if (!userId) {
+            // 如果没有userId，先根据email查找用户
+            const { prisma } = await import('../global.js');
+            const contact = await prisma.ow_users_contacts.findFirst({
+                where: {
+                    contact_value: email,
+                    contact_type: 'email'
+                }
+            });
+            
+            if (!contact) {
+                throw new Error('无法发送魔术链接邮件：未找到用户');
+            }
+            
+            options.userId = contact.user_id;
         }
-
-        await sendEmail(email, subject, content);
+        
+        const titleMap = {
+            login: '魔术链接登录',
+            register: '完成账户注册',
+            password_reset: '密码重置'
+        };
+        
+        const contentMap = {
+            login: '点击下方链接快速登录您的账户',
+            register: '点击下方链接完成您的账户注册',
+            password_reset: '点击下方链接重置您的密码'
+        };
+        
+        // 使用createNotification发送魔术链接通知
+        await createNotification({
+            userId: options.userId,
+            title: titleMap[templateType] || '魔术链接',
+            content: `${contentMap[templateType] || '点击下方链接继续操作'}：\n\n${magicLink}\n\n链接将在30分钟后失效，请及时使用。`,
+            notificationType: 'magic_link_email',
+            hidden: true,
+            pushChannels: ['email'],
+            data: {
+                email_to: email,
+                email_username: email.split('@')[0],
+                email_link: magicLink,
+                email_buttons: null,
+                type: 'magic_link',
+                template_type: templateType,
+                magic_link: magicLink
+            }
+        });
 
         return {
             success: true

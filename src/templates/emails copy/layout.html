@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{subject}}</title>
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #1289d8, #0585ee);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 300;
+        }
+        .content {
+            padding: 40px 30px;
+            background: #fff;
+        }
+        .content h2 {
+            color: #1289d8;
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-size: 24px;
+            font-weight: 400;
+        }
+        .content p {
+            margin-bottom: 16px;
+            color: #555;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #1289d8, #0585ee);
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: 500;
+            margin: 20px 0;
+            transition: all 0.3s ease;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(18, 137, 216, 0.4);
+        }
+        .code-box {
+            background: #f8f9fa;
+            border: 2px dashed #1289d8;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            margin: 25px 0;
+        }
+        .verification-code {
+            font-size: 32px;
+            font-weight: bold;
+            letter-spacing: 8px;
+            color: #1289d8;
+            font-family: 'Courier New', monospace;
+        }
+        .footer {
+            background: #f8f9fa;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid #e9ecef;
+        }
+        .footer p {
+            margin: 5px 0;
+            font-size: 14px;
+            color: #6c757d;
+        }
+        .footer a {
+            color: #1289d8;
+            text-decoration: none;
+        }
+        .logo {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 20px;
+            display: block;
+        }
+        .divider {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #1289d8, transparent);
+            margin: 30px 0;
+        }
+        @media only screen and (max-width: 600px) {
+            .container {
+                margin: 0;
+                border-radius: 0;
+            }
+            .header, .content, .footer {
+                padding: 20px;
+            }
+            .verification-code {
+                font-size: 28px;
+                letter-spacing: 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img class="logo" src="https://b2.190823.xyz/2023/05/d405a5b948f858b3479fa0d60478c98f.svg" alt="{{siteName}}" />
+            <h1>{{subject}}</h1>
+        </div>
+        <div class="content">
+            {{{content}}}
+        </div>
+        <div class="footer">
+            <p>此邮件由 {{siteName}} 系统自动发送，请勿回复。</p>
+            <p>如需联系，请发送邮件至 <a href="mailto:{{siteEmail}}">{{siteEmail}}</a></p>
+            {{#if unsubscribeUrl}}
+            <p><a href="{{unsubscribeUrl}}">取消订阅此类邮件</a></p>
+            {{/if}}
+            <div class="divider"></div>
+            <p>© {{year}} {{siteName}}. 保留所有权利。</p>
+        </div>
+    </div>
+</body>
+</html>
