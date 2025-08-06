@@ -671,9 +671,3 @@ export const logoutAllDevices = async (req, res) => {
     }
 };
 
-/**
- * 发送验证码到指定邮箱
- */
-export const sendVerificationEmail = async (email, contactHash, type) => {
-    // 实现从email.js导入
-};
