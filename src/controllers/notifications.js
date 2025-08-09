@@ -166,11 +166,30 @@ async function executeMultiChannelPush(pushData) {
                             email_buttons
                         } = emailData_details;
 
+                        // 获取用户信息以显示display_name
+                        let userDisplayInfo = {};
+                        if (userId) {
+                            const user = await prisma.ow_users.findUnique({
+                                where: { id: Number(userId) },
+                                select: {
+                                    display_name: true,
+                                    username: true,
+                                },
+                            });
+                            userDisplayInfo = {
+                                display_name: user?.display_name || user?.username || email_username || email_to.split('@')[0]
+                            };
+                        } else {
+                            userDisplayInfo = {
+                                display_name: email_username || email_to.split('@')[0]
+                            };
+                        }
+
                         const rendered = await emailTemplateService.renderTemplate('notification', {
                             title,
                             content,
                             email: email_to,
-                            username: email_username || email_to.split('@')[0],
+                            username: userDisplayInfo.display_name,
                             userId: userId,
                             link: email_link,
                             buttons: email_buttons
@@ -282,7 +301,7 @@ async function sendEmailNotificationDirect(emailData) {
         title,
         content,
         email: user.email,
-        username: email_username || user.display_name || user.username,
+        username: user.display_name || user.username,
         userId: userId,
         link: email_link,
         buttons: email_buttons

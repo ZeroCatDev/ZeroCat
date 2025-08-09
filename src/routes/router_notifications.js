@@ -323,16 +323,15 @@ router.post("/register-browser", needLogin, async (req, res) => {
  * @desc 取消浏览器推送通知
  * @access Private
  */
-router.delete("/register-browser", needLogin, async (req, res) => {
+router.delete("/register-browser", async (req, res) => {
     try {
-        const userId = res.locals.userid;
         const { endpoint } = req.body;
 
         if (!endpoint) {
             return res.status(400).json({error: "缺少推送端点信息"});
         }
 
-        const result = await unregisterPushSubscription(userId, endpoint);
+        const result = await unregisterPushSubscription(endpoint);
 
         if (result.success) {
             res.json({

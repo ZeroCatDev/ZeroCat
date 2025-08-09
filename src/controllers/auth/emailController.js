@@ -1,7 +1,8 @@
 import logger from "../../services/logger.js";
-import {prisma} from "../../services/global.js";
-import {addUserContact, sendVerificationEmail, verifyContact} from "../email.js";
-
+import { prisma } from "../../services/global.js";
+import { addUserContact, sendVerificationEmail, verifyContact } from "../email.js";
+import isEmail from 'validator/lib/isEmail.js'
+import { isDisposableEmail } from "../../services/global.js";
 /**
  * 获取用户邮箱列表
  */
@@ -21,7 +22,7 @@ export const getEmails = async (req, res) => {
                 verified: true,
                 created_at: true,
             },
-            orderBy: [{is_primary: "desc"}, {created_at: "desc"}],
+            orderBy: [{ is_primary: "desc" }, { created_at: "desc" }],
         });
 
         return res.status(200).json({
@@ -43,7 +44,7 @@ export const getEmails = async (req, res) => {
  */
 export const sendVerificationCode = async (req, res) => {
     try {
-        const {email} = req.body;
+        const { email } = req.body;
         const userId = res.locals.userid;
 
         // 检查邮箱是否属于当前用户
@@ -82,39 +83,11 @@ export const sendVerificationCode = async (req, res) => {
  */
 export const addEmail = async (req, res) => {
     try {
-        const {email, verificationCode} = req.body;
+        const { email } = req.body;
         const userId = res.locals.userid;
 
-        // 获取主邮箱
-        const primaryEmail = await prisma.ow_users_contacts.findFirst({
-            where: {
-                user_id: userId,
-                contact_type: "email",
-                is_primary: true,
-            },
-        });
-
-        if (!primaryEmail) {
-            return res.status(200).json({
-                status: "error",
-                message: "需要先设置主邮箱",
-            });
-        }
-
-        // 验证主邮箱的验证码
-        const isValid = await verifyContact(
-            primaryEmail.contact_value,
-            verificationCode
-        );
-        if (!isValid) {
-            return res.status(200).json({
-                status: "error",
-                message: "验证码无效",
-            });
-        }
-
         // 检查新邮箱格式
-        if (!email || !emailTest(email)) {
+        if (!email || !isEmail(email)|| isDisposableEmail(email)) {
             return res.status(200).json({
                 status: "error",
                 message: "请提供有效的邮箱地址",
@@ -123,7 +96,7 @@ export const addEmail = async (req, res) => {
 
         // 检查邮箱是否已被使用
         const existingContact = await prisma.ow_users_contacts.findFirst({
-            where: {contact_value: email},
+            where: { contact_value: email },
         });
 
         if (existingContact) {
@@ -176,36 +149,8 @@ export const addEmail = async (req, res) => {
  */
 export const removeEmail = async (req, res) => {
     try {
-        const {email, verificationCode} = req.body;
+        const { email } = req.body;
         const userId = res.locals.userid;
-
-        // 获取主邮箱
-        const primaryEmail = await prisma.ow_users_contacts.findFirst({
-            where: {
-                user_id: userId,
-                contact_type: "email",
-                is_primary: true,
-            },
-        });
-
-        if (!primaryEmail) {
-            return res.status(200).json({
-                status: "error",
-                message: "需要先设置主邮箱",
-            });
-        }
-
-        // 验证主邮箱的验证码
-        const isValid = await verifyContact(
-            primaryEmail.contact_value,
-            verificationCode
-        );
-        if (!isValid) {
-            return res.status(200).json({
-                status: "error",
-                message: "验证码无效",
-            });
-        }
 
         // 查找要删除的邮箱
         const contactToDelete = await prisma.ow_users_contacts.findFirst({
@@ -256,7 +201,7 @@ export const removeEmail = async (req, res) => {
  */
 export const setPrimaryEmail = async (req, res) => {
     try {
-        const {email, verificationCode} = req.body;
+        const { email, verificationCode } = req.body;
         const userId = res.locals.userid;
 
         // 验证邮箱归属

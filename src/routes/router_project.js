@@ -1087,7 +1087,9 @@ router.get("/files/:sha256", async (req, res, next) => {
 });
 
 // 删除作品
-router.delete("/:id", async (req, res, next) => {
+import { requireSudo } from "../middleware/sudo.js"; // 放顶部已有import区
+
+router.delete("/:id", needLogin, requireSudo, async (req, res, next) => {
   try {
     const project = await prisma.ow_projects.findFirst({
       where: { id: Number(req.params.id), authorid: res.locals.userid },
@@ -1219,7 +1221,7 @@ router.post("/initlize", needLogin, async (req, res, next) => {
 });
 
 // 重命名项目
-router.put("/rename/:id", needLogin, async (req, res, next) => {
+router.put("/rename/:id", needLogin, requireSudo, async (req, res, next) => {
   try {
     const { id } = req.params;
     const { newName } = req.body;
@@ -1289,7 +1291,7 @@ router.put("/rename/:id", needLogin, async (req, res, next) => {
 });
 
 // 重命名项目
-router.put("/changevisibility/:id", needLogin, async (req, res, next) => {
+router.put("/changevisibility/:id", needLogin, requireSudo, async (req, res, next) => {
   try {
     const { id } = req.params;
     const { newState } = req.body;

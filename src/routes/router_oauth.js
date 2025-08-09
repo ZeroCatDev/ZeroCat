@@ -9,7 +9,7 @@ import {generateAuthCode, validateRedirectUri, validateScopes,} from "../service
 import {generateOAuthTokens, refreshOAuthTokens, verifyOAuthClientCredentials,} from "../services/auth/tokenManager.js";
 import multer from "multer";
 import { handleAssetUpload } from "../services/assets.js";
-
+import {requireSudo} from "../middleware/sudo.js";
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -128,7 +128,7 @@ async function handleUserInfoError(res, errorInfo) {
 }
 
 // 创建新的OAuth应用
-router.post("/applications", needLogin, async (req, res) => {
+router.post("/applications", needLogin, requireSudo, async (req, res) => {
     try {
         const {
             name,
@@ -383,7 +383,7 @@ router.put("/applications/:client_id", needLogin, async (req, res) => {
 });
 
 // 删除应用（软删除）
-router.delete("/applications/:client_id", needLogin, async (req, res) => {
+router.delete("/applications/:client_id", needLogin, requireSudo, async (req, res) => {
     try {
         const {client_id} = req.params;
 

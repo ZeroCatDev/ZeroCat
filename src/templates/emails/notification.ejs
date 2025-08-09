@@ -122,14 +122,9 @@
                 <%= content %>
             </div>
             
-            <% if (locals.username || locals.email) { %>
+            <% if (locals.username) { %>
             <div class="user-info">
-                <% if (locals.username) { %>
                 <div><strong>用户:</strong> <%= username %></div>
-                <% } %>
-                <% if (locals.email) { %>
-                <div><strong>邮箱:</strong> <%= email %></div>
-                <% } %>
                 <% if (locals.userId) { %>
                 <div><strong>用户ID:</strong> <%= userId %></div>
                 <% } %>

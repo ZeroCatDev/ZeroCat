@@ -3,13 +3,15 @@ import zcconfig from "../services/config/zcconfig.js";
 import {Router} from "express";
 import {prisma} from "../services/global.js";
 import {needAdmin, needLogin} from "../middleware/auth.js";
+import { requireSudo } from "../middleware/sudo.js";
 import {createEvent} from "../controllers/events.js";
 import jwt from "jsonwebtoken";
 import * as bcrypt from "bcrypt";
 import {PasswordHash} from "phpass";
+import { changeUsername } from "../controllers/users.js";
 
-// PHPass hasher for legacy password validation
-const passwordHash = new PasswordHash();
+ // PHPass hasher for legacy password validation
+ const passwordHash = new PasswordHash();
 
 // Helper function to check if password is hashed with PHPass
 function isPhpassHash(hash) {
@@ -435,53 +437,17 @@ router.post("/login", async function (req, res, next) {
 });
 
 // 修改密码
-router.post("/change-password", needLogin, async function (req, res, next) {
+router.post("/change-password", needLogin, requireSudo, async function (req, res, next) {
     try {
         const userId = res.locals.userid;
-        const {currentPassword, newPassword} = req.body;
+        const { newPassword } = req.body;
 
         // 简单验证
-        if (!currentPassword || !newPassword) {
+        if (!newPassword) {
             return res.status(400).json({
                 status: "error",
                 code: "validation_error",
-                message: "当前密码和新密码为必填项",
-            });
-        }
-
-        // 获取用户信息
-        const user = await prisma.ow_users.findUnique({
-            where: {id: userId},
-        });
-
-        if (!user) {
-            return res.status(404).json({
-                status: "error",
-                code: "not_found",
-                message: "用户不存在",
-            });
-        }
-
-        // 验证当前密码
-        let passwordValid = false;
-
-        // 检查密码哈希类型并验证
-        if (isPhpassHash(user.password)) {
-            // 使用PHPass验证
-            passwordValid = passwordHash.checkPassword(
-                currentPassword,
-                user.password
-            );
-        } else {
-            // 使用bcrypt验证
-            passwordValid = await bcrypt.compare(currentPassword, user.password);
-        }
-
-        if (!passwordValid) {
-            return res.status(401).json({
-                status: "error",
-                code: "invalid_password",
-                message: "当前密码错误",
+                message: "新密码为必填项",
             });
         }
 
@@ -504,8 +470,11 @@ router.post("/change-password", needLogin, async function (req, res, next) {
     }
 });
 
-// 更新用户信息
-router.patch("/profile/update", needLogin, async function (req, res, next) {
+// 修改用户名
+router.post("/change-username", needLogin, requireSudo, changeUsername);
+
+ // 更新用户信息
+ router.patch("/profile/update", needLogin, async function (req, res, next) {
     try {
         const userId = res.locals.userid;
         const {display_name, bio, avatar, settings} = req.body;

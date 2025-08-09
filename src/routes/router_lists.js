@@ -105,7 +105,9 @@ router.post("/create", needLogin, async (req, res) => {
 });
 
 // Delete a list
-router.post("/delete", needLogin, async (req, res) => {
+import { requireSudo } from "../middleware/sudo.js";
+
+router.post("/delete", needLogin, requireSudo, async (req, res) => {
     try {
         const {id} = req.body;
 

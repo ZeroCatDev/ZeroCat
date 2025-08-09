@@ -4,7 +4,7 @@
 
 ## 接口概览
 
-### 1. 统一扩展搜索接口 
+### 1. 统一扩展搜索接口
 `GET /extensions/search`
 
 支持灵活的扩展搜索和筛选，可以查询公开扩展、用户自己的扩展或所有扩展。
@@ -42,7 +42,7 @@ GET /extensions/search
 
 #### 排序字段选项
 - `created_at`: 创建时间
-- `updated_at`: 更新时间  
+- `updated_at`: 更新时间
 - `stars`: 星标数
 - `views`: 查看数
 - `likes`: 点赞数
@@ -268,8 +268,8 @@ GET /extensions/detail/123?scope=my
    ```javascript
    // 原来
    fetch('/extensions/marketplace')
-   
-   // 现在  
+
+   // 现在
    fetch('/extensions/search?scope=public')
    ```
 
@@ -277,7 +277,7 @@ GET /extensions/detail/123?scope=my
    ```javascript
    // 原来
    fetch('/extensions/manager/my')
-   
+
    // 现在
    fetch('/extensions/search?scope=my')
    ```
@@ -286,7 +286,7 @@ GET /extensions/detail/123?scope=my
    ```javascript
    // 原来
    fetch('/extensions/marketplace/123')
-   
+
    // 现在
    fetch('/extensions/detail/123?scope=public')
    ```
@@ -295,8 +295,8 @@ GET /extensions/detail/123?scope=my
    ```javascript
    // 原来
    fetch('/extensions/manager/123')
-   
-   // 现在  
+
+   // 现在
    fetch('/extensions/detail/123?scope=my')
    ```
 

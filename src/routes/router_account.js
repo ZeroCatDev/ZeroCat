@@ -1,5 +1,6 @@
 import {Router} from "express";
 import {needLogin} from "../middleware/auth.js";
+import { requireSudo } from "../middleware/sudo.js";
 import {tokenAuthMiddleware} from "../middleware.js";
 import geetestMiddleware from "../middleware/geetest.js";
 import {
@@ -47,10 +48,10 @@ router.post("/reset-password", registerController.resetPassword);
 router.post("/set-password", registerController.setPassword);
 
 // 邮箱管理相关路由
-router.get("/emails", needLogin, emailController.getEmails);
 router.post("/send-verification-code", needLogin, emailController.sendVerificationCode);
-router.post("/add-email", needLogin, emailController.addEmail);
-router.post("/remove-email", needLogin, emailController.removeEmail);
+router.get("/emails", needLogin, emailController.getEmails);
+router.post("/add-email", needLogin, requireSudo, emailController.addEmail);
+router.post("/remove-email", needLogin, requireSudo, emailController.removeEmail);
 
 // TOTP相关路由
 router.get("/totp/list", needLogin, totpController.getTotpList);
@@ -203,7 +204,7 @@ router.get("/oauth/validate-token/:token", async (req, res) => {
     }
 });
 router.post("/oauth/bound", needLogin, oauthController.getBoundOAuthAccounts);
-router.post("/unlink-oauth", oauthController.unlinkOAuth);
+router.post("/unlink-oauth", requireSudo, oauthController.unlinkOAuth);
 
 // 令牌管理相关路由
 router.post("/refresh-token", tokenController.refreshToken);

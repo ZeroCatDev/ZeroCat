@@ -34,7 +34,7 @@ router.post("/set/avatar", upload.single("zcfile"), async (req, res) => {
     try {
         // 验证文件类型
         const fileTypeValidation = await validateFileTypeFromContent(req.file.buffer, req.file.mimetype);
-        
+
         if (!fileTypeValidation.isValid) {
             logger.warn("头像文件类型验证失败:", {
                 originalname: req.file.originalname,
@@ -43,7 +43,7 @@ router.post("/set/avatar", upload.single("zcfile"), async (req, res) => {
                 error: fileTypeValidation.error
             });
             return res.status(400).send({
-                status: "error", 
+                status: "error",
                 message: fileTypeValidation.error || "不支持的文件类型"
             });
         }
@@ -51,7 +51,7 @@ router.post("/set/avatar", upload.single("zcfile"), async (req, res) => {
         // 确保是图片文件
         if (!fileTypeValidation.mimeType.startsWith('image/')) {
             return res.status(400).send({
-                status: "error", 
+                status: "error",
                 message: "头像必须是图片文件"
             });
         }
@@ -63,7 +63,7 @@ router.post("/set/avatar", upload.single("zcfile"), async (req, res) => {
         // 使用统一的文件上传函数，purpose 设为 'avatar'
         const result = await uploadFile(
             req.file,
-            { 
+            {
                 purpose: 'avatar',
                 category: 'avatars',
                 tags: 'avatar'
@@ -75,7 +75,7 @@ router.post("/set/avatar", upload.single("zcfile"), async (req, res) => {
 
         if (!result.success) {
             return res.status(500).send({
-                status: "error", 
+                status: "error",
                 message: "头像上传失败"
             });
         }
@@ -94,7 +94,7 @@ router.post("/set/avatar", upload.single("zcfile"), async (req, res) => {
         });
 
         res.status(200).send({
-            status: "success", 
+            status: "success",
             message: "头像上传成功",
             avatar: {
                 md5: result.asset.md5,
@@ -207,7 +207,9 @@ router.post("/set/userinfo", async (req, res) => {
 });
 
 //修改用户名
-router.post("/set/username", async (req, res) => {
+import { requireSudo } from "../middleware/sudo.js"; // 确保已导入
+
+router.post("/set/username", requireSudo, async (req, res) => {
     await prisma.ow_users.update({
         where: {id: res.locals.userid},
         data: {
@@ -220,7 +222,7 @@ router.post("/set/username", async (req, res) => {
 });
 
 //修改密码：动作
-router.post("/set/pw", async (req, res) => {
+router.post("/set/pw", requireSudo, async (req, res) => {
     const USER = await prisma.ow_users.findUnique({
         where: {id: res.locals.userid},
     });

@@ -141,6 +141,10 @@ async function registerBusinessRoutes(app) {
         const assetsModule = await import('./routes/router_assets.js');
         app.use("/assets", assetsModule.default);
 
+        // 统一认证路由
+        const authModule = await import('./routes/router_auth.js');
+        app.use("/auth", authModule.default);
+
         logger.info('[routes] 所有业务路由注册成功');
     } catch (error) {
         logger.error('[routes] 注册业务路由失败:', error);

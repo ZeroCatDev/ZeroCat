@@ -2,12 +2,13 @@ import zcconfig from "./config/zcconfig.js";
 import logger from "./logger.js";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
-import {PasswordHash} from "phpass";
+import { PasswordHash } from "phpass";
 import fs from "fs";
-
+import DisposableDomains from 'disposable-domains/index.json' assert { type: 'json' };
+import DisposableWildcards from 'disposable-domains/wildcard.json' assert { type: 'json' };
 //prisma client
-import {PrismaClient} from "@prisma/client";
-import {PutObjectCommand, S3Client} from "@aws-sdk/client-s3";
+import { PrismaClient } from "@prisma/client";
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 const prisma = new PrismaClient()
 
@@ -76,7 +77,7 @@ function emailTest(email) {
 function randomPassword(len = 12) {
     const chars = "ABCDEFGHJKMNPQRSTWXYZabcdefhijkmnprstwxyz2345678";
     const maxPos = chars.length;
-    const password = Array.from({length: len - 4}, () =>
+    const password = Array.from({ length: len - 4 }, () =>
         chars.charAt(Math.floor(Math.random() * maxPos))
     ).join("");
     return `${password}@Aa1`;
@@ -106,7 +107,20 @@ function isJSON(str) {
         return false;
     }
 }
+function isDisposableEmail(email) {
 
+    //在DisposableDomains与DisposableWildcards两个array中查找域名
+    if (email) {
+        email = email.toLowerCase().trim();
+    }
+    if (!email || !email.includes("@")) {
+        return false;
+    }
+
+    const domain = email.split("@")[1];
+    return DisposableDomains.includes(domain) ||
+        DisposableWildcards.some(wildcard => domain.endsWith(wildcard));
+}
 export {
     prisma,
     S3updateFromPath,
@@ -119,5 +133,6 @@ export {
     randomPassword,
     generateJwt,
     isJSON,
+    isDisposableEmail,
 };
 

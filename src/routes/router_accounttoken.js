@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { needLogin } from "../middleware/auth.js";
+import { requireSudo } from "../middleware/sudo.js";
 import { prisma } from "../services/global.js";
 import logger from "../services/logger.js";
 import { createHash, randomBytes } from "crypto";
@@ -14,7 +15,7 @@ router.use(needLogin);
  * 创建新的账户令牌
  * POST /accounttoken/create
  */
-router.post("/create", async (req, res) => {
+router.post("/create", requireSudo, async (req, res) => {
     try {
         const { name, expires_in } = req.body;
         const userId = res.locals.userid;

@@ -224,11 +224,10 @@ export async function sendPushNotificationToUser(userId, payload) {
  * @param {string} endpoint - 推送端点
  * @returns {Promise<Object>} 取消结果
  */
-export async function unregisterPushSubscription(userId, endpoint) {
+export async function unregisterPushSubscription(endpoint) {
     try {
         const result = await prisma.ow_push_subscriptions.updateMany({
             where: {
-                user_id: userId,
                 endpoint: endpoint
             },
             data: {
@@ -237,7 +236,7 @@ export async function unregisterPushSubscription(userId, endpoint) {
             }
         });
 
-        logger.info(`[推送通知] 取消用户 ${userId} 的推送订阅: ${endpoint}`);
+        logger.info(`[推送通知] 取消推送订阅: ${endpoint}`);
         return {
             success: true,
             count: result.count

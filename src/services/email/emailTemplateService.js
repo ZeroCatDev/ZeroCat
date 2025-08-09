@@ -38,18 +38,18 @@ class EmailTemplateService {
      */
     async processLink(link, isRawLink = false) {
         if (!link) return null;
-        
+
         // 如果是原始链接模式且不包含协议
         if (isRawLink && !link.startsWith('http://') && !link.startsWith('https://')) {
             const siteConfig = await this.getSiteConfig();
             return `${siteConfig.frontendUrl}${link.startsWith('/') ? '' : '/'}${link}`;
         }
-        
+
         // 如果没有协议，默认添加https://
         if (!link.startsWith('http://') && !link.startsWith('https://')) {
             return `https://${link}`;
         }
-        
+
         return link;
     }
 
@@ -64,10 +64,10 @@ class EmailTemplateService {
                 ...data,
                 loginUrl: `${siteConfig.frontendUrl}/login`,
             };
-            
+
             // 直接使用EJS渲染
             const templatePath = path.join(this.templatesPath, `${templateName}.ejs`);
-            
+
             if (!fs.existsSync(templatePath)) {
                 throw new Error(`模板文件不存在: ${templatePath}`);
             }
@@ -81,7 +81,7 @@ class EmailTemplateService {
                 .replace(/\s+/g, ' ') // 合并多个空白字符为单个空格
                 .replace(/\n\s*\n/g, '\n') // 移除多余的空行
                 .trim();
-            
+
             return {
                 subject: data.subject || templateData.title || '通知',
                 html,
