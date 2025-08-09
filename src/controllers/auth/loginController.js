@@ -17,6 +17,7 @@ import {
 } from "../../services/auth/magiclink.js";
 import { createNotification } from "../notifications.js";
 import tokenUtils from "../../services/auth/tokenUtils.js";
+import twoFactor from "../../services/auth/twoFactor.js";
 
 /**
  * 处理用户密码登录
@@ -137,11 +138,32 @@ export const loginWithPassword = async (req, res, next) => {
 
         const userEmail = primaryEmail?.contact_value || verifiedEmail?.contact_value;
 
-        // 使用新的统一令牌生成函数
         // 获取标准化的用户信息
         const userInfo = await tokenUtils.getUserInfoForToken(user, userEmail);
 
-        // 创建登录令牌
+        // 检查是否启用2FA
+        const twoFA = await twoFactor.getTwoFactorStatus(user.id);
+        if (twoFA.enabled) {
+            const { challengeId, expiresIn } = await twoFactor.createLogin2FAChallenge(
+                user.id,
+                userInfo,
+                req.ipInfo?.clientIP || req.ip,
+                req.headers["user-agent"]
+            );
+            // 登录成功后清除尝试记录
+            await redisClient.delete(attemptKey);
+            return res.status(200).json({
+                status: "need_2fa",
+                message: "需要二次验证",
+                data: {
+                    challenge_id: challengeId,
+                    expires_in: expiresIn,
+                    available_methods: ["totp", "passkey"],
+                },
+            });
+        }
+
+        // 未启用2FA，直接签发令牌
         const tokenResult = await tokenUtils.createUserLoginTokens(
             user.id,
             userInfo,
@@ -164,7 +186,6 @@ export const loginWithPassword = async (req, res, next) => {
         // 登录成功后清除尝试记录
         await redisClient.delete(attemptKey);
 
-        // 生成登录响应
         const response = tokenUtils.generateLoginResponse(user, tokenResult, userEmail);
         return res.status(200).json(response);
     } catch (err) {
@@ -240,7 +261,7 @@ export const sendLoginCode = async (req, res) => {
 
         // 使用createNotification发送登录验证码通知
         const code = verificationResult.code;
-        
+
         // 发送登录验证码邮件通知
         await createNotification({
             userId: contact.user_id,
@@ -337,11 +358,29 @@ export const loginWithCode = async (req, res) => {
             });
         }
 
-        // 使用新的统一令牌生成函数
         // 获取标准化的用户信息
         const userInfo = await tokenUtils.getUserInfoForToken(user, email);
 
-        // 创建登录令牌
+        // 检查是否启用2FA
+        const twoFA = await twoFactor.getTwoFactorStatus(user.id);
+        if (twoFA.enabled) {
+            const { challengeId, expiresIn } = await twoFactor.createLogin2FAChallenge(
+                user.id,
+                userInfo,
+                req.ipInfo?.clientIP || req.ip,
+                req.headers["user-agent"]
+            );
+            return res.status(200).json({
+                status: "need_2fa",
+                message: "需要二次验证",
+                data: {
+                    challenge_id: challengeId,
+                    expires_in: expiresIn,
+                    available_methods: ["totp", "passkey"],
+                },
+            });
+        }
+
         const tokenResult = await tokenUtils.createUserLoginTokens(
             user.id,
             userInfo,
@@ -361,7 +400,6 @@ export const loginWithCode = async (req, res) => {
             });
         }
 
-        // 生成登录响应
         const response = tokenUtils.generateLoginResponse(user, tokenResult, email);
         return res.status(200).json(response);
     } catch (error) {
@@ -567,11 +605,31 @@ export const validateMagicLinkAndLogin = async (req, res) => {
             verifiedEmail?.contact_value ||
             validateResult.email;
 
-        // 使用新的统一令牌生成函数
         // 获取标准化的用户信息
         const userInfo = await tokenUtils.getUserInfoForToken(user, userEmail);
 
-        // 创建登录令牌
+        // 检查是否启用2FA
+        const twoFA = await twoFactor.getTwoFactorStatus(user.id);
+        if (twoFA.enabled) {
+            const { challengeId, expiresIn } = await twoFactor.createLogin2FAChallenge(
+                user.id,
+                userInfo,
+                req.ipInfo?.clientIP || req.ip,
+                req.headers["user-agent"]
+            );
+            await markMagicLinkAsUsed(token);
+            return res.status(200).json({
+                status: "need_2fa",
+                message: "需要二次验证",
+                data: {
+                    challenge_id: challengeId,
+                    expires_in: expiresIn,
+                    available_methods: ["totp", "passkey"],
+                    callback: redirect ? { redirect: decodeURIComponent(redirect), canUseCurrentPage: true } : null,
+                },
+            });
+        }
+
         const tokenResult = await tokenUtils.createUserLoginTokens(
             user.id,
             userInfo,
@@ -591,18 +649,15 @@ export const validateMagicLinkAndLogin = async (req, res) => {
             });
         }
 
-        // 标记魔术链接为已使用
         await markMagicLinkAsUsed(token);
 
-        // 如果请求包含重定向URL，则构建回调数据
         const callbackData = redirect
             ? {
                 redirect: decodeURIComponent(redirect),
-                canUseCurrentPage: true, // 允许在当前页面登录
+                canUseCurrentPage: true,
             }
             : null;
 
-        // 生成登录响应，包含额外的回调数据
         const response = tokenUtils.generateLoginResponse(user, tokenResult, userEmail, {callback: callbackData});
         return res.status(200).json(response);
     } catch (error) {

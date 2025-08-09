@@ -9,16 +9,15 @@ import {
     oauthController,
     registerController,
     tokenController,
-    totpController
+    twoFactorController,
+    passkeyController
 } from "../controllers/auth/index.js";
 import {initializeOAuthProviders} from "../controllers/oauth.js";
-import totpUtils from "../services/auth/totp.js";
 import {invalidateTemporaryToken, validateTemporaryToken} from "../services/auth/verification.js";
 import {prisma} from "../services/global.js";
 import logger from "../services/logger.js";
 import tokenUtils from "../services/auth/tokenUtils.js";
 
-const {validateTotpToken} = totpUtils;
 
 // 初始化 OAuth 配置
 initializeOAuthProviders();
@@ -53,19 +52,22 @@ router.get("/emails", needLogin, emailController.getEmails);
 router.post("/add-email", needLogin, requireSudo, emailController.addEmail);
 router.post("/remove-email", needLogin, requireSudo, emailController.removeEmail);
 
-// TOTP相关路由
-router.get("/totp/list", needLogin, totpController.getTotpList);
-router.post("/totp/rename", needLogin, totpController.renameTotpToken);
-router.post("/totp/check", totpController.checkTotpToken);
-router.post("/totp/delete", needLogin, totpController.deleteTotpToken);
-router.post("/totp/generate", needLogin, totpController.generateTotpToken);
-router.post("/totp/activate", needLogin, totpController.activateTotpToken);
-router.post("/totp/protected-route", validateTotpToken, (req, res) => {
-    return res.json({
-        status: "success",
-        message: "请求成功，验证器令牌验证通过",
-    });
-});
+// 二次验证（2FA）相关路由
+router.get("/2fa/status", needLogin, twoFactorController.status);
+router.post("/2fa/setup", needLogin, requireSudo, twoFactorController.setup);
+router.post("/2fa/activate", needLogin, requireSudo, twoFactorController.activate);
+router.post("/2fa/disable", needLogin, requireSudo, twoFactorController.disable);
+router.post("/2fa/login/totp", twoFactorController.finalizeLoginWithTotp);
+
+// Passkey相关路由
+router.post("/passkey/begin-registration", needLogin, requireSudo, passkeyController.beginRegistration);
+router.post("/passkey/finish-registration", needLogin, requireSudo, passkeyController.finishRegistration);
+router.post("/passkey/begin-login", passkeyController.beginLogin);
+router.post("/passkey/finish-login", passkeyController.finishLogin);
+router.post("/passkey/sudo-begin", needLogin, passkeyController.sudoWithPasskey);
+router.post("/passkey/sudo-finish", needLogin, passkeyController.finalizeSudoWithPasskey);
+router.get("/passkey/list", needLogin, passkeyController.listCredentials);
+router.post("/passkey/delete", needLogin, requireSudo, passkeyController.deleteCredential);
 
 // OAuth相关路由
 router.get("/oauth/providers", oauthController.getOAuthProviders);

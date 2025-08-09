@@ -135,30 +135,8 @@ export async function auth(req, res) {
 
         switch (purpose) {
             case 'login':
-                // 生成登录令牌
-                const deviceInfo = req.headers['user-agent'] || 'Unknown Device';
-                const ipAddress = req.ipInfo?.clientIP || req.ip;
-
-                const tokenResult = await createUserLoginTokens(
-                    authResult.user.id,
-                    deviceInfo,
-                    ipAddress
-                );
-
-                if (!tokenResult.success) {
-                    return res.status(500).json({
-                        status: 'error',
-                        message: '生成登录令牌失败',
-                        code: 'TOKEN_GENERATION_FAILED'
-                    });
-                }
-
-                responseData = {
-                    user: authResult.user,
-                    access_token: tokenResult.accessToken,
-                    refresh_token: tokenResult.refreshToken,
-                    expires_in: tokenResult.expiresIn
-                };
+                // 由具体登录控制器处理令牌签发与2FA，这里仅返回用户
+                responseData = { user: authResult.user };
                 break;
 
             case 'sudo':
@@ -202,22 +180,62 @@ export async function auth(req, res) {
  */
 export async function getAuthMethods(req, res) {
     try {
-        const { purpose = 'login' } = req.query;
+        const { purpose = 'login', identifier } = req.query;
 
-        // 根据目的返回可用的认证方法
-        const methods = {
-            login: ['password', 'email'],
-            sudo: ['password', 'email'],
+        // 根据目的返回可用的认证方法（基础集合）
+        const baseMethods = {
+            login: ['password', 'email', 'passkey'],
+            sudo: ['password', 'email', 'totp', 'passkey'],
             reset_password: ['email'],
             change_email: ['password', 'email'],
             delete_account: ['password', 'email']
         };
 
+        let availableMethods = baseMethods[purpose] || ['password', 'email'];
+
+        // 识别用户：优先使用已登录用户，其次使用查询参数中的identifier（用户名或邮箱）
+        let userId = res.locals.userid;
+
+        if (!userId && identifier) {
+            const { prisma } = await import('../../services/global.js');
+            const user = await prisma.ow_users.findFirst({
+                where: { OR: [{ username: identifier }, { email: identifier }] },
+                select: { id: true }
+            });
+            if (user) {
+                userId = user.id;
+            }
+        }
+
+        // 如果能够识别用户，则依据其是否已注册 TOTP / Passkey 过滤方法
+        if (userId) {
+            const { prisma } = await import('../../services/global.js');
+            const [totpContact, passkeyContact] = await Promise.all([
+                prisma.ow_users_contacts.findFirst({
+                    where: { user_id: Number(userId), contact_type: 'totp' }
+                }),
+                prisma.ow_users_contacts.findFirst({
+                    where: { user_id: Number(userId), contact_type: 'passkey', verified: true }
+                })
+            ]);
+
+            const hasTotp = !!totpContact && !!totpContact.verified && totpContact.metadata?.enabled === true;
+            const hasPasskey = !!passkeyContact && Array.isArray(passkeyContact.metadata?.credentials) && passkeyContact.metadata.credentials.length > 0;
+
+            // 在可用方法中移除未注册的方式
+            if (!hasTotp) {
+                availableMethods = availableMethods.filter(m => m !== 'totp');
+            }
+            if (!hasPasskey) {
+                availableMethods = availableMethods.filter(m => m !== 'passkey');
+            }
+        }
+
         res.json({
             status: 'success',
             data: {
                 purpose,
-                available_methods: methods[purpose] || ['password', 'email']
+                available_methods: availableMethods
             }
         });
     } catch (error) {

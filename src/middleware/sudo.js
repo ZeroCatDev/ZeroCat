@@ -3,9 +3,9 @@ import { verifySudoToken } from '../services/auth/sudoAuth.js';
 
 /**
  * sudo验证中间件
- * 验证请求是否包含有效的sudo令牌
+ * 验证请求是否包含有效的sudo令牌（或已通过passkey二次验证）
  * @param {import("express").Request} req
- * @param {import("express").Response} res  
+ * @param {import("express").Response} res
  * @param {import("express").NextFunction} next
  */
 export const requireSudo = async (req, res, next) => {
@@ -56,7 +56,7 @@ export const requireSudo = async (req, res, next) => {
 
         // 验证sudo令牌
         const verification = await verifySudoToken(sudoToken);
-        
+
         if (!verification.valid) {
             return res.status(403).json({
                 status: 'error',
@@ -94,7 +94,7 @@ export const requireSudo = async (req, res, next) => {
  * 可选的sudo验证中间件
  * 如果提供了sudo令牌则验证，但不强制要求
  * @param {import("express").Request} req
- * @param {import("express").Response} res  
+ * @param {import("express").Response} res
  * @param {import("express").NextFunction} next
  */
 export const optionalSudo = async (req, res, next) => {
@@ -130,7 +130,7 @@ export const optionalSudo = async (req, res, next) => {
 
         // 验证提供的sudo令牌
         const verification = await verifySudoToken(sudoToken);
-        
+
         if (verification.valid && verification.userId === res.locals.userid) {
             res.locals.sudoVerified = true;
             res.locals.sudoToken = sudoToken;

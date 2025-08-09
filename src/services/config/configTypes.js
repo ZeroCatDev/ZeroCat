@@ -546,6 +546,24 @@ export const CONFIG_TYPES = {
         description: "Web Push VAPID主题",
         public: true,
     },
+    "webauthn.rpId": {
+        type: "string",
+        required: false,
+        description: "WebAuthn RP ID",
+        public: true,
+    },
+    "webauthn.rpName": {
+        type: "string",
+        required: false,
+        description: "WebAuthn RP Name",
+        public: true,
+    },
+    "webauthn.origins": {
+        type: "array",
+        required: false,
+        description: "WebAuthn RP Origins",
+        public: true,
+    },
 };
 
 // 从数据库加载的动态配置

@@ -22,7 +22,7 @@ router.get('/methods', getAuthMethods);
  * POST /auth/send-code
  * 统一发送验证码接口
  * 支持所有认证场景：登录、sudo、重置密码、更改邮箱、删除账户等
- * 
+ *
  * 请求体:
  * - email: 邮箱地址（可选，某些场景下会自动获取用户邮箱）
  * - purpose: 认证目的 (login, sudo, reset_password, change_email, delete_account)
@@ -41,9 +41,9 @@ router.post('/send-code', (req, res, next) => {
  * POST /auth/authenticate
  * 统一认证接口
  * 支持多种认证方式和认证目的
- * 
+ *
  * 请求体:
- * - method: 认证方式 (password, email, totp)
+ * - method: 认证方式 (password, email, totp, passkey)
  * - purpose: 认证目的 (login, sudo, reset_password, change_email, delete_account)
  * - identifier: 用户标识符（用户名或邮箱，login时使用）
  * - userId: 用户ID（非login时使用，某些情况下会从登录状态获取）

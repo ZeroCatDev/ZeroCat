@@ -1,3 +1,33 @@
+### 2FA 与 Passkey 相关返回值示例
+
+当启用2FA的用户登录时，登录接口返回need_2fa：
+
+```json
+{
+  "status": "need_2fa",
+  "message": "需要二次验证",
+  "data": {
+    "challenge_id": "abc123",
+    "expires_in": 600,
+    "available_methods": ["totp", "passkey"]
+  }
+}
+```
+
+使用TOTP完成：
+
+```json
+{
+  "status": "success",
+  "data": {
+    "user": {"id": 1},
+    "access_token": "...",
+    "refresh_token": "...",
+    "expires_in": 3600
+  }
+}
+```
+
 # 通知系统使用文档
 
 ## 概述

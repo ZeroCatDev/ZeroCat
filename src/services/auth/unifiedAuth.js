@@ -5,6 +5,7 @@ import redisClient from '../redis.js';
 import logger from '../logger.js';
 import {createNotification} from '../../controllers/notifications.js';
 import zcconfig from '../config/zcconfig.js';
+import twoFactor from './twoFactor.js';
 
 const VERIFICATION_CODE_PREFIX = 'verify_code:';
 const VERIFICATION_CODE_EXPIRY = 5 * 60; // 5分钟
@@ -14,7 +15,7 @@ const VERIFICATION_CODE_EXPIRY = 5 * 60; // 5分钟
  */
 export class UnifiedAuthService {
     constructor() {
-        this.supportedMethods = ['password', 'email', 'totp'];
+        this.supportedMethods = ['password', 'email', 'totp', 'passkey'];
         this.supportedPurposes = ['login', 'sudo', 'reset_password', 'change_email', 'delete_account'];
     }
 
@@ -297,9 +298,37 @@ export class UnifiedAuthService {
                     }
                     break;
 
-                case 'totp':
-                    // TOTP实现留待后续
-                    return { success: false, message: 'TOTP认证暂未实现' };
+                case 'totp': {
+                    // userId required
+                    const uid = purpose === 'login' ? authResult?.user?.id || null : (userId || null);
+                    const targetUserId = uid || userId;
+                    const totpToken = code || password || authData?.totp || null; // accept in any field
+                    if (!targetUserId || !totpToken) {
+                        return { success: false, message: '缺少用户ID或TOTP验证码' };
+                    }
+                    const verify = await twoFactor.verifyTotp(targetUserId, totpToken);
+                    if (!verify.success) {
+                        return { success: false, message: verify.message };
+                    }
+                    // if login, must have prior password/email pre-auth challenge
+                    if (purpose === 'login') {
+                        // expect a challengeId to finalize
+                        const challengeId = authData?.challengeId;
+                        if (!challengeId) {
+                            return { success: false, message: '缺少登录挑战ID' };
+                        }
+                        const challenge = await twoFactor.getLogin2FAChallenge(challengeId);
+                        if (!challenge || challenge.userId !== targetUserId) {
+                            return { success: false, message: '登录挑战无效' };
+                        }
+                        return { valid: true, message: 'TOTP验证成功', user: { id: targetUserId }, data: { challengeId } };
+                    }
+                    return { valid: true, message: 'TOTP验证成功', user: { id: targetUserId } };
+                }
+
+                case 'passkey':
+                    // Passkey handled via separate controller due to WebAuthn ceremony
+                    return { success: false, message: 'Passkey认证需调用WebAuthn端点' };
 
                 default:
                     return { success: false, message: '不支持的认证方式' };

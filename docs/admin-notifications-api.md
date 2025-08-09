@@ -1,3 +1,4 @@
+注：涉及登录的接口可能在启用2FA时返回need_2fa状态，随后需调用`/account/2fa/login/totp`或passkey登录完成流程。
 参考一下文档和已有管理员页面，创建新的与代码集成的通知管理员页面
 发送通知`POST /admin/notifications/send`
 | 参数 | 类型 | 必需 | 默认值 | 说明 |

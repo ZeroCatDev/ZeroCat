@@ -2,9 +2,9 @@
 
 你需要参考文档，创建一个sudotoken的管理组件，可以调用获取sudotoken，如果没有则阻塞执行并弹出弹框，创建统一的账户认证组件，允许使用各种认证方式。任何关键的请求都可以调用sudo组件获取sudotoken，sudotoken管理组件需要存储记录
   ，并判断过期等等，保留一定缓冲时间。
-  ## 认证方式与目的
+## 认证方式与目的
 
-**认证方式**：password, email
+**认证方式**：password, email, totp, passkey
 
 **获取认证方法**
 ```
@@ -17,10 +17,88 @@ GET /auth/methods?purpose=login
   "status": "success",
   "data": {
     "purpose": "login",
-    "available_methods": ["password", "email"]
+    "available_methods": ["password", "email", "passkey"]
   }
 }
 ```
+## 二次验证（2FA）
+
+当用户启用了2FA后，密码/邮箱/魔术链接登录将返回need_2fa响应：
+
+```
+POST /account/login
+```
+
+成功但需要2FA示例：
+
+```json
+{
+  "status": "need_2fa",
+  "message": "需要二次验证",
+  "data": {
+    "challenge_id": "abc123...",
+    "expires_in": 600,
+    "available_methods": ["totp", "passkey"]
+  }
+}
+```
+
+使用TOTP完成登录：
+
+```
+POST /account/2fa/login/totp
+{
+  "challenge_id": "abc123...",
+  "token": "123456"
+}
+```
+
+响应（登录成功）：
+
+```json
+{
+  "status": "success",
+  "data": {
+    "user": {"id": 123, "username": "testuser"},
+    "access_token": "...",
+    "refresh_token": "...",
+    "expires_in": 3600
+  }
+}
+```
+
+管理2FA：
+
+```
+GET /account/2fa/status
+POST /account/2fa/setup
+POST /account/2fa/activate { token }
+POST /account/2fa/disable
+```
+
+## Passkey（WebAuthn）
+
+注册：
+
+```
+POST /account/passkey/begin-registration
+POST /account/passkey/finish-registration
+```
+
+登录：
+
+```
+POST /account/passkey/begin-login { identifier }
+POST /account/passkey/finish-login { user_id, challenge, assertion }
+```
+
+sudo 提升：
+
+```
+POST /account/passkey/sudo-begin
+POST /account/passkey/sudo-finish { challenge, assertion }
+```
+
 
 **发送验证码**
 ```
@@ -54,6 +132,8 @@ POST /auth/authenticate
   "password": "your_password"
 }
 ```
+
+注意：启用2FA的用户不会直接在此接口获得令牌，需要按照2FA流程完成。
 
 **成功响应（登录）:**
 ```json
@@ -94,6 +174,13 @@ POST /auth/authenticate
     "expires_in": 900
   }
 }
+```
+
+也可以使用passkey完成sudo：
+
+```
+POST /account/passkey/sudo-begin
+POST /account/passkey/sudo-finish { challenge, assertion }
 ```
 
 **重置密码认证示例：**

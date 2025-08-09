@@ -411,6 +411,8 @@ enum ow_users_contacts_contact_type {
   oauth_microsoft
   oauth_40code
   oauth_linuxdo
+  totp
+  passkey
 }
 
 enum ow_user_relationship_type {

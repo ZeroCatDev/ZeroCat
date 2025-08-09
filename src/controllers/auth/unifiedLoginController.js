@@ -1,7 +1,7 @@
 import logger from '../../services/logger.js';
-import { 
-    sendVerificationCode, 
-    authenticate 
+import {
+    sendVerificationCode,
+    authenticate
 } from '../../services/auth/unifiedAuth.js';
 
 /**
@@ -55,12 +55,12 @@ export const sendLoginCode = async (req, res) => {
  */
 export const unifiedLogin = async (req, res) => {
     try {
-        const { 
-            method, 
-            identifier, 
-            password, 
-            code_id: codeId, 
-            code 
+        const {
+            method,
+            identifier,
+            password,
+            code_id: codeId,
+            code
         } = req.body;
 
         // 执行统一认证
@@ -124,15 +124,11 @@ export const loginWithPassword = async (req, res) => {
         });
 
         if (authResult.success) {
+            // 统一认证层不直接签发令牌
             res.json({
                 status: 'success',
-                message: '登录成功',
-                data: {
-                    user: authResult.user,
-                    access_token: authResult.data?.access_token,
-                    refresh_token: authResult.data?.refresh_token,
-                    expires_in: authResult.data?.expires_in
-                }
+                message: '认证成功',
+                data: { user: authResult.user }
             });
         } else {
             res.status(400).json({
@@ -166,7 +162,7 @@ export const loginWithCode = async (req, res) => {
         // 注意：这里需要先通过邮箱获取code_id
         // 在实际应用中，前端应该保存发送验证码时返回的code_id
         // 这里为了兼容性，我们使用email作为标识符查找验证码
-        
+
         res.status(501).json({
             status: 'error',
             message: '此接口需要升级，请使用 /auth/authenticate 接口',

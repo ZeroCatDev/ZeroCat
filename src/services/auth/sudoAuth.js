@@ -87,7 +87,7 @@ export async function revokeSudoToken(token) {
  * 使用统一认证系统进行sudo认证
  * @param {number} userId 用户ID
  * @param {Object} authData 认证数据
- * @param {string} authData.method 认证方式：'password' | 'email'
+ * @param {string} authData.method 认证方式：'password' | 'email' | 'totp' | 'passkey'
  * @param {string} authData.password 密码（password方式）
  * @param {string} authData.codeId 验证码ID（email方式）
  * @param {string} authData.code 验证码（email方式）
@@ -95,7 +95,7 @@ export async function revokeSudoToken(token) {
  */
 export async function authenticateSudo(userId, authData) {
     try {
-        // 使用统一认证系统
+        // 使用统一认证系统（允许totp/passkey）
         const authResult = await authenticate({
             ...authData,
             purpose: 'sudo',
