@@ -50,6 +50,7 @@ router.post("/set-password", registerController.setPassword);
 router.post("/send-verification-code", needLogin, emailController.sendVerificationCode);
 router.get("/emails", needLogin, emailController.getEmails);
 router.post("/add-email", needLogin, requireSudo, emailController.addEmail);
+router.post("/verify-email", needLogin, emailController.verifyEmail);
 router.post("/remove-email", needLogin, requireSudo, emailController.removeEmail);
 
 // 二次验证（2FA）相关路由

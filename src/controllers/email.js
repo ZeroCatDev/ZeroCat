@@ -198,6 +198,7 @@ const sendVerificationEmail = async (contactValue, contactHash, template = 'DEFA
 };
 
 // Verify contact
+
 const verifyContact = async (contactValue, token) => {
     const contact = await prisma.ow_users_contacts.findFirst({
         where: {

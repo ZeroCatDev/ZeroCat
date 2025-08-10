@@ -145,6 +145,78 @@ export const addEmail = async (req, res) => {
 };
 
 /**
+ * 验证邮箱
+ */
+export const verifyEmail = async (req, res) => {
+    try {
+        const { email, token } = req.body;
+        const userId = res.locals.userid;
+
+        // 检查参数是否完整
+        if (!email || !token) {
+            return res.status(200).json({
+                status: "error",
+                message: "邮箱和验证码都是必需的",
+            });
+        }
+
+        // 检查邮箱是否属于当前用户
+        const contact = await prisma.ow_users_contacts.findFirst({
+            where: {
+                user_id: userId,
+                contact_value: email,
+                contact_type: "email",
+                verified: false,
+            },
+        });
+
+        if (!contact) {
+            return res.status(200).json({
+                status: "error",
+                message: "未找到此邮箱或邮箱已验证",
+            });
+        }
+
+        // 验证验证码
+        const isValid = await verifyContact(email, token);
+
+        if (!isValid) {
+            return res.status(200).json({
+                status: "error",
+                message: "验证码无效",
+            });
+        }
+
+        // 更新邮箱为已验证状态
+        await prisma.ow_users_contacts.update({
+            where: {
+                contact_id: contact.contact_id,
+            },
+            data: {
+                verified: true,
+            },
+        });
+
+        return res.status(200).json({
+            status: "success",
+            message: "邮箱验证成功",
+            data: {
+                contact_id: contact.contact_id,
+                contact_value: contact.contact_value,
+                is_primary: contact.is_primary,
+                verified: true,
+            },
+        });
+    } catch (error) {
+        logger.error("验证邮箱时出错:", error);
+        return res.status(200).json({
+            status: "error",
+            message: error.message || "验证邮箱失败",
+        });
+    }
+};
+
+/**
  * 删除邮箱
  */
 export const removeEmail = async (req, res) => {
