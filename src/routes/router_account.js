@@ -52,7 +52,7 @@ router.get("/emails", needLogin, emailController.getEmails);
 router.post("/add-email", needLogin, requireSudo, emailController.addEmail);
 router.post("/verify-email", needLogin, emailController.verifyEmail);
 router.post("/remove-email", needLogin, requireSudo, emailController.removeEmail);
-
+router.post("/set-primary-email", needLogin, requireSudo, emailController.setPrimaryEmail);
 // 二次验证（2FA）相关路由
 router.get("/2fa/status", needLogin, twoFactorController.status);
 router.post("/2fa/setup", needLogin, requireSudo, twoFactorController.setup);

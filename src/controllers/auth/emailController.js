@@ -273,7 +273,7 @@ export const removeEmail = async (req, res) => {
  */
 export const setPrimaryEmail = async (req, res) => {
     try {
-        const { email, verificationCode } = req.body;
+        const { email } = req.body;
         const userId = res.locals.userid;
 
         // 验证邮箱归属
@@ -290,15 +290,6 @@ export const setPrimaryEmail = async (req, res) => {
             return res.status(200).json({
                 status: "error",
                 message: "邮箱不存在或未验证"
-            });
-        }
-
-        // 验证验证码
-        const isValid = await verifyContact(email, verificationCode);
-        if (!isValid) {
-            return res.status(200).json({
-                status: "error",
-                message: "验证码无效"
             });
         }
 
