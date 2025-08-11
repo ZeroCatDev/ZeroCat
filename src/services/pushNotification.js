@@ -264,6 +264,7 @@ export async function getUserPushSubscriptions(userId) {
             },
             select: {
                 id: true,
+                user_id: true,
                 endpoint: true,
                 device_info: true,
                 user_agent: true,
