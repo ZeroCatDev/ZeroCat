@@ -352,14 +352,6 @@ router.post(
             });
         }
 
-        // 检查是否包含缩略图信息（由successCallback添加）
-        if (!uploadResult.result.result.detectedMimeType?.startsWith('image/')) {
-            return res.status(400).send({
-                status: "error",
-                message: "缩略图必须是图片格式"
-            });
-        }
-
         res.status(200).send({
             status: "success",
             ...uploadResult.result.thumbnail
