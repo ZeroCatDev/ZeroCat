@@ -1221,7 +1221,7 @@ router.post("/initlize", needLogin, async (req, res, next) => {
 });
 
 // 重命名项目
-router.put("/rename/:id", needLogin, requireSudo, async (req, res, next) => {
+router.put("/rename/:id", needLogin, async (req, res, next) => {
   try {
     const { id } = req.params;
     const { newName } = req.body;
