@@ -1,8 +1,3 @@
-### 2FA & Passkey
-
-本系统支持TOTP二次验证与Passkey（WebAuthn）。启用2FA后，登录需要完成二次验证；也可以直接使用Passkey登录和sudo。
-
-接口参考：`docs/sudo-auth-system.md` 与 `docs/EXTENSIONS_API_DOCS.md`。
 # ZeroCat 编程社区
 
 高中喵开发，求 Star 支持
