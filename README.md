@@ -1,8 +1,3 @@
-### 2FA & Passkey
-
-本系统支持TOTP二次验证与Passkey（WebAuthn）。启用2FA后，登录需要完成二次验证；也可以直接使用Passkey登录和sudo。
-
-接口参考：`docs/sudo-auth-system.md` 与 `docs/EXTENSIONS_API_DOCS.md`。
 # ZeroCat 编程社区
 
 高中喵开发，求 Star 支持
@@ -34,8 +29,6 @@ ZeroCat 是一个轻量级的在线编程、分享平台
   - [许可协议](#许可协议)
 - [感谢](#感谢)
 
-## 前端一键部署
-[![使用 EdgeOne Pages 部署](https://cdnstatic.tencentcs.com/edgeone/pages/deploy.svg)](https://edgeone.ai/pages/new?repository-url=https://github.com/ZeroCatDev/zerocat-frontend&repository-name=ZeroCat&env=VITE_APP_BASE_API&env-description=后端API地址)
 
 
 ## 背景
@@ -126,7 +119,7 @@ Copyright (C) 2020-2024  Sun Wuyuan.
 
 # 感谢
 
-本项目 CDN 加速及安全防护由 Tencent EdgeOne 赞助
-[立即访问 EdgeOne](https://edgeone.ai/zh?from=github)
+本项目 CDN 加速及安全防护由 Tencent EdgeOne 赞助：EdgeOne 提供长期有效的免费套餐，包含不限量的流量和请求，覆盖中国大陆节点，且无任何超额收费，感兴趣的朋友可以点击下面的链接领取
+[亚洲最佳CDN、边缘和安全解决方案 - Tencent EdgeOne](https://edgeone.ai/zh?from=github)
 
 [![EdgeOne](./public/34fe3a45-492d-4ea4-ae5d-ea1087ca7b4b.png)](https://edgeone.ai/zh?from=github)
