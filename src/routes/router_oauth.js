@@ -768,7 +768,7 @@ router.get("/userinfo", async (req, res) => {
 
         // 构建头像URL
         const avatarUrl = token.user.avatar
-            ? `${await zcconfig.get("s3.staticurl")}/user/${token.user.avatar}`
+            ? `${await zcconfig.get("s3.staticurl")}/assets/${token.user.avatar.slice(0,2)}/${token.user.avatar.slice(2,4)}/${token.user.avatar}.webp`
             : null;
 
         // 返回用户信息
