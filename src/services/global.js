@@ -4,8 +4,13 @@ import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { PasswordHash } from "phpass";
 import fs from "fs";
-import DisposableDomains from 'disposable-domains/index.json' assert { type: 'json' };
-import DisposableWildcards from 'disposable-domains/wildcard.json' assert { type: 'json' };
+import { createRequire } from 'module';
+
+// Some Node.js environments or older bundlers may not support `import ... assert { type: 'json' }`.
+// Use createRequire to synchronously load JSON in a compatible way.
+const require = createRequire(import.meta.url);
+const DisposableDomains = require('disposable-domains/index.json');
+const DisposableWildcards = require('disposable-domains/wildcard.json');
 //prisma client
 import { PrismaClient } from "@prisma/client";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";

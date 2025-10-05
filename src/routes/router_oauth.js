@@ -1,15 +1,15 @@
 import logger from "../services/logger.js";
 import zcconfig from "../services/config/zcconfig.js";
-import {Router} from "express";
-import {prisma, S3update} from "../services/global.js";
-import {needLogin} from "../middleware/auth.js";
-import {oauthRateLimit} from "../middleware/rateLimit.js";
+import { Router } from "express";
+import { prisma, S3update } from "../services/global.js";
+import { needLogin } from "../middleware/auth.js";
+import { oauthRateLimit } from "../middleware/rateLimit.js";
 import crypto from "crypto";
-import {generateAuthCode, validateRedirectUri, validateScopes,} from "../services/auth/oauth.js";
-import {generateOAuthTokens, refreshOAuthTokens, verifyOAuthClientCredentials,} from "../services/auth/tokenManager.js";
+import { generateAuthCode, validateRedirectUri, validateScopes, } from "../services/auth/oauth.js";
+import { generateOAuthTokens, refreshOAuthTokens, verifyOAuthClientCredentials, } from "../services/auth/tokenManager.js";
 import multer from "multer";
 import { handleAssetUpload } from "../services/assets.js";
-import {requireSudo} from "../middleware/sudo.js";
+import { requireSudo } from "../middleware/sudo.js";
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -107,7 +107,7 @@ async function handleApiError(res, errorInfo, state = null) {
         errorInfo.description,
         state
     );
-    return res.json({redirect_url: redirectUrl});
+    return res.json({ redirect_url: redirectUrl });
 }
 
 /**
@@ -124,7 +124,7 @@ async function handleUserInfoError(res, errorInfo) {
         errorInfo.error,
         errorInfo.description
     );
-    return res.json({redirect_url: redirectUrl});
+    return res.json({ redirect_url: redirectUrl });
 }
 
 // 创建新的OAuth应用
@@ -144,7 +144,7 @@ router.post("/applications", needLogin, requireSudo, async (req, res) => {
 
         // 基本验证
         if (!name || !redirect_uris || !Array.isArray(redirect_uris)) {
-            return res.status(400).json({error: "缺少必填字段"});
+            return res.status(400).json({ error: "缺少必填字段" });
         }
 
         // 生成client_id和client_secret
@@ -178,7 +178,7 @@ router.post("/applications", needLogin, requireSudo, async (req, res) => {
         });
     } catch (error) {
         logger.error("Create OAuth application error:", error);
-        res.status(500).json({error: "服务器内部错误"});
+        res.status(500).json({ error: "服务器内部错误" });
     }
 });
 
@@ -205,17 +205,17 @@ router.get("/applications", needLogin, async (req, res) => {
         res.json(applications);
     } catch (error) {
         logger.error("Get OAuth applications error:", error);
-        res.status(500).json({error: "服务器内部错误"});
+        res.status(500).json({ error: "服务器内部错误" });
     }
 });
 
 // 获取应用详情
 router.get("/applications/:client_id", async (req, res) => {
     try {
-        const {client_id} = req.params;
+        const { client_id } = req.params;
 
         const application = await prisma.ow_oauth_applications.findFirst({
-            where: {client_id, status: "active"},
+            where: { client_id, status: "active" },
             select: {
                 id: true,
                 name: true,
@@ -234,17 +234,29 @@ router.get("/applications/:client_id", async (req, res) => {
                 owner_id: true,
                 created_at: true,
                 updated_at: true,
+                owner: { select: { id: true, username: true, display_name: true, avatar: true } }
+
             },
         });
 
         if (!application) {
-            return res.status(404).json({error: "Application not found"});
+            return res.status(404).json({ error: "Application not found" });
+        }
+
+        // 检查是否为应用作者，如果不是则隐藏敏感信息
+        const isOwner = res.locals.userid && res.locals.userid === application.owner_id;
+
+        if (!isOwner) {
+            // 非作者只能看到公开信息，隐藏敏感字段
+            delete application.client_secret;
+            delete application.redirect_uris;
+            delete application.webhook_url;
         }
 
         res.json(application);
     } catch (error) {
         logger.error("Get OAuth application error:", error);
-        res.status(500).json({error: "Internal server error"});
+        res.status(500).json({ error: "Internal server error" });
     }
 });
 
@@ -325,7 +337,7 @@ router.post(
 // 更新应用信息
 router.put("/applications/:client_id", needLogin, async (req, res) => {
     try {
-        const {client_id} = req.params;
+        const { client_id } = req.params;
         const {
             name,
             description,
@@ -344,22 +356,22 @@ router.put("/applications/:client_id", needLogin, async (req, res) => {
             where: {
                 client_id,
                 owner_id: res.locals.userid,
-                status: {not: "deleted"},
+                status: { not: "deleted" },
             },
         });
 
         if (!application) {
-            return res.status(404).json({error: "Application not found"});
+            return res.status(404).json({ error: "Application not found" });
         }
 
         // 基本验证
         if (name && (!redirect_uris || !Array.isArray(redirect_uris))) {
-            return res.status(400).json({error: "无效的重定向URI"});
+            return res.status(400).json({ error: "无效的重定向URI" });
         }
 
         // 更新应用信息
         const updatedApplication = await prisma.ow_oauth_applications.update({
-            where: {id: application.id},
+            where: { id: application.id },
             data: {
                 name: name || undefined,
                 description: description || undefined,
@@ -378,31 +390,31 @@ router.put("/applications/:client_id", needLogin, async (req, res) => {
         res.json(updatedApplication);
     } catch (error) {
         logger.error("Update OAuth application error:", error);
-        res.status(500).json({error: "Internal server error"});
+        res.status(500).json({ error: "Internal server error" });
     }
 });
 
 // 删除应用（软删除）
 router.delete("/applications/:client_id", needLogin, requireSudo, async (req, res) => {
     try {
-        const {client_id} = req.params;
+        const { client_id } = req.params;
 
         // 查找应用并验证所有权
         const application = await prisma.ow_oauth_applications.findFirst({
             where: {
                 client_id,
                 owner_id: res.locals.userid,
-                status: {not: "deleted"},
+                status: { not: "deleted" },
             },
         });
 
         if (!application) {
-            return res.status(404).json({error: "Application not found"});
+            return res.status(404).json({ error: "Application not found" });
         }
 
         // 软删除应用
         await prisma.ow_oauth_applications.update({
-            where: {id: application.id},
+            where: { id: application.id },
             data: {
                 status: "deleted",
                 updated_at: new Date(),
@@ -411,7 +423,7 @@ router.delete("/applications/:client_id", needLogin, requireSudo, async (req, re
 
         // 撤销所有相关的访问令牌
         await prisma.ow_oauth_access_tokens.updateMany({
-            where: {application_id: application.id},
+            where: { application_id: application.id },
             data: {
                 is_revoked: true,
                 updated_at: new Date(),
@@ -420,17 +432,17 @@ router.delete("/applications/:client_id", needLogin, requireSudo, async (req, re
 
         // 更新所有相关的授权记录
         await prisma.ow_oauth_authorizations.updateMany({
-            where: {application_id: application.id},
+            where: { application_id: application.id },
             data: {
                 status: "revoked",
                 updated_at: new Date(),
             },
         });
 
-        res.json({code: 'success', message: "应用删除成功"});
+        res.json({ code: 'success', message: "应用删除成功" });
     } catch (error) {
         logger.error("Delete OAuth application error:", error);
-        res.status(500).json({error: "Internal server error"});
+        res.status(500).json({ error: "Internal server error" });
     }
 });
 
@@ -453,7 +465,7 @@ router.get("/user/emails", needLogin, async (req, res) => {
         res.json(verifiedEmails);
     } catch (error) {
         logger.error("Get user emails error:", error);
-        res.status(500).json({error: "Internal server error"});
+        res.status(500).json({ error: "Internal server error" });
     }
 });
 
@@ -482,7 +494,7 @@ router.get("/authorize", async (req, res) => {
 
         // 查找应用
         const application = await prisma.ow_oauth_applications.findFirst({
-            where: {client_id, status: "active"},
+            where: { client_id, status: "active" },
         });
 
         if (!application) {
@@ -560,7 +572,7 @@ router.post("/authorize/confirm", needLogin, async (req, res) => {
 
         // 查找应用
         const application = await prisma.ow_oauth_applications.findFirst({
-            where: {client_id, status: "active"},
+            where: { client_id, status: "active" },
         });
 
         if (!application) {
@@ -653,7 +665,7 @@ router.post("/token", oauthRateLimit, async (req, res) => {
                 where: {
                     code,
                     application_id: application.id,
-                    code_expires_at: {gt: new Date()},
+                    code_expires_at: { gt: new Date() },
                     status: "active",
                 },
             });
@@ -663,7 +675,7 @@ router.post("/token", oauthRateLimit, async (req, res) => {
             }
 
             // 生成访问令牌和刷新令牌
-            const {accessToken, refreshToken, expiresIn} =
+            const { accessToken, refreshToken, expiresIn } =
                 await generateOAuthTokens(
                     authorization.user_id,
                     application.id,
@@ -673,7 +685,7 @@ router.post("/token", oauthRateLimit, async (req, res) => {
 
             // 清除授权码
             await prisma.ow_oauth_authorizations.update({
-                where: {id: authorization.id},
+                where: { id: authorization.id },
                 data: {
                     code: null,
                     last_used_at: new Date(),
@@ -734,7 +746,7 @@ router.get("/userinfo", async (req, res) => {
         const token = await prisma.ow_oauth_access_tokens.findFirst({
             where: {
                 access_token: accessToken,
-                expires_at: {gt: new Date()},
+                expires_at: { gt: new Date() },
                 is_revoked: false,
             },
             include: {
@@ -759,7 +771,7 @@ router.get("/userinfo", async (req, res) => {
 
         // 更新令牌使用信息
         await prisma.ow_oauth_access_tokens.update({
-            where: {id: token.id},
+            where: { id: token.id },
             data: {
                 last_used_at: new Date(),
                 last_used_ip: req.ip,
@@ -768,7 +780,7 @@ router.get("/userinfo", async (req, res) => {
 
         // 构建头像URL
         const avatarUrl = token.user.avatar
-            ? `${await zcconfig.get("s3.staticurl")}/assets/${token.user.avatar.slice(0,2)}/${token.user.avatar.slice(2,4)}/${token.user.avatar}.webp`
+            ? `${await zcconfig.get("s3.staticurl")}/assets/${token.user.avatar.slice(0, 2)}/${token.user.avatar.slice(2, 4)}/${token.user.avatar}.webp`
             : null;
 
         // 返回用户信息
