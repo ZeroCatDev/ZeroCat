@@ -44,7 +44,7 @@
     "morgan": "^1.10.0",
     "multer": "^2.0.1",
     "mysql2": "^3.6.0",
-    "nodemailer": "^7.0.3",
+    "nodemailer": "^7.0.7",
     "otpauth": "^9.4.0",
     "phpass": "^0.1.1",
     "rate-limit-redis": "^4.2.1",
