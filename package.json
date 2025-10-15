@@ -48,7 +48,7 @@
     "otpauth": "^9.4.0",
     "phpass": "^0.1.1",
     "rate-limit-redis": "^4.2.1",
-    "sharp": "^0.34.3",
+    "sharp": "^0.34.4",
     "sitemap": "^8.0.0",
     "tar": "^7.4.3",
     "ua-parser-js": "^2.0.3",
