@@ -43,7 +43,7 @@
     "jsonwebtoken": "^9.0.0",
     "morgan": "^1.10.0",
     "multer": "^2.0.1",
-    "mysql2": "^3.6.0",
+    "mysql2": "^3.15.0",
     "nodemailer": "^7.0.3",
     "otpauth": "^9.4.0",
     "phpass": "^0.1.1",
