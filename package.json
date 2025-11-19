@@ -16,7 +16,7 @@
     "@maxmind/geoip2-node": "^6.1.0",
     "@prisma/client": "^6.13.0",
     "@simplewebauthn/server": "^10.0.1",
-    "axios": "^1.9.0",
+    "axios": "^1.13.1",
     "base32-encode": "^2.0.0",
     "base64url": "^3.0.1",
     "bcrypt": "^6.0.0",
