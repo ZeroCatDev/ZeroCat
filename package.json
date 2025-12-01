@@ -30,7 +30,7 @@
     "dotenv": "^16.5.0",
     "ejs": "^3.1.10",
     "email-templates": "^12.0.3",
-    "express": "^5.1.0",
+    "express": "^5.2.0",
     "express-jwt": "^8.5.1",
     "express-rate-limit": "^7.5.1",
     "express-session": "^1.18.1",
