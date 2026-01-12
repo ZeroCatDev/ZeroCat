@@ -1,5 +1,5 @@
 # 使用轻量且有社区支持的 Node 官方镜像
-FROM node:20.19.5-alpine
+FROM node:20.19.6-alpine
 
 # 设置作者信息
 LABEL author="wuyuan"
