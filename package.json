@@ -12,7 +12,7 @@
     "dev:no": "NODE_ENV=development node server.js"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.826.0",
+    "@aws-sdk/client-s3": "^3.958.0",
     "@maxmind/geoip2-node": "^6.1.0",
     "@prisma/client": "^6.13.0",
     "@simplewebauthn/server": "^10.0.1",
