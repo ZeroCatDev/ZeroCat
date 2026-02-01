@@ -1,4 +1,3 @@
-
 -- CreateSchema
 CREATE SCHEMA IF NOT EXISTS "public";
 
@@ -34,7 +33,7 @@ CREATE TABLE "oauth_applications" (
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ(6) NOT NULL,
 
-    CONSTRAINT "idx_16442_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19042_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -51,7 +50,7 @@ CREATE TABLE "ow_account_tokens" (
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ(6) NOT NULL,
 
-    CONSTRAINT "idx_16453_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19053_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -72,7 +71,7 @@ CREATE TABLE "ow_analytics_device" (
     "first_seen" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "last_seen" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "idx_16460_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19060_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -97,7 +96,7 @@ CREATE TABLE "ow_analytics_event" (
     "timezone" VARCHAR(191),
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "idx_16467_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19067_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -123,7 +122,7 @@ CREATE TABLE "ow_assets" (
     "tags" VARCHAR(500),
     "category" VARCHAR(50),
 
-    CONSTRAINT "idx_16473_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19073_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -146,7 +145,7 @@ CREATE TABLE "ow_auth_tokens" (
     "user_agent" TEXT,
     "device_info" TEXT,
 
-    CONSTRAINT "idx_16481_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19081_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -158,7 +157,7 @@ CREATE TABLE "ow_cache_kv" (
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ(6) NOT NULL,
 
-    CONSTRAINT "idx_16490_primary" PRIMARY KEY ("user_id","key")
+    CONSTRAINT "idx_19090_PRIMARY" PRIMARY KEY ("user_id","key")
 );
 
 -- CreateTable
@@ -172,7 +171,7 @@ CREATE TABLE "ow_coderun_devices" (
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ(6) NOT NULL,
 
-    CONSTRAINT "idx_16497_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19097_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -181,7 +180,7 @@ CREATE TABLE "ow_comment" (
     "user_id" INTEGER,
     "type" VARCHAR(64) DEFAULT 'comment',
     "text" TEXT,
-    "insertedat" TIMESTAMPTZ(6) DEFAULT CURRENT_TIMESTAMP,
+    "insertedAt" TIMESTAMPTZ(6) DEFAULT CURRENT_TIMESTAMP,
     "user_ip" VARCHAR(100) DEFAULT '',
     "link" VARCHAR(128),
     "pid" INTEGER,
@@ -191,11 +190,11 @@ CREATE TABLE "ow_comment" (
     "url" VARCHAR(255),
     "page_type" VARCHAR(32),
     "page_id" VARCHAR(32),
-    "createdat" TIMESTAMPTZ(6) DEFAULT CURRENT_TIMESTAMP,
-    "updatedat" TIMESTAMPTZ(6) DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMPTZ(6) DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(6) DEFAULT CURRENT_TIMESTAMP,
     "page_key" VARCHAR(128),
 
-    CONSTRAINT "idx_16505_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19105_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -208,7 +207,7 @@ CREATE TABLE "ow_config" (
     "metadata" JSON,
     "type" "ow_config_type" NOT NULL DEFAULT 'STRING',
 
-    CONSTRAINT "idx_16517_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19117_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -222,7 +221,7 @@ CREATE TABLE "ow_events" (
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "public" SMALLINT NOT NULL DEFAULT 0,
 
-    CONSTRAINT "idx_16526_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19126_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -247,7 +246,7 @@ CREATE TABLE "ow_notifications" (
     "push_error" BOOLEAN NOT NULL DEFAULT false,
     "push_results" JSON,
 
-    CONSTRAINT "idx_16535_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19135_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -269,7 +268,7 @@ CREATE TABLE "ow_oauth_access_tokens" (
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ(6) NOT NULL,
 
-    CONSTRAINT "idx_16546_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19146_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -289,7 +288,7 @@ CREATE TABLE "ow_oauth_authorizations" (
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ(6) NOT NULL,
 
-    CONSTRAINT "idx_16553_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19153_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -304,7 +303,7 @@ CREATE TABLE "ow_oauth_scopes" (
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ(6) NOT NULL,
 
-    CONSTRAINT "idx_16560_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19160_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -329,7 +328,7 @@ CREATE TABLE "ow_projects" (
     "star_count" INTEGER DEFAULT 0,
     "thumbnail" VARCHAR(37) DEFAULT '',
 
-    CONSTRAINT "idx_16570_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19170_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -342,7 +341,7 @@ CREATE TABLE "ow_projects_assets" (
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ(6) NOT NULL,
 
-    CONSTRAINT "idx_16589_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19189_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -355,7 +354,7 @@ CREATE TABLE "ow_projects_branch" (
     "protected" VARCHAR(45) DEFAULT 'false',
     "creator" INTEGER,
 
-    CONSTRAINT "idx_16594_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19194_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -371,7 +370,7 @@ CREATE TABLE "ow_projects_commits" (
     "commit_description" TEXT,
     "depth" INTEGER,
 
-    CONSTRAINT "idx_16598_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19198_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -381,7 +380,7 @@ CREATE TABLE "ow_projects_file" (
     "create_time" TIMESTAMPTZ(6) DEFAULT CURRENT_TIMESTAMP,
     "create_userid" INTEGER,
 
-    CONSTRAINT "idx_16604_primary" PRIMARY KEY ("sha256")
+    CONSTRAINT "idx_19204_PRIMARY" PRIMARY KEY ("sha256")
 );
 
 -- CreateTable
@@ -398,7 +397,7 @@ CREATE TABLE "ow_projects_history" (
     "licence" VARCHAR(45),
     "tags" VARCHAR(100),
 
-    CONSTRAINT "idx_16611_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19211_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -406,9 +405,9 @@ CREATE TABLE "ow_projects_list_items" (
     "id" INTEGER NOT NULL,
     "listid" INTEGER NOT NULL,
     "projectid" INTEGER NOT NULL,
-    "createtime" TIMESTAMPTZ(6) DEFAULT CURRENT_TIMESTAMP,
+    "createTime" TIMESTAMPTZ(6) DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "idx_16622_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19222_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -419,10 +418,10 @@ CREATE TABLE "ow_projects_lists" (
     "description" VARCHAR(1024) DEFAULT '列表',
     "state" VARCHAR(32) DEFAULT 'private',
     "list" TEXT,
-    "updatetime" TIMESTAMPTZ(6),
-    "createtime" TIMESTAMPTZ(6) DEFAULT CURRENT_TIMESTAMP,
+    "updateTime" TIMESTAMPTZ(6),
+    "createTime" TIMESTAMPTZ(6) DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "idx_16626_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19226_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -430,9 +429,9 @@ CREATE TABLE "ow_projects_stars" (
     "id" INTEGER NOT NULL,
     "userid" INTEGER NOT NULL,
     "projectid" INTEGER NOT NULL,
-    "createtime" TIMESTAMPTZ(6) DEFAULT CURRENT_TIMESTAMP,
+    "createTime" TIMESTAMPTZ(6) DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "idx_16635_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19235_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -442,7 +441,7 @@ CREATE TABLE "ow_projects_tags" (
     "projectid" INTEGER NOT NULL,
     "created_at" TIMESTAMPTZ(6) DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "idx_16639_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19239_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -459,7 +458,7 @@ CREATE TABLE "ow_push_subscriptions" (
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ(6) NOT NULL,
 
-    CONSTRAINT "idx_16643_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19243_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -474,9 +473,9 @@ CREATE TABLE "ow_scratch_extensions" (
     "status" VARCHAR(32) NOT NULL DEFAULT 'developing',
     "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ(6) NOT NULL,
-    "scratchcompatible" BOOLEAN NOT NULL DEFAULT false,
+    "scratchCompatible" BOOLEAN NOT NULL DEFAULT false,
 
-    CONSTRAINT "idx_16650_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19250_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -489,7 +488,7 @@ CREATE TABLE "ow_user_relationships" (
     "updated_at" TIMESTAMPTZ(6),
     "metadata" JSON,
 
-    CONSTRAINT "idx_16660_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19260_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -500,8 +499,8 @@ CREATE TABLE "ow_users" (
     "password" VARCHAR(255),
     "display_name" CHAR(20) NOT NULL DEFAULT 'ZeroCat创作者',
     "status" VARCHAR(20) NOT NULL DEFAULT 'active',
-    "logintime" TIMESTAMPTZ(6) DEFAULT CURRENT_TIMESTAMP,
-    "regtime" TIMESTAMPTZ(6) DEFAULT CURRENT_TIMESTAMP,
+    "loginTime" TIMESTAMPTZ(6) DEFAULT CURRENT_TIMESTAMP,
+    "regTime" TIMESTAMPTZ(6) DEFAULT CURRENT_TIMESTAMP,
     "sex" VARCHAR(16) DEFAULT '0',
     "birthday" TIMESTAMPTZ(6) DEFAULT '2000-03-31 08:00:00+08'::timestamp with time zone,
     "motto" TEXT,
@@ -509,8 +508,8 @@ CREATE TABLE "ow_users" (
     "avatar" VARCHAR(255) DEFAULT 'fcd939e653195bb6d057e8c2519f5cc7',
     "type" VARCHAR(50) DEFAULT 'guest',
     "url" VARCHAR(255),
-    "createdat" TIMESTAMPTZ(6) DEFAULT CURRENT_TIMESTAMP,
-    "updatedat" TIMESTAMPTZ(6),
+    "createdAt" TIMESTAMPTZ(6) DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMPTZ(6),
     "label" VARCHAR(255),
     "bio" TEXT,
     "custom_status" JSON,
@@ -518,7 +517,7 @@ CREATE TABLE "ow_users" (
     "location" VARCHAR(100),
     "region" VARCHAR(100),
 
-    CONSTRAINT "idx_16666_primary" PRIMARY KEY ("id","username")
+    CONSTRAINT "idx_19266_PRIMARY" PRIMARY KEY ("id","username")
 );
 
 -- CreateTable
@@ -534,17 +533,17 @@ CREATE TABLE "ow_users_contacts" (
     "updated_at" TIMESTAMPTZ(6) DEFAULT CURRENT_TIMESTAMP,
     "metadata" JSON,
 
-    CONSTRAINT "idx_16681_primary" PRIMARY KEY ("contact_id")
+    CONSTRAINT "idx_19281_PRIMARY" PRIMARY KEY ("contact_id")
 );
 
 -- CreateTable
 CREATE TABLE "ow_users_magiclink" (
     "id" INTEGER NOT NULL,
-    "userid" INTEGER NOT NULL,
+    "userId" INTEGER NOT NULL,
     "token" VARCHAR(255) NOT NULL,
-    "expiresat" TIMESTAMPTZ(6) NOT NULL,
+    "expiresAt" TIMESTAMPTZ(6) NOT NULL,
 
-    CONSTRAINT "idx_16690_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19290_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -562,281 +561,282 @@ CREATE TABLE "ow_users_totp" (
     "created_at" TIMESTAMPTZ(6) DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ(6) DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "idx_16693_primary" PRIMARY KEY ("id")
+    CONSTRAINT "idx_19293_PRIMARY" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idx_16442_oauth_applications_client_id_key" ON "oauth_applications"("client_id");
+CREATE UNIQUE INDEX "idx_19042_oauth_applications_client_id_key" ON "oauth_applications"("client_id");
 
 -- CreateIndex
-CREATE INDEX "idx_16442_oauth_applications_client_id_idx" ON "oauth_applications"("client_id");
+CREATE INDEX "idx_19042_oauth_applications_client_id_idx" ON "oauth_applications"("client_id");
 
 -- CreateIndex
-CREATE INDEX "idx_16442_oauth_applications_owner_id_idx" ON "oauth_applications"("owner_id");
+CREATE INDEX "idx_19042_oauth_applications_owner_id_idx" ON "oauth_applications"("owner_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idx_16453_ow_account_tokens_token_key" ON "ow_account_tokens"("token");
+CREATE UNIQUE INDEX "idx_19053_ow_account_tokens_token_key" ON "ow_account_tokens"("token");
 
 -- CreateIndex
-CREATE INDEX "idx_16453_ow_account_tokens_expires_at_idx" ON "ow_account_tokens"("expires_at");
+CREATE INDEX "idx_19053_ow_account_tokens_expires_at_idx" ON "ow_account_tokens"("expires_at");
 
 -- CreateIndex
-CREATE INDEX "idx_16453_ow_account_tokens_is_revoked_idx" ON "ow_account_tokens"("is_revoked");
+CREATE INDEX "idx_19053_ow_account_tokens_is_revoked_idx" ON "ow_account_tokens"("is_revoked");
 
 -- CreateIndex
-CREATE INDEX "idx_16453_ow_account_tokens_token_idx" ON "ow_account_tokens"("token");
+CREATE INDEX "idx_19053_ow_account_tokens_token_idx" ON "ow_account_tokens"("token");
 
 -- CreateIndex
-CREATE INDEX "idx_16453_ow_account_tokens_user_id_idx" ON "ow_account_tokens"("user_id");
+CREATE INDEX "idx_19053_ow_account_tokens_user_id_idx" ON "ow_account_tokens"("user_id");
 
 -- CreateIndex
-CREATE INDEX "idx_16460_ow_analytics_device_first_seen_idx" ON "ow_analytics_device"("first_seen");
+CREATE INDEX "idx_19060_ow_analytics_device_first_seen_idx" ON "ow_analytics_device"("first_seen");
 
 -- CreateIndex
-CREATE INDEX "idx_16460_ow_analytics_device_last_seen_idx" ON "ow_analytics_device"("last_seen");
+CREATE INDEX "idx_19060_ow_analytics_device_last_seen_idx" ON "ow_analytics_device"("last_seen");
 
 -- CreateIndex
-CREATE INDEX "idx_16460_ow_analytics_device_user_id_idx" ON "ow_analytics_device"("user_id");
+CREATE INDEX "idx_19060_ow_analytics_device_user_id_idx" ON "ow_analytics_device"("user_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idx_16460_ow_analytics_device_fingerprint_user_id_key" ON "ow_analytics_device"("fingerprint", "user_id");
+CREATE UNIQUE INDEX "idx_19060_ow_analytics_device_fingerprint_user_id_key" ON "ow_analytics_device"("fingerprint", "user_id");
 
 -- CreateIndex
-CREATE INDEX "idx_16467_ow_analytics_event_created_at_idx" ON "ow_analytics_event"("created_at");
+CREATE INDEX "idx_19067_ow_analytics_event_created_at_idx" ON "ow_analytics_event"("created_at");
 
 -- CreateIndex
-CREATE INDEX "idx_16467_ow_analytics_event_device_id_idx" ON "ow_analytics_event"("device_id");
+CREATE INDEX "idx_19067_ow_analytics_event_device_id_idx" ON "ow_analytics_event"("device_id");
 
 -- CreateIndex
-CREATE INDEX "idx_16467_ow_analytics_event_ip_address_idx" ON "ow_analytics_event"("ip_address");
+CREATE INDEX "idx_19067_ow_analytics_event_ip_address_idx" ON "ow_analytics_event"("ip_address");
 
 -- CreateIndex
-CREATE INDEX "idx_16467_ow_analytics_event_referrer_domain_idx" ON "ow_analytics_event"("referrer_domain");
+CREATE INDEX "idx_19067_ow_analytics_event_referrer_domain_idx" ON "ow_analytics_event"("referrer_domain");
 
 -- CreateIndex
-CREATE INDEX "idx_16467_ow_analytics_event_user_id_idx" ON "ow_analytics_event"("user_id");
+CREATE INDEX "idx_19067_ow_analytics_event_user_id_idx" ON "ow_analytics_event"("user_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idx_16473_ow_assets_md5_key" ON "ow_assets"("md5");
+CREATE UNIQUE INDEX "idx_19073_ow_assets_md5_key" ON "ow_assets"("md5");
 
 -- CreateIndex
-CREATE INDEX "idx_16473_ow_assets_category_idx" ON "ow_assets"("category");
+CREATE INDEX "idx_19073_ow_assets_category_idx" ON "ow_assets"("category");
 
 -- CreateIndex
-CREATE INDEX "idx_16473_ow_assets_created_at_idx" ON "ow_assets"("created_at");
+CREATE INDEX "idx_19073_ow_assets_created_at_idx" ON "ow_assets"("created_at");
 
 -- CreateIndex
-CREATE INDEX "idx_16473_ow_assets_extension_idx" ON "ow_assets"("extension");
+CREATE INDEX "idx_19073_ow_assets_extension_idx" ON "ow_assets"("extension");
 
 -- CreateIndex
-CREATE INDEX "idx_16473_ow_assets_is_banned_idx" ON "ow_assets"("is_banned");
+CREATE INDEX "idx_19073_ow_assets_is_banned_idx" ON "ow_assets"("is_banned");
 
 -- CreateIndex
-CREATE INDEX "idx_16473_ow_assets_md5_idx" ON "ow_assets"("md5");
+CREATE INDEX "idx_19073_ow_assets_md5_idx" ON "ow_assets"("md5");
 
 -- CreateIndex
-CREATE INDEX "idx_16473_ow_assets_uploader_id_idx" ON "ow_assets"("uploader_id");
+CREATE INDEX "idx_19073_ow_assets_uploader_id_idx" ON "ow_assets"("uploader_id");
 
 -- CreateIndex
-CREATE INDEX "idx_16473_ow_assets_usage_count_idx" ON "ow_assets"("usage_count");
+CREATE INDEX "idx_19073_ow_assets_usage_count_idx" ON "ow_assets"("usage_count");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idx_16481_idx_access_token" ON "ow_auth_tokens"("access_token");
+CREATE UNIQUE INDEX "idx_19081_idx_access_token" ON "ow_auth_tokens"("access_token");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idx_16481_idx_refresh_token" ON "ow_auth_tokens"("refresh_token");
+CREATE UNIQUE INDEX "idx_19081_idx_refresh_token" ON "ow_auth_tokens"("refresh_token");
 
 -- CreateIndex
-CREATE INDEX "idx_16481_idx_tokens_last_used_at" ON "ow_auth_tokens"("last_used_at");
+CREATE INDEX "idx_19081_idx_tokens_last_used_at" ON "ow_auth_tokens"("last_used_at");
 
 -- CreateIndex
-CREATE INDEX "idx_16481_idx_tokens_last_used_ip" ON "ow_auth_tokens"("last_used_ip");
+CREATE INDEX "idx_19081_idx_tokens_last_used_ip" ON "ow_auth_tokens"("last_used_ip");
 
 -- CreateIndex
-CREATE INDEX "idx_16481_idx_user_id" ON "ow_auth_tokens"("user_id");
+CREATE INDEX "idx_19081_idx_user_id" ON "ow_auth_tokens"("user_id");
 
 -- CreateIndex
-CREATE INDEX "idx_16490_ow_cache_kv_key_idx" ON "ow_cache_kv"("key");
+CREATE INDEX "idx_19090_ow_cache_kv_key_idx" ON "ow_cache_kv"("key");
 
 -- CreateIndex
-CREATE INDEX "idx_16490_ow_cache_kv_user_id_idx" ON "ow_cache_kv"("user_id");
+CREATE INDEX "idx_19090_ow_cache_kv_user_id_idx" ON "ow_cache_kv"("user_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idx_16497_ow_coderun_devices_runner_token_key" ON "ow_coderun_devices"("runner_token");
+CREATE UNIQUE INDEX "idx_19097_ow_coderun_devices_runner_token_key" ON "ow_coderun_devices"("runner_token");
 
 -- CreateIndex
-CREATE INDEX "idx_16497_ow_coderun_devices_runner_token_idx" ON "ow_coderun_devices"("runner_token");
+CREATE INDEX "idx_19097_ow_coderun_devices_runner_token_idx" ON "ow_coderun_devices"("runner_token");
 
 -- CreateIndex
-CREATE INDEX "idx_16497_ow_coderun_devices_status_idx" ON "ow_coderun_devices"("status");
+CREATE INDEX "idx_19097_ow_coderun_devices_status_idx" ON "ow_coderun_devices"("status");
 
 -- CreateIndex
-CREATE INDEX "idx_16505_idx_comment_user" ON "ow_comment"("user_id");
+CREATE INDEX "idx_19105_idx_comment_user" ON "ow_comment"("user_id");
 
 -- CreateIndex
-CREATE INDEX "idx_16505_idx_projects_comments" ON "ow_comment"("page_type", "page_id", "insertedat");
+CREATE INDEX "idx_19105_idx_projects_comments" ON "ow_comment"("page_type", "page_id", "insertedAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idx_16517_config_key" ON "ow_config"("key");
+CREATE UNIQUE INDEX "idx_19117_config_key" ON "ow_config"("key");
 
 -- CreateIndex
-CREATE INDEX "idx_16526_idx_created" ON "ow_events"("created_at");
+CREATE INDEX "idx_19126_idx_created" ON "ow_events"("created_at");
 
 -- CreateIndex
-CREATE INDEX "idx_16526_idx_target" ON "ow_events"("target_type", "target_id");
+CREATE INDEX "idx_19126_idx_target" ON "ow_events"("target_type", "target_id");
 
 -- CreateIndex
-CREATE INDEX "idx_16526_idx_type_actor" ON "ow_events"("event_type", "actor_id");
+CREATE INDEX "idx_19126_idx_type_actor" ON "ow_events"("event_type", "actor_id");
 
 -- CreateIndex
-CREATE INDEX "idx_16535_idx_notification_actor" ON "ow_notifications"("actor_id");
+CREATE INDEX "idx_19135_idx_notification_actor" ON "ow_notifications"("actor_id");
 
 -- CreateIndex
-CREATE INDEX "idx_16535_idx_notification_hidden" ON "ow_notifications"("hidden");
+CREATE INDEX "idx_19135_idx_notification_hidden" ON "ow_notifications"("hidden");
 
 -- CreateIndex
-CREATE INDEX "idx_16535_idx_user_all" ON "ow_notifications"("user_id", "created_at");
+CREATE INDEX "idx_19135_idx_user_all" ON "ow_notifications"("user_id", "created_at");
 
 -- CreateIndex
-CREATE INDEX "idx_16535_idx_user_unread" ON "ow_notifications"("user_id", "read", "created_at");
+CREATE INDEX "idx_19135_idx_user_unread" ON "ow_notifications"("user_id", "read", "created_at");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idx_16546_ow_oauth_access_tokens_access_token_key" ON "ow_oauth_access_tokens"("access_token");
+CREATE UNIQUE INDEX "idx_19146_ow_oauth_access_tokens_access_token_key" ON "ow_oauth_access_tokens"("access_token");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idx_16546_ow_oauth_access_tokens_refresh_token_key" ON "ow_oauth_access_tokens"("refresh_token");
+CREATE UNIQUE INDEX "idx_19146_ow_oauth_access_tokens_refresh_token_key" ON "ow_oauth_access_tokens"("refresh_token");
 
 -- CreateIndex
-CREATE INDEX "idx_16546_ow_oauth_access_tokens_access_token_idx" ON "ow_oauth_access_tokens"("access_token");
+CREATE INDEX "idx_19146_ow_oauth_access_tokens_access_token_idx" ON "ow_oauth_access_tokens"("access_token");
 
 -- CreateIndex
-CREATE INDEX "idx_16546_ow_oauth_access_tokens_application_id_idx" ON "ow_oauth_access_tokens"("application_id");
+CREATE INDEX "idx_19146_ow_oauth_access_tokens_application_id_idx" ON "ow_oauth_access_tokens"("application_id");
 
 -- CreateIndex
-CREATE INDEX "idx_16546_ow_oauth_access_tokens_authorization_id_idx" ON "ow_oauth_access_tokens"("authorization_id");
+CREATE INDEX "idx_19146_ow_oauth_access_tokens_authorization_id_idx" ON "ow_oauth_access_tokens"("authorization_id");
 
 -- CreateIndex
-CREATE INDEX "idx_16546_ow_oauth_access_tokens_refresh_token_idx" ON "ow_oauth_access_tokens"("refresh_token");
+CREATE INDEX "idx_19146_ow_oauth_access_tokens_refresh_token_idx" ON "ow_oauth_access_tokens"("refresh_token");
 
 -- CreateIndex
-CREATE INDEX "idx_16546_ow_oauth_access_tokens_user_id_idx" ON "ow_oauth_access_tokens"("user_id");
+CREATE INDEX "idx_19146_ow_oauth_access_tokens_user_id_idx" ON "ow_oauth_access_tokens"("user_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idx_16553_ow_oauth_authorizations_code_key" ON "ow_oauth_authorizations"("code");
+CREATE UNIQUE INDEX "idx_19153_ow_oauth_authorizations_code_key" ON "ow_oauth_authorizations"("code");
 
 -- CreateIndex
-CREATE INDEX "idx_16553_ow_oauth_authorizations_code_idx" ON "ow_oauth_authorizations"("code");
+CREATE INDEX "idx_19153_ow_oauth_authorizations_code_idx" ON "ow_oauth_authorizations"("code");
 
 -- CreateIndex
-CREATE INDEX "idx_16553_ow_oauth_authorizations_user_id_idx" ON "ow_oauth_authorizations"("user_id");
+CREATE INDEX "idx_19153_ow_oauth_authorizations_user_id_idx" ON "ow_oauth_authorizations"("user_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idx_16553_ow_oauth_authorizations_application_id_user_id_key" ON "ow_oauth_authorizations"("application_id", "user_id");
+CREATE UNIQUE INDEX "idx_19153_ow_oauth_authorizations_application_id_user_id_key" ON "ow_oauth_authorizations"("application_id", "user_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idx_16560_ow_oauth_scopes_name_key" ON "ow_oauth_scopes"("name");
+CREATE UNIQUE INDEX "idx_19160_ow_oauth_scopes_name_key" ON "ow_oauth_scopes"("name");
 
 -- CreateIndex
-CREATE INDEX "idx_16560_ow_oauth_scopes_category_idx" ON "ow_oauth_scopes"("category");
+CREATE INDEX "idx_19160_ow_oauth_scopes_category_idx" ON "ow_oauth_scopes"("category");
 
 -- CreateIndex
-CREATE INDEX "idx_16560_ow_oauth_scopes_risk_level_idx" ON "ow_oauth_scopes"("risk_level");
+CREATE INDEX "idx_19160_ow_oauth_scopes_risk_level_idx" ON "ow_oauth_scopes"("risk_level");
 
 -- CreateIndex
-CREATE INDEX "idx_16570_idx_project_author" ON "ow_projects"("authorid");
+CREATE INDEX "idx_19170_idx_project_author" ON "ow_projects"("authorid");
 
 -- CreateIndex
-CREATE INDEX "idx_16570_idx_projects_state" ON "ow_projects"("state");
+CREATE INDEX "idx_19170_idx_projects_state" ON "ow_projects"("state");
 
 -- CreateIndex
-CREATE INDEX "idx_16589_ow_projects_assets_asset_id_idx" ON "ow_projects_assets"("asset_id");
+CREATE INDEX "idx_19189_ow_projects_assets_asset_id_idx" ON "ow_projects_assets"("asset_id");
 
 -- CreateIndex
-CREATE INDEX "idx_16589_ow_projects_assets_project_id_idx" ON "ow_projects_assets"("project_id");
+CREATE INDEX "idx_19189_ow_projects_assets_project_id_idx" ON "ow_projects_assets"("project_id");
 
 -- CreateIndex
-CREATE INDEX "idx_16589_ow_projects_assets_usage_context_idx" ON "ow_projects_assets"("usage_context");
+CREATE INDEX "idx_19189_ow_projects_assets_usage_context_idx" ON "ow_projects_assets"("usage_context");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idx_16589_ow_projects_assets_project_id_asset_id_key" ON "ow_projects_assets"("project_id", "asset_id");
+CREATE UNIQUE INDEX "idx_19189_ow_projects_assets_project_id_asset_id_key" ON "ow_projects_assets"("project_id", "asset_id");
 
 -- CreateIndex
-CREATE INDEX "idx_16594_idx_branch_creator" ON "ow_projects_branch"("creator");
+CREATE INDEX "idx_19194_idx_branch_creator" ON "ow_projects_branch"("creator");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idx_16594_unique_project_branch" ON "ow_projects_branch"("projectid", "name");
+CREATE UNIQUE INDEX "idx_19194_unique_project_branch" ON "ow_projects_branch"("projectid", "name");
 
 -- CreateIndex
-CREATE INDEX "idx_16598_idx_parent_commit" ON "ow_projects_commits"("parent_commit_id");
+CREATE INDEX "idx_19198_idx_parent_commit" ON "ow_projects_commits"("parent_commit_id");
 
 -- CreateIndex
-CREATE INDEX "idx_16598_idx_projects_commits_project_date" ON "ow_projects_commits"("project_id", "commit_date");
+CREATE INDEX "idx_19198_idx_projects_commits_project_date" ON "ow_projects_commits"("project_id", "commit_date");
 
 -- CreateIndex
-CREATE INDEX "idx_16622_idx_list_items" ON "ow_projects_list_items"("listid");
+CREATE INDEX "idx_19222_idx_list_items" ON "ow_projects_list_items"("listid");
 
 -- CreateIndex
-CREATE INDEX "idx_16622_idx_project_in_lists" ON "ow_projects_list_items"("projectid");
+CREATE INDEX "idx_19222_idx_project_in_lists" ON "ow_projects_list_items"("projectid");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idx_16622_unique_list_project" ON "ow_projects_list_items"("listid", "projectid");
+CREATE UNIQUE INDEX "idx_19222_unique_list_project" ON "ow_projects_list_items"("listid", "projectid");
 
 -- CreateIndex
-CREATE INDEX "idx_16626_idx_author_lists" ON "ow_projects_lists"("authorid");
+CREATE INDEX "idx_19226_idx_author_lists" ON "ow_projects_lists"("authorid");
 
 -- CreateIndex
-CREATE INDEX "idx_16635_idx_projects_stars_project" ON "ow_projects_stars"("projectid");
+CREATE INDEX "idx_19235_idx_projects_stars_project" ON "ow_projects_stars"("projectid");
 
 -- CreateIndex
-CREATE INDEX "idx_16635_idx_projects_stars_user" ON "ow_projects_stars"("userid");
+CREATE INDEX "idx_19235_idx_projects_stars_user" ON "ow_projects_stars"("userid");
 
 -- CreateIndex
-CREATE INDEX "idx_16639_idx_projectid" ON "ow_projects_tags"("projectid");
+CREATE INDEX "idx_19239_idx_projectid" ON "ow_projects_tags"("projectid");
 
 -- CreateIndex
-CREATE INDEX "idx_16643_ow_push_subscriptions_is_active_idx" ON "ow_push_subscriptions"("is_active");
+CREATE INDEX "idx_19243_ow_push_subscriptions_is_active_idx" ON "ow_push_subscriptions"("is_active");
 
 -- CreateIndex
-CREATE INDEX "idx_16643_ow_push_subscriptions_last_used_at_idx" ON "ow_push_subscriptions"("last_used_at");
+CREATE INDEX "idx_19243_ow_push_subscriptions_last_used_at_idx" ON "ow_push_subscriptions"("last_used_at");
 
 -- CreateIndex
-CREATE INDEX "idx_16643_ow_push_subscriptions_user_id_idx" ON "ow_push_subscriptions"("user_id");
+CREATE INDEX "idx_19243_ow_push_subscriptions_user_id_idx" ON "ow_push_subscriptions"("user_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idx_16643_ow_push_subscriptions_user_id_endpoint_key" ON "ow_push_subscriptions"("user_id", "endpoint");
+CREATE UNIQUE INDEX "idx_19243_ow_push_subscriptions_user_id_endpoint_key" ON "ow_push_subscriptions"("user_id", "endpoint");
 
 -- CreateIndex
-CREATE INDEX "idx_16650_idx_extension_project" ON "ow_scratch_extensions"("projectid");
+CREATE INDEX "idx_19250_idx_extension_project" ON "ow_scratch_extensions"("projectid");
 
 -- CreateIndex
-CREATE INDEX "idx_16650_idx_extension_samples" ON "ow_scratch_extensions"("samples");
+CREATE INDEX "idx_19250_idx_extension_samples" ON "ow_scratch_extensions"("samples");
 
 -- CreateIndex
-CREATE INDEX "idx_16650_idx_extension_status" ON "ow_scratch_extensions"("status");
+CREATE INDEX "idx_19250_idx_extension_status" ON "ow_scratch_extensions"("status");
 
 -- CreateIndex
-CREATE INDEX "idx_16660_idx_source_user_relationships" ON "ow_user_relationships"("source_user_id", "relationship_type");
+CREATE INDEX "idx_19260_idx_source_user_relationships" ON "ow_user_relationships"("source_user_id", "relationship_type");
 
 -- CreateIndex
-CREATE INDEX "idx_16660_idx_target_user_relationships" ON "ow_user_relationships"("target_user_id", "relationship_type");
+CREATE INDEX "idx_19260_idx_target_user_relationships" ON "ow_user_relationships"("target_user_id", "relationship_type");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idx_16660_ow_user_relationships_source_user_id_target_user_id_r" ON "ow_user_relationships"("source_user_id", "target_user_id", "relationship_type");
+CREATE UNIQUE INDEX "idx_19260_ow_user_relationships_source_user_id_target_user_id_r" ON "ow_user_relationships"("source_user_id", "target_user_id", "relationship_type");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idx_16666_id_unique" ON "ow_users"("id");
+CREATE UNIQUE INDEX "idx_19266_id_UNIQUE" ON "ow_users"("id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idx_16666_user_unique" ON "ow_users"("username");
+CREATE UNIQUE INDEX "idx_19266_user_UNIQUE" ON "ow_users"("username");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idx_16681_contact_value_unique" ON "ow_users_contacts"("contact_value");
+CREATE UNIQUE INDEX "idx_19281_contact_value_UNIQUE" ON "ow_users_contacts"("contact_value");
 
 -- CreateIndex
-CREATE INDEX "idx_16681_idx_user_contact_type" ON "ow_users_contacts"("user_id", "contact_type");
+CREATE INDEX "idx_19281_idx_user_contact_type" ON "ow_users_contacts"("user_id", "contact_type");
 
 -- CreateIndex
-CREATE INDEX "idx_16681_idx_user_contacts" ON "ow_users_contacts"("user_id");
+CREATE INDEX "idx_19281_idx_user_contacts" ON "ow_users_contacts"("user_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "idx_16690_token" ON "ow_users_magiclink"("token");
+CREATE UNIQUE INDEX "idx_19290_token" ON "ow_users_magiclink"("token");
+
