@@ -12,11 +12,8 @@ const require = createRequire(import.meta.url);
 const DisposableDomains = require('disposable-domains/index.json');
 const DisposableWildcards = require('disposable-domains/wildcard.json');
 //prisma client
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "./prisma.js";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-
-const prisma = new PrismaClient()
-
 
 const pwdHash = new PasswordHash();
 const s3config = {

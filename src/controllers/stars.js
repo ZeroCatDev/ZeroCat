@@ -1,8 +1,8 @@
-import {PrismaClient} from "@prisma/client";
+import { prisma } from '../services/prisma.js';
+
 import logger from "../services/logger.js";
 import {createEvent} from "./events.js";
 
-const prismaClient = new PrismaClient();
 
 /**
  * Star a project for a user
@@ -16,7 +16,7 @@ export async function starProject(userId, projectId) {
         const parsedProjectId = parseInt(projectId);
 
         // 检查项目是否存在
-        const project = await prismaClient.ow_projects.findUnique({
+        const project = await prisma.ow_projects.findUnique({
             where: {id: parsedProjectId}
         });
 
@@ -25,7 +25,7 @@ export async function starProject(userId, projectId) {
         }
 
         // 检查是否已经收藏
-        const existingStar = await prismaClient.ow_projects_stars.findFirst({
+        const existingStar = await prisma.ow_projects_stars.findFirst({
             where: {
                 userid: parsedUserId,
                 projectid: parsedProjectId,
@@ -37,7 +37,7 @@ export async function starProject(userId, projectId) {
         }
 
         // 创建收藏
-        const star = await prismaClient.ow_projects_stars.create({
+        const star = await prisma.ow_projects_stars.create({
             data: {
                 userid: parsedUserId,
                 projectid: parsedProjectId,
@@ -46,7 +46,7 @@ export async function starProject(userId, projectId) {
         });
 
         // 更新项目收藏数
-        await prismaClient.ow_projects.update({
+        await prisma.ow_projects.update({
             where: {id: parsedProjectId},
             data: {
                 star_count: {
@@ -87,7 +87,7 @@ export async function unstarProject(userId, projectId) {
         const parsedProjectId = parseInt(projectId);
 
         // 检查项目是否存在
-        const project = await prismaClient.ow_projects.findUnique({
+        const project = await prisma.ow_projects.findUnique({
             where: {id: parsedProjectId}
         });
 
@@ -96,7 +96,7 @@ export async function unstarProject(userId, projectId) {
         }
 
         // 检查用户是否已收藏该项目
-        const existingStar = await prismaClient.ow_projects_stars.findFirst({
+        const existingStar = await prisma.ow_projects_stars.findFirst({
             where: {
                 userid: parsedUserId,
                 projectid: parsedProjectId,
@@ -108,7 +108,7 @@ export async function unstarProject(userId, projectId) {
         }
 
         // 删除收藏记录
-        const star = await prismaClient.ow_projects_stars.deleteMany({
+        const star = await prisma.ow_projects_stars.deleteMany({
             where: {
                 userid: parsedUserId,
                 projectid: parsedProjectId,
@@ -116,7 +116,7 @@ export async function unstarProject(userId, projectId) {
         });
 
         // 更新项目收藏数
-        await prismaClient.ow_projects.update({
+        await prisma.ow_projects.update({
             where: {id: parsedProjectId},
             data: {
                 star_count: {
@@ -147,7 +147,7 @@ export async function getProjectStarStatus(userId, projectId) {
         const parsedUserId = parseInt(userId);
         const parsedProjectId = parseInt(projectId);
 
-        const star = await prismaClient.ow_projects_stars.findFirst({
+        const star = await prisma.ow_projects_stars.findFirst({
             where: {
                 userid: parsedUserId,
                 projectid: parsedProjectId,
@@ -170,7 +170,7 @@ export async function getProjectStars(projectId) {
     try {
         const parsedProjectId = parseInt(projectId);
 
-        const count = await prismaClient.ow_projects_stars.count({
+        const count = await prisma.ow_projects_stars.count({
             where: {
                 projectid: parsedProjectId,
             }

@@ -1,4 +1,4 @@
-import {prisma} from "../global.js";
+import {prisma} from "../prisma.js";
 import zcconfig from "../config/zcconfig.js";
 import logger from "../logger.js";
 import ipLocation from "../ip/ipLocation.js";

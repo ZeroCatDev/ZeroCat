@@ -1,11 +1,10 @@
 import express from 'express';
-import {PrismaClient} from '@prisma/client';
+import {prisma} from "../services/prisma.js";
 import logger from "../services/logger.js";
 import {UAParser} from 'ua-parser-js';
 import ipLocation from '../services/ip/ipLocation.js';
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // URL 解析函数
 function parseURL(url) {

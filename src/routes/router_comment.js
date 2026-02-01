@@ -4,7 +4,7 @@ import {UAParser} from "ua-parser-js";
 import ipLocation from "../services/ip/ipLocation.js";
 
 import {Router} from "express";
-import {prisma} from "../services/global.js";
+import {prisma} from "../services/prisma.js";
 import {createEvent} from "../controllers/events.js";
 
 const router = Router();

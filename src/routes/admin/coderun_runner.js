@@ -1,5 +1,5 @@
 import {Router} from 'express';
-import {PrismaClient} from '@prisma/client';
+import {prisma} from '../../services/prisma.js';
 import {randomBytes} from 'crypto';
 import zcconfig from '../../services/config/zcconfig.js';
 import logger from '../../services/logger.js';
@@ -8,7 +8,6 @@ import {getValue} from '../../services/cachekv.js'
 
 const router = Router();
 
-const prisma = new PrismaClient();
 // Get active runners endpoint
 router.get('/getrunners', async (req, res) => {
     try {

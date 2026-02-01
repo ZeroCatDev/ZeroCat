@@ -1,6 +1,6 @@
 import logger from "../../services/logger.js";
 import authUtils from "../../services/auth/auth.js";
-import {prisma} from "../../services/global.js";
+import {prisma} from "../../services/prisma.js";
 import ipLocation from "../../services/ip/ipLocation.js";
 
 /**

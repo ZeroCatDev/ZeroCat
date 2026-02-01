@@ -14,7 +14,8 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.826.0",
     "@maxmind/geoip2-node": "^6.1.0",
-    "@prisma/client": "^6.13.0",
+    "@prisma/adapter-pg": "^7.3.0",
+    "@prisma/client": "^7.3.0",
     "@simplewebauthn/server": "^10.0.1",
     "axios": "^1.9.0",
     "base32-encode": "^2.0.0",
@@ -27,7 +28,6 @@
     "cors": "^2.8.5",
     "crypto-js": "^4.1.1",
     "disposable-domains": "^1.0.12",
-    "dotenv": "^16.5.0",
     "ejs": "^3.1.10",
     "email-templates": "^12.0.3",
     "express": "^5.1.0",
@@ -46,6 +46,7 @@
     "mysql2": "^3.6.0",
     "nodemailer": "^7.0.3",
     "otpauth": "^9.4.0",
+    "pg": "^8.18.0",
     "phpass": "^0.1.1",
     "rate-limit-redis": "^4.2.1",
     "sharp": "^0.34.3",
@@ -59,6 +60,7 @@
     "winston-daily-rotate-file": "^5.0.0"
   },
   "devDependencies": {
-    "prisma": "^6.13.0"
+    "dotenv": "^16.5.0",
+    "prisma": "^7.3.0"
   }
 }

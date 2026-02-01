@@ -1,4 +1,4 @@
-import {prisma} from "../services/global.js";
+import {prisma} from "../services/prisma.js";
 import logger from "../services/logger.js";
 import {createNotification} from "./notifications.js";
 import {AudienceDataDependencies, EventConfig,} from "../config/eventConfig.js";
@@ -201,7 +201,7 @@ async function processNotifications(event, eventConfig, eventData) {
             try {
                 const audienceUsers = await getAudienceUsers(audienceType, event, eventData, audienceResults);
                 audienceResults[audienceType] = audienceUsers;
-                
+
                 // 添加用户到通知列表（排除事件创建者）
                 audienceUsers.forEach(userId => {
                     if (userId && userId !== actorId) {
@@ -242,7 +242,7 @@ async function processNotifications(event, eventConfig, eventData) {
 
         const results = await Promise.allSettled(notificationPromises);
         const successCount = results.filter(r => r.status === 'fulfilled' && r.value).length;
-        
+
         logger.debug(`事件 ${event.event_type} 通知发送完成: ${successCount}/${userIds.length} 成功`);
     } catch (error) {
         logger.error('通知处理错误:', error);
@@ -320,7 +320,7 @@ async function getAudienceUsers(audienceType, event, eventData, audienceResults 
 
         const actorId = Number(event.actor_id);
         const targetId = Number(event.target_id);
-        
+
         // 如果事件数据中指定了通知对象，直接返回
         if (eventData.NotificationTo) {
             return eventData.NotificationTo;

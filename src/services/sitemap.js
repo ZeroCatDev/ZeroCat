@@ -2,7 +2,7 @@ import {createHash} from 'crypto';
 import {SitemapStream, streamToPromise} from 'sitemap';
 import {Readable} from 'stream';
 import {createGzip} from 'zlib';
-import {prisma} from './global.js';
+import {prisma} from './prisma.js';
 import logger from './logger.js';
 import zcconfig from './config/zcconfig.js';
 import schedulerService from './scheduler.js';

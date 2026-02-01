@@ -1,7 +1,8 @@
 import logger from "../services/logger.js";
 import zcconfig from "../services/config/zcconfig.js";
 import { Router } from "express";
-import { prisma, S3update } from "../services/global.js";
+import { prisma } from "../services/prisma.js";
+import { S3update } from "../services/global.js";
 import { needLogin } from "../middleware/auth.js";
 import { oauthRateLimit } from "../middleware/rateLimit.js";
 import crypto from "crypto";

@@ -3,7 +3,7 @@ import zcconfig from "../services/config/zcconfig.js";
 
 import {Router} from "express";
 import cryptojs from "crypto-js";
-import {prisma} from "../services/global.js";
+import {prisma} from "../services/prisma.js";
 import {needAdmin} from "../middleware/auth.js";
 import followsRoutes from "./router_follows.js";
 import {CONFIG_TYPES} from "../services/config/configTypes.js";

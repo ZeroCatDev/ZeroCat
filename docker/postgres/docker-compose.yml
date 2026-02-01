@@ -1,17 +1,47 @@
-version: '3.8'
-
 services:
   postgres:
-    image: postgres:16
+    image: postgres:15
     container_name: zerocat-postgres
     restart: unless-stopped
-    ports:
-      - "5431:5432"
     environment:
-      POSTGRES_USER: root               # 使用 root 用户名
-      POSTGRES_PASSWORD: 123456     # 设置 root 密码
-      POSTGRES_DB: zerocat           # 初始化数据库
+      POSTGRES_USER: zerocat
+      POSTGRES_PASSWORD: zerocat_pass_change_me
+      POSTGRES_DB: zerocat
+      TZ: Asia/Shanghai
+      PGTZ: Asia/Shanghai
+    ports:
+      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zerocat -d zerocat"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=200"
+      - "-c"
+      - "shared_buffers=256MB"
+
+  # 可选：图形化管理界面
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: zerocat-pgadmin
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@local.dev
+      PGADMIN_DEFAULT_PASSWORD: admin_change_me
+      TZ: Asia/Shanghai
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin:/var/lib/pgadmin
+
 volumes:
   pgdata:
+  pgadmin:

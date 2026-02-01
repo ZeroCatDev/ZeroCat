@@ -1,5 +1,5 @@
 import logger from "../services/logger.js";
-import {prisma} from "../services/global.js";
+import {prisma} from "../services/prisma.js";
 
 /**
  * Get users by list of IDs

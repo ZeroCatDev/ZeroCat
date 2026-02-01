@@ -6,7 +6,7 @@ import express from "express";
 import {needLogin} from "../middleware/auth.js";
 import logger from "../services/logger.js";
 import notificationUtils from "../controllers/notifications.js";
-import {prisma} from "../services/global.js";
+import {prisma} from "../services/prisma.js";
 import { registerPushSubscription, unregisterPushSubscription, getUserPushSubscriptions } from "../services/pushNotification.js";
 
 const router = express.Router();

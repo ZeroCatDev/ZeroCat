@@ -5,7 +5,8 @@ import fs, {createReadStream} from "fs";
 
 import {Router} from "express";
 import {createHash} from "crypto";
-import {prisma, S3update} from "../services/global.js";
+import {prisma} from "../services/prisma.js";
+import {S3update} from "../services/global.js";
 import {needLogin} from "../middleware/auth.js";
 import {getProjectById, getProjectFile} from "../controllers/projects.js";
 import multer from "multer";

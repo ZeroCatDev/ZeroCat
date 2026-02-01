@@ -1,5 +1,5 @@
 import logger from "./logger.js";
-import { prisma } from "./global.js";
+import { prisma } from "./prisma.js";
 import zcconfig from "./config/zcconfig.js";
 import { createHash } from "crypto";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";

@@ -1,7 +1,7 @@
 /**
  * @fileoverview 通知系统辅助函数和常量
  */
-import {prisma} from "../services/global.js";
+import {prisma} from "../services/prisma.js";
 import logger from "../services/logger.js";
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -132,7 +132,7 @@ async function executeMultiChannelPush(pushData) {
     for (const channel of pushChannels) {
         try {
             let result = null;
-            
+
             switch (channel) {
                 case 'browser':
                 case 'push':
@@ -197,7 +197,7 @@ async function executeMultiChannelPush(pushData) {
 
                         const { sendEmail } = await import('../services/email/emailService.js');
                         await sendEmail(email_to, rendered.subject, rendered.html);
-                        
+
                         result = {
                             success: true,
                             to: email_to,
@@ -383,7 +383,7 @@ export async function createNotification(notificationData) {
         // 默认推送渠道设置
         const defaultChannels = notificationData.hidden ? [] : ['browser'];
         const pushChannels = notificationData.pushChannels || defaultChannels;
-        
+
         // 推送结果记录
         const pushResults = {};
         let hasError = false;
@@ -719,10 +719,10 @@ export async function sendEnhancedNotification(notificationData) {
             targetId,
             hidden,
             pushChannels,
-            data: { 
-                custom_title: title, 
+            data: {
+                custom_title: title,
                 custom_content: content,
-                ...metadata 
+                ...metadata
             },
             skipPush: false // 使用新的多渠道推送
         });
@@ -1037,9 +1037,9 @@ async function resolveRecipients(recipients, recipientType) {
                     break;
 
                 default:
-                    results.push({ 
-                        userId: null, 
-                        error: `不支持的接收者类型: ${recipientType}` 
+                    results.push({
+                        userId: null,
+                        error: `不支持的接收者类型: ${recipientType}`
                     });
                     continue;
             }
@@ -1052,16 +1052,16 @@ async function resolveRecipients(recipients, recipientType) {
                     email: userInfo.email || null
                 });
             } else {
-                results.push({ 
-                    userId: null, 
-                    error: `找不到${recipientType}: ${recipient}` 
+                results.push({
+                    userId: null,
+                    error: `找不到${recipientType}: ${recipient}`
                 });
             }
 
         } catch (error) {
-            results.push({ 
-                userId: null, 
-                error: `解析${recipientType} ${recipient}时出错: ${error.message}` 
+            results.push({
+                userId: null,
+                error: `解析${recipientType} ${recipient}时出错: ${error.message}`
             });
         }
     }

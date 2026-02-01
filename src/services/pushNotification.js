@@ -2,7 +2,7 @@
  * @fileoverview 浏览器推送通知服务
  */
 import webpush from 'web-push';
-import { prisma } from './global.js';
+import { prisma } from './prisma.js'
 import logger from './logger.js';
 import zcconfig from './config/zcconfig.js';
 

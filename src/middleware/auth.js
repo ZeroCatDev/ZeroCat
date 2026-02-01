@@ -1,7 +1,7 @@
 import zcconfig from "../services/config/zcconfig.js";
 import logger from "../services/logger.js";
 import {updateTokenActivity, verifyToken,} from "../services/auth/tokenUtils.js";
-import {prisma} from "../services/global.js";
+import {prisma} from "../services/prisma.js";
 import {verifyAccountToken, updateAccountTokenUsage} from "../services/auth/accountTokenService.js";
 
 /**

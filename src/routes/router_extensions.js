@@ -1,7 +1,7 @@
 import logger from "../services/logger.js";
 import zcconfig from "../services/config/zcconfig.js";
 import { Router } from "express";
-import { prisma } from "../services/global.js";
+import { prisma } from "../services/prisma.js";
 import { needLogin } from "../middleware/auth.js";
 import { hasProjectPermission } from "../services/auth/permissionManager.js";
 

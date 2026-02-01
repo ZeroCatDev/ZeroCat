@@ -14,7 +14,7 @@ import {
 } from "../controllers/auth/index.js";
 import {initializeOAuthProviders} from "../controllers/oauth.js";
 import {invalidateTemporaryToken, validateTemporaryToken} from "../services/auth/verification.js";
-import {prisma} from "../services/global.js";
+import {prisma} from "../services/prisma.js";
 import logger from "../services/logger.js";
 import tokenUtils from "../services/auth/tokenUtils.js";
 

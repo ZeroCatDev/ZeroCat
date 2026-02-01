@@ -1,4 +1,4 @@
-import {prisma} from "../services/global.js";
+import {prisma} from "../services/prisma.js";
 import logger from '../services/logger.js';
 import zcconfig from "../services/config/zcconfig.js";
 import crypto from 'crypto';

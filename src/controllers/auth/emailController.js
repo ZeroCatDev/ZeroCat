@@ -1,5 +1,5 @@
 import logger from "../../services/logger.js";
-import { prisma } from "../../services/global.js";
+import { prisma } from "../../services/prisma.js";
 import { addUserContact, sendVerificationEmail, verifyContact } from "../email.js";
 import isEmail from 'validator/lib/isEmail.js'
 import { isDisposableEmail } from "../../services/global.js";

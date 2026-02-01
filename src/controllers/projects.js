@@ -1,5 +1,5 @@
 import logger from "../services/logger.js";
-import {prisma} from "../services/global.js";
+import {prisma} from "../services/prisma.js";
 
 import {createHash} from "crypto";
 import {getUsersByList} from "./users.js";

@@ -1,7 +1,7 @@
 import logger from "../services/logger.js";
 import zcconfig from "../services/config/zcconfig.js";
 import {Router} from "express";
-import {prisma} from "../services/global.js";
+import {prisma} from "../services/prisma.js";
 import {needAdmin, needLogin} from "../middleware/auth.js";
 import { requireSudo } from "../middleware/sudo.js";
 import {createEvent} from "../controllers/events.js";

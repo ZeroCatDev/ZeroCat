@@ -1,8 +1,6 @@
 import logger from "../logger.js";
-import {PrismaClient} from "@prisma/client";
+import {prisma} from "../prisma.js";
 import {CONFIG_TYPES, getDefaultValue, validateConfig} from "./configTypes.js";
-
-const prisma = new PrismaClient();
 
 class ZCConfig {
     constructor() {

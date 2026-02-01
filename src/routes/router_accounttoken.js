@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { needLogin } from "../middleware/auth.js";
 import { requireSudo } from "../middleware/sudo.js";
-import { prisma } from "../services/global.js";
+import { prisma } from "../services/prisma.js";
 import logger from "../services/logger.js";
 import { createHash, randomBytes } from "crypto";
 import { verifyAccountToken, updateAccountTokenUsage } from "../services/auth/accountTokenService.js";

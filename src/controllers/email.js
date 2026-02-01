@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import base32Encode from 'base32-encode';
-import {prisma} from "../services/global.js";
+import {prisma} from "../services/prisma.js";
 import { createNotification } from '../controllers/notifications.js';
 import {TOTP} from "otpauth";
 import logger from '../services/logger.js';

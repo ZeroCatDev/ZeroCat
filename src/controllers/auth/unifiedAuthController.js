@@ -3,6 +3,8 @@ import {
     sendVerificationCode,
     authenticate
 } from '../../services/auth/unifiedAuth.js';
+import { prisma } from '../../services/prisma.js'
+
 import { generateSudoToken } from '../../services/auth/sudoAuth.js';
 import { createUserLoginTokens } from '../../services/auth/tokenUtils.js';
 import { needLogin } from '../../middleware/auth.js';
@@ -31,7 +33,6 @@ export async function sendCode(req, res) {
 
         // 对于登录和重置密码，如果没有提供userId但提供了email，尝试查找用户
         if (['login', 'reset_password'].includes(purpose) && !userId && email) {
-            const { prisma } = await import('../../services/global.js');
             const user = await prisma.ow_users.findFirst({
                 where: { email },
                 select: { id: true }
@@ -197,7 +198,6 @@ export async function getAuthMethods(req, res) {
         let userId = res.locals.userid;
 
         if (!userId && identifier) {
-            const { prisma } = await import('../../services/global.js');
             const user = await prisma.ow_users.findFirst({
                 where: { OR: [{ username: identifier }, { email: identifier }] },
                 select: { id: true }
@@ -209,7 +209,6 @@ export async function getAuthMethods(req, res) {
 
         // 如果能够识别用户，则依据其是否已注册 TOTP / Passkey 过滤方法
         if (userId) {
-            const { prisma } = await import('../../services/global.js');
             const [totpContact, passkeyContact] = await Promise.all([
                 prisma.ow_users_contacts.findFirst({
                     where: { user_id: Number(userId), contact_type: 'totp' }

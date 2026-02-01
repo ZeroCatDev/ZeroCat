@@ -1,5 +1,6 @@
 import logger from "../../services/logger.js";
-import {emailTest, hash, prisma, userpwTest} from "../../services/global.js";
+import {emailTest, hash, userpwTest} from "../../services/global.js";
+import { prisma } from "../../services/prisma.js";
 import redisClient from "../../services/redis.js";
 import {
     checkRateLimit,

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { prisma } from "../services/global.js"; // 功能函数集
+import { prisma } from "../services/prisma.js"; // 功能函数集
 import logger from "../services/logger.js";
 
 const router = Router();

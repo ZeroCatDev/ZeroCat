@@ -1,6 +1,7 @@
 import logger from "../../services/logger.js";
 import authUtils from "../../services/auth/auth.js";
-import {checkhash, emailTest, prisma, userpwTest,} from "../../services/global.js";
+import {checkhash, emailTest, userpwTest,} from "../../services/global.js";
+import { prisma } from "../../services/prisma.js";
 import redisClient from "../../services/redis.js";
 import zcconfig from "../../services/config/zcconfig.js";
 import {

@@ -1,4 +1,4 @@
-import { prisma } from '../../services/global.js';
+import { prisma } from '../../services/prisma.js';
 import tokenUtils from '../../services/auth/tokenUtils.js';
 import logger from '../../services/logger.js';
 import redisClient from '../../services/redis.js';

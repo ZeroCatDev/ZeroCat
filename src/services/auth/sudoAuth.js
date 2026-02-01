@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import {prisma} from '../global.js';
+import {prisma} from '../prisma.js';
 import redisClient from '../redis.js';
 import logger from '../logger.js';
 import { authenticate } from './unifiedAuth.js';

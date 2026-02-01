@@ -1,7 +1,5 @@
-import {PrismaClient} from "@prisma/client";
+import { prisma } from '../services/prisma.js'
 import logger from "../services/logger.js";
-
-const prisma = new PrismaClient();
 
 /**
  * Get a project list by ID

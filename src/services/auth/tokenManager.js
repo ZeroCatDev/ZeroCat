@@ -2,7 +2,7 @@ import jwt from "jsonwebtoken";
 import zcconfig from "../config/zcconfig.js";
 import {createTypedJWT} from "./tokenUtils.js";
 import logger from "../logger.js";
-import {prisma} from "../global.js";
+import {prisma} from "../prisma.js";
 import crypto from "crypto";
 
 export async function generateFileAccessToken(sha256, userid) {

@@ -1,5 +1,5 @@
 import logger from '../logger.js';
-import {prisma} from '../global.js';
+import {prisma} from '../prisma.js';
 import jsonwebtoken from 'jsonwebtoken';
 import zcconfig from '../config/zcconfig.js';
 import crypto from 'crypto';

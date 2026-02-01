@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
-import {prisma} from '../global.js';
+import {prisma} from '../prisma.js';
 import redisClient from '../redis.js';
 import logger from '../logger.js';
 import {createNotification} from '../../controllers/notifications.js';

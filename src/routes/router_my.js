@@ -5,7 +5,8 @@ import fs, {createReadStream} from "fs";
 import {Router} from "express";
 import {createHash} from "crypto";
 //功能函数集
-import {checkhash, hash, prisma, S3update} from "../services/global.js";
+import {prisma} from "../services/prisma.js";
+import {checkhash, hash, S3update} from "../services/global.js";
 //数据库
 import multer from "multer";
 import {createEvent} from "../controllers/events.js";

@@ -6,7 +6,7 @@ import express from "express";
 import { needAdmin } from "../../middleware/auth.js";
 import logger from "../../services/logger.js";
 import notificationUtils from "../../controllers/notifications.js";
-import { prisma } from "../../services/global.js";
+import { prisma } from "../../services/prisma.js";
 
 const router = express.Router();
 
@@ -22,24 +22,24 @@ router.post("/send", needAdmin, async (req, res) => {
             // 接收者配置
             recipients,              // 接收者数组 [user_id1, user_id2] 或单个 user_id
             recipient_type = 'user_id', // 接收者类型: 'user_id' | 'username' | 'email'
-            
+
             // 通知内容
             title,
             content,
             link,
-            
+
             // 推送配置
             push_channels = ['browser'],  // 推送渠道: ['browser', 'email', 'push']
-            
+
             // 通知设置
             hidden = false,               // 是否隐藏通知
             high_priority = false,        // 是否高优先级
             notification_type = 'admin_notification',
-            
+
             // 目标信息
             target_type,
             target_id,
-            
+
             // 额外数据
             metadata = {}
         } = req.body;
@@ -54,7 +54,7 @@ router.post("/send", needAdmin, async (req, res) => {
 
         // 标准化接收者为数组
         const recipientList = Array.isArray(recipients) ? recipients : [recipients];
-        
+
         if (recipientList.length === 0) {
             return res.status(400).json({
                 error: "接收者列表不能为空"
@@ -102,7 +102,7 @@ router.post("/send", needAdmin, async (req, res) => {
 
         res.json({
             success: true,
-            message: recipientList.length === 1 
+            message: recipientList.length === 1
                 ? (hidden ? "隐藏通知发送成功" : "通知发送成功")
                 : `批量通知发送完成: 成功 ${result.successful.length}/${result.total}`,
             result,

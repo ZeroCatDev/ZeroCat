@@ -1,8 +1,7 @@
-import {PrismaClient} from '@prisma/client';
+import {prisma} from '../../services/prisma.js';
 import express from 'express';
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // Get projects with filtering, sorting and pagination
 router.get('/', async (req, res) => {

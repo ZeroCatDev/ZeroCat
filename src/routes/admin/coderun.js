@@ -1,11 +1,9 @@
 import {Router} from "express";
-import {PrismaClient} from "@prisma/client";
+import {prisma} from "../../services/prisma.js";
 import {needAdmin} from "../../middleware/auth.js";
 import codeRunManager from "../../services/coderunManager.js";
 
 const router = Router();
-
-const prisma = new PrismaClient();
 
 // List all CodeRun devices
 router.get("/devices", needAdmin, async (req, res) => {

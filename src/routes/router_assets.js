@@ -12,7 +12,7 @@ import {
   getAssetStats,
   handleAssetUpload
 } from "../services/assets.js";
-import { prisma } from "../services/global.js";
+import { prisma } from "../services/prisma.js";
 
 const router = Router();
 

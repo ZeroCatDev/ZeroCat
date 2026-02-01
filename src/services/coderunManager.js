@@ -1,10 +1,8 @@
-import {PrismaClient} from "@prisma/client";
+import {prisma} from "./prisma.js";
 import zcconfig from "./config/zcconfig.js";
 import logger from "./logger.js";
 import schedulerService from "./scheduler.js";
 import {set} from "./cachekv.js";
-
-const prisma = new PrismaClient();
 
 class CodeRunManager {
     constructor() {

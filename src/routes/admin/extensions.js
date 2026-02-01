@@ -1,9 +1,8 @@
 import {Router} from "express";
-import {PrismaClient} from "@prisma/client";
+import {prisma} from "../../services/prisma.js";
 import logger from "../../services/logger.js";
 
 const router = Router();
-const prisma = new PrismaClient();
 
 /**
  * @api {get} /admin/extensions List extensions with pagination, sorting and filtering

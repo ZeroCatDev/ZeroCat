@@ -141,3 +141,4 @@ docker/redis/redis.conf
 meili_data
 
 cache
+/generated/prisma

@@ -1,9 +1,7 @@
 import {Router} from "express";
-import {PrismaClient} from "@prisma/client";
+import {prisma} from "../../services/prisma.js";
 
 const router = Router();
-
-const prisma = new PrismaClient();
 
 /**
  * @api {get} /admin/users List users with pagination, sorting and filtering

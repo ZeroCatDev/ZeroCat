@@ -1,4 +1,4 @@
-import {prisma} from "../global.js";
+import {prisma} from "../prisma.js";
 
 export async function hasProjectPermission(projectId, userId, permission) {
     const project = await prisma.ow_projects.findFirst({

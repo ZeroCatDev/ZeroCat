@@ -1,4 +1,4 @@
-import {prisma} from "./global.js";
+import {prisma} from "./prisma.js";
 
 /**
  * 获取指定目标的分析数据

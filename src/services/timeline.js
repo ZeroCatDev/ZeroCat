@@ -1,4 +1,4 @@
-import {prisma} from "./global.js";
+import {prisma} from "./prisma.js";
 import logger from "./logger.js";
 import {EventConfig} from "../config/eventConfig.js";
 

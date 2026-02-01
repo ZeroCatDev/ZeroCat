@@ -1,7 +1,7 @@
 import logger from "../services/logger.js";
 import zcconfig from "../services/config/zcconfig.js";
 import { Router } from "express";
-import { prisma } from "../services/global.js";
+import { prisma } from "../services/prisma.js";
 import default_project from "../default_project.js";
 import {
   authorSelectionFields,

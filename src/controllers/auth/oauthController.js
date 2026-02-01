@@ -1,5 +1,5 @@
 import logger from "../../services/logger.js";
-import {prisma} from "../../services/global.js";
+import {prisma} from "../../services/prisma.js";
 import crypto from "crypto";
 import memoryCache from "../../services/memoryCache.js";
 import {generateAuthUrl, handleOAuthCallback, OAUTH_PROVIDERS,} from "../oauth.js";
