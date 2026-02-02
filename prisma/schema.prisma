@@ -1,6 +1,7 @@
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
+  previewFeatures = ["views"]
 }
 
 datasource db {
@@ -9,199 +10,13 @@ datasource db {
 
 }
 
-model oauth_applications {
-  id            Int      @id(map: "idx_19042_PRIMARY") @default(autoincrement())
-  owner_id      Int
-  name          String   @db.VarChar(191)
-  owner         ow_users @relation(fields: [owner_id], references: [id])
-  description   String?  @db.VarChar(191)
-  homepage_url  String?  @db.VarChar(191)
-  client_id     String   @unique(map: "idx_19042_oauth_applications_client_id_key") @db.VarChar(191)
-  client_secret String   @db.VarChar(191)
-  redirect_uris Json     @db.Json
-  type          String   @default("oauth") @db.VarChar(191)
-  client_type   String   @default("confidential") @db.VarChar(191)
-  scopes        Json     @db.Json
-  webhook_url   String?  @db.VarChar(191)
-  logo_url      String?  @db.VarChar(191)
-  terms_url     String?  @db.VarChar(191)
-  privacy_url   String?  @db.VarChar(191)
-  status        String   @default("active") @db.VarChar(191)
-  is_verified   Boolean  @default(false)
-  is_public     Boolean  @default(false)
-  created_at    DateTime @default(now()) @db.Timestamptz(6)
-  updated_at    DateTime @default(now()) @updatedAt @db.Timestamptz(6)
-
-  @@index([client_id], map: "idx_19042_oauth_applications_client_id_idx")
-  @@index([owner_id], map: "idx_19042_oauth_applications_owner_id_idx")
-}
-
-model ow_account_tokens {
-  id           Int       @id(map: "idx_19053_PRIMARY") @default(autoincrement())
-  user_id      Int
-  name         String    @db.VarChar(255)
-  token        String    @unique(map: "idx_19053_ow_account_tokens_token_key") @db.VarChar(255)
-  expires_at   DateTime? @db.Timestamptz(6)
-  is_revoked   Boolean   @default(false)
-  revoked_at   DateTime? @db.Timestamptz(6)
-  last_used_at DateTime? @db.Timestamptz(6)
-  last_used_ip String?   @db.VarChar(100)
-  created_at   DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at   DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
-
-  user ow_users @relation("AccountTokens", fields: [user_id], references: [id])
-
-  @@index([expires_at], map: "idx_19053_ow_account_tokens_expires_at_idx")
-  @@index([is_revoked], map: "idx_19053_ow_account_tokens_is_revoked_idx")
-  @@index([token], map: "idx_19053_ow_account_tokens_token_idx")
-  @@index([user_id], map: "idx_19053_ow_account_tokens_user_id_idx")
-}
-
-model ow_analytics_device {
-  id              Int      @id(map: "idx_19060_PRIMARY") @default(autoincrement())
-  fingerprint     String   @db.VarChar(191)
-  user_id         Int?
-  hostname        String?  @db.VarChar(191)
-  screen          String?  @db.VarChar(191)
-  language        String?  @db.VarChar(191)
-  browser         String?  @db.VarChar(191)
-  browser_version String?  @db.VarChar(191)
-  os              String?  @db.VarChar(191)
-  os_version      String?  @db.VarChar(191)
-  device_type     String?  @db.VarChar(191)
-  device_vendor   String?  @db.VarChar(191)
-  user_agent      String?
-  first_seen      DateTime @default(now()) @db.Timestamptz(6)
-  last_seen       DateTime @default(now()) @db.Timestamptz(6)
-
-  @@unique([fingerprint, user_id], map: "idx_19060_ow_analytics_device_fingerprint_user_id_key")
-  @@index([first_seen], map: "idx_19060_ow_analytics_device_first_seen_idx")
-  @@index([last_seen], map: "idx_19060_ow_analytics_device_last_seen_idx")
-  @@index([user_id], map: "idx_19060_ow_analytics_device_user_id_idx")
-}
-
-model ow_analytics_event {
-  id              Int      @id(map: "idx_19067_PRIMARY") @default(autoincrement())
-  device_id       Int
-  user_id         Int?
-  url             String   @db.VarChar(191)
-  url_path        String   @db.VarChar(191)
-  url_query       String?  @db.VarChar(191)
-  referrer        String?  @db.VarChar(191)
-  referrer_domain String?  @db.VarChar(191)
-  referrer_path   String?  @db.VarChar(191)
-  referrer_query  String?  @db.VarChar(191)
-  page_title      String?  @db.VarChar(191)
-  target_type     String   @db.VarChar(191)
-  target_id       Int
-  ip_address      String?  @db.VarChar(191)
-  country         String?  @db.VarChar(191)
-  region          String?  @db.VarChar(191)
-  city            String?  @db.VarChar(191)
-  timezone        String?  @db.VarChar(191)
-  created_at      DateTime @default(now()) @db.Timestamptz(6)
-
-  @@index([created_at], map: "idx_19067_ow_analytics_event_created_at_idx")
-  @@index([device_id], map: "idx_19067_ow_analytics_event_device_id_idx")
-  @@index([ip_address], map: "idx_19067_ow_analytics_event_ip_address_idx")
-  @@index([referrer_domain], map: "idx_19067_ow_analytics_event_referrer_domain_idx")
-  @@index([user_id], map: "idx_19067_ow_analytics_event_user_id_idx")
-}
-
-model ow_assets {
-  id           Int       @id(map: "idx_19073_PRIMARY") @default(autoincrement())
-  md5          String    @unique(map: "idx_19073_ow_assets_md5_key") @db.VarChar(32)
-  filename     String    @db.VarChar(255)
-  extension    String    @db.VarChar(20)
-  mime_type    String    @db.VarChar(100)
-  file_size    Int
-  uploader_id  Int
-  uploader_ip  String?   @db.VarChar(100)
-  uploader_ua  String?
-  created_at   DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at   DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
-  is_banned    Boolean   @default(false)
-  banned_at    DateTime? @db.Timestamptz(6)
-  banned_by    Int?
-  ban_reason   String?   @db.VarChar(500)
-  usage_count  Int       @default(0)
-  last_used_at DateTime? @db.Timestamptz(6)
-  metadata     Json?     @db.Json
-  tags         String?   @db.VarChar(500)
-  category     String?   @db.VarChar(50)
-
-  uploader ow_users? @relation("AssetUploader", fields: [uploader_id], references: [id])
-  banned_by_user ow_users? @relation("AssetBannedBy", fields: [banned_by], references: [id])
-
-  @@index([category], map: "idx_19073_ow_assets_category_idx")
-  @@index([created_at], map: "idx_19073_ow_assets_created_at_idx")
-  @@index([extension], map: "idx_19073_ow_assets_extension_idx")
-  @@index([is_banned], map: "idx_19073_ow_assets_is_banned_idx")
-  @@index([md5], map: "idx_19073_ow_assets_md5_idx")
-  @@index([uploader_id], map: "idx_19073_ow_assets_uploader_id_idx")
-  @@index([usage_count], map: "idx_19073_ow_assets_usage_count_idx")
-}
-
-model ow_auth_tokens {
-  id                 Int       @id(map: "idx_19081_PRIMARY") @default(autoincrement())
-  user_id            Int
-  access_token       String    @unique(map: "idx_19081_idx_access_token") @db.VarChar(255)
-  refresh_token      String    @unique(map: "idx_19081_idx_refresh_token") @db.VarChar(255)
-  expires_at         DateTime  @db.Timestamptz(6)
-  refresh_expires_at DateTime  @db.Timestamptz(6)
-  created_at         DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at         DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
-  last_used_at       DateTime? @db.Timestamptz(6)
-  last_used_ip       String?   @db.VarChar(255)
-  activity_count     Int       @default(0)
-  extended_at        DateTime? @db.Timestamptz(6)
-  revoked            Boolean   @default(false)
-  revoked_at         DateTime? @db.Timestamptz(6)
-  ip_address         String?   @db.VarChar(100)
-  user_agent         String?
-  device_info        String?
-
-  user ow_users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Restrict)
-
-  @@index([last_used_at], map: "idx_19081_idx_tokens_last_used_at")
-  @@index([last_used_ip], map: "idx_19081_idx_tokens_last_used_ip")
-  @@index([user_id], map: "idx_19081_idx_user_id")
-}
-
-model ow_cache_kv {
-  user_id    Int
-  key        String   @db.VarChar(255)
-  value      Json     @db.Json
-  user       ow_users @relation(fields: [user_id], references: [id])
-  creator_ip String?  @default("") @db.VarChar(100)
-  created_at DateTime @default(now()) @db.Timestamptz(6)
-  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
-
-  @@id([user_id, key])
-  @@index([key], map: "idx_19090_ow_cache_kv_key_idx")
-  @@index([user_id], map: "idx_19090_ow_cache_kv_user_id_idx")
-}
-
-model ow_coderun_devices {
-  id            String   @id(map: "idx_19097_PRIMARY") @db.VarChar(191)
-  device_name   String   @db.VarChar(255)
-  runner_token  String   @unique(map: "idx_19097_ow_coderun_devices_runner_token_key") @db.VarChar(255)
-  request_url   String?  @db.VarChar(1024)
-  status        String   @default("active") @db.VarChar(32)
-  device_config Json?    @db.Json
-  created_at    DateTime @default(now()) @db.Timestamptz(6)
-  updated_at    DateTime @default(now()) @updatedAt @db.Timestamptz(6)
-
-  @@index([runner_token], map: "idx_19097_ow_coderun_devices_runner_token_idx")
-  @@index([status], map: "idx_19097_ow_coderun_devices_status_idx")
-}
-
+// 评论表
 model ow_comment {
-  id         Int       @id(map: "idx_19105_PRIMARY") @default(autoincrement())
+  id         Int       @id @default(autoincrement())
   user_id    Int?
   type       String?   @default("comment") @db.VarChar(64)
   text       String?
-  insertedAt DateTime? @default(now()) @db.Timestamptz(6)
+  insertedAt DateTime? @default(now()) @db.Timestamp(6)
   user_ip    String?   @default("") @db.VarChar(100)
   link       String?   @db.VarChar(128)
   pid        Int?
@@ -211,441 +26,144 @@ model ow_comment {
   url        String?   @db.VarChar(255)
   page_type  String?   @db.VarChar(32)
   page_id    String?   @db.VarChar(32)
-  createdAt  DateTime? @default(now()) @db.Timestamptz(6)
-  updatedAt  DateTime? @default(now()) @updatedAt @db.Timestamptz(6)
+  createdAt  DateTime? @default(now()) @db.Timestamp(6)
+  updatedAt  DateTime? @default(now()) @db.Timestamp(6)
   page_key   String?   @db.VarChar(128)
 
-  user ow_users? @relation(fields: [user_id], references: [id])
+  // 关联
+  user ow_users? @relation(fields: [user_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
 
-  @@index([user_id], map: "idx_19105_idx_comment_user")
-  @@index([page_type, page_id, insertedAt], map: "idx_19105_idx_projects_comments")
+  @@index([page_type, page_id, insertedAt])
+  @@index([user_id])
+  @@map("ow_comment")
 }
 
-model ow_config {
-  id         Int            @id(map: "idx_19117_PRIMARY") @default(autoincrement())
-  key        String         @unique(map: "idx_19117_config_key") @db.VarChar(255)
-  value      String
-  created_at DateTime?      @default(now()) @db.Timestamptz(6)
-  updated_at DateTime?      @default(now()) @updatedAt @db.Timestamptz(6)
-  metadata   Json?          @db.Json
-  type       ow_config_type @default(STRING)
-}
-
-model ow_events {
-  id          Int      @id(map: "idx_19126_PRIMARY") @default(autoincrement())
-  event_type  String   @db.VarChar(50)
-  actor_id    Int
-  target_type String   @db.VarChar(50)
-  target_id   Int
-  event_data  Json     @db.Json
-  created_at  DateTime @default(now()) @db.Timestamptz(6)
-  public      Int      @default(0) @db.SmallInt
-
-  actor ow_users @relation("EventActor", fields: [actor_id], references: [id])
-
-  @@index([created_at], map: "idx_19126_idx_created")
-  @@index([target_type, target_id], map: "idx_19126_idx_target")
-  @@index([event_type, actor_id], map: "idx_19126_idx_type_actor")
-}
-
-model ow_notifications {
-  id                Int       @id(map: "idx_19135_PRIMARY") @default(autoincrement())
-  user_id           Int
-  notification_type String    @db.VarChar(64)
-  read              Boolean   @default(false)
-  high_priority     Boolean   @default(false)
-  created_at        DateTime  @default(now()) @db.Timestamptz(6)
-  read_at           DateTime? @db.Timestamptz(6)
-  actor_id          Int?
-  target_type       String?   @db.VarChar(50)
-  target_id         Int?
-  data              Json?     @db.Json
-  content           String?
-  link              String?   @db.VarChar(255)
-  metadata          Json?     @db.Json
-  title             String?   @db.VarChar(100)
-  hidden            Boolean   @default(false)
-  push_channels     Json?     @db.Json
-  push_error        Boolean   @default(false)
-  push_results      Json?     @db.Json
-
-  actor ow_users? @relation("NotificationActor", fields: [actor_id], references: [id])
-
-  @@index([actor_id], map: "idx_19135_idx_notification_actor")
-  @@index([hidden], map: "idx_19135_idx_notification_hidden")
-  @@index([user_id, created_at], map: "idx_19135_idx_user_all")
-  @@index([user_id, read, created_at], map: "idx_19135_idx_user_unread")
-}
-
-model ow_oauth_access_tokens {
-  id                       Int       @id(map: "idx_19146_PRIMARY") @default(autoincrement())
-  application_id           Int
-  authorization_id         Int
-  user_id                  Int
-  access_token             String    @unique(map: "idx_19146_ow_oauth_access_tokens_access_token_key") @db.VarChar(255)
-  user                     ow_users  @relation(fields: [user_id], references: [id])
-  refresh_token            String?   @unique(map: "idx_19146_ow_oauth_access_tokens_refresh_token_key") @db.VarChar(255)
-  scopes                   Json      @db.Json
-  expires_at               DateTime  @db.Timestamptz(6)
-  refresh_token_expires_at DateTime? @db.Timestamptz(6)
-  ip_address               String?   @db.VarChar(100)
-  user_agent               String?
-  last_used_at             DateTime? @db.Timestamptz(6)
-  last_used_ip             String?   @db.VarChar(100)
-  is_revoked               Boolean   @default(false)
-  created_at               DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at               DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
-
-  @@index([access_token], map: "idx_19146_ow_oauth_access_tokens_access_token_idx")
-  @@index([application_id], map: "idx_19146_ow_oauth_access_tokens_application_id_idx")
-  @@index([authorization_id], map: "idx_19146_ow_oauth_access_tokens_authorization_id_idx")
-  @@index([refresh_token], map: "idx_19146_ow_oauth_access_tokens_refresh_token_idx")
-  @@index([user_id], map: "idx_19146_ow_oauth_access_tokens_user_id_idx")
-}
-
-model ow_oauth_authorizations {
-  id                    Int       @id(map: "idx_19153_PRIMARY") @default(autoincrement())
-  application_id        Int
-  user_id               Int
-  authorized_email      String    @db.VarChar(255)
-  user                  ow_users  @relation(fields: [user_id], references: [id])
-  scopes                Json      @db.Json
-  code                  String?   @unique(map: "idx_19153_ow_oauth_authorizations_code_key") @db.VarChar(255)
-  code_challenge        String?   @db.VarChar(255)
-  code_challenge_method String?   @db.VarChar(20)
-  code_expires_at       DateTime? @db.Timestamptz(6)
-  status                String    @default("active") @db.VarChar(50)
-  last_used_at          DateTime? @db.Timestamptz(6)
-  metadata              Json?     @db.Json
-  created_at            DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at            DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
-
-  @@unique([application_id, user_id], map: "idx_19153_ow_oauth_authorizations_application_id_user_id_key")
-  @@index([code], map: "idx_19153_ow_oauth_authorizations_code_idx")
-  @@index([user_id], map: "idx_19153_ow_oauth_authorizations_user_id_idx")
-}
-
-model ow_oauth_scopes {
-  id                    Int      @id(map: "idx_19160_PRIMARY") @default(autoincrement())
-  name                  String   @unique(map: "idx_19160_ow_oauth_scopes_name_key") @db.VarChar(100)
-  description           String
-  is_default            Boolean  @default(false)
-  requires_verification Boolean  @default(false)
-  category              String   @db.VarChar(50)
-  risk_level            String   @default("low") @db.VarChar(20)
-  created_at            DateTime @default(now()) @db.Timestamptz(6)
-  updated_at            DateTime @default(now()) @updatedAt @db.Timestamptz(6)
-
-  @@index([category], map: "idx_19160_ow_oauth_scopes_category_idx")
-  @@index([risk_level], map: "idx_19160_ow_oauth_scopes_risk_level_idx")
-}
-
+// 项目表
 model ow_projects {
-  id             Int       @id(map: "idx_19170_PRIMARY") @default(autoincrement())
+  id             Int       @id @default(autoincrement())
   name           String    @db.VarChar(128)
   default_branch String?   @db.VarChar(128)
   type           String?   @default("text") @db.VarChar(32)
   license        String?   @db.VarChar(32)
-  authorid       Int
-  state          String?   @default("private") @db.VarChar(32)
-  view_count     Int?      @default(0)
-  like_count     Int?      @default(0)
-  favo_count     Int?      @default(0)
-  time           DateTime? @default(now()) @db.Timestamptz(6)
-  title          String?   @default("ZeroCat新项目") @db.VarChar(1000)
-  description    String?   @default("ZeroCat上的项目") @db.VarChar(1000)
+  authorid       Int?
+  thumbnail      String    @default("") @db.VarChar(37)
+  state          String    @default("private") @db.VarChar(32)
+  view_count     Int       @default(0)
+  like_count     Int       @default(0)
+  favo_count     Int       @default(0)
+  time           DateTime  @default(now()) @db.Timestamp(6)
+  title          String    @default("ZeroCat新项目") @db.VarChar(1000)
+  description    String    @default("ZeroCat上的项目") @db.VarChar(1000)
   history        Boolean   @default(true)
   devenv         Boolean   @default(true)
   tags           String    @default("") @db.VarChar(100)
   fork           Int?
-  star_count     Int?      @default(0)
-  thumbnail      String?   @default("") @db.VarChar(37)
+  star_count     Int       @default(0)
 
-  author ow_users? @relation("ProjectAuthor", fields: [authorid], references: [id])
-  stars ow_projects_stars[]
-  lists ow_projects_list_items[]
-  branches ow_projects_branch[]
-  project_tags ow_projects_tags[]
-  extensions ow_scratch_extensions[] @relation("ProjectExtensions")
-  assets ow_projects_assets[] @relation("ProjectAssets")
+  // 关联
+  author            ow_users?                   @relation("ProjectAuthor", fields: [authorid], references: [id], onDelete: SetNull, onUpdate: SetNull)
+  stars             ow_projects_stars[]
+  lists             ow_projects_list_items[]
+  branches          ow_projects_branch[]
+  project_tags      ow_projects_tags[]
+  extensions        ow_scratch_extensions[]     @relation("ProjectExtensions")
+  sample_extensions ow_scratch_extensions[]     @relation("SampleProject")
+  assets            ow_projects_assets[]        @relation("ProjectAssets")
 
-  @@index([authorid], map: "idx_19170_idx_project_author")
-  @@index([state], map: "idx_19170_idx_projects_state")
+  @@index([state])
+  @@index([authorid])
+  @@index([time(sort: Desc)])
+  @@map("ow_projects")
 }
 
-model ow_projects_assets {
-  id            Int      @id(map: "idx_19189_PRIMARY") @default(autoincrement())
-  project_id    Int
-  asset_id      Int
-  usage_context String?  @db.VarChar(255)
-  usage_order   Int?     @default(0)
-  created_at    DateTime @default(now()) @db.Timestamptz(6)
-  updated_at    DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+// 用户表
+model ow_users {
+  id               Int       @id @default(autoincrement())
+  username         String    @unique @db.VarChar(20)
+  email            String?   @db.VarChar(100)
+  password         String?   @db.VarChar(255)
+  display_name     String    @default("ZeroCat创作者") @db.VarChar(20)
+  status           String    @default("active") @db.VarChar(20)
 
-  project ow_projects @relation("ProjectAssets", fields: [project_id], references: [id])
+  // 个人资料信息
+  motto            String?
+  bio              String?
+  location         String?   @db.VarChar(100)
+  region           String?   @db.VarChar(100)
+  birthday         DateTime? @default("2000-03-31T00:00:00.000Z") @db.Timestamp(6)
+  sex              String    @default("0") @db.VarChar(16)
+  url              String?   @db.VarChar(255)
+  custom_status    Json?
+  featured_projects Int?
 
-  @@unique([project_id, asset_id], map: "idx_19189_ow_projects_assets_project_id_asset_id_key")
-  @@index([asset_id], map: "idx_19189_ow_projects_assets_asset_id_idx")
-  @@index([project_id], map: "idx_19189_ow_projects_assets_project_id_idx")
-  @@index([usage_context], map: "idx_19189_ow_projects_assets_usage_context_idx")
+  // 视觉元素
+  images  String @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
+  avatar  String @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
+
+  // 系统字段
+  type      String    @default("guest") @db.VarChar(50)
+  label     String?   @db.VarChar(255)
+  loginTime DateTime? @default(now()) @db.Timestamp(6)
+  regTime   DateTime? @default(now()) @db.Timestamp(6)
+  createdAt DateTime  @default(now()) @db.Timestamp(6)
+  updatedAt DateTime  @updatedAt @db.Timestamp(6)
+
+  // 关联
+  auth_tokens             ow_auth_tokens[]
+  authored_projects       ow_projects[]           @relation("ProjectAuthor")
+  starred_projects        ow_projects_stars[]
+  project_lists           ow_projects_lists[]
+  contacts                ow_users_contacts[]
+  relationships_as_source ow_user_relationships[] @relation("RelationshipSource")
+  relationships_as_target ow_user_relationships[] @relation("RelationshipTarget")
+  notifications_acted     ow_notifications[]      @relation("NotificationActor")
+  events_acted            ow_events[]             @relation("EventActor")
+  comments                ow_comment[]
+  commits                 ow_projects_commits[]
+  oauth_applications      ow_oauth_applications[]
+  oauth_authorizations    ow_oauth_authorizations[]
+  oauth_access_tokens     ow_oauth_access_tokens[]
+  kv_store                ow_cache_kv[]
+  account_tokens          ow_account_tokens[]     @relation("AccountTokens")
+  uploaded_assets         ow_assets[]             @relation("AssetUploader")
+  banned_assets           ow_assets[]             @relation("AssetBannedBy")
+  push_subscriptions      ow_push_subscriptions[] @relation("UserPushSubscriptions")
+
+  @@index([email])
+  @@index([status])
+  @@map("ow_users")
 }
 
-model ow_projects_branch {
-  id                 Int     @id(map: "idx_19194_PRIMARY") @default(autoincrement())
-  name               String  @db.VarChar(128)
-  latest_commit_hash String  @db.VarChar(64)
-  description        String  @db.VarChar(128)
-  projectid          Int
-  protected          String? @default("false") @db.VarChar(45)
-  creator            Int?
-
-  project ow_projects @relation(fields: [projectid], references: [id])
-
-  @@unique([projectid, name], map: "idx_19194_unique_project_branch")
-  @@index([creator], map: "idx_19194_idx_branch_creator")
-}
-
-model ow_projects_commits {
-  id                 String   @id(map: "idx_19198_PRIMARY") @db.VarChar(256)
-  project_id         Int
-  author_id          Int
-  branch             String   @default("main") @db.VarChar(255)
-  parent_commit_id   String?  @db.VarChar(256)
-  commit_message     String
-  commit_date        DateTime @db.Timestamptz(6)
-  commit_file        String   @db.VarChar(256)
-  commit_description String?
-  depth              Int?
-
-  parent_commit ow_projects_commits? @relation("CommitTree", fields: [parent_commit_id], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  child_commits ow_projects_commits[] @relation("CommitTree")
-  author ow_users? @relation(fields: [author_id], references: [id])
-
-  @@index([parent_commit_id], map: "idx_19198_idx_parent_commit")
-  @@index([project_id, commit_date], map: "idx_19198_idx_projects_commits_project_date")
-}
-
+// 项目文件表
 model ow_projects_file {
-  sha256        String    @id(map: "idx_19204_PRIMARY") @db.VarChar(64)
+  sha256        String    @id @db.VarChar(64)
   source        String?
-  create_time   DateTime? @default(now()) @db.Timestamptz(6)
+  create_time   DateTime? @default(now()) @db.Timestamp(6)
   create_userid Int?
+
+  @@map("ow_projects_file")
 }
 
+// 项目历史表
 model ow_projects_history {
-  id          Int      @id(map: "idx_19211_PRIMARY") @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   authorid    Int
   projectid   Int
   type        String?  @default("text") @db.VarChar(32)
-  time        DateTime @default(now()) @db.Timestamptz(6)
-  title       String?  @default("ZeroCat新项目") @db.VarChar(50)
-  description String?  @default("commit") @db.VarChar(1000)
+  time        DateTime @default(now()) @db.Timestamp(6)
+  title       String   @default("ZeroCat新项目") @db.VarChar(50)
+  description String   @default("commit") @db.VarChar(1000)
   source      String?
-  state       String?  @default("private") @db.VarChar(32)
+  state       String   @default("private") @db.VarChar(32)
   licence     String?  @db.VarChar(45)
   tags        String?  @db.VarChar(100)
+
+  @@index([projectid])
+  @@index([authorid])
+  @@map("ow_projects_history")
 }
 
-model ow_projects_list_items {
-  id         Int       @id(map: "idx_19222_PRIMARY") @default(autoincrement())
-  listid     Int
-  projectid  Int
-  createTime DateTime? @default(now()) @db.Timestamptz(6)
-
-  list ow_projects_lists @relation(fields: [listid], references: [id])
-  project ow_projects @relation(fields: [projectid], references: [id])
-
-  @@unique([listid, projectid], map: "idx_19222_unique_list_project")
-  @@index([listid], map: "idx_19222_idx_list_items")
-  @@index([projectid], map: "idx_19222_idx_project_in_lists")
-}
-
-model ow_projects_lists {
-  id          Int       @id(map: "idx_19226_PRIMARY") @default(autoincrement())
-  authorid    Int?
-  title       String?   @default("收藏夹") @db.VarChar(1024)
-  description String?   @default("列表") @db.VarChar(1024)
-  state       String?   @default("private") @db.VarChar(32)
-  list        String?
-  updateTime  DateTime? @db.Timestamptz(6)
-  createTime  DateTime? @default(now()) @db.Timestamptz(6)
-
-  author ow_users? @relation(fields: [authorid], references: [id])
-  list_items ow_projects_list_items[]
-
-  @@index([authorid], map: "idx_19226_idx_author_lists")
-}
-
-model ow_projects_stars {
-  id         Int       @id(map: "idx_19235_PRIMARY") @default(autoincrement())
-  userid     Int
-  projectid  Int
-  createTime DateTime? @default(now()) @db.Timestamptz(6)
-
-  user ow_users @relation(fields: [userid], references: [id])
-  project ow_projects @relation(fields: [projectid], references: [id])
-
-  @@index([projectid], map: "idx_19235_idx_projects_stars_project")
-  @@index([userid], map: "idx_19235_idx_projects_stars_user")
-}
-
-model ow_projects_tags {
-  id         Int       @id(map: "idx_19239_PRIMARY") @default(autoincrement())
-  name       String    @db.VarChar(45)
-  projectid  Int
-  created_at DateTime? @default(now()) @db.Timestamptz(6)
-
-  project ow_projects @relation(fields: [projectid], references: [id])
-
-  @@index([projectid], map: "idx_19239_idx_projectid")
-}
-
-model ow_push_subscriptions {
-  id           Int       @id(map: "idx_19243_PRIMARY") @default(autoincrement())
-  user_id      Int
-  endpoint     String    @db.VarChar(500)
-  p256dh_key   String    @db.VarChar(255)
-  auth_key     String    @db.VarChar(255)
-  user_agent   String?
-  device_info  Json?     @db.Json
-  is_active    Boolean   @default(true)
-  last_used_at DateTime? @db.Timestamptz(6)
-  created_at   DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at   DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
-
-  user ow_users @relation("UserPushSubscriptions", fields: [user_id], references: [id])
-
-  @@unique([user_id, endpoint], map: "idx_19243_ow_push_subscriptions_user_id_endpoint_key")
-  @@index([is_active], map: "idx_19243_ow_push_subscriptions_is_active_idx")
-  @@index([last_used_at], map: "idx_19243_ow_push_subscriptions_last_used_at_idx")
-  @@index([user_id], map: "idx_19243_ow_push_subscriptions_user_id_idx")
-}
-
-model ow_scratch_extensions {
-  id                Int      @id(map: "idx_19250_PRIMARY") @default(autoincrement())
-  projectid         Int
-  branch            String   @default("") @db.VarChar(128)
-  commit            String   @default("latest") @db.VarChar(64)
-  image             String   @db.VarChar(255)
-  samples           Int?
-  docs              String?  @db.VarChar(1024)
-  status            String   @default("developing") @db.VarChar(32)
-  created_at        DateTime @default(now()) @db.Timestamptz(6)
-  updated_at        DateTime @default(now()) @updatedAt @db.Timestamptz(6)
-  scratchCompatible Boolean  @default(false)
-
-  project ow_projects @relation("ProjectExtensions", fields: [projectid], references: [id])
-
-  @@index([projectid], map: "idx_19250_idx_extension_project")
-  @@index([samples], map: "idx_19250_idx_extension_samples")
-  @@index([status], map: "idx_19250_idx_extension_status")
-}
-
-model ow_user_relationships {
-  id                Int                                     @id(map: "idx_19260_PRIMARY") @default(autoincrement())
-  source_user_id    Int
-  target_user_id    Int
-  relationship_type ow_user_relationships_relationship_type
-  created_at        DateTime                                @default(now()) @db.Timestamptz(6)
-  updated_at        DateTime?                               @default(now()) @updatedAt @db.Timestamptz(6)
-  metadata          Json?                                   @db.Json
-
-  source_user ow_users @relation("RelationshipSource", fields: [source_user_id], references: [id])
-  target_user ow_users @relation("RelationshipTarget", fields: [target_user_id], references: [id])
-
-  @@unique([source_user_id, target_user_id, relationship_type], map: "idx_19260_ow_user_relationships_source_user_id_target_user_id_r")
-  @@index([source_user_id, relationship_type], map: "idx_19260_idx_source_user_relationships")
-  @@index([target_user_id, relationship_type], map: "idx_19260_idx_target_user_relationships")
-}
-
-model ow_users {
-  id                Int       @unique(map: "idx_19266_id_UNIQUE") @default(autoincrement())
-  username          String    @unique(map: "idx_19266_user_UNIQUE") @db.Char(20)
-  email             String?   @db.Char(100)
-  password          String?   @db.VarChar(255)
-  display_name      String    @default("ZeroCat创作者") @db.Char(20)
-  status            String    @default("active") @db.VarChar(20)
-  loginTime         DateTime? @default(now()) @db.Timestamptz(6)
-  regTime           DateTime? @default(now()) @db.Timestamptz(6)
-  sex               String?   @default("0") @db.VarChar(16)
-  birthday          DateTime? @default(dbgenerated("'2000-03-31 08:00:00+08'::timestamp with time zone")) @db.Timestamptz(6)
-  motto             String?
-  images            String?   @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
-  avatar            String?   @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
-  type              String?   @default("guest") @db.VarChar(50)
-  url               String?   @db.VarChar(255)
-  createdAt         DateTime? @default(now()) @db.Timestamptz(6)
-  updatedAt         DateTime? @default(now()) @updatedAt @db.Timestamptz(6)
-  label             String?   @db.VarChar(255)
-  bio               String?
-  custom_status     Json?     @db.Json
-  featured_projects Int?
-  location          String?   @db.VarChar(100)
-  region            String?   @db.VarChar(100)
-
-  auth_tokens ow_auth_tokens[]
-  authored_projects ow_projects[] @relation("ProjectAuthor")
-  starred_projects ow_projects_stars[]
-  project_lists ow_projects_lists[]
-  contacts ow_users_contacts[]
-  relationships_as_source ow_user_relationships[] @relation("RelationshipSource")
-  relationships_as_target ow_user_relationships[] @relation("RelationshipTarget")
-  notifications_acted ow_notifications[] @relation("NotificationActor")
-  events_acted ow_events[] @relation("EventActor")
-  comments ow_comment[]
-  commits ow_projects_commits[]
-  oauth_applications oauth_applications[]
-  oauth_authorizations ow_oauth_authorizations[]
-  oauth_access_tokens ow_oauth_access_tokens[]
-  account_tokens ow_account_tokens[] @relation("AccountTokens")
-  uploaded_assets ow_assets[] @relation("AssetUploader")
-  banned_assets ow_assets[] @relation("AssetBannedBy")
-  push_subscriptions ow_push_subscriptions[] @relation("UserPushSubscriptions")
-  kv_store ow_cache_kv[]
-
-  @@id([id, username], map: "idx_19266_PRIMARY")
-}
-
-model ow_users_contacts {
-  contact_id    Int                            @id(map: "idx_19281_PRIMARY") @default(autoincrement())
-  user_id       Int
-  contact_value String                         @unique(map: "idx_19281_contact_value_UNIQUE") @db.VarChar(255)
-  contact_info  String?                        @db.VarChar(255)
-  contact_type  ow_users_contacts_contact_type
-  is_primary    Boolean?                       @default(false)
-  verified      Boolean?                       @default(false)
-  created_at    DateTime?                      @default(now()) @db.Timestamptz(6)
-  updated_at    DateTime?                      @default(now()) @updatedAt @db.Timestamptz(6)
-  metadata      Json?                          @db.Json
-
-  user ow_users @relation(fields: [user_id], references: [id])
-
-  @@index([user_id, contact_type], map: "idx_19281_idx_user_contact_type")
-  @@index([user_id], map: "idx_19281_idx_user_contacts")
-}
-
-model ow_users_magiclink {
-  id        Int      @id(map: "idx_19290_PRIMARY") @default(autoincrement())
-  userId    Int
-  token     String   @unique(map: "idx_19290_token") @db.VarChar(255)
-  expiresAt DateTime @db.Timestamptz(6)
-}
-
-model ow_users_totp {
-  id                Int       @id(map: "idx_19293_PRIMARY") @default(autoincrement())
-  name              String    @default("验证器") @db.VarChar(128)
-  user_id           Int
-  type              String    @default("totp") @db.VarChar(45)
-  status            String    @default("unverified") @db.VarChar(32)
-  totp_secret       String?   @db.VarChar(255)
-  totp_algorithm    String?   @default("SHA256") @db.VarChar(10)
-  totp_digits       Int?      @default(6)
-  totp_period       Int?      @default(30)
-  totp_last_updated DateTime? @db.Timestamptz(6)
-  created_at        DateTime? @default(now()) @db.Timestamptz(6)
-  updated_at        DateTime? @default(now()) @updatedAt @db.Timestamptz(6)
-}
-
+// 配置类型枚举
 enum ow_config_type {
   STRING
   NUMBER
@@ -654,13 +172,143 @@ enum ow_config_type {
   ENUM
 }
 
-enum ow_user_relationships_relationship_type {
-  follow
-  block
-  mute
-  favorite
+// 配置表
+model ow_config {
+  id         Int            @id @default(autoincrement())
+  key        String         @unique @db.VarChar(255)
+  value      String
+  type       ow_config_type @default(STRING)
+  metadata   Json?
+  created_at DateTime       @default(now()) @db.Timestamp(6)
+  updated_at DateTime       @default(now()) @db.Timestamp(6)
+
+  @@map("ow_config")
 }
 
+// 用户TOTP表
+model ow_users_totp {
+  id                Int       @id @default(autoincrement())
+  name              String    @default("验证器") @db.VarChar(128)
+  user_id           Int
+  type              String    @default("totp") @db.VarChar(45)
+  status            String    @default("unverified") @db.VarChar(32)
+  totp_secret       String?   @db.VarChar(255)
+  totp_algorithm    String    @default("SHA256") @db.VarChar(10)
+  totp_digits       Int       @default(6)
+  totp_period       Int       @default(30)
+  totp_last_updated DateTime? @db.Timestamp(6)
+  created_at        DateTime  @default(now()) @db.Timestamp(6)
+  updated_at        DateTime  @default(now()) @db.Timestamp(6)
+
+  @@index([user_id])
+  @@map("ow_users_totp")
+}
+
+// 项目标签表
+model ow_projects_tags {
+  id         Int      @id @default(autoincrement())
+  name       String   @db.VarChar(45)
+  projectid  Int?
+  created_at DateTime @default(now()) @db.Timestamp(6)
+
+  // 关联
+  project ow_projects? @relation(fields: [projectid], references: [id], onDelete: SetNull, onUpdate: SetNull)
+
+  @@index([projectid])
+  @@index([name])
+  @@map("ow_projects_tags")
+}
+
+// 项目收藏表
+model ow_projects_stars {
+  id         Int      @id @default(autoincrement())
+  userid     Int?
+  projectid  Int?
+  createTime DateTime @default(now()) @db.Timestamp(6)
+
+  // 关联
+  user    ow_users?    @relation(fields: [userid], references: [id], onDelete: SetNull, onUpdate: SetNull)
+  project ow_projects? @relation(fields: [projectid], references: [id], onDelete: SetNull, onUpdate: SetNull)
+
+  @@unique([userid, projectid])
+  @@index([projectid])
+  @@index([userid])
+  @@map("ow_projects_stars")
+}
+
+// 项目列表表
+model ow_projects_lists {
+  id          Int       @id @default(autoincrement())
+  authorid    Int?
+  title       String    @default("收藏夹") @db.VarChar(1024)
+  description String    @default("列表") @db.VarChar(1024)
+  state       String    @default("private") @db.VarChar(32)
+  list        String?
+  updateTime  DateTime? @db.Timestamp(6)
+  createTime  DateTime  @default(now()) @db.Timestamp(6)
+
+  // 关联
+  author     ow_users?                @relation(fields: [authorid], references: [id], onDelete: SetNull, onUpdate: SetNull)
+  list_items ow_projects_list_items[]
+
+  @@index([authorid])
+  @@map("ow_projects_lists")
+}
+
+// 项目提交表
+model ow_projects_commits {
+  id                 String   @id @db.VarChar(256)
+  project_id         Int
+  author_id          Int?
+  branch             String   @default("main") @db.VarChar(255)
+  parent_commit_id   String?  @db.VarChar(256)
+  commit_message     String
+  commit_date        DateTime @db.Timestamp(6)
+  commit_file        String   @db.VarChar(256)
+  commit_description String?
+  depth              Int?
+
+  // 关联
+  parent_commit ow_projects_commits?  @relation("CommitTree", fields: [parent_commit_id], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  child_commits ow_projects_commits[] @relation("CommitTree")
+  author        ow_users?             @relation(fields: [author_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+
+  @@index([project_id, commit_date(sort: Desc)])
+  @@index([parent_commit_id])
+  @@index([author_id])
+  @@map("ow_projects_commits")
+}
+
+// 魔法链接表
+model ow_users_magiclink {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  token     String   @unique @db.VarChar(255)
+  expiresAt DateTime @db.Timestamp(6)
+
+  @@index([expiresAt])
+  @@map("ow_users_magiclink")
+}
+
+// 项目分支表
+model ow_projects_branch {
+  id                 Int         @id @default(autoincrement())
+  name               String      @db.VarChar(128)
+  latest_commit_hash String      @db.VarChar(64)
+  description        String      @db.VarChar(128)
+  projectid          Int?
+  protected          Boolean     @default(false)
+  creator            Int?
+
+  // 关联
+  project ow_projects? @relation(fields: [projectid], references: [id], onDelete: SetNull, onUpdate: SetNull)
+
+  @@unique([projectid, name])
+  @@index([creator])
+  @@map("ow_projects_branch")
+}
+
+// 用户联系方式枚举
 enum ow_users_contacts_contact_type {
   email
   phone
@@ -673,4 +321,491 @@ enum ow_users_contacts_contact_type {
   oauth_linuxdo
   totp
   passkey
+}
+
+// 用户联系方式表
+model ow_users_contacts {
+  contact_id    Int                             @id @default(autoincrement())
+  user_id       Int?
+  contact_value String                          @unique @db.VarChar(255)
+  contact_info  String?                         @db.VarChar(255)
+  contact_type  ow_users_contacts_contact_type
+  is_primary    Boolean                         @default(false)
+  verified      Boolean                         @default(false)
+  metadata      Json?
+  created_at    DateTime                        @default(now()) @db.Timestamp(6)
+  updated_at    DateTime                        @default(now()) @db.Timestamp(6)
+
+  // 关联
+  user ow_users? @relation(fields: [user_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+
+  @@index([user_id])
+  @@index([user_id, contact_type])
+  @@map("ow_users_contacts")
+}
+
+// 事件表
+model ow_events {
+  id          Int      @id @default(autoincrement())
+  event_type  String   @db.VarChar(50)
+  actor_id    Int?
+  target_type String   @db.VarChar(50)
+  target_id   Int
+  event_data  Json
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+  public      Boolean  @default(false)
+
+  // 关联
+  actor ow_users? @relation("EventActor", fields: [actor_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+
+  @@index([created_at(sort: Desc)])
+  @@index([target_type, target_id])
+  @@index([event_type, actor_id])
+  @@map("ow_events")
+}
+
+// 项目列表项表
+model ow_projects_list_items {
+  id         Int      @id @default(autoincrement())
+  listid     Int?
+  projectid  Int?
+  createTime DateTime @default(now()) @db.Timestamp(6)
+
+  // 关联
+  list    ow_projects_lists? @relation(fields: [listid], references: [id], onDelete: SetNull, onUpdate: SetNull)
+  project ow_projects?       @relation(fields: [projectid], references: [id], onDelete: SetNull, onUpdate: SetNull)
+
+  @@unique([listid, projectid])
+  @@index([listid])
+  @@index([projectid])
+  @@map("ow_projects_list_items")
+}
+
+// 认证令牌表
+model ow_auth_tokens {
+  id                 Int       @id @default(autoincrement())
+  user_id            Int?
+  access_token       String    @unique @db.VarChar(255)
+  refresh_token      String    @unique @db.VarChar(255)
+  expires_at         DateTime  @db.Timestamp(6)
+  refresh_expires_at DateTime  @db.Timestamp(6)
+  created_at         DateTime  @default(now()) @db.Timestamp(6)
+  updated_at         DateTime  @updatedAt @db.Timestamp(6)
+  last_used_at       DateTime? @db.Timestamp(6)
+  last_used_ip       String?   @db.VarChar(255)
+  activity_count     Int       @default(0)
+  extended_at        DateTime? @db.Timestamp(6)
+  revoked            Boolean   @default(false)
+  revoked_at         DateTime? @db.Timestamp(6)
+  ip_address         String?   @db.VarChar(100)
+  user_agent         String?
+  device_info        String?
+
+  // 关联
+  user ow_users? @relation(fields: [user_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+
+  @@index([user_id])
+  @@index([last_used_at])
+  @@index([last_used_ip])
+  @@index([expires_at])
+  @@map("ow_auth_tokens")
+}
+
+// 通知表
+model ow_notifications {
+  id                Int       @id @default(autoincrement())
+  user_id           Int
+  title             String?   @db.VarChar(100)
+  content           String?
+  link              String?   @db.VarChar(255)
+  metadata          Json?
+  notification_type String    @db.VarChar(64)
+  read              Boolean   @default(false)
+  high_priority     Boolean   @default(false)
+  hidden            Boolean   @default(false)
+  push_channels     Json?
+  push_results      Json?
+  push_error        Boolean   @default(false)
+  created_at        DateTime  @default(now()) @db.Timestamp(6)
+  read_at           DateTime? @db.Timestamp(6)
+  actor_id          Int?
+  target_type       String?   @db.VarChar(50)
+  target_id         Int?
+  data              Json?
+
+  // 关联
+  actor ow_users? @relation("NotificationActor", fields: [actor_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+
+  @@index([user_id, read, created_at(sort: Desc)])
+  @@index([user_id, created_at(sort: Desc)])
+  @@index([actor_id])
+  @@index([hidden])
+  @@map("ow_notifications")
+}
+
+// 用户关系类型枚举
+enum ow_user_relationship_type {
+  follow
+  block
+  mute
+  favorite
+}
+
+// 用户关系表
+model ow_user_relationships {
+  id                Int                       @id @default(autoincrement())
+  source_user_id    Int?
+  target_user_id    Int?
+  relationship_type ow_user_relationship_type
+  created_at        DateTime                  @default(now()) @db.Timestamp(6)
+  updated_at        DateTime                  @updatedAt @db.Timestamp(6)
+  metadata          Json?
+
+  // 关联
+  source_user ow_users? @relation("RelationshipSource", fields: [source_user_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+  target_user ow_users? @relation("RelationshipTarget", fields: [target_user_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+
+  @@unique([source_user_id, target_user_id, relationship_type])
+  @@index([source_user_id, relationship_type])
+  @@index([target_user_id, relationship_type])
+  @@map("ow_user_relationships")
+}
+
+// 分析设备表
+model ow_analytics_device {
+  id             Int      @id @default(autoincrement())
+  fingerprint    String   @db.VarChar(255)
+  user_id        Int?
+  hostname       String?  @db.VarChar(255)
+  screen         String?  @db.VarChar(50)
+  language       String?  @db.VarChar(20)
+  browser        String?  @db.VarChar(100)
+  browser_version String? @db.VarChar(50)
+  os             String?  @db.VarChar(100)
+  os_version     String?  @db.VarChar(50)
+  device_type    String?  @db.VarChar(20)
+  device_vendor  String?  @db.VarChar(100)
+  user_agent     String?
+  first_seen     DateTime @default(now()) @db.Timestamp(6)
+  last_seen      DateTime @default(now()) @db.Timestamp(6)
+
+  // 关联
+  events ow_analytics_event[]
+
+  @@unique([fingerprint, user_id])
+  @@index([user_id])
+  @@index([first_seen])
+  @@index([last_seen])
+  @@map("ow_analytics_device")
+}
+
+// 分析事件表
+model ow_analytics_event {
+  id              Int      @id @default(autoincrement())
+  device_id       Int?
+  user_id         Int?
+  url             String   @db.VarChar(2048)
+  url_path        String   @db.VarChar(1024)
+  url_query       String?  @db.VarChar(1024)
+  referrer        String?  @db.VarChar(2048)
+  referrer_domain String?  @db.VarChar(255)
+  referrer_path   String?  @db.VarChar(1024)
+  referrer_query  String?  @db.VarChar(1024)
+  page_title      String?  @db.VarChar(500)
+  target_type     String   @db.VarChar(50)
+  target_id       Int
+  ip_address      String?  @db.VarChar(100)
+  country         String?  @db.VarChar(100)
+  region          String?  @db.VarChar(100)
+  city            String?  @db.VarChar(100)
+  timezone        String?  @db.VarChar(100)
+  created_at      DateTime @default(now()) @db.Timestamp(6)
+
+  // 关联
+  device ow_analytics_device? @relation(fields: [device_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+
+  @@index([device_id])
+  @@index([user_id])
+  @@index([created_at(sort: Desc)])
+  @@index([referrer_domain])
+  @@index([ip_address])
+  @@index([target_type, target_id])
+  @@map("ow_analytics_event")
+}
+
+// OAuth应用表
+model ow_oauth_applications {
+  id             Int      @id @default(autoincrement())
+  owner_id       Int?
+  name           String   @db.VarChar(255)
+  description    String?
+  homepage_url   String?  @db.VarChar(500)
+  client_id      String   @unique @db.VarChar(255)
+  client_secret  String   @db.VarChar(255)
+  redirect_uris  Json
+  type           String   @default("oauth") @db.VarChar(50)
+  client_type    String   @default("confidential") @db.VarChar(50)
+  scopes         Json
+  webhook_url    String?  @db.VarChar(500)
+  logo_url       String?  @db.VarChar(500)
+  terms_url      String?  @db.VarChar(500)
+  privacy_url    String?  @db.VarChar(500)
+  status         String   @default("active") @db.VarChar(50)
+  is_verified    Boolean  @default(false)
+  is_public      Boolean  @default(false)
+  created_at     DateTime @default(now()) @db.Timestamp(6)
+  updated_at     DateTime @updatedAt @db.Timestamp(6)
+
+  // 关联
+  owner          ow_users?                 @relation(fields: [owner_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+  authorizations ow_oauth_authorizations[]
+  access_tokens  ow_oauth_access_tokens[]
+
+  @@index([owner_id])
+  @@index([client_id])
+  @@index([status])
+  @@map("oauth_applications")
+}
+
+// OAuth授权记录表
+model ow_oauth_authorizations {
+  id                     Int       @id @default(autoincrement())
+  application_id         Int?
+  user_id                Int?
+  authorized_email       String    @db.VarChar(255)
+  scopes                 Json
+  code                   String?   @unique @db.VarChar(255)
+  code_challenge         String?   @db.VarChar(255)
+  code_challenge_method  String?   @db.VarChar(20)
+  code_expires_at        DateTime? @db.Timestamp(6)
+  status                 String    @default("active") @db.VarChar(50)
+  last_used_at           DateTime? @db.Timestamp(6)
+  metadata               Json?
+  created_at             DateTime  @default(now()) @db.Timestamp(6)
+  updated_at             DateTime  @updatedAt @db.Timestamp(6)
+
+  // 关联
+  application   ow_oauth_applications?   @relation(fields: [application_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+  user          ow_users?                @relation(fields: [user_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+  access_tokens ow_oauth_access_tokens[]
+
+  @@unique([application_id, user_id])
+  @@index([code])
+  @@index([user_id])
+  @@map("oauth_authorizations")
+}
+
+// OAuth访问令牌表
+model ow_oauth_access_tokens {
+  id                       Int       @id @default(autoincrement())
+  application_id           Int?
+  authorization_id         Int?
+  user_id                  Int?
+  access_token             String    @unique @db.VarChar(255)
+  refresh_token            String?   @unique @db.VarChar(255)
+  scopes                   Json
+  expires_at               DateTime  @db.Timestamp(6)
+  refresh_token_expires_at DateTime? @db.Timestamp(6)
+  ip_address               String?   @db.VarChar(100)
+  user_agent               String?
+  last_used_at             DateTime? @db.Timestamp(6)
+  last_used_ip             String?   @db.VarChar(100)
+  is_revoked               Boolean   @default(false)
+  created_at               DateTime  @default(now()) @db.Timestamp(6)
+  updated_at               DateTime  @updatedAt @db.Timestamp(6)
+
+  // 关联
+  application   ow_oauth_applications?   @relation(fields: [application_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+  authorization ow_oauth_authorizations? @relation(fields: [authorization_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+  user          ow_users?                @relation(fields: [user_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+
+  @@index([access_token])
+  @@index([refresh_token])
+  @@index([user_id])
+  @@index([application_id])
+  @@index([authorization_id])
+  @@index([expires_at])
+  @@map("oauth_access_tokens")
+}
+
+// OAuth权限表
+model ow_oauth_scopes {
+  id                    Int      @id @default(autoincrement())
+  name                  String   @unique @db.VarChar(100)
+  description           String
+  is_default            Boolean  @default(false)
+  requires_verification Boolean  @default(false)
+  category              String   @db.VarChar(50)
+  risk_level            String   @default("low") @db.VarChar(20)
+  created_at            DateTime @default(now()) @db.Timestamp(6)
+  updated_at            DateTime @updatedAt @db.Timestamp(6)
+
+  @@index([category])
+  @@index([risk_level])
+  @@map("oauth_scopes")
+}
+
+// 用户键值存储表
+model ow_cache_kv {
+  user_id    Int      @db.Integer
+  key        String   @db.VarChar(255)
+  value      Json
+  creator_ip String   @default("") @db.VarChar(100)
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @updatedAt @db.Timestamp(6)
+
+  // 关联
+  user ow_users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([user_id, key])
+  @@index([user_id])
+  @@index([key])
+  @@map("ow_cache_kv")
+}
+
+// 代码运行设备表
+model ow_coderun_devices {
+  id            String   @id @default(uuid()) @db.Uuid
+  device_name   String   @db.VarChar(255)
+  runner_token  String   @unique @db.VarChar(255)
+  request_url   String?  @db.VarChar(1024)
+  status        String   @default("active") @db.VarChar(32)
+  device_config Json?
+  created_at    DateTime @default(now()) @db.Timestamp(6)
+  updated_at    DateTime @updatedAt @db.Timestamp(6)
+
+  @@index([status])
+  @@index([runner_token])
+  @@map("ow_coderun_devices")
+}
+
+// Scratch扩展表
+model ow_scratch_extensions {
+  id                Int      @id @default(autoincrement())
+  projectid         Int?
+  branch            String   @default("") @db.VarChar(128)
+  commit            String   @default("latest") @db.VarChar(64)
+  image             String   @db.VarChar(255)
+  samples           Int?
+  docs              String?  @db.VarChar(1024)
+  scratchCompatible Boolean  @default(false)
+  status            String   @default("developing") @db.VarChar(32)
+  created_at        DateTime @default(now()) @db.Timestamp(6)
+  updated_at        DateTime @updatedAt @db.Timestamp(6)
+
+  // 关联
+  project        ow_projects?  @relation("ProjectExtensions", fields: [projectid], references: [id], onDelete: SetNull, onUpdate: SetNull)
+  sample_project ow_projects? @relation("SampleProject", fields: [samples], references: [id], onDelete: SetNull, onUpdate: SetNull)
+
+  @@index([projectid])
+  @@index([status])
+  @@index([samples])
+  @@map("ow_scratch_extensions")
+}
+
+// 用户账户令牌表
+model ow_account_tokens {
+  id           Int       @id @default(autoincrement())
+  user_id      Int?
+  name         String    @db.VarChar(255)
+  token        String    @unique @db.VarChar(255)
+  expires_at   DateTime? @db.Timestamp(6)
+  is_revoked   Boolean   @default(false)
+  revoked_at   DateTime? @db.Timestamp(6)
+  last_used_at DateTime? @db.Timestamp(6)
+  last_used_ip String?   @db.VarChar(100)
+  created_at   DateTime  @default(now()) @db.Timestamp(6)
+  updated_at   DateTime  @updatedAt @db.Timestamp(6)
+
+  // 关联
+  user ow_users? @relation("AccountTokens", fields: [user_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+
+  @@index([user_id])
+  @@index([token])
+  @@index([is_revoked])
+  @@index([expires_at])
+  @@map("ow_account_tokens")
+}
+
+// 项目素材关联表
+model ow_projects_assets {
+  id            Int      @id @default(autoincrement())
+  project_id    Int?
+  asset_id      Int?
+  usage_context String?  @db.VarChar(255)
+  usage_order   Int      @default(0)
+  created_at    DateTime @default(now()) @db.Timestamp(6)
+  updated_at    DateTime @updatedAt @db.Timestamp(6)
+
+  // 关联
+  project ow_projects? @relation("ProjectAssets", fields: [project_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+  asset   ow_assets?   @relation("AssetProjects", fields: [asset_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+
+  @@unique([project_id, asset_id])
+  @@index([project_id])
+  @@index([asset_id])
+  @@index([usage_context])
+  @@map("ow_projects_assets")
+}
+
+// 素材管理表
+model ow_assets {
+  id            Int       @id @default(autoincrement())
+  md5           String    @unique @db.VarChar(32)
+  filename      String    @db.VarChar(255)
+  extension     String    @db.VarChar(20)
+  mime_type     String    @db.VarChar(100)
+  file_size     Int
+  uploader_id   Int?
+  uploader_ip   String?   @db.VarChar(100)
+  uploader_ua   String?
+  created_at    DateTime  @default(now()) @db.Timestamp(6)
+  updated_at    DateTime  @updatedAt @db.Timestamp(6)
+  is_banned     Boolean   @default(false)
+  banned_at     DateTime? @db.Timestamp(6)
+  banned_by     Int?
+  ban_reason    String?   @db.VarChar(500)
+  usage_count   Int       @default(0)
+  last_used_at  DateTime? @db.Timestamp(6)
+  metadata      Json?
+  tags          String?   @db.VarChar(500)
+  category      String?   @db.VarChar(50)
+
+  // 关联
+  uploader       ow_users?            @relation("AssetUploader", fields: [uploader_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+  banned_by_user ow_users?            @relation("AssetBannedBy", fields: [banned_by], references: [id], onDelete: SetNull, onUpdate: SetNull)
+  projects       ow_projects_assets[] @relation("AssetProjects")
+
+  @@index([md5])
+  @@index([uploader_id])
+  @@index([created_at(sort: Desc)])
+  @@index([is_banned])
+  @@index([extension])
+  @@index([category])
+  @@index([usage_count])
+  @@map("ow_assets")
+}
+
+// 浏览器通知订阅表
+model ow_push_subscriptions {
+  id           Int       @id @default(autoincrement())
+  user_id      Int?
+  endpoint     String    @db.VarChar(500)
+  p256dh_key   String    @db.VarChar(255)
+  auth_key     String    @db.VarChar(255)
+  user_agent   String?
+  device_info  Json?
+  is_active    Boolean   @default(true)
+  last_used_at DateTime? @db.Timestamp(6)
+  created_at   DateTime  @default(now()) @db.Timestamp(6)
+  updated_at   DateTime  @updatedAt @db.Timestamp(6)
+
+  // 关联
+  user ow_users? @relation("UserPushSubscriptions", fields: [user_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+
+  @@unique([user_id, endpoint])
+  @@index([user_id])
+  @@index([is_active])
+  @@index([last_used_at])
+  @@map("ow_push_subscriptions")
 }
