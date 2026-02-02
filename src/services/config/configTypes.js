@@ -149,6 +149,12 @@ export const CONFIG_TYPES = {
         default: "localhost",
         description: "Redis服务器地址",
     },
+    "sentry.dsn": {
+        type: "string",
+        required: false,
+        default: "",
+        description: "Sentry DSN 地址",
+    },
     "redis.port": {
         type: "number",
         required: false,

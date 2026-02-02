@@ -38,7 +38,7 @@ export async function createEvent(eventType, actorId, targetType, targetId, even
                     target_type: targetType,
                     target_id: Number(targetId)
                 },
-                public: eventConfig.public ? 1 : 0
+                public: eventConfig.public ? true : false
             }
         });
 
@@ -66,7 +66,7 @@ export async function getTargetEvents(targetType, targetId, limit = 10, offset =
             where: {
                 target_type: targetType,
                 target_id: targetId,
-                ...(includePrivate ? {} : {public: 1}),
+                ...(includePrivate ? {} : {public: true}),
             },
             orderBy: {
                 created_at: 'desc',
@@ -90,7 +90,7 @@ export async function getActorEvents(actorId, limit = 10, offset = 0, includePri
         const events = await prisma.ow_events.findMany({
             where: {
                 actor_id: actorId,
-                ...(includePrivate ? {} : {public: 1}),
+                ...(includePrivate ? {} : {public: true}),
             },
             orderBy: {
                 created_at: 'desc',

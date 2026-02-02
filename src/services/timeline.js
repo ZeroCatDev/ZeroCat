@@ -84,7 +84,7 @@ export async function getUserTimeline(userId, page = 1, limit = 20, isOwner = fa
     try {
         const where = {
             actor_id: Number(userId),
-            ...(isOwner ? {} : {public: 1}),
+            ...(isOwner ? {} : {public: true}),
         };
 
         const [events, total] = await Promise.all([
@@ -150,7 +150,7 @@ export async function getFollowingTimeline(userId, page = 1, limit = 20) {
             prisma.ow_events.findMany({
                 where: {
                     actor_id: {in: followingIds.map((id) => Number(id))},
-                    public: 1,
+                    public: true,
                 },
                 orderBy: {created_at: "desc"},
                 skip: (Number(page) - 1) * Number(limit),
@@ -159,7 +159,7 @@ export async function getFollowingTimeline(userId, page = 1, limit = 20) {
             prisma.ow_events.count({
                 where: {
                     actor_id: {in: followingIds.map((id) => Number(id))},
-                    public: 1,
+                    public: true,
                 },
             })
         ]);
@@ -208,7 +208,7 @@ export async function getMyTimeline(userId, page = 1, limit = 20) {
             prisma.ow_events.findMany({
                 where: {
                     actor_id: {in: followingIds},
-                    public: 1,
+                    public: true,
                 },
                 orderBy: {created_at: "desc"},
                 skip: (Number(page) - 1) * Number(limit),
@@ -217,7 +217,7 @@ export async function getMyTimeline(userId, page = 1, limit = 20) {
             prisma.ow_events.count({
                 where: {
                     actor_id: {in: followingIds},
-                    public: 1,
+                    public: true,
                 },
             })
         ]);

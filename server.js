@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import "./src/instrument.js";
+
 /**
  * ZeroCat Backend 服务器入口文件
  */

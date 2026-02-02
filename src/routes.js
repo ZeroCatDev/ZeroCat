@@ -41,7 +41,6 @@ export async function configureRoutes(app) {
 
     // 注册业务路由
     await registerBusinessRoutes(app);
-
     // 404路由处理
     app.all("/{*path}", (req, res) => {
         res.status(404).json({

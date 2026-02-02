@@ -30,6 +30,11 @@ class ErrorHandlerService {
                 message: err.message || '服务器内部错误'
             };
 
+            // 如果有 Sentry 事件 ID，添加到响应中
+            if (res.sentry) {
+                errorResponse.sentry = res.sentry;
+            }
+
             // 在非生产环境下，添加详细错误信息
             if (!isProd) {
                 errorResponse.stack = err.stack;

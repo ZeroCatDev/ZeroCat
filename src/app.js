@@ -1,4 +1,5 @@
 import "dotenv/config";
+import * as Sentry from "@sentry/node";
 import express from "express";
 import logger from "./services/logger.js";
 
@@ -73,6 +74,10 @@ class Application {
             // 配置路由
             await configureRoutes(this.app);
             logger.debug('[app] 路由配置完成');
+
+            // Sentry 错误处理器应该在所有控制器之后，其他错误中间件之前设置
+            Sentry.setupExpressErrorHandler(this.app);
+
             // 添加全局错误处理中间件
             this.app.use(errorHandlerService.createExpressErrorHandler());
             logger.debug('[app] 全局错误处理中间件配置完成');

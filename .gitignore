@@ -142,3 +142,6 @@ meili_data
 
 cache
 /generated/prisma
+
+# Sentry Config File
+.sentryclirc
