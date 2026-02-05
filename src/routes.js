@@ -140,6 +140,10 @@ async function registerBusinessRoutes(app) {
         const assetsModule = await import('./routes/router_assets.js');
         app.use("/assets", assetsModule.default);
 
+        // 推文社交路由
+        const postsModule = await import('./routes/router_posts.js');
+        app.use("/posts", postsModule.default);
+
         // 统一认证路由
         const authModule = await import('./routes/router_auth.js');
         app.use("/auth", authModule.default);

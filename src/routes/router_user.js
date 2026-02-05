@@ -76,8 +76,9 @@ router.get("/id/:id", async function (req, res, next) {
 
 // 根据用户名获取用户信息
 router.get("/username/:username", async function (req, res, next) {
+    logger.debug("获取用户信息: " + req.params.username);
     try {
-        var user = await prisma.ow_users.findMany({
+        var user = await prisma.ow_users.findUnique({
             where: {
                 username: req.params.username,
             },
@@ -101,21 +102,21 @@ router.get("/username/:username", async function (req, res, next) {
                 url: true,
             },
         });
-
-        if (!user[0]) {
-            logger.debug("用户不存在");
+logger.debug(user);
+        if (!user) {
+            logger.debug("用户不存在 #1");
             return res.status(404).json({
                 status: "error",
                 code: "404",
-                message: "找不到页面",
+                message: "用户不存在",
             });
         }
 
         // 格式化用户信息
         const formattedUser = {
-            ...user[0],
-            isActive: user[0].status === "active",
-            isAdmin: user[0].type === "administrator",
+            ...user,
+            isActive: user.status === "active",
+            isAdmin: user.type === "administrator",
         };
 
         res.send({
@@ -126,6 +127,7 @@ router.get("/username/:username", async function (req, res, next) {
         next(err);
     }
 });
+
 
 // 批量查询用户信息
 router.post("/batch/:type", async function (req, res, next) {

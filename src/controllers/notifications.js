@@ -55,6 +55,21 @@ async function getTargetInfo(targetType, targetId) {
                         },
                     },
                 });
+            case 'post':
+                return await prisma.ow_posts.findUnique({
+                    where: { id: Number(targetId) },
+                    select: {
+                        id: true,
+                        content: true,
+                        author_id: true,
+                        author: {
+                            select: {
+                                username: true,
+                                display_name: true,
+                            },
+                        },
+                    },
+                });
             case 'user':
                 return await prisma.ow_users.findUnique({
                     where: { id: Number(targetId) },
@@ -104,6 +119,8 @@ function generateTargetLink(targetType, targetId) {
     switch (targetType) {
         case 'project':
             return `/app/link/project?id=${targetId}`;
+        case 'post':
+            return `/posts/${targetId}`;
         case 'user':
             return `/app/link/user?id=${targetId}`;
         default:

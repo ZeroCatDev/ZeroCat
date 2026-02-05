@@ -29,7 +29,7 @@ export async function followUser(followerId, followedId, note = "") {
         // Check if already following
         const existingFollow = await prisma.ow_user_relationships.findUnique({
             where: {
-                unique_user_relationship: {
+                source_user_id_target_user_id_relationship_type: {
                     source_user_id: followerId,
                     target_user_id: followedId,
                     relationship_type: "follow",
@@ -125,7 +125,7 @@ export async function blockUser(blockerId, blockedId, reason = "") {
         // Check if already blocked
         const existingBlock = await prisma.ow_user_relationships.findUnique({
             where: {
-                unique_user_relationship: {
+                source_user_id_target_user_id_relationship_type: {
                     source_user_id: blockerId,
                     target_user_id: blockedId,
                     relationship_type: "block",
@@ -417,7 +417,7 @@ export async function isFollowing(followerId, followedId) {
     try {
         const relationship = await prisma.ow_user_relationships.findUnique({
             where: {
-                unique_user_relationship: {
+                source_user_id_target_user_id_relationship_type: {
                     source_user_id: followerId,
                     target_user_id: followedId,
                     relationship_type: "follow",
@@ -443,7 +443,7 @@ export async function isBlocking(blockerId, blockedId) {
     try {
         const relationship = await prisma.ow_user_relationships.findUnique({
             where: {
-                unique_user_relationship: {
+                source_user_id_target_user_id_relationship_type: {
                     source_user_id: blockerId,
                     target_user_id: blockedId,
                     relationship_type: "block",
@@ -526,7 +526,7 @@ export async function updateFollowNote(followerId, followedId, note) {
         // Check if relationship exists
         const existingFollow = await prisma.ow_user_relationships.findUnique({
             where: {
-                unique_user_relationship: {
+                source_user_id_target_user_id_relationship_type: {
                     source_user_id: followerId,
                     target_user_id: followedId,
                     relationship_type: "follow",
@@ -571,7 +571,7 @@ export async function updateBlockReason(blockerId, blockedId, reason) {
         // Check if relationship exists
         const existingBlock = await prisma.ow_user_relationships.findUnique({
             where: {
-                unique_user_relationship: {
+                source_user_id_target_user_id_relationship_type: {
                     source_user_id: blockerId,
                     target_user_id: blockedId,
                     relationship_type: "block",
@@ -615,7 +615,7 @@ export async function getRelationshipNotes(userId, targetUserId) {
         // Get follow note if exists
         const followRelationship = await prisma.ow_user_relationships.findUnique({
             where: {
-                unique_user_relationship: {
+                source_user_id_target_user_id_relationship_type: {
                     source_user_id: userId,
                     target_user_id: targetUserId,
                     relationship_type: "follow",
@@ -626,7 +626,7 @@ export async function getRelationshipNotes(userId, targetUserId) {
         // Get block reason if exists
         const blockRelationship = await prisma.ow_user_relationships.findUnique({
             where: {
-                unique_user_relationship: {
+                source_user_id_target_user_id_relationship_type: {
                     source_user_id: userId,
                     target_user_id: targetUserId,
                     relationship_type: "block",

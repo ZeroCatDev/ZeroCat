@@ -105,5 +105,40 @@
       "custom_title",
       "custom_content"
     ]
+  },
+  "post_mention": {
+    "title": "推文提及",
+    "template": "{{actor_name}} 在推文中提到了你",
+    "icon": "mention",
+    "requiresActor": true,
+    "requiresData": []
+  },
+  "post_reply": {
+    "title": "推文回复",
+    "template": "{{actor_name}} 回复了你的推文",
+    "icon": "reply",
+    "requiresActor": true,
+    "requiresData": []
+  },
+  "post_retweet": {
+    "title": "推文转推",
+    "template": "{{actor_name}} 转推了你的推文",
+    "icon": "retweet",
+    "requiresActor": true,
+    "requiresData": []
+  },
+  "post_quote": {
+    "title": "推文引用",
+    "template": "{{actor_name}} 引用了你的推文",
+    "icon": "quote",
+    "requiresActor": true,
+    "requiresData": []
+  },
+  "post_like": {
+    "title": "推文点赞",
+    "template": "{{actor_name}} 点赞了你的推文",
+    "icon": "like",
+    "requiresActor": true,
+    "requiresData": []
   }
 }

@@ -92,8 +92,8 @@ export const CONFIG_TYPES = {
     "security.refreshTokenExpiry": {
         type: "number",
         required: false,
-        default: 2592000,
-        description: "刷新令牌有效期（秒），默认30天",
+        default: 31536000,
+        description: "刷新令牌有效期（秒），默认365天（1年）",
         transform: typeTransformers.number,
         validate: (value) => value > 0,
     },

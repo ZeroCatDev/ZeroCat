@@ -676,7 +676,7 @@ export const validateMagicLinkAndLogin = async (req, res) => {
 export const logout = async (req, res) => {
     try {
         // 使用中间件验证后的用户信息
-        const result = await authUtils.revokeToken(req.user.token_id);
+        const result = await authUtils.revokeToken(res.locals.tokeninfo.token_id);
 
         if (result.success) {
             return res.status(200).json({
