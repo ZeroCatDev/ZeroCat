@@ -149,7 +149,6 @@ function projectSelectionFields() {
         time: true,
         title: true,
         description: true,
-        tags: true,
         star_count: true,
         fork: true,
         author: {

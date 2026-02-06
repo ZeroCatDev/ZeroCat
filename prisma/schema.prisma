@@ -55,8 +55,6 @@ model ow_projects {
   title          String    @default("ZeroCat新项目") @db.VarChar(1000)
   description    String    @default("ZeroCat上的项目") @db.VarChar(1000)
   history        Boolean   @default(true)
-  devenv         Boolean   @default(true)
-  tags           String    @default("") @db.VarChar(100)
   fork           Int?
   star_count     Int       @default(0)
 
@@ -942,4 +940,3 @@ model ow_posts_media {
   @@index([asset_id])
   @@map("ow_posts_media")
 }
-

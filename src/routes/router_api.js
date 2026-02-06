@@ -130,7 +130,6 @@ router.get("/projectinfo", async function (req, res, next) {
                 state: true,
                 description: true,
                 license: true,
-                tags: true,
                 name: true,
                 star_count: true,
             },

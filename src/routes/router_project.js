@@ -952,7 +952,7 @@ router.put("/id/:id", needLogin, async (req, res, next) => {
     });
 
     // 其他可能变更的字段
-    ["description", "license", "tags", "thumbnail"].forEach((field) => {
+    ["description", "license", "thumbnail"].forEach((field) => {
       if (
         updatedData[field] !== undefined &&
         updatedData[field] !== project[field]

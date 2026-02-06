@@ -113,7 +113,7 @@ router.put('/:id', async (req, res) => {
             'name', 'default_branch', 'type', 'license', 'thumbnail',
             'authorid',  'state', 'view_count',
             'like_count', 'favo_count', 'time', 'title',
-            'description', 'history', 'devenv', 'tags',
+            'description', 'history',
             'fork', 'star_count'
         ];
 
@@ -126,7 +126,6 @@ router.put('/:id', async (req, res) => {
         if (updateData.fork) updateData.fork = parseInt(updateData.fork);
         if (updateData.time) updateData.time = new Date(updateData.time);
         if (updateData.history !== undefined) updateData.history = Boolean(updateData.history);
-        if (updateData.devenv !== undefined) updateData.devenv = Boolean(updateData.devenv);
 
         // Filter out any fields that aren't in the allowed list
         const validUpdateData = Object.keys(updateData)

@@ -46,7 +46,6 @@ router.get("/projectinfo", async function (req, res, next) {
                 license: true,
                 thumbnail: true,
                 default_branch: true,
-                tags: true,
                 name: true,
                 star_count: true,
             },
