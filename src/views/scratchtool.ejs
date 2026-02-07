@@ -133,6 +133,8 @@ const cloudWsState = {
   wsCandidates: [],
   wsCandidateIndex: 0,
   globalListenersInstalled: false,
+  pendingUpdates: {},
+  handshakeSent: false,
 };
 
 function getQueryStringParameter(name) {
@@ -260,6 +262,54 @@ function collectVmCloudVariables() {
   return map;
 }
 
+function queueCloudUpdate(method, name, value) {
+  const normalizedName = String(name || "").trim();
+  if (!normalizedName) return false;
+  if (cloudWsState.manualDisconnect) {
+    cloudWsState.manualDisconnect = false;
+  }
+
+  if (method === "delete") {
+    const existing = cloudWsState.pendingUpdates[normalizedName];
+    if (existing && existing.method === "delete") return true;
+    cloudWsState.pendingUpdates[normalizedName] = { method: "delete" };
+  } else {
+    const normalizedValue = String(value ?? "");
+    const existing = cloudWsState.pendingUpdates[normalizedName];
+    if (existing && existing.method === "set" && existing.value === normalizedValue) return true;
+    cloudWsState.pendingUpdates[normalizedName] = { method: "set", value: normalizedValue };
+  }
+
+  cloudAutoConnectIfNeeded({ force: true });
+  scheduleCloudReconnect("pending");
+  return true;
+}
+
+function flushPendingCloudUpdates() {
+  const socket = cloudWsState.socket;
+  if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+  if (!cloudWsState.handshakeSent) {
+    sendCloudHandshake();
+  }
+  const pending = cloudWsState.pendingUpdates;
+  const names = Object.keys(pending);
+  if (names.length === 0) return true;
+
+  for (const name of names) {
+    const item = pending[name];
+    if (item.method === "delete") {
+      sendCloudUpdate("delete", { name });
+      appendCloudLog(`[out] delete ${name}`);
+    } else if (item.method === "set") {
+      sendCloudUpdate("set", { name, value: item.value });
+      appendCloudLog(`[out] ${name} = ${item.value}`);
+    }
+  }
+
+  cloudWsState.pendingUpdates = {};
+  return true;
+}
+
 function areCloudMapsEqual(a, b) {
   const keysA = Object.keys(a);
   const keysB = Object.keys(b);
@@ -356,8 +406,12 @@ function clearCloudRetryTimer() {
 }
 
 function scheduleCloudReconnect(reason = "") {
-  if (cloudWsState.manualDisconnect || !cloudWsState.autoReconnect) return;
+  if (!cloudWsState.autoReconnect) return;
   if (cloudWsState.retryTimer) return;
+  const socket = cloudWsState.socket;
+  if (socket && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN)) {
+    return;
+  }
 
   cloudWsState.retryCount += 1;
   const exp = Math.min(cloudWsState.retryCount - 1, 6);
@@ -374,9 +428,8 @@ function scheduleCloudReconnect(reason = "") {
 
 function cloudAutoConnectIfNeeded({ force = false } = {}) {
   if (!cloudWsState.autoConnect) return false;
-  if (cloudWsState.manualDisconnect) return false;
   const socket = cloudWsState.socket;
-  if (!force && socket && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN)) {
+  if (socket && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CLOSING)) {
     return false;
   }
   return connectCloudWs({ auto: true, silent: true });
@@ -421,6 +474,20 @@ function sendCloudWsMessage(message) {
   }
   socket.send(JSON.stringify(message));
   return true;
+}
+
+function sendCloudHandshake() {
+  if (!cloudWsState.projectId || !cloudWsState.username) return false;
+  const ok = sendCloudWsMessage({
+    method: "handshake",
+    project_id: String(cloudWsState.projectId),
+    user: cloudWsState.username,
+  });
+  if (ok) {
+    cloudWsState.handshakeSent = true;
+    appendCloudLog(`[handshake] project_id=${cloudWsState.projectId}, user=${cloudWsState.username}`);
+  }
+  return ok;
 }
 
 function sendCloudUpdate(method, payload) {
@@ -491,6 +558,13 @@ function handleCloudSocketMessage(data) {
 function connectCloudWs(options = {}) {
   const silent = Boolean(options.silent);
   const shouldAutoRetry = Boolean(options.auto);
+  const existingSocket = cloudWsState.socket;
+  if (existingSocket && (existingSocket.readyState === WebSocket.CONNECTING || existingSocket.readyState === WebSocket.OPEN || existingSocket.readyState === WebSocket.CLOSING)) {
+    if (!silent) {
+      appendCloudLog("[connect] skipped, socket already active");
+    }
+    return false;
+  }
   const vm = getActiveVm();
   if (!vm) {
     setCloudConnectionStatus("waiting_vm");
@@ -581,12 +655,11 @@ function connectCloudWs(options = {}) {
     clearCloudRetryTimer();
     cloudWsState.retryCount = 0;
     setCloudConnectionStatus("open");
-    sendCloudWsMessage({
-      method: "handshake",
-      project_id: String(projectId),
-      user: username,
-    });
-    appendCloudLog(`[handshake] project_id=${projectId}, user=${username}`);
+    cloudWsState.handshakeSent = false;
+    sendCloudHandshake();
+    setTimeout(() => {
+      flushPendingCloudUpdates();
+    }, 0);
   });
 
   socket.addEventListener("message", (event) => {
@@ -599,6 +672,7 @@ function connectCloudWs(options = {}) {
     const detail = `code=${event.code}, reason=${event.reason || "-"}`;
     setCloudConnectionStatus("closed", detail);
     cloudWsState.socket = null;
+    cloudWsState.handshakeSent = false;
     const currentVm = getActiveVm();
     if (currentVm && cloudWsState.provider) {
       currentVm.setCloudProvider(null);
@@ -620,7 +694,6 @@ function connectCloudWs(options = {}) {
 
 function disconnectCloudWs({ manual = true } = {}) {
   if (manual) {
-    cloudWsState.manualDisconnect = true;
     cloudWsState.retryCount = 0;
   }
   clearCloudRetryTimer();
@@ -664,7 +737,17 @@ function openCloudToolDialog() {
 function cloudSetVariableByName(name, value) {
   const socket = cloudWsState.socket;
   if (!socket || socket.readyState !== WebSocket.OPEN) {
-    showSnackbar("请先连接后端 WS");
+    const normalizedName = String(name || "").trim();
+    if (!normalizedName) {
+      showSnackbar("变量名不能为空");
+      return;
+    }
+    const normalizedValue = String(value ?? "");
+    queueCloudUpdate("set", normalizedName, normalizedValue);
+    cloudWsState.variables[normalizedName] = normalizedValue;
+    renderCloudVariables();
+    appendCloudLog(`[out] queued ${normalizedName} = ${normalizedValue}`);
+    showSnackbar("连接已断开，已加入队列并尝试重连");
     return;
   }
 
@@ -1047,7 +1130,6 @@ function initialize() {
     <mdui-button onclick="cloudConnect()">连接后端 WS</mdui-button>
     <mdui-button onclick="cloudDisconnect()">断开连接</mdui-button>
     <mdui-button onclick="cloudRefreshVariables()">刷新变量列表</mdui-button>
-    <mdui-text-field variant="outlined" label="云变量数量" readonly id="cloud-vars-count"></mdui-text-field>
     <div id="cloud-vars-list" style="max-height: 380px; overflow: auto; margin-top: 8px;"></div>
 </mdui-dialog>
 `
