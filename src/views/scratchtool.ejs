@@ -1186,6 +1186,8 @@ function initialize() {
     return;
   }
 
+  ResourceLoadTracker.install(zcvm);
+
   const msg = getQueryStringParameter("msg");
   if (msg) {
     if (msg == "404") alert("作品不存在");
@@ -1210,6 +1212,76 @@ function updateLoadingDescription(description) {
   if (loadingDialog) {
     loadingDialog.description = description;
   }
+}
+
+const ResourceLoadTracker = {
+  active: false,
+  total: 0,
+  loaded: 0,
+  failed: 0,
+  wrapped: false,
+  originalLoad: null,
+  lastRenderAt: 0,
+  install(vm) {
+    if (this.wrapped) return;
+    const storage = vm?.runtime?.storage;
+    if (!storage || typeof storage.load !== "function") return;
+    this.originalLoad = storage.load.bind(storage);
+    const tracker = this;
+    storage.load = function (...args) {
+      const result = tracker.originalLoad(...args);
+      if (!tracker.active) return result;
+      return Promise.resolve(result)
+        .then((asset) => {
+          tracker.incrementLoaded(false);
+          return asset;
+        })
+        .catch((error) => {
+          tracker.incrementLoaded(true);
+          throw error;
+        });
+    };
+    this.wrapped = true;
+  },
+  start(total) {
+    this.active = true;
+    this.total = Math.max(0, Number(total) || 0);
+    this.loaded = 0;
+    this.failed = 0;
+    this.render();
+  },
+  stop() {
+    this.active = false;
+  },
+  incrementLoaded(failed) {
+    if (!this.active) return;
+    this.loaded += 1;
+    if (failed) this.failed += 1;
+    this.render();
+  },
+  render() {
+    if (!this.active) return;
+    const now = Date.now();
+    if (now - this.lastRenderAt < 50) return;
+    this.lastRenderAt = now;
+    if (this.total <= 0) {
+      updateLoadingDescription("正在加载资源...");
+      return;
+    }
+    const percent = Math.min(100, Math.floor((this.loaded / this.total) * 100));
+    const failText = this.failed > 0 ? `，失败 ${this.failed}` : "";
+    updateLoadingDescription(`正在加载资源 ${this.loaded}/${this.total} (${percent}%)${failText}`);
+  },
+};
+
+function countProjectAssets(projectData) {
+  const targets = Array.isArray(projectData?.targets) ? projectData.targets : [];
+  let total = 0;
+  for (const target of targets) {
+    if (Array.isArray(target?.costumes)) total += target.costumes.length;
+    if (Array.isArray(target?.sounds)) total += target.sounds.length;
+  }
+  return total;
 }
 
 async function loadProject() {
@@ -1299,7 +1371,11 @@ async function downloadAndLoadProject(pid) {
 
     updateLoadingDescription("正在解析项目数据...");
     // The response is the file content itself, not a JSON object containing it
-    await zcvm.loadProject(JSON.parse(fileResponse));
+    const projectData = JSON.parse(fileResponse);
+    const totalAssets = countProjectAssets(projectData);
+    ResourceLoadTracker.start(totalAssets);
+    await zcvm.loadProject(projectData);
+    ResourceLoadTracker.stop();
 
     console.log("Project loaded into VM successfully.");
     updateLoadingDescription("正在初始化Scratch引擎...");
@@ -1312,6 +1388,7 @@ async function downloadAndLoadProject(pid) {
 
   } catch (error) {
     console.error("Error downloading or loading project:", error);
+    ResourceLoadTracker.stop();
     if (loadingDialog) loadingDialog.open = false;
     isLoading = false;
     showErrorAlert(
