@@ -96,6 +96,13 @@ let zcvm, zcgui;
 let _pid = 0;
 let logText,
   zctab,
+  cloudDialog,
+  cloudProjectIdInput,
+  cloudUsernameInput,
+  cloudConnStatusInput,
+  cloudVarsCountInput,
+  cloudVarsListContainer,
+  cloudSyncTimer = null,
   currentUserId = null,  // 当前用户ID，由后端API获取
   projectjson = "null",
   projectinfo = {};
@@ -107,7 +114,26 @@ let authorinfoavatar = {};
 const buttons = [
   { id: "open-zerocat-tab", text: "信息", onclick: () => updateZerocatTab() },
   { id: "save-button", text: "保存", onclick: () => openCommitDialog() },
+  { id: "open-cloud-tool", text: "云变量", onclick: () => openCloudToolDialog() },
 ];
+
+const cloudWsState = {
+  socket: null,
+  provider: null,
+  projectId: null,
+  username: "",
+  wsUrl: "",
+  status: "idle",
+  variables: {},
+  autoConnect: true,
+  autoReconnect: true,
+  manualDisconnect: false,
+  retryTimer: null,
+  retryCount: 0,
+  wsCandidates: [],
+  wsCandidateIndex: 0,
+  globalListenersInstalled: false,
+};
 
 function getQueryStringParameter(name) {
   return new URL(window.location.href).searchParams.get(name);
@@ -127,6 +153,566 @@ function showSnackbar(text) {
     console.log(text);
   }
 }
+
+function getActiveVm() {
+  return zcvm || window.vm || null;
+}
+
+function getCloudProjectId() {
+  const fromInput = Number((cloudProjectIdInput?.value || "").trim());
+  if (Number.isInteger(fromInput) && fromInput > 0) return fromInput;
+  if (Number.isInteger(_pid) && _pid > 0) return _pid;
+  const fromQuery = Number(getQueryStringParameter("id"));
+  if (Number.isInteger(fromQuery) && fromQuery > 0) return fromQuery;
+  return null;
+}
+
+function getCloudUsername() {
+  const fromInput = (cloudUsernameInput?.value || "").trim();
+  if (fromInput) return fromInput;
+  return (localStorage.getItem("zc:cloud-username") || localStorage.getItem("zc:username") || "").trim();
+}
+
+function getCloudToken() {
+  const localStrongsToken = window.localstrongs?.getItem?.("token") || window.localstrongs?.token;
+  if (localStrongsToken) return localStrongsToken;
+  return localStorage.getItem("token") || "";
+}
+
+function buildCloudWsUrlCandidates(token) {
+  const endpointPath = "/scratch/cloud/ws";
+  const sources = [
+    ZCConfig.api.getPath(endpointPath),
+    `${window.location.origin}${endpointPath}`,
+    ZCConfig.api.url,
+  ];
+  const results = [];
+
+  const addCandidate = (urlString) => {
+    if (!urlString) return;
+    if (!results.includes(urlString)) results.push(urlString);
+  };
+
+  for (const source of sources) {
+    let base;
+    try {
+      base = new URL(source, window.location.origin);
+    } catch (error) {
+      continue;
+    }
+    base.pathname = endpointPath;
+    base.hash = "";
+
+    let protocolOrder = [];
+    if (base.protocol === "wss:") protocolOrder = ["wss:", "ws:"];
+    else if (base.protocol === "ws:") protocolOrder = ["ws:", "wss:"];
+    else if (base.protocol === "https:") protocolOrder = ["wss:", "ws:"];
+    else if (base.protocol === "http:") protocolOrder = ["ws:", "wss:"];
+    else protocolOrder = window.location.protocol === "https:" ? ["wss:", "ws:"] : ["ws:", "wss:"];
+
+    for (const protocol of protocolOrder) {
+      const candidate = new URL(base.toString());
+      candidate.protocol = protocol;
+      candidate.search = "";
+      if (token) candidate.searchParams.set("token", token);
+      addCandidate(candidate.toString());
+    }
+  }
+
+  return results;
+}
+
+function normalizeCloudWsUrl(urlLike, token) {
+  try {
+    const url = new URL(String(urlLike || ""), window.location.origin);
+    if (url.protocol === "https:") url.protocol = "wss:";
+    else if (url.protocol === "http:") url.protocol = "ws:";
+    else if (url.protocol !== "ws:" && url.protocol !== "wss:") {
+      url.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    }
+    url.hash = "";
+    if (token) url.searchParams.set("token", token);
+    return url.toString();
+  } catch (error) {
+    return "";
+  }
+}
+
+function appendCloudLog(text) {
+  console.log(`[cloud ${getCurrentTime()}] ${text}`);
+}
+
+function setCloudConnectionStatus(status, detail = "") {
+  cloudWsState.status = status;
+  const statusText = detail ? `${status}: ${detail}` : status;
+  if (cloudConnStatusInput) cloudConnStatusInput.value = statusText;
+  appendCloudLog(`[status] ${statusText}`);
+}
+
+function collectVmCloudVariables() {
+  const vm = getActiveVm();
+  const stage = vm?.runtime?.getTargetForStage?.();
+  const variables = Object.values(stage?.variables || {}).filter((item) => item && item.isCloud && typeof item.name === "string");
+  const map = {};
+  for (const item of variables) {
+    map[item.name] = String(item.value ?? "");
+  }
+  return map;
+}
+
+function areCloudMapsEqual(a, b) {
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  for (const key of keysA) {
+    if (!Object.prototype.hasOwnProperty.call(b, key) || a[key] !== b[key]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function renderCloudVariables() {
+  if (!cloudVarsListContainer) return;
+  const names = Object.keys(cloudWsState.variables).sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
+  cloudVarsListContainer.innerHTML = "";
+  if (cloudVarsCountInput) {
+    cloudVarsCountInput.value = String(names.length);
+  }
+
+  if (names.length === 0) {
+    const empty = document.createElement("div");
+    empty.textContent = "当前没有云变量";
+    empty.style.opacity = "0.75";
+    empty.style.padding = "8px 0";
+    cloudVarsListContainer.appendChild(empty);
+    return;
+  }
+
+  for (const name of names) {
+    const row = document.createElement("div");
+    row.style.display = "grid";
+    row.style.gridTemplateColumns = "minmax(180px, 1fr) minmax(180px, 1fr) auto";
+    row.style.gap = "8px";
+    row.style.marginBottom = "8px";
+
+    const nameField = document.createElement("mdui-text-field");
+    nameField.label = "变量名";
+    nameField.value = name;
+    nameField.readOnly = true;
+    nameField.setAttribute("readonly", "");
+
+    const valueField = document.createElement("mdui-text-field");
+    valueField.label = "变量值";
+    valueField.value = cloudWsState.variables[name] ?? "";
+    valueField.setAttribute("data-cloud-name", name);
+    valueField.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        cloudSetVariableByName(name, valueField.value);
+      }
+    });
+
+    const saveButton = document.createElement("mdui-button");
+    saveButton.variant = "filled";
+    saveButton.setAttribute("variant", "filled");
+    saveButton.textContent = "保存";
+    saveButton.addEventListener("click", () => {
+      cloudSetVariableByName(name, valueField.value);
+    });
+
+    row.appendChild(nameField);
+    row.appendChild(valueField);
+    row.appendChild(saveButton);
+    cloudVarsListContainer.appendChild(row);
+  }
+}
+
+function refreshCloudVariablesFromVm({ forceRender = false } = {}) {
+  const vmVariables = collectVmCloudVariables();
+  if (forceRender || !areCloudMapsEqual(vmVariables, cloudWsState.variables)) {
+    cloudWsState.variables = vmVariables;
+    renderCloudVariables();
+  }
+}
+
+function startCloudSyncTimer() {
+  if (cloudSyncTimer) return;
+  cloudSyncTimer = setInterval(() => {
+    refreshCloudVariablesFromVm();
+  }, 400);
+}
+
+function stopCloudSyncTimer() {
+  if (!cloudSyncTimer) return;
+  clearInterval(cloudSyncTimer);
+  cloudSyncTimer = null;
+}
+
+function clearCloudRetryTimer() {
+  if (!cloudWsState.retryTimer) return;
+  clearTimeout(cloudWsState.retryTimer);
+  cloudWsState.retryTimer = null;
+}
+
+function scheduleCloudReconnect(reason = "") {
+  if (cloudWsState.manualDisconnect || !cloudWsState.autoReconnect) return;
+  if (cloudWsState.retryTimer) return;
+
+  cloudWsState.retryCount += 1;
+  const exp = Math.min(cloudWsState.retryCount - 1, 6);
+  const baseDelay = 1000 * Math.pow(2, Math.max(0, exp));
+  const jitter = Math.floor(Math.random() * 500);
+  const delayMs = Math.min(30000, baseDelay + jitter);
+  setCloudConnectionStatus("retrying", `${delayMs}ms ${reason}`.trim());
+
+  cloudWsState.retryTimer = setTimeout(() => {
+    cloudWsState.retryTimer = null;
+    connectCloudWs({ auto: true, silent: true });
+  }, delayMs);
+}
+
+function cloudAutoConnectIfNeeded({ force = false } = {}) {
+  if (!cloudWsState.autoConnect) return false;
+  if (cloudWsState.manualDisconnect) return false;
+  const socket = cloudWsState.socket;
+  if (!force && socket && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN)) {
+    return false;
+  }
+  return connectCloudWs({ auto: true, silent: true });
+}
+
+function installCloudGlobalListeners() {
+  if (cloudWsState.globalListenersInstalled) return;
+  cloudWsState.globalListenersInstalled = true;
+
+  window.addEventListener("online", () => {
+    cloudAutoConnectIfNeeded({ force: true });
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      cloudAutoConnectIfNeeded();
+    }
+  });
+}
+
+function parseCloudFrames(raw) {
+  return String(raw || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch (error) {
+        appendCloudLog(`[parse-error] ${line}`);
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+function sendCloudWsMessage(message) {
+  const socket = cloudWsState.socket;
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    appendCloudLog("[send] skipped, websocket not open");
+    return false;
+  }
+  socket.send(JSON.stringify(message));
+  return true;
+}
+
+function sendCloudUpdate(method, payload) {
+  if (!cloudWsState.projectId || !cloudWsState.username) {
+    appendCloudLog("[send] skipped, project_id or user missing");
+    return false;
+  }
+  return sendCloudWsMessage({
+    method,
+    project_id: String(cloudWsState.projectId),
+    user: cloudWsState.username,
+    ...payload,
+  });
+}
+
+function createScratchCloudProvider() {
+  return {
+    createVariable: (name, value) => {
+      const normalizedValue = String(value ?? "");
+      cloudWsState.variables[name] = normalizedValue;
+      renderCloudVariables();
+      return sendCloudUpdate("create", { name, value: normalizedValue });
+    },
+    updateVariable: (name, value) => {
+      const normalizedValue = String(value ?? "");
+      cloudWsState.variables[name] = normalizedValue;
+      renderCloudVariables();
+      return sendCloudUpdate("set", { name, value: normalizedValue });
+    },
+    renameVariable: (oldName, newName) => {
+      if (Object.prototype.hasOwnProperty.call(cloudWsState.variables, oldName)) {
+        const value = cloudWsState.variables[oldName];
+        delete cloudWsState.variables[oldName];
+        cloudWsState.variables[newName] = value;
+        renderCloudVariables();
+      }
+      return sendCloudUpdate("rename", { name: oldName, new_name: newName });
+    },
+    deleteVariable: (name) => {
+      if (Object.prototype.hasOwnProperty.call(cloudWsState.variables, name)) {
+        delete cloudWsState.variables[name];
+        renderCloudVariables();
+      }
+      return sendCloudUpdate("delete", { name });
+    },
+    requestCloseConnection: () => disconnectCloudWs({ manual: false }),
+  };
+}
+
+function handleCloudSocketMessage(data) {
+  const vm = getActiveVm();
+  for (const message of parseCloudFrames(data)) {
+    if (message.method === "set" && typeof message.name === "string") {
+      const value = message.value;
+      vm?.postIOData?.("cloud", { varUpdate: { name: message.name, value } });
+      const normalizedValue = String(value ?? "");
+      if (cloudWsState.variables[message.name] !== normalizedValue) {
+        cloudWsState.variables[message.name] = normalizedValue;
+        renderCloudVariables();
+      }
+      appendCloudLog(`[in] ${message.name} = ${normalizedValue}`);
+      continue;
+    }
+    appendCloudLog(`[in] ignored method=${message.method || "unknown"}`);
+  }
+}
+
+function connectCloudWs(options = {}) {
+  const silent = Boolean(options.silent);
+  const shouldAutoRetry = Boolean(options.auto);
+  const vm = getActiveVm();
+  if (!vm) {
+    setCloudConnectionStatus("waiting_vm");
+    if (!silent) showSnackbar("Scratch VM 尚未就绪");
+    if (shouldAutoRetry) scheduleCloudReconnect("vm");
+    return false;
+  }
+
+  const projectId = Number(options.projectId || getCloudProjectId());
+  if (!Number.isInteger(projectId) || projectId <= 0) {
+    setCloudConnectionStatus("waiting_project_id");
+    if (!silent) showSnackbar("无效 project_id");
+    if (shouldAutoRetry) scheduleCloudReconnect("project_id");
+    return false;
+  }
+
+  const username = (options.username || getCloudUsername()).trim();
+  if (!username) {
+    setCloudConnectionStatus("waiting_user");
+    if (!silent) showSnackbar("握手用户名不能为空");
+    if (shouldAutoRetry) scheduleCloudReconnect("username");
+    return false;
+  }
+
+  const token = String(options.token || getCloudToken() || "").trim();
+  if (!token) {
+    appendCloudLog("[auth] token missing, try anonymous handshake");
+  }
+
+  const directUrl = options.wsUrl ? normalizeCloudWsUrl(options.wsUrl, token) : "";
+  const wsCandidates = directUrl ? [directUrl] : buildCloudWsUrlCandidates(token);
+  if (wsCandidates.length === 0) {
+    setCloudConnectionStatus("error", "no ws url candidates");
+    if (shouldAutoRetry) scheduleCloudReconnect("no-candidate");
+    return false;
+  }
+
+  clearCloudRetryTimer();
+  cloudWsState.manualDisconnect = false;
+
+  cloudWsState.wsCandidates = wsCandidates;
+  const providedIndex = Number.isInteger(options.wsCandidateIndex)
+    ? options.wsCandidateIndex
+    : cloudWsState.wsCandidateIndex;
+  const normalizedIndex = ((providedIndex % wsCandidates.length) + wsCandidates.length) % wsCandidates.length;
+  cloudWsState.wsCandidateIndex = normalizedIndex;
+  const wsUrl = wsCandidates[normalizedIndex];
+
+  if (cloudWsState.socket && cloudWsState.socket.readyState !== WebSocket.CLOSED) {
+    try {
+      cloudWsState.socket.close(1000, "reconnect");
+    } catch (error) {
+      console.error("close old cloud ws error:", error);
+    }
+    cloudWsState.socket = null;
+  }
+
+  const provider = createScratchCloudProvider();
+  vm.setCloudProvider(provider);
+  cloudWsState.provider = provider;
+  cloudWsState.projectId = projectId;
+  cloudWsState.username = username;
+  cloudWsState.wsUrl = wsUrl;
+  cloudWsState.variables = collectVmCloudVariables();
+
+  if (cloudProjectIdInput) cloudProjectIdInput.value = String(projectId);
+  if (cloudUsernameInput) cloudUsernameInput.value = username;
+  renderCloudVariables();
+
+  localStorage.setItem("zc:cloud-username", username);
+
+  let socket;
+  try {
+    socket = new WebSocket(wsUrl);
+  } catch (error) {
+    setCloudConnectionStatus("connect_error", String(error?.message || error));
+    if (shouldAutoRetry) {
+      cloudWsState.wsCandidateIndex = (cloudWsState.wsCandidateIndex + 1) % wsCandidates.length;
+      scheduleCloudReconnect("constructor");
+    }
+    return false;
+  }
+  cloudWsState.socket = socket;
+  setCloudConnectionStatus("connecting", `${wsUrl} [${normalizedIndex + 1}/${wsCandidates.length}]`);
+
+  socket.addEventListener("open", () => {
+    if (cloudWsState.socket !== socket) return;
+    clearCloudRetryTimer();
+    cloudWsState.retryCount = 0;
+    setCloudConnectionStatus("open");
+    sendCloudWsMessage({
+      method: "handshake",
+      project_id: String(projectId),
+      user: username,
+    });
+    appendCloudLog(`[handshake] project_id=${projectId}, user=${username}`);
+  });
+
+  socket.addEventListener("message", (event) => {
+    if (cloudWsState.socket !== socket) return;
+    handleCloudSocketMessage(event.data);
+  });
+
+  socket.addEventListener("close", (event) => {
+    if (cloudWsState.socket !== socket) return;
+    const detail = `code=${event.code}, reason=${event.reason || "-"}`;
+    setCloudConnectionStatus("closed", detail);
+    cloudWsState.socket = null;
+    const currentVm = getActiveVm();
+    if (currentVm && cloudWsState.provider) {
+      currentVm.setCloudProvider(null);
+    }
+    cloudWsState.provider = null;
+    if (!cloudWsState.manualDisconnect) {
+      cloudWsState.wsCandidateIndex = (cloudWsState.wsCandidateIndex + 1) % cloudWsState.wsCandidates.length;
+      scheduleCloudReconnect(`close:${event.code}`);
+    }
+  });
+
+  socket.addEventListener("error", () => {
+    if (cloudWsState.socket !== socket) return;
+    setCloudConnectionStatus("error");
+  });
+
+  return true;
+}
+
+function disconnectCloudWs({ manual = true } = {}) {
+  if (manual) {
+    cloudWsState.manualDisconnect = true;
+    cloudWsState.retryCount = 0;
+  }
+  clearCloudRetryTimer();
+  const socket = cloudWsState.socket;
+  if (socket) {
+    try {
+      socket.close(1000, "client close");
+    } catch (error) {
+      console.error("close cloud ws error:", error);
+    }
+  }
+  cloudWsState.socket = null;
+  const vm = getActiveVm();
+  if (vm && cloudWsState.provider) {
+    vm.setCloudProvider(null);
+  }
+  cloudWsState.provider = null;
+  setCloudConnectionStatus("disconnected");
+}
+
+function cloudConnect() {
+  cloudWsState.manualDisconnect = false;
+  connectCloudWs({ projectId: getCloudProjectId(), username: getCloudUsername(), auto: true });
+}
+
+function cloudDisconnect() {
+  disconnectCloudWs({ manual: true });
+}
+
+function openCloudToolDialog() {
+  if (!cloudDialog) {
+    showSnackbar("云变量工具未初始化");
+    return;
+  }
+  cloudDialog.open = true;
+  refreshCloudVariablesFromVm({ forceRender: true });
+  startCloudSyncTimer();
+  cloudAutoConnectIfNeeded();
+}
+
+function cloudSetVariableByName(name, value) {
+  const socket = cloudWsState.socket;
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    showSnackbar("请先连接后端 WS");
+    return;
+  }
+
+  const vm = getActiveVm();
+  const cloudDevice = vm?.runtime?.ioDevices?.cloud;
+  const normalizedName = String(name || "").trim();
+  if (!normalizedName) {
+    showSnackbar("变量名不能为空");
+    return;
+  }
+  const normalizedValue = String(value ?? "");
+
+  if (vm && cloudDevice?.requestUpdateVariable) {
+    cloudDevice.requestUpdateVariable(normalizedName, normalizedValue);
+  } else {
+    sendCloudUpdate("set", { name: normalizedName, value: normalizedValue });
+  }
+
+  cloudWsState.variables[normalizedName] = normalizedValue;
+  renderCloudVariables();
+  appendCloudLog(`[out] ${normalizedName} = ${normalizedValue}`);
+}
+
+function cloudRefreshVariables() {
+  refreshCloudVariablesFromVm({ forceRender: true });
+}
+
+window.CloudExternal = {
+  connect: (options = {}) => connectCloudWs(options),
+  disconnect: () => disconnectCloudWs({ manual: true }),
+  set: (name, value) => cloudSetVariableByName(name, value),
+  list: () => Object.keys(cloudWsState.variables).sort().map((name) => ({ name, value: cloudWsState.variables[name] })),
+  refresh: () => cloudRefreshVariables(),
+  autoConnect: () => {
+    cloudWsState.manualDisconnect = false;
+    return cloudAutoConnectIfNeeded({ force: true });
+  },
+  status: () => ({
+    status: cloudWsState.status,
+    projectId: cloudWsState.projectId,
+    username: cloudWsState.username,
+    wsUrl: cloudWsState.wsUrl,
+    readyState: cloudWsState.socket ? cloudWsState.socket.readyState : null,
+    retryCount: cloudWsState.retryCount,
+    candidateIndex: cloudWsState.wsCandidateIndex,
+    candidates: cloudWsState.wsCandidates,
+  }),
+};
 
 
 
@@ -180,9 +766,15 @@ async function loadUserInfo() {
       currentUserId = result.data.id;
       // 可选：缓存到 localStorage
       localStorage.setItem("zc:id", String(result.data.id));
+      if (result.data.username) {
+        localStorage.setItem("zc:cloud-username", result.data.username);
+      } else if (result.data.zcusername) {
+        localStorage.setItem("zc:cloud-username", result.data.zcusername);
+      }
       if (result.data.display_name) {
         localStorage.setItem("zc:username", result.data.display_name);
       }
+      cloudAutoConnectIfNeeded({ force: true });
     }
   } catch (error) {
     console.error("获取用户信息失败:", error);
@@ -448,6 +1040,16 @@ function initialize() {
     <mdui-text-field variant="outlined" label="分支名称" value="main" id="branch-name"></mdui-text-field>
     <mdui-button onclick="commitProject()">提交</mdui-button>
 </mdui-dialog>
+<mdui-dialog headline="云变量工具" description="遵守标准协议，与 Scratch 云变量实时同步" close-on-overlay-click id="cloud-tool-dialog">
+    <mdui-text-field variant="outlined" label="Project ID" id="cloud-project-id"></mdui-text-field>
+    <mdui-text-field variant="outlined" label="Handshake User" id="cloud-username"></mdui-text-field>
+    <mdui-text-field variant="outlined" label="连接状态" readonly id="cloud-conn-status"></mdui-text-field>
+    <mdui-button onclick="cloudConnect()">连接后端 WS</mdui-button>
+    <mdui-button onclick="cloudDisconnect()">断开连接</mdui-button>
+    <mdui-button onclick="cloudRefreshVariables()">刷新变量列表</mdui-button>
+    <mdui-text-field variant="outlined" label="云变量数量" readonly id="cloud-vars-count"></mdui-text-field>
+    <div id="cloud-vars-list" style="max-height: 380px; overflow: auto; margin-top: 8px;"></div>
+</mdui-dialog>
 `
       );
 
@@ -455,6 +1057,20 @@ function initialize() {
       authorinfocard = document.querySelector("#author-info");
       authorinfoavatar = document.querySelector("#author-avatar");
       logText = document.querySelector("#log-text");
+      cloudDialog = document.querySelector("#cloud-tool-dialog");
+      cloudProjectIdInput = document.querySelector("#cloud-project-id");
+      cloudUsernameInput = document.querySelector("#cloud-username");
+      cloudConnStatusInput = document.querySelector("#cloud-conn-status");
+      cloudVarsCountInput = document.querySelector("#cloud-vars-count");
+      cloudVarsListContainer = document.querySelector("#cloud-vars-list");
+      if (cloudProjectIdInput && _pid > 0) cloudProjectIdInput.value = String(_pid);
+      if (cloudUsernameInput) cloudUsernameInput.value = getCloudUsername();
+      setCloudConnectionStatus("idle");
+      renderCloudVariables();
+      if (cloudDialog) {
+        cloudDialog.addEventListener("close", stopCloudSyncTimer);
+        cloudDialog.addEventListener("closed", stopCloudSyncTimer);
+      }
 
       renderButtons();
     } catch (error) {
@@ -495,6 +1111,8 @@ function initialize() {
   }
 
   loadUserInfo();
+  installCloudGlobalListeners();
+  cloudAutoConnectIfNeeded();
   loadProject();
 }
 
@@ -523,6 +1141,10 @@ async function loadProject() {
   if (queryId) {
     _pid = Number(queryId);
     console.log(`Project ID from query: ${_pid}`);
+    if (cloudProjectIdInput && Number.isInteger(_pid) && _pid > 0) {
+      cloudProjectIdInput.value = String(_pid);
+    }
+    cloudAutoConnectIfNeeded({ force: true });
   }
   if (_pid === 0) {
     console.log("No project ID found, redirecting to new project page.");

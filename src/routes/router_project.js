@@ -23,6 +23,73 @@ import { getAnalytics } from "../services/analytics.js";
 
 const router = Router();
 
+const PROJECT_CONFIG_TARGET_TYPE = "project";
+const PROJECT_CONFIG_KEY_CLOUD_ANON_WRITE = "scratch.clouddata.anonymouswrite";
+
+const parseBooleanInput = (value) => {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1 ? true : value === 0 ? false : null;
+  if (typeof value !== "string") return null;
+
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on", "enable", "enabled"].includes(normalized)) return true;
+  if (["0", "false", "no", "off", "disable", "disabled"].includes(normalized)) return false;
+  return null;
+};
+
+const parseBooleanConfigValue = (value, fallback = false) => {
+  const parsed = parseBooleanInput(value);
+  return parsed === null ? fallback : parsed;
+};
+
+const getProjectCloudAnonymousWriteConfig = async (projectId) => {
+  const record = await prisma.ow_target_configs.findUnique({
+    where: {
+      target_type_target_id_key: {
+        target_type: PROJECT_CONFIG_TARGET_TYPE,
+        target_id: String(projectId),
+        key: PROJECT_CONFIG_KEY_CLOUD_ANON_WRITE,
+      },
+    },
+    select: {
+      value: true,
+      updated_at: true,
+    },
+  });
+
+  const enabled = parseBooleanConfigValue(record?.value, false);
+  return {
+    enabled,
+    raw_value: record?.value ?? String(enabled),
+    updated_at: record?.updated_at ?? null,
+  };
+};
+
+const setProjectCloudAnonymousWriteConfig = async (projectId, enabled) => {
+  return prisma.ow_target_configs.upsert({
+    where: {
+      target_type_target_id_key: {
+        target_type: PROJECT_CONFIG_TARGET_TYPE,
+        target_id: String(projectId),
+        key: PROJECT_CONFIG_KEY_CLOUD_ANON_WRITE,
+      },
+    },
+    create: {
+      target_type: PROJECT_CONFIG_TARGET_TYPE,
+      target_id: String(projectId),
+      key: PROJECT_CONFIG_KEY_CLOUD_ANON_WRITE,
+      value: enabled ? "true" : "false",
+    },
+    update: {
+      value: enabled ? "true" : "false",
+    },
+    select: {
+      value: true,
+      updated_at: true,
+    },
+  });
+};
+
 // 中间件，确保所有请求均经过该处理
 
 // 抽离的函数
@@ -908,6 +975,93 @@ router.get("/id/:id", async (req, res, next) => {
   logger.debug(tags);
   logger.debug(project);
   res.status(200).send(project);
+});
+
+// 获取项目云变量匿名写入配置
+router.get("/id/:id/cloudconfig", async (req, res, next) => {
+  try {
+    const projectId = Number(req.params.id);
+    const userId = res.locals.userid || 0;
+    const project = await prisma.ow_projects.findFirst({
+      where: { id: projectId },
+      select: { id: true },
+    });
+    if (!project) {
+      return res.status(404).send({
+        status: "error",
+        message: "项目不存在",
+      });
+    }
+
+    const hasPermission = await hasProjectPermission(projectId, userId, "read");
+    if (!hasPermission) {
+      return res.status(403).send({
+        status: "error",
+        message: "无权访问此项目",
+      });
+    }
+
+    const config = await getProjectCloudAnonymousWriteConfig(projectId);
+    res.status(200).send({
+      status: "success",
+      message: "获取成功",
+      data: {
+        target_type: PROJECT_CONFIG_TARGET_TYPE,
+        target_id: String(projectId),
+        key: PROJECT_CONFIG_KEY_CLOUD_ANON_WRITE,
+        value: config.enabled,
+        raw_value: config.raw_value,
+        updated_at: config.updated_at,
+      },
+    });
+  } catch (err) {
+    logger.error("Error getting project cloud config:", err);
+    next(err);
+  }
+});
+
+// 更新项目云变量匿名写入配置
+router.put("/id/:id/cloudconfig", needLogin, async (req, res, next) => {
+  try {
+    const projectId = Number(req.params.id);
+    const project = await prisma.ow_projects.findFirst({
+      where: { id: projectId, authorid: res.locals.userid },
+      select: { id: true },
+    });
+
+    if (!project) {
+      return res.status(404).send({
+        status: "error",
+        message: "项目不存在或无权访问",
+      });
+    }
+
+    const rawValue = req.body?.anonymouswrite ?? req.body?.[PROJECT_CONFIG_KEY_CLOUD_ANON_WRITE];
+    const enabled = parseBooleanInput(rawValue);
+    if (enabled === null) {
+      return res.status(400).send({
+        status: "error",
+        message: "anonymouswrite 必须是布尔值",
+      });
+    }
+
+    const saved = await setProjectCloudAnonymousWriteConfig(projectId, enabled);
+    res.status(200).send({
+      status: "success",
+      message: "保存成功",
+      data: {
+        target_type: PROJECT_CONFIG_TARGET_TYPE,
+        target_id: String(projectId),
+        key: PROJECT_CONFIG_KEY_CLOUD_ANON_WRITE,
+        value: parseBooleanConfigValue(saved.value, false),
+        raw_value: saved.value,
+        updated_at: saved.updated_at,
+      },
+    });
+  } catch (err) {
+    logger.error("Error updating project cloud config:", err);
+    next(err);
+  }
 });
 
 // 更新作品信息

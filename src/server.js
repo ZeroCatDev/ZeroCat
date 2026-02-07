@@ -1,6 +1,7 @@
 import logger from './services/logger.js';
 import http from 'http';
 import app from './app.js';
+import {attachScratchCloudWebSocket} from './services/scratchCloudWs.js';
 
 /**
  * 服务器配置和启动类
@@ -21,6 +22,7 @@ class ServerConfig {
             try {
                 // 创建HTTP服务器
                 this.server = http.createServer(app);
+                attachScratchCloudWebSocket(this.server);
 
                 // 设置错误处理
                 this.server.on('error', this.handleServerError);

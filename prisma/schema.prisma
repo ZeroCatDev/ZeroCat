@@ -71,6 +71,9 @@ model ow_projects {
   @@index([state])
   @@index([authorid])
   @@index([time(sort: Desc)])
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_ow_projects_name_trgm")
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_ow_projects_title_trgm")
+  @@index([description(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_ow_projects_description_trgm")
   @@map("ow_projects")
 }
 
@@ -133,6 +136,12 @@ model ow_users {
 
   @@index([email])
   @@index([status])
+  @@index([username(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_ow_users_username_trgm")
+  @@index([display_name(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_ow_users_display_name_trgm")
+  @@index([bio(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_ow_users_bio_trgm")
+  @@index([motto(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_ow_users_motto_trgm")
+  @@index([location(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_ow_users_location_trgm")
+  @@index([region(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_ow_users_region_trgm")
   @@map("ow_users")
 }
 
@@ -143,6 +152,8 @@ model ow_projects_file {
   create_time   DateTime? @default(now()) @db.Timestamp(6)
   create_userid Int?
 
+  @@index([create_time], map: "idx_ow_projects_file_create_time")
+  @@index([create_userid], map: "idx_ow_projects_file_create_userid")
   @@map("ow_projects_file")
 }
 
@@ -665,6 +676,40 @@ model ow_cache_kv {
   @@map("ow_cache_kv")
 }
 
+// 通用目标配置表（无关联，按 target_type + target_id + key 存储）
+model ow_target_configs {
+  id          Int      @id @default(autoincrement())
+  target_type String   @db.VarChar(64)
+  target_id   String   @db.VarChar(64)
+  key         String   @db.VarChar(255)
+  value       String   @db.Text
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+  updated_at  DateTime @updatedAt @db.Timestamp(6)
+
+  @@unique([target_type, target_id, key])
+  @@index([target_type, target_id])
+  @@index([key])
+  @@map("project_config")
+}
+
+// 云变量修改历史
+model project_clouddata_history {
+  id                  Int      @id @default(autoincrement())
+  project_id          Int
+  method              String   @db.VarChar(32)
+  name                String   @db.VarChar(1024)
+  value               String?  @db.Text
+  actor_id            Int?
+  actor_name          String?  @db.VarChar(255)
+  ip                  String?  @db.VarChar(100)
+  created_at          DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([project_id, created_at(sort: Desc)])
+  @@index([method])
+  @@index([actor_id])
+  @@map("project_clouddata_history")
+}
+
 // 代码运行设备表
 model ow_coderun_devices {
   id            String   @id @default(uuid()) @db.Uuid
@@ -867,6 +912,7 @@ model ow_posts {
   @@index([is_deleted])
   @@index([is_deleted, created_at(sort: Desc)])
   @@index([thread_root_id, created_at(sort: Asc)])
+  @@index([content(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_ow_posts_content_trgm")
   @@map("ow_posts")
 }
 

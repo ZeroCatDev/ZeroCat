@@ -11,8 +11,440 @@ import {needLogin} from "../middleware/auth.js";
 import {getProjectById, getProjectFile} from "../controllers/projects.js";
 import multer from "multer";
 import { validateFileTypeFromContent, uploadFile, handleAssetUpload, processImage, generateMD5, uploadToS3 } from "../services/assets.js";
+import redisClient from "../services/redis.js";
 
 var router = Router();
+
+const CLOUD_EVENT_TARGET_TYPE = "scratch_cloud";
+const CLOUD_MAX_NAME_LENGTH = 256;
+const CLOUD_MAX_VALUE_LENGTH = 1024;
+const CLOUD_UPDATES_MAX_LIMIT = 200;
+const TARGET_CONFIG_TYPE_PROJECT = "project";
+const TARGET_CONFIG_KEY_CLOUD_ANON_WRITE = "scratch.clouddata.anonymouswrite";
+
+const cloudVarsRedisKey = (projectId) => `scratch:cloud:${projectId}:vars`;
+const cloudSnapshotDbKey = (projectId) => `scratch:cloud:${projectId}:vars`;
+
+const parseBooleanInput = (value) => {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number") return value === 1 ? true : value === 0 ? false : null;
+    if (typeof value !== "string") return null;
+
+    const normalized = value.trim().toLowerCase();
+    if (["1", "true", "yes", "on", "enable", "enabled"].includes(normalized)) return true;
+    if (["0", "false", "no", "off", "disable", "disabled"].includes(normalized)) return false;
+    return null;
+};
+
+const sanitizeAnonymousInputName = (name) => {
+    const raw = String(name || "").replace(/[\r\n\t]/g, " ").replace(/\s+/g, " ").trim();
+    const cleaned = raw.replace(/[\[\]]/g, "");
+    return cleaned.slice(0, 64) || "unknown";
+};
+
+const normalizeIp = (ipAddress) => {
+    const value = String(ipAddress || "").trim();
+    if (!value) return "unknown";
+    if (value.startsWith("::ffff:")) return value.slice(7);
+    return value;
+};
+
+const resolveActorName = ({userId, username, bodyUserName, ip}) => {
+    if (typeof userId === "number" && userId > 0) {
+        return username ? String(username) : String(userId);
+    }
+    const anonymousInputName = sanitizeAnonymousInputName(bodyUserName);
+    return `[匿名]${anonymousInputName}`;
+};
+
+const getProjectAnonymousWriteEnabled = async (projectId) => {
+    const record = await prisma.ow_target_configs.findUnique({
+        where: {
+            target_type_target_id_key: {
+                target_type: TARGET_CONFIG_TYPE_PROJECT,
+                target_id: String(projectId),
+                key: TARGET_CONFIG_KEY_CLOUD_ANON_WRITE,
+            },
+        },
+        select: {
+            value: true,
+        },
+    });
+
+    const parsed = parseBooleanInput(record?.value);
+    return parsed === null ? false : parsed;
+};
+
+const appendCloudHistory = async ({
+    projectId,
+    method,
+    name,
+    value = null,
+    actorId = null,
+    actorName = null,
+    ip = "",
+}) => {
+    return prisma.project_clouddata_history.create({
+        data: {
+            project_id: Number(projectId),
+            method: String(method || ""),
+            name: String(name || ""),
+            value: value === null ? null : String(value),
+            actor_id: typeof actorId === "number" ? actorId : null,
+            actor_name: actorName ? String(actorName) : null,
+            ip: ip ? String(ip) : "",
+        },
+        select: {id: true},
+    });
+};
+
+const parseCloudBody = (req) => {
+    if (typeof req.body === "string") {
+        try {
+            return JSON.parse(req.body);
+        } catch (error) {
+            return null;
+        }
+    }
+    return req.body;
+};
+
+const normalizeCloudValue = (value) => {
+    if (typeof value === "number") {
+        if (!Number.isFinite(value)) return null;
+        return String(value);
+    }
+
+    if (typeof value === "string") {
+        if (value.length > CLOUD_MAX_VALUE_LENGTH) return null;
+        return value;
+    }
+
+    return null;
+};
+
+const isValidCloudName = (name) => {
+    if (typeof name !== "string") return false;
+    if (!name.startsWith("☁")) return false;
+    if (!name.trim()) return false;
+    return name.length <= CLOUD_MAX_NAME_LENGTH;
+};
+
+const getCloudProject = async (projectId, userId) => {
+    const project = await prisma.ow_projects.findFirst({
+        where: {id: Number(projectId)},
+        select: {
+            id: true,
+            authorid: true,
+            state: true,
+            type: true,
+            title: true,
+        },
+    });
+
+    if (!project) {
+        return {ok: false, status: 404, message: "项目不存在"};
+    }
+
+    if (project.type !== "scratch") {
+        return {ok: false, status: 400, message: "仅支持Scratch项目"};
+    }
+
+    if (project.state !== "public" && project.authorid !== userId) {
+        return {ok: false, status: 403, message: "无权访问此项目"};
+    }
+
+    return {ok: true, project};
+};
+
+const loadCloudState = async (project) => {
+    const varsKey = cloudVarsRedisKey(project.id);
+    let vars = {};
+
+    if (redisClient.client && redisClient.isConnected) {
+        vars = await redisClient.client.hgetall(varsKey);
+        if (Object.keys(vars).length > 0) {
+            return vars;
+        }
+    }
+
+    if (!project.authorid) {
+        return {};
+    }
+
+    const snapshot = await prisma.ow_cache_kv.findUnique({
+        where: {
+            user_id_key: {
+                user_id: project.authorid,
+                key: cloudSnapshotDbKey(project.id),
+            },
+        },
+        select: {value: true},
+    });
+
+    if (!snapshot || typeof snapshot.value !== "object" || Array.isArray(snapshot.value)) {
+        return {};
+    }
+
+    vars = snapshot.value;
+
+    if (redisClient.client && redisClient.isConnected && Object.keys(vars).length > 0) {
+        await redisClient.client.hset(varsKey, vars);
+    }
+
+    return vars;
+};
+
+const saveCloudSnapshot = async (project, vars, creatorIp) => {
+    if (!project.authorid) return;
+
+    await prisma.ow_cache_kv.upsert({
+        where: {
+            user_id_key: {
+                user_id: project.authorid,
+                key: cloudSnapshotDbKey(project.id),
+            },
+        },
+        create: {
+            user_id: project.authorid,
+            key: cloudSnapshotDbKey(project.id),
+            value: vars,
+            creator_ip: creatorIp || "",
+        },
+        update: {
+            value: vars,
+            creator_ip: creatorIp || "",
+        },
+    });
+};
+
+const appendCloudEvent = async (projectId, actorId, eventData) => {
+    return prisma.ow_events.create({
+        data: {
+            event_type: "cloud_variable",
+            actor_id: actorId,
+            target_type: CLOUD_EVENT_TARGET_TYPE,
+            target_id: Number(projectId),
+            event_data: eventData,
+            public: false,
+        },
+        select: {
+            id: true,
+            created_at: true,
+        },
+    });
+};
+
+const formatCloudVars = (vars) =>
+    Object.entries(vars).map(([name, value]) => ({
+        method: "set",
+        name,
+        value,
+    }));
+
+const processCloudMessage = async ({
+    project,
+    userId,
+    username,
+    body,
+    ip,
+    allowNonAuthorWrite = false,
+}) => {
+    const method = body?.method;
+    const actorId = typeof userId === "number" ? userId : null;
+    const actorName = resolveActorName({
+        userId,
+        username,
+        bodyUserName: body?.user,
+        ip,
+    });
+
+    if (!method || typeof method !== "string") {
+        return {status: 400, data: {status: "error", message: "缺少method"}};
+    }
+
+    if (body.project_id && String(body.project_id) !== String(project.id)) {
+        return {status: 400, data: {status: "error", message: "project_id不匹配"}};
+    }
+
+    if (body.user && body.user !== username) {
+        return {status: 403, data: {status: "error", message: "用户标识不匹配"}};
+    }
+
+    if (method === "handshake") {
+        const vars = await loadCloudState(project);
+        return {
+            status: 200,
+            data: {
+                status: "success",
+                method: "handshake",
+                project_id: String(project.id),
+                user: username,
+                variables: formatCloudVars(vars),
+            },
+        };
+    }
+
+    if (!allowNonAuthorWrite && project.authorid !== userId) {
+        return {status: 403, data: {status: "error", message: "仅项目作者可修改云变量"}};
+    }
+
+    const vars = await loadCloudState(project);
+
+    if (method === "set" || method === "create") {
+        const name = body.name;
+        const value = normalizeCloudValue(body.value);
+
+        if (!isValidCloudName(name)) {
+            return {status: 400, data: {status: "error", message: "变量名非法"}};
+        }
+
+        if (value === null) {
+            return {status: 400, data: {status: "error", message: "变量值非法"}};
+        }
+
+        vars[name] = value;
+
+        if (redisClient.client && redisClient.isConnected) {
+            await redisClient.client.hset(cloudVarsRedisKey(project.id), name, value);
+        }
+
+        await saveCloudSnapshot(project, vars, ip);
+        const event = await appendCloudEvent(project.id, userId, {
+            method: "set",
+            name,
+            value,
+            user: username,
+        });
+        await appendCloudHistory({
+            projectId: project.id,
+            method: "set",
+            name,
+            value,
+            actorId,
+            actorName,
+            ip,
+        });
+
+        return {
+            status: 200,
+            data: {
+                status: "success",
+                update: {
+                    id: event.id,
+                    method: "set",
+                    name,
+                    value,
+                    user: username,
+                    created_at: event.created_at,
+                },
+            },
+        };
+    }
+
+    if (method === "rename") {
+        const oldName = body.name;
+        const newName = body.new_name;
+
+        if (!isValidCloudName(oldName) || !isValidCloudName(newName)) {
+            return {status: 400, data: {status: "error", message: "变量名非法"}};
+        }
+
+        if (!(oldName in vars)) {
+            return {status: 404, data: {status: "error", message: "旧变量不存在"}};
+        }
+
+        vars[newName] = vars[oldName];
+        delete vars[oldName];
+
+        if (redisClient.client && redisClient.isConnected) {
+            const redisKey = cloudVarsRedisKey(project.id);
+            await redisClient.client.multi().hdel(redisKey, oldName).hset(redisKey, newName, vars[newName]).exec();
+        }
+
+        await saveCloudSnapshot(project, vars, ip);
+        const event = await appendCloudEvent(project.id, userId, {
+            method: "rename",
+            name: oldName,
+            new_name: newName,
+            value: vars[newName],
+            user: username,
+        });
+        await appendCloudHistory({
+            projectId: project.id,
+            method: "rename",
+            name: oldName,
+            value: vars[newName],
+            actorId,
+            actorName,
+            ip,
+        });
+
+        return {
+            status: 200,
+            data: {
+                status: "success",
+                update: {
+                    id: event.id,
+                    method: "rename",
+                    name: oldName,
+                    new_name: newName,
+                    value: vars[newName],
+                    user: username,
+                    created_at: event.created_at,
+                },
+            },
+        };
+    }
+
+    if (method === "delete") {
+        const name = body.name;
+        if (!isValidCloudName(name)) {
+            return {status: 400, data: {status: "error", message: "变量名非法"}};
+        }
+
+        if (!(name in vars)) {
+            return {status: 404, data: {status: "error", message: "变量不存在"}};
+        }
+
+        delete vars[name];
+
+        if (redisClient.client && redisClient.isConnected) {
+            await redisClient.client.hdel(cloudVarsRedisKey(project.id), name);
+        }
+
+        await saveCloudSnapshot(project, vars, ip);
+        const event = await appendCloudEvent(project.id, userId, {
+            method: "delete",
+            name,
+            user: username,
+        });
+        await appendCloudHistory({
+            projectId: project.id,
+            method: "delete",
+            name,
+            actorId,
+            actorName,
+            ip,
+        });
+
+        return {
+            status: 200,
+            data: {
+                status: "success",
+                update: {
+                    id: event.id,
+                    method: "delete",
+                    name,
+                    user: username,
+                    created_at: event.created_at,
+                },
+            },
+        };
+    }
+
+    return {status: 400, data: {status: "error", message: "不支持的method"}};
+};
 
 // 配置multer用于内存存储（scratch上传）
 const upload = multer({
@@ -410,5 +842,222 @@ router.post(
         });
     }
 );
+
+router.post("/cloud/:projectid/message", needLogin, async (req, res, next) => {
+    try {
+        const projectId = Number(req.params.projectid);
+
+        if (!projectId) {
+            return res.status(400).json({status: "error", message: "缺少项目ID"});
+        }
+
+        const projectResult = await getCloudProject(projectId, res.locals.userid);
+        if (!projectResult.ok) {
+            return res.status(projectResult.status).json({
+                status: "error",
+                message: projectResult.message,
+            });
+        }
+
+        const body = parseCloudBody(req);
+        if (!body || typeof body !== "object") {
+            return res.status(400).json({status: "error", message: "消息格式错误"});
+        }
+
+        const anonymousWriteEnabled = await getProjectAnonymousWriteEnabled(projectResult.project.id);
+        const result = await processCloudMessage({
+            project: projectResult.project,
+            userId: res.locals.userid,
+            username: res.locals.username,
+            body,
+            ip: req.ipInfo?.clientIP || req.ip,
+            allowNonAuthorWrite: Boolean(anonymousWriteEnabled),
+        });
+
+        res.status(result.status).json(result.data);
+    } catch (error) {
+        logger.error("处理云变量消息失败:", error);
+        next(error);
+    }
+});
+
+router.get("/cloud/:projectid/variables", needLogin, async (req, res, next) => {
+    try {
+        const projectId = Number(req.params.projectid);
+        if (!projectId) {
+            return res.status(400).json({status: "error", message: "缺少项目ID"});
+        }
+
+        const projectResult = await getCloudProject(projectId, res.locals.userid);
+        if (!projectResult.ok) {
+            return res.status(projectResult.status).json({
+                status: "error",
+                message: projectResult.message,
+            });
+        }
+
+        const vars = await loadCloudState(projectResult.project);
+
+        res.json({
+            status: "success",
+            project_id: String(projectResult.project.id),
+            variables: formatCloudVars(vars),
+        });
+    } catch (error) {
+        logger.error("读取云变量失败:", error);
+        next(error);
+    }
+});
+
+const handleCloudUpdatesRequest = async (req, res, next) => {
+    try {
+        const projectId = Number(req.params.projectid);
+        if (!projectId) {
+            return res.status(400).json({status: "error", message: "缺少项目ID"});
+        }
+
+        const projectResult = await getCloudProject(projectId, res.locals.userid);
+        if (!projectResult.ok) {
+            return res.status(projectResult.status).json({
+                status: "error",
+                message: projectResult.message,
+            });
+        }
+
+        const since = Number(req.query.since || 0);
+        const limitRaw = Number(req.query.limit || 50);
+        const limit = Number.isFinite(limitRaw)
+            ? Math.min(Math.max(limitRaw, 1), CLOUD_UPDATES_MAX_LIMIT)
+            : 50;
+
+        const updates = await prisma.ow_events.findMany({
+            where: {
+                target_type: CLOUD_EVENT_TARGET_TYPE,
+                target_id: projectResult.project.id,
+                ...(since > 0 ? {id: {gt: since}} : {}),
+            },
+            orderBy: {id: "asc"},
+            take: limit,
+            select: {
+                id: true,
+                actor_id: true,
+                created_at: true,
+                event_data: true,
+            },
+        });
+
+        const actorIds = [...new Set(updates.map((row) => row.actor_id).filter((id) => typeof id === "number"))];
+        const users = actorIds.length > 0
+            ? await prisma.ow_users.findMany({
+                where: {id: {in: actorIds}},
+                select: {
+                    id: true,
+                    username: true,
+                    display_name: true,
+                    avatar: true,
+                },
+            })
+            : [];
+        const userMap = new Map(users.map((u) => [u.id, u]));
+
+        const mappedUpdates = updates.map((row) => ({
+            id: row.id,
+            actor_id: row.actor_id,
+            actor: row.actor_id ? userMap.get(row.actor_id) || null : null,
+            created_at: row.created_at,
+            ...(typeof row.event_data === "object" && row.event_data !== null ? row.event_data : {}),
+        }));
+
+        res.json({
+            status: "success",
+            project_id: String(projectResult.project.id),
+            updates: mappedUpdates,
+            next_since: mappedUpdates.length > 0 ? mappedUpdates[mappedUpdates.length - 1].id : since,
+        });
+    } catch (error) {
+        logger.error("读取云变量更新失败:", error);
+        next(error);
+    }
+};
+
+router.get("/cloud/:projectid/updates", needLogin, handleCloudUpdatesRequest);
+
+router.get("/cloud/:projectid/history", needLogin, async (req, res, next) => {
+    try {
+        const projectId = Number(req.params.projectid);
+        if (!projectId) {
+            return res.status(400).json({status: "error", message: "缺少项目ID"});
+        }
+
+        const projectResult = await getCloudProject(projectId, res.locals.userid);
+        if (!projectResult.ok) {
+            return res.status(projectResult.status).json({
+                status: "error",
+                message: projectResult.message,
+            });
+        }
+
+        const since = Number(req.query.since || 0);
+        const limitRaw = Number(req.query.limit || 50);
+        const limit = Number.isFinite(limitRaw)
+            ? Math.min(Math.max(limitRaw, 1), CLOUD_UPDATES_MAX_LIMIT)
+            : 50;
+
+        const rows = await prisma.project_clouddata_history.findMany({
+            where: {
+                project_id: projectResult.project.id,
+                ...(since > 0 ? {id: {lt: since}} : {}),
+            },
+            orderBy: {id: "desc"},
+            take: limit,
+            select: {
+                id: true,
+                method: true,
+                name: true,
+                value: true,
+                actor_id: true,
+                actor_name: true,
+                ip: true,
+                created_at: true,
+            },
+        });
+
+        const actorIds = [...new Set(rows.map((row) => row.actor_id).filter((id) => typeof id === "number"))];
+        const users = actorIds.length > 0
+            ? await prisma.ow_users.findMany({
+                where: {id: {in: actorIds}},
+                select: {
+                    id: true,
+                    username: true,
+                    display_name: true,
+                    avatar: true,
+                },
+            })
+            : [];
+        const userMap = new Map(users.map((u) => [u.id, u]));
+
+        const history = rows.map((row) => ({
+            id: row.id,
+            method: row.method,
+            name: row.name,
+            value: row.value,
+            actor_id: row.actor_id,
+            actor: row.actor_id ? userMap.get(row.actor_id) || null : null,
+            actor_name: row.actor_name,
+            ip: row.actor_id ? null : row.ip,
+            created_at: row.created_at,
+        }));
+
+        res.json({
+            status: "success",
+            project_id: String(projectResult.project.id),
+            history,
+            next_since: history.length > 0 ? history[history.length - 1].id : since,
+        });
+    } catch (error) {
+        logger.error("读取云变量历史失败:", error);
+        next(error);
+    }
+});
 
 export default router;
