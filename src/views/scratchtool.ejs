@@ -96,6 +96,7 @@ let zcvm, zcgui;
 let _pid = 0;
 let logText,
   zctab,
+  assetUploadDialog,
   cloudDialog,
   cloudProjectIdInput,
   cloudUsernameInput,
@@ -927,6 +928,16 @@ function setButton(id, text, onclick) {
   }
 }
 
+function updateAssetUploadDialog(description, { open } = {}) {
+  if (!assetUploadDialog) return;
+  if (typeof description === "string") {
+    assetUploadDialog.description = description;
+  }
+  if (typeof open === "boolean") {
+    assetUploadDialog.open = open;
+  }
+}
+
 // --- Refactored uploadProjectAssets ---
 async function uploadProjectAssets() {
   try {
@@ -945,38 +956,87 @@ async function uploadProjectAssets() {
       (asset) => !uploadedFiles.includes(asset.assetId)
     );
 
-    logText.value += `[${getCurrentTime()}] 需要上传 ${toUploadFiles.length} 个文件。
+    if (logText) {
+      logText.value += `[${getCurrentTime()}] 需要上传 ${toUploadFiles.length} 个文件。
 `;
+    }
 
-    for (const asset of toUploadFiles) {
-      try {
-        const formData = new FormData();
-        formData.append(
-          "file",
-          new Blob([asset.data], { type: asset.assetType.contentType }),
-          `${asset.assetId}.${asset.dataFormat}`
-        );
+    if (toUploadFiles.length === 0) {
+      showSnackbar("媒体库无需保存");
+      return;
+    }
 
-        await apiRequest({
-          url: `${ZCConfig.api.getPath("/scratch/assets/" + asset.assetId + "." + asset.dataFormat)}`,
-          type: "POST",
-          data: formData,
-          processData: false,
-          contentType: false,
-        });
+    updateAssetUploadDialog("正在准备上传...", { open: true });
 
-        logText.value += `[${getCurrentTime()}] 文件上传成功: ${asset.assetId}.${asset.dataFormat}
+    let completed = 0;
+    let failed = 0;
+    const total = toUploadFiles.length;
+    const concurrency = Math.min(4, total);
+
+    const updateProgress = () => {
+      const percent = Math.min(100, Math.floor((completed / total) * 100));
+      const failText = failed > 0 ? `，失败 ${failed}` : "";
+      updateAssetUploadDialog(`正在上传素材 ${completed}/${total} (${percent}%)${failText}`);
+    };
+
+    const uploadSingleAsset = async (asset) => {
+      const formData = new FormData();
+      formData.append(
+        "file",
+        new Blob([asset.data], { type: asset.assetType.contentType }),
+        `${asset.assetId}.${asset.dataFormat}`
+      );
+
+      await apiRequest({
+        url: `${ZCConfig.api.getPath("/scratch/assets/" + asset.assetId + "." + asset.dataFormat)}`,
+        type: "POST",
+        data: formData,
+        processData: false,
+        contentType: false,
+      });
+    };
+
+    updateProgress();
+
+    let index = 0;
+    const workers = Array.from({ length: concurrency }, () => (async () => {
+      while (true) {
+        const current = index;
+        index += 1;
+        if (current >= total) break;
+        const asset = toUploadFiles[current];
+        try {
+          await uploadSingleAsset(asset);
+          if (logText) {
+            logText.value += `[${getCurrentTime()}] 文件上传成功: ${asset.assetId}.${asset.dataFormat}
 `;
-        asset.clean = true;
-      } catch (error) {
-        logText.value += `[${getCurrentTime()}] 文件上传失败: ${asset.assetId}.${asset.dataFormat}
+          }
+          asset.clean = true;
+        } catch (error) {
+          failed += 1;
+          if (logText) {
+            logText.value += `[${getCurrentTime()}] 文件上传失败: ${asset.assetId}.${asset.dataFormat}
 Error: ${error.responseJSON?.message || error.statusText}
 `;
+          }
+        } finally {
+          completed += 1;
+          updateProgress();
+        }
       }
+    })());
+
+    await Promise.all(workers);
+    updateAssetUploadDialog("素材上传完成", { open: false });
+
+    if (failed > 0) {
+      showSnackbar(`媒体库保存完成（失败 ${failed} 个）`);
+    } else {
+      showSnackbar("媒体库保存完成");
     }
-    showSnackbar("媒体库保存完成");
   } catch (error) {
     console.error("Error checking or uploading assets:", error);
+    updateAssetUploadDialog("素材上传失败", { open: false });
     showErrorAlert("媒体库保存失败", `错误: ${error.responseJSON?.message || error.statusText}`);
   }
 }
@@ -1132,6 +1192,7 @@ function initialize() {
     <mdui-button onclick="cloudRefreshVariables()">刷新变量列表</mdui-button>
     <div id="cloud-vars-list" style="max-height: 380px; overflow: auto; margin-top: 8px;"></div>
 </mdui-dialog>
+<mdui-dialog headline="保存素材" description="正在准备上传..." close-on-overlay-click id="asset-upload-dialog"></mdui-dialog>
 `
       );
 
@@ -1139,6 +1200,7 @@ function initialize() {
       authorinfocard = document.querySelector("#author-info");
       authorinfoavatar = document.querySelector("#author-avatar");
       logText = document.querySelector("#log-text");
+      assetUploadDialog = document.querySelector("#asset-upload-dialog");
       cloudDialog = document.querySelector("#cloud-tool-dialog");
       cloudProjectIdInput = document.querySelector("#cloud-project-id");
       cloudUsernameInput = document.querySelector("#cloud-username");
