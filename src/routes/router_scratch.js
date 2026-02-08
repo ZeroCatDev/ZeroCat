@@ -21,9 +21,12 @@ const CLOUD_MAX_VALUE_LENGTH = 1024;
 const CLOUD_UPDATES_MAX_LIMIT = 200;
 const TARGET_CONFIG_TYPE_PROJECT = "project";
 const TARGET_CONFIG_KEY_CLOUD_ANON_WRITE = "scratch.clouddata.anonymouswrite";
+const TARGET_CONFIG_KEY_CLOUD_HISTORY_ENABLED = "scratch.clouddata.history.enabled";
+const CLOUD_CONFIG_CACHE_TTL_SECONDS = 604800;
 
 const cloudVarsRedisKey = (projectId) => `scratch:cloud:${projectId}:vars`;
 const cloudSnapshotDbKey = (projectId) => `scratch:cloud:${projectId}:vars`;
+const cloudConfigRedisKey = (projectId) => `scratch:cloud:${projectId}:config`;
 
 const parseBooleanInput = (value) => {
     if (typeof value === "boolean") return value;
@@ -57,22 +60,69 @@ const resolveActorName = ({userId, username, bodyUserName, ip}) => {
     return `[匿名]${anonymousInputName}`;
 };
 
-const getProjectAnonymousWriteEnabled = async (projectId) => {
-    const record = await prisma.ow_target_configs.findUnique({
-        where: {
-            target_type_target_id_key: {
-                target_type: TARGET_CONFIG_TYPE_PROJECT,
-                target_id: String(projectId),
-                key: TARGET_CONFIG_KEY_CLOUD_ANON_WRITE,
-            },
-        },
-        select: {
-            value: true,
-        },
-    });
+const parseCloudConfigCache = (raw) => {
+    if (!raw || typeof raw !== "object") return null;
+    const anonymousParsed = parseBooleanInput(raw.anonymousWriteEnabled);
+    const historyParsed = parseBooleanInput(raw.historyEnabled);
+    if (anonymousParsed === null || historyParsed === null) return null;
+    return {
+        anonymousWriteEnabled: anonymousParsed,
+        historyEnabled: historyParsed,
+    };
+};
 
-    const parsed = parseBooleanInput(record?.value);
-    return parsed === null ? false : parsed;
+const getCachedCloudConfig = async (projectId) => {
+    const cacheKey = cloudConfigRedisKey(projectId);
+    if (!redisClient.client || !redisClient.isConnected) {
+        return null;
+    }
+    try {
+        const cachedValue = await redisClient.client.hgetall(cacheKey);
+        return parseCloudConfigCache(cachedValue);
+    } catch (error) {
+        logger.warn(`[cloud-config] 读取Redis缓存失败: ${cacheKey}`, error);
+        return null;
+    }
+};
+
+const loadCloudConfigFromDb = async (projectId) => {
+    const records = await prisma.ow_target_configs.findMany({
+        where: {
+            target_type: TARGET_CONFIG_TYPE_PROJECT,
+            target_id: String(projectId),
+            key: {in: [TARGET_CONFIG_KEY_CLOUD_ANON_WRITE, TARGET_CONFIG_KEY_CLOUD_HISTORY_ENABLED]},
+        },
+        select: {key: true, value: true},
+    });
+    const recordMap = new Map(records.map((row) => [row.key, row.value]));
+    const anonymousParsed = parseBooleanInput(recordMap.get(TARGET_CONFIG_KEY_CLOUD_ANON_WRITE));
+    const historyParsed = parseBooleanInput(recordMap.get(TARGET_CONFIG_KEY_CLOUD_HISTORY_ENABLED));
+    return {
+        anonymousWriteEnabled: anonymousParsed === null ? false : anonymousParsed,
+        historyEnabled: historyParsed === null ? true : historyParsed,
+    };
+};
+
+const getProjectCloudConfig = async (projectId) => {
+    const cacheKey = cloudConfigRedisKey(projectId);
+    const cachedConfig = await getCachedCloudConfig(projectId);
+    if (cachedConfig) {
+        return cachedConfig;
+    }
+
+    const config = await loadCloudConfigFromDb(projectId);
+    if (redisClient.client && redisClient.isConnected) {
+        try {
+            await redisClient.client.hset(cacheKey, {
+                anonymousWriteEnabled: config.anonymousWriteEnabled ? "true" : "false",
+                historyEnabled: config.historyEnabled ? "true" : "false",
+            });
+            await redisClient.client.expire(cacheKey, CLOUD_CONFIG_CACHE_TTL_SECONDS);
+        } catch (error) {
+            logger.warn(`[cloud-config] 写入Redis缓存失败: ${cacheKey}`, error);
+        }
+    }
+    return config;
 };
 
 const appendCloudHistory = async ({
@@ -249,6 +299,7 @@ const processCloudMessage = async ({
     body,
     ip,
     allowNonAuthorWrite = false,
+    historyEnabled = true,
 }) => {
     const method = body?.method;
     const actorId = typeof userId === "number" ? userId : null;
@@ -316,15 +367,17 @@ const processCloudMessage = async ({
             value,
             user: username,
         });
-        await appendCloudHistory({
-            projectId: project.id,
-            method: "set",
-            name,
-            value,
-            actorId,
-            actorName,
-            ip,
-        });
+        if (historyEnabled) {
+            await appendCloudHistory({
+                projectId: project.id,
+                method: "set",
+                name,
+                value,
+                actorId,
+                actorName,
+                ip,
+            });
+        }
 
         return {
             status: 200,
@@ -370,15 +423,17 @@ const processCloudMessage = async ({
             value: vars[newName],
             user: username,
         });
-        await appendCloudHistory({
-            projectId: project.id,
-            method: "rename",
-            name: oldName,
-            value: vars[newName],
-            actorId,
-            actorName,
-            ip,
-        });
+        if (historyEnabled) {
+            await appendCloudHistory({
+                projectId: project.id,
+                method: "rename",
+                name: oldName,
+                value: vars[newName],
+                actorId,
+                actorName,
+                ip,
+            });
+        }
 
         return {
             status: 200,
@@ -419,14 +474,16 @@ const processCloudMessage = async ({
             name,
             user: username,
         });
-        await appendCloudHistory({
-            projectId: project.id,
-            method: "delete",
-            name,
-            actorId,
-            actorName,
-            ip,
-        });
+        if (historyEnabled) {
+            await appendCloudHistory({
+                projectId: project.id,
+                method: "delete",
+                name,
+                actorId,
+                actorName,
+                ip,
+            });
+        }
 
         return {
             status: 200,
@@ -864,7 +921,8 @@ router.post("/cloud/:projectid/message", needLogin, async (req, res, next) => {
             return res.status(400).json({status: "error", message: "消息格式错误"});
         }
 
-        const anonymousWriteEnabled = await getProjectAnonymousWriteEnabled(projectResult.project.id);
+        const cachedConfig = await getCachedCloudConfig(projectResult.project.id);
+        const {anonymousWriteEnabled, historyEnabled} = cachedConfig || await getProjectCloudConfig(projectResult.project.id);
         const result = await processCloudMessage({
             project: projectResult.project,
             userId: res.locals.userid,
@@ -872,6 +930,7 @@ router.post("/cloud/:projectid/message", needLogin, async (req, res, next) => {
             body,
             ip: req.ipInfo?.clientIP || req.ip,
             allowNonAuthorWrite: Boolean(anonymousWriteEnabled),
+            historyEnabled,
         });
 
         res.status(result.status).json(result.data);
@@ -922,6 +981,12 @@ const handleCloudUpdatesRequest = async (req, res, next) => {
                 status: "error",
                 message: projectResult.message,
             });
+        }
+
+        const cachedConfig = await getCachedCloudConfig(projectResult.project.id);
+        const {historyEnabled} = cachedConfig || await getProjectCloudConfig(projectResult.project.id);
+        if (!historyEnabled) {
+            return res.status(403).json({status: "error", message: "云变量历史记录未启用"});
         }
 
         const since = Number(req.query.since || 0);
@@ -995,6 +1060,12 @@ router.get("/cloud/:projectid/history", needLogin, async (req, res, next) => {
                 status: "error",
                 message: projectResult.message,
             });
+        }
+
+        const cachedConfig = await getCachedCloudConfig(projectResult.project.id);
+        const {historyEnabled} = cachedConfig || await getProjectCloudConfig(projectResult.project.id);
+        if (!historyEnabled) {
+            return res.status(403).json({status: "error", message: "云变量历史记录未启用"});
         }
 
         const since = Number(req.query.since || 0);

@@ -20,11 +20,16 @@ import { hasProjectPermission } from "../services/auth/permissionManager.js";
 import { getUserByUsername } from "../controllers/users.js";
 import { createEvent } from "../controllers/events.js";
 import { getAnalytics } from "../services/analytics.js";
+import redisClient from "../services/redis.js";
 
 const router = Router();
 
 const PROJECT_CONFIG_TARGET_TYPE = "project";
 const PROJECT_CONFIG_KEY_CLOUD_ANON_WRITE = "scratch.clouddata.anonymouswrite";
+const PROJECT_CONFIG_KEY_CLOUD_HISTORY_ENABLED = "scratch.clouddata.history.enabled";
+const CLOUD_CONFIG_CACHE_TTL_SECONDS = 604800;
+
+const cloudConfigRedisKey = (projectId) => `scratch:cloud:${projectId}:config`;
 
 const parseBooleanInput = (value) => {
   if (typeof value === "boolean") return value;
@@ -65,19 +70,19 @@ const getProjectCloudAnonymousWriteConfig = async (projectId) => {
   };
 };
 
-const setProjectCloudAnonymousWriteConfig = async (projectId, enabled) => {
-  return prisma.ow_target_configs.upsert({
+const setProjectCloudConfig = async (projectId, key, enabled) =>
+  prisma.ow_target_configs.upsert({
     where: {
       target_type_target_id_key: {
         target_type: PROJECT_CONFIG_TARGET_TYPE,
         target_id: String(projectId),
-        key: PROJECT_CONFIG_KEY_CLOUD_ANON_WRITE,
+        key,
       },
     },
     create: {
       target_type: PROJECT_CONFIG_TARGET_TYPE,
       target_id: String(projectId),
-      key: PROJECT_CONFIG_KEY_CLOUD_ANON_WRITE,
+      key,
       value: enabled ? "true" : "false",
     },
     update: {
@@ -88,6 +93,54 @@ const setProjectCloudAnonymousWriteConfig = async (projectId, enabled) => {
       updated_at: true,
     },
   });
+
+const setProjectCloudAnonymousWriteConfig = (projectId, enabled) =>
+  setProjectCloudConfig(projectId, PROJECT_CONFIG_KEY_CLOUD_ANON_WRITE, enabled);
+
+const setProjectCloudHistoryEnabledConfig = (projectId, enabled) =>
+  setProjectCloudConfig(projectId, PROJECT_CONFIG_KEY_CLOUD_HISTORY_ENABLED, enabled);
+
+const loadCloudConfigFromDb = async (projectId) => {
+  const records = await prisma.ow_target_configs.findMany({
+    where: {
+      target_type: PROJECT_CONFIG_TARGET_TYPE,
+      target_id: String(projectId),
+      key: { in: [PROJECT_CONFIG_KEY_CLOUD_ANON_WRITE, PROJECT_CONFIG_KEY_CLOUD_HISTORY_ENABLED] },
+    },
+    select: { key: true, value: true },
+  });
+  const recordMap = new Map(records.map((row) => [row.key, row.value]));
+  const anonymousParsed = parseBooleanInput(recordMap.get(PROJECT_CONFIG_KEY_CLOUD_ANON_WRITE));
+  const historyParsed = parseBooleanInput(recordMap.get(PROJECT_CONFIG_KEY_CLOUD_HISTORY_ENABLED));
+  return {
+    anonymousWriteEnabled: anonymousParsed === null ? false : anonymousParsed,
+    historyEnabled: historyParsed === null ? true : historyParsed,
+  };
+};
+
+const parseCloudConfigCache = (raw) => {
+  if (!raw || typeof raw !== "object") return null;
+  const anonymousParsed = parseBooleanInput(raw.anonymousWriteEnabled);
+  const historyParsed = parseBooleanInput(raw.historyEnabled);
+  if (anonymousParsed === null || historyParsed === null) return null;
+  return {
+    anonymousWriteEnabled: anonymousParsed,
+    historyEnabled: historyParsed,
+  };
+};
+
+const refreshCloudConfigCache = async (projectId, config) => {
+  if (!redisClient.client || !redisClient.isConnected) return;
+  const cacheKey = cloudConfigRedisKey(projectId);
+  try {
+    await redisClient.client.hset(cacheKey, {
+      anonymousWriteEnabled: config.anonymousWriteEnabled ? "true" : "false",
+      historyEnabled: config.historyEnabled ? "true" : "false",
+    });
+    await redisClient.client.expire(cacheKey, CLOUD_CONFIG_CACHE_TTL_SECONDS);
+  } catch (error) {
+    logger.warn(`[cloud-config] 刷新Redis缓存失败: ${cacheKey}`, error);
+  }
 };
 
 // 中间件，确保所有请求均经过该处理
@@ -977,7 +1030,7 @@ router.get("/id/:id", async (req, res, next) => {
   res.status(200).send(project);
 });
 
-// 获取项目云变量匿名写入配置
+// 获取项目云变量配置
 router.get("/id/:id/cloudconfig", async (req, res, next) => {
   try {
     const projectId = Number(req.params.id);
@@ -1001,18 +1054,29 @@ router.get("/id/:id/cloudconfig", async (req, res, next) => {
       });
     }
 
-    const config = await getProjectCloudAnonymousWriteConfig(projectId);
+    const config = await loadCloudConfigFromDb(projectId);
+    await refreshCloudConfigCache(projectId, config);
     res.status(200).send({
       status: "success",
       message: "获取成功",
-      data: {
-        target_type: PROJECT_CONFIG_TARGET_TYPE,
-        target_id: String(projectId),
-        key: PROJECT_CONFIG_KEY_CLOUD_ANON_WRITE,
-        value: config.enabled,
-        raw_value: config.raw_value,
-        updated_at: config.updated_at,
-      },
+      data: [
+        {
+          target_type: PROJECT_CONFIG_TARGET_TYPE,
+          target_id: String(projectId),
+          key: PROJECT_CONFIG_KEY_CLOUD_ANON_WRITE,
+          value: config.anonymousWriteEnabled,
+          raw_value: config.anonymousWriteEnabled ? "true" : "false",
+          updated_at: null,
+        },
+        {
+          target_type: PROJECT_CONFIG_TARGET_TYPE,
+          target_id: String(projectId),
+          key: PROJECT_CONFIG_KEY_CLOUD_HISTORY_ENABLED,
+          value: config.historyEnabled,
+          raw_value: config.historyEnabled ? "true" : "false",
+          updated_at: null,
+        },
+      ],
     });
   } catch (err) {
     logger.error("Error getting project cloud config:", err);
@@ -1036,27 +1100,102 @@ router.put("/id/:id/cloudconfig", needLogin, async (req, res, next) => {
       });
     }
 
-    const rawValue = req.body?.anonymouswrite ?? req.body?.[PROJECT_CONFIG_KEY_CLOUD_ANON_WRITE];
-    const enabled = parseBooleanInput(rawValue);
-    if (enabled === null) {
+    const rawAnonymousWrite = req.body?.anonymouswrite ?? req.body?.[PROJECT_CONFIG_KEY_CLOUD_ANON_WRITE];
+    const rawHistoryEnabled = req.body?.historyenabled ?? req.body?.[PROJECT_CONFIG_KEY_CLOUD_HISTORY_ENABLED];
+
+    if (rawAnonymousWrite === undefined && rawHistoryEnabled === undefined) {
       return res.status(400).send({
         status: "error",
-        message: "anonymouswrite 必须是布尔值",
+        message: "缺少配置项",
       });
     }
 
-    const saved = await setProjectCloudAnonymousWriteConfig(projectId, enabled);
-    res.status(200).send({
-      status: "success",
-      message: "保存成功",
-      data: {
+    const updates = [];
+
+    if (rawAnonymousWrite !== undefined) {
+      const enabled = parseBooleanInput(rawAnonymousWrite);
+      if (enabled === null) {
+        return res.status(400).send({
+          status: "error",
+          message: "anonymouswrite 必须是布尔值",
+        });
+      }
+      const saved = await setProjectCloudAnonymousWriteConfig(projectId, enabled);
+      updates.push({
         target_type: PROJECT_CONFIG_TARGET_TYPE,
         target_id: String(projectId),
         key: PROJECT_CONFIG_KEY_CLOUD_ANON_WRITE,
         value: parseBooleanConfigValue(saved.value, false),
         raw_value: saved.value,
         updated_at: saved.updated_at,
+      });
+    }
+
+    if (rawHistoryEnabled !== undefined) {
+      const enabled = parseBooleanInput(rawHistoryEnabled);
+      if (enabled === null) {
+        return res.status(400).send({
+          status: "error",
+          message: "historyenabled 必须是布尔值",
+        });
+      }
+      const saved = await setProjectCloudHistoryEnabledConfig(projectId, enabled);
+      updates.push({
+        target_type: PROJECT_CONFIG_TARGET_TYPE,
+        target_id: String(projectId),
+        key: PROJECT_CONFIG_KEY_CLOUD_HISTORY_ENABLED,
+        value: parseBooleanConfigValue(saved.value, true),
+        raw_value: saved.value,
+        updated_at: saved.updated_at,
+      });
+    }
+
+    if (redisClient.client && redisClient.isConnected) {
+      try {
+        const cachedValue = await redisClient.client.hgetall(cloudConfigRedisKey(projectId));
+        let mergedConfig = parseCloudConfigCache(cachedValue);
+        if (!mergedConfig) {
+          mergedConfig = await loadCloudConfigFromDb(projectId);
+        } else {
+          for (const update of updates) {
+            if (update.key === PROJECT_CONFIG_KEY_CLOUD_ANON_WRITE) {
+              mergedConfig.anonymousWriteEnabled = parseBooleanConfigValue(update.raw_value, false);
+            }
+            if (update.key === PROJECT_CONFIG_KEY_CLOUD_HISTORY_ENABLED) {
+              mergedConfig.historyEnabled = parseBooleanConfigValue(update.raw_value, true);
+            }
+          }
+        }
+        await refreshCloudConfigCache(projectId, mergedConfig);
+      } catch (error) {
+        logger.warn(`[cloud-config] 刷新Redis缓存失败: ${cacheKey}`, error);
+      }
+    }
+
+    const fullConfig = await loadCloudConfigFromDb(projectId);
+    const fullResponse = [
+      {
+        target_type: PROJECT_CONFIG_TARGET_TYPE,
+        target_id: String(projectId),
+        key: PROJECT_CONFIG_KEY_CLOUD_ANON_WRITE,
+        value: fullConfig.anonymousWriteEnabled,
+        raw_value: fullConfig.anonymousWriteEnabled ? "true" : "false",
+        updated_at: updates.find((item) => item.key === PROJECT_CONFIG_KEY_CLOUD_ANON_WRITE)?.updated_at ?? null,
       },
+      {
+        target_type: PROJECT_CONFIG_TARGET_TYPE,
+        target_id: String(projectId),
+        key: PROJECT_CONFIG_KEY_CLOUD_HISTORY_ENABLED,
+        value: fullConfig.historyEnabled,
+        raw_value: fullConfig.historyEnabled ? "true" : "false",
+        updated_at: updates.find((item) => item.key === PROJECT_CONFIG_KEY_CLOUD_HISTORY_ENABLED)?.updated_at ?? null,
+      },
+    ];
+
+    res.status(200).send({
+      status: "success",
+      message: "保存成功",
+      data: fullResponse,
     });
   } catch (err) {
     logger.error("Error updating project cloud config:", err);

@@ -8,6 +8,8 @@ import {verifyAccountToken} from "./auth/accountTokenService.js";
 const CLOUD_EVENT_TARGET_TYPE = "scratch_cloud";
 const TARGET_CONFIG_TYPE_PROJECT = "project";
 const TARGET_CONFIG_KEY_CLOUD_ANON_WRITE = "scratch.clouddata.anonymouswrite";
+const TARGET_CONFIG_KEY_CLOUD_HISTORY_ENABLED = "scratch.clouddata.history.enabled";
+const CLOUD_CONFIG_CACHE_TTL_SECONDS = 604800;
 const CLOUD_PREFIXES = ["☁ ", ":cloud: "];
 const CLOUD_MAX_NAME_LENGTH = 1024;
 const CLOUD_MAX_VALUE_LENGTH = 100000;
@@ -21,6 +23,7 @@ const rooms = new Map();
 
 const cloudVarsRedisKey = (projectId) => `scratch:cloud:${projectId}:vars`;
 const cloudSnapshotDbKey = (projectId) => `scratch:cloud:${projectId}:vars`;
+const cloudConfigRedisKey = (projectId) => `scratch:cloud:${projectId}:config`;
 
 class CloudWsError extends Error {
     constructor(code, message) {
@@ -144,19 +147,62 @@ const extractClientIpFromUpgradeRequest = (req) => {
     return normalizeIp(req.socket?.remoteAddress || "");
 };
 
-const getProjectAnonymousWriteEnabled = async (projectId) => {
-    const record = await prisma.ow_target_configs.findUnique({
+const parseCloudConfigCache = (raw) => {
+    if (!raw || typeof raw !== "object") return null;
+    const anonymousParsed = parseBooleanInput(raw.anonymousWriteEnabled);
+    const historyParsed = parseBooleanInput(raw.historyEnabled);
+    if (anonymousParsed === null || historyParsed === null) return null;
+    return {
+        anonymousWriteEnabled: anonymousParsed,
+        historyEnabled: historyParsed,
+    };
+};
+
+const loadCloudConfigFromDb = async (projectId) => {
+    const records = await prisma.ow_target_configs.findMany({
         where: {
-            target_type_target_id_key: {
-                target_type: TARGET_CONFIG_TYPE_PROJECT,
-                target_id: String(projectId),
-                key: TARGET_CONFIG_KEY_CLOUD_ANON_WRITE,
-            },
+            target_type: TARGET_CONFIG_TYPE_PROJECT,
+            target_id: String(projectId),
+            key: {in: [TARGET_CONFIG_KEY_CLOUD_ANON_WRITE, TARGET_CONFIG_KEY_CLOUD_HISTORY_ENABLED]},
         },
-        select: {value: true},
+        select: {key: true, value: true},
     });
-    const parsed = parseBooleanInput(record?.value);
-    return parsed === null ? false : parsed;
+    const recordMap = new Map(records.map((row) => [row.key, row.value]));
+    const anonymousParsed = parseBooleanInput(recordMap.get(TARGET_CONFIG_KEY_CLOUD_ANON_WRITE));
+    const historyParsed = parseBooleanInput(recordMap.get(TARGET_CONFIG_KEY_CLOUD_HISTORY_ENABLED));
+    return {
+        anonymousWriteEnabled: anonymousParsed === null ? false : anonymousParsed,
+        historyEnabled: historyParsed === null ? true : historyParsed,
+    };
+};
+
+const getProjectCloudConfig = async (projectId) => {
+    const cacheKey = cloudConfigRedisKey(projectId);
+    if (redisClient.client && redisClient.isConnected) {
+        try {
+            const cachedValue = await redisClient.client.hgetall(cacheKey);
+            const cachedConfig = parseCloudConfigCache(cachedValue);
+            if (cachedConfig) {
+                return cachedConfig;
+            }
+        } catch (error) {
+            logger.warn(`[cloud-config] 读取Redis缓存失败: ${cacheKey}`, error);
+        }
+    }
+
+    const config = await loadCloudConfigFromDb(projectId);
+    if (redisClient.client && redisClient.isConnected) {
+        try {
+            await redisClient.client.hset(cacheKey, {
+                anonymousWriteEnabled: config.anonymousWriteEnabled ? "true" : "false",
+                historyEnabled: config.historyEnabled ? "true" : "false",
+            });
+            await redisClient.client.expire(cacheKey, CLOUD_CONFIG_CACHE_TTL_SECONDS);
+        } catch (error) {
+            logger.warn(`[cloud-config] 写入Redis缓存失败: ${cacheKey}`, error);
+        }
+    }
+    return config;
 };
 
 const appendCloudHistory = async ({
@@ -353,7 +399,7 @@ const broadcastToOtherClients = (projectId, sourceWs, message) => {
     }
 };
 
-const processCloudWrite = async (project, ws, message) => {
+const processCloudWrite = async (project, ws, message, historyEnabled) => {
     const method = message.method;
     const vars = await loadCloudState(project);
     const username = ws.user.username;
@@ -383,15 +429,17 @@ const processCloudWrite = async (project, ws, message) => {
             value,
             user: username,
         });
-        await appendCloudHistory({
-            projectId: project.id,
-            method: "set",
-            name,
-            value,
-            actorId,
-            actorName,
-            ip: ws.ip,
-        });
+        if (historyEnabled) {
+            await appendCloudHistory({
+                projectId: project.id,
+                method: "set",
+                name,
+                value,
+                actorId,
+                actorName,
+                ip: ws.ip,
+            });
+        }
 
         return {
             id: event.id,
@@ -428,15 +476,17 @@ const processCloudWrite = async (project, ws, message) => {
             value: vars[newName],
             user: username,
         });
-        await appendCloudHistory({
-            projectId: project.id,
-            method: "rename",
-            name: oldName,
-            value: vars[newName],
-            actorId,
-            actorName,
-            ip: ws.ip,
-        });
+        if (historyEnabled) {
+            await appendCloudHistory({
+                projectId: project.id,
+                method: "rename",
+                name: oldName,
+                value: vars[newName],
+                actorId,
+                actorName,
+                ip: ws.ip,
+            });
+        }
 
         return {
             id: event.id,
@@ -466,14 +516,16 @@ const processCloudWrite = async (project, ws, message) => {
             name,
             user: username,
         });
-        await appendCloudHistory({
-            projectId: project.id,
-            method: "delete",
-            name,
-            actorId,
-            actorName,
-            ip: ws.ip,
-        });
+        if (historyEnabled) {
+            await appendCloudHistory({
+                projectId: project.id,
+                method: "delete",
+                name,
+                actorId,
+                actorName,
+                ip: ws.ip,
+            });
+        }
 
         return {
             id: event.id,
@@ -522,7 +574,7 @@ const handleHandshake = async (ws, message) => {
         if (project.state !== "public") {
             throw new CloudWsError(WS_CLOSE_PROJECT_UNAVAILABLE, "project unavailable");
         }
-        const anonymousWriteEnabled = await getProjectAnonymousWriteEnabled(project.id);
+        const {anonymousWriteEnabled} = await getProjectCloudConfig(project.id);
         if (!anonymousWriteEnabled) {
             throw new CloudWsError(WS_CLOSE_PROJECT_UNAVAILABLE, "anonymous disabled");
         }
@@ -573,7 +625,8 @@ const processRawMessage = async (ws, rawText) => {
             throw new CloudWsError(WS_CLOSE_ERROR, "handshake required");
         }
 
-        const update = await processCloudWrite(ws.project, ws, message);
+        const {historyEnabled} = await getProjectCloudConfig(ws.project.id);
+        const update = await processCloudWrite(ws.project, ws, message, historyEnabled);
         if (update?.broadcast) {
             broadcastToOtherClients(ws.project.id, ws, update.broadcast);
         }
