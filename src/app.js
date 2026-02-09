@@ -10,10 +10,10 @@ import zcconfigInstance from "./services/config/zcconfig.js";
 
 // 导入服务
 import geoIpService from "./services/ip/ipLocation.js";
-import schedulerService from "./services/scheduler.js";
 import errorHandlerService from "./services/errorHandler.js";
 import sitemapService from './services/sitemap.js';
 import codeRunManager from './services/coderunManager.js';
+import queueManager from './services/queue/queueManager.js';
 
 // 全局初始化标志，防止重复初始化
 global.appInitialized = global.appInitialized || false;
@@ -120,8 +120,10 @@ class Application {
                 logger.error('[app] 初始化MaxMind GeoIP失败:', error);
             });
 
-            // 初始化调度服务
-            schedulerService.initialize();
+            // 初始化BullMQ任务队列
+            await queueManager.initialize().catch(error => {
+                logger.error('[app] BullMQ初始化失败:', error);
+            });
 
             // Initialize CodeRunManager
             await codeRunManager.initialize();

@@ -38,9 +38,4 @@ class MemoryCache {
 // 创建单例实例
 const memoryCache = new MemoryCache();
 
-// 每小时清理一次过期的缓存项
-setInterval(() => {
-    memoryCache.cleanup();
-}, 3600000);
-
 export default memoryCache; 

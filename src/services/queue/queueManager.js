@@ -1,0 +1,156 @@
+import { createTransport } from 'nodemailer';
+import { createQueues, getEmailQueue, getScheduledTasksQueue } from './queues.js';
+import { createEmailWorker, getEmailWorker } from './workers/emailWorker.js';
+import { createScheduledTasksWorker, getScheduledTasksWorker } from './workers/scheduledTasksWorker.js';
+import { closeAll as closeAllConnections } from './redisConnectionFactory.js';
+import zcconfig from '../config/zcconfig.js';
+import logger from '../logger.js';
+
+let initialized = false;
+
+const queueManager = {
+    async initialize() {
+        const enabled = await zcconfig.get('bullmq.enabled');
+        if (enabled === false) {
+            logger.info('[queue-manager] BullMQ is disabled by configuration');
+            return;
+        }
+
+        try {
+            // Create queues
+            await createQueues();
+
+            // Create workers
+            await createEmailWorker();
+            await createScheduledTasksWorker();
+
+            // Register repeatable jobs
+            await this.registerRepeatableJobs();
+
+            initialized = true;
+            logger.info('[queue-manager] BullMQ initialized successfully');
+        } catch (error) {
+            logger.error('[queue-manager] BullMQ initialization failed:', error);
+            throw error;
+        }
+    },
+
+    async registerRepeatableJobs() {
+        const scheduledQueue = getScheduledTasksQueue();
+        if (!scheduledQueue) return;
+
+        // hourly-cleanup: every hour
+        await scheduledQueue.upsertJobScheduler(
+            'hourly-cleanup',
+            { every: 3600000 },
+            { name: 'hourly-cleanup', data: {} }
+        );
+
+        // daily-stats: every 24 hours
+        await scheduledQueue.upsertJobScheduler(
+            'daily-stats',
+            { every: 86400000 },
+            { name: 'daily-stats', data: {} }
+        );
+
+        // memory-cache-cleanup: every hour
+        await scheduledQueue.upsertJobScheduler(
+            'memory-cache-cleanup',
+            { every: 3600000 },
+            { name: 'memory-cache-cleanup', data: {} }
+        );
+
+        // sitemap-auto-update: every 24 hours
+        await scheduledQueue.upsertJobScheduler(
+            'sitemap-auto-update',
+            { every: 86400000 },
+            { name: 'sitemap-auto-update', data: {} }
+        );
+
+        logger.info('[queue-manager] Repeatable jobs registered');
+    },
+
+    async enqueueEmail(to, subject, html, options = {}) {
+        const emailQueue = getEmailQueue();
+        if (!emailQueue || !initialized) {
+            logger.warn('[queue-manager] Queue not initialized, sending email directly');
+            return this._sendEmailDirect(to, subject, html);
+        }
+
+        try {
+            const maxRetries = await zcconfig.get('bullmq.email.maxRetries') || 3;
+            const retryDelay = await zcconfig.get('bullmq.email.retryDelay') || 60000;
+
+            const job = await emailQueue.add('send-email', { to, subject, html }, {
+                attempts: maxRetries,
+                backoff: {
+                    type: 'exponential',
+                    delay: retryDelay,
+                },
+                ...options,
+            });
+
+            logger.info(`[queue-manager] Email job ${job.id} enqueued for ${to}`);
+            return { jobId: job.id, queued: true };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue email, sending directly:', error.message);
+            return this._sendEmailDirect(to, subject, html);
+        }
+    },
+
+    async _sendEmailDirect(to, subject, html) {
+        const host = await zcconfig.get('mail.host');
+        const port = await zcconfig.get('mail.port');
+        const secure = await zcconfig.get('mail.secure');
+        const user = await zcconfig.get('mail.auth.user');
+        const pass = await zcconfig.get('mail.auth.pass');
+        const fromName = await zcconfig.get('mail.from_name');
+        const fromAddress = await zcconfig.get('mail.from_address');
+
+        if (!host || !port || !user || !pass) {
+            throw new Error('Email service is not available or not properly configured');
+        }
+
+        const transporter = createTransport({ host, port, secure, auth: { user, pass } });
+        const from = fromName ? `${fromName} <${fromAddress}>` : fromAddress;
+
+        await transporter.sendMail({ from, to, subject, html });
+        return { queued: false, sentDirectly: true };
+    },
+
+    async shutdown() {
+        if (!initialized) return;
+
+        logger.info('[queue-manager] Shutting down BullMQ...');
+
+        try {
+            // Close workers first
+            const emailWorker = getEmailWorker();
+            const scheduledWorker = getScheduledTasksWorker();
+
+            if (emailWorker) await emailWorker.close();
+            if (scheduledWorker) await scheduledWorker.close();
+
+            // Close queues
+            const emailQueue = getEmailQueue();
+            const scheduledQueue = getScheduledTasksQueue();
+
+            if (emailQueue) await emailQueue.close();
+            if (scheduledQueue) await scheduledQueue.close();
+
+            // Close redis connections
+            await closeAllConnections();
+
+            initialized = false;
+            logger.info('[queue-manager] BullMQ shut down successfully');
+        } catch (error) {
+            logger.error('[queue-manager] Error during shutdown:', error);
+        }
+    },
+
+    isInitialized() {
+        return initialized;
+    },
+};
+
+export default queueManager;

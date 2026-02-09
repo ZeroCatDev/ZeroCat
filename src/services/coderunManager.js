@@ -1,7 +1,6 @@
 import {prisma} from "./prisma.js";
 import zcconfig from "./config/zcconfig.js";
 import logger from "./logger.js";
-import schedulerService from "./scheduler.js";
 import {set} from "./cachekv.js";
 
 class CodeRunManager {
@@ -38,26 +37,10 @@ class CodeRunManager {
             logger.error('[CodeRunManager] Error loading active devices:', error);
         }
 
-        // Get report interval from config
-        const reportInterval = await zcconfig.get(
-            "coderun.report_interval",
-        ); // Default 5 min
-        const checkInterval = reportInterval * 1.5;
-
-        // Register scheduler task
-        schedulerService.registerTask("coderun-status-check", {
-            interval: checkInterval,
-            handler: async () => this.checkInactiveRunners(),
-            runImmediately: true,
-        });
-
         // Update cache after initialization
         await this.updateCache();
 
-        logger.info(
-            "[CodeRunManager] Initialized with check interval:",
-            checkInterval
-        );
+        logger.info("[CodeRunManager] Initialized");
     }
 
     async updateRunnerStatus(runnerId, status) {

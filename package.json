@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.826.0",
+    "@bull-board/api": "^6.17.0",
+    "@bull-board/express": "^6.17.0",
     "@maxmind/geoip2-node": "^6.1.0",
     "@prisma/adapter-pg": "^7.3.0",
     "@prisma/client": "^7.3.0",
@@ -25,6 +27,7 @@
     "base64url": "^3.0.1",
     "bcrypt": "^6.0.0",
     "body-parser": "^2.2.0",
+    "bullmq": "^5.67.3",
     "compression": "^1.8.0",
     "connect-multiparty": "^2.2.0",
     "cookie-parser": "^1.4.7",

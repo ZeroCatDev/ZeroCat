@@ -2,6 +2,7 @@ import expressWinston from 'express-winston';
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import compress from 'compression';
+import cookieParser from 'cookie-parser';
 import logger from './services/logger.js';
 import zcconfig from './services/config/zcconfig.js';
 import ipMiddleware from './middleware/ipMiddleware.js';
@@ -133,6 +134,9 @@ export async function configureMiddleware(app) {
 
     // 压缩中间件
     app.use(compress());
+
+    // Cookie 解析中间件
+    app.use(cookieParser());
 
     // 认证中间件 - 使用动态导入避免循环依赖
     app.use(async (req, res, next) => {

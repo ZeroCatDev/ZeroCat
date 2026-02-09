@@ -4,7 +4,10 @@
       "Bash(npm install:*)",
       "Bash(pnpm add:*)",
       "Bash(mkdir:*)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(dir:*)",
+      "Bash(ls -la \"D:\\\\ZeroCat\\\\ZeroCat\\\\src\\\\public\"\" 2>/dev/null || echo \"No public directory \")",
+      "Bash(node -e:*)"
     ],
     "deny": []
   }

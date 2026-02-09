@@ -11,6 +11,7 @@ import logger from './src/services/logger.js';
 import {serverConfig} from './src/index.js';
 import {execSync} from 'child_process';
 import fs from 'fs';
+import queueManager from './src/services/queue/queueManager.js';
 
 // 定义需要检查的目录列表
 const REQUIRED_DIRECTORIES = [
@@ -134,6 +135,9 @@ async function gracefulShutdown() {
             logger.error('[server] 关闭超时，强制退出');
             process.exit(1);
         }, 15000);
+
+        // 关闭BullMQ队列
+        await queueManager.shutdown();
 
         // 关闭服务器
         await serverConfig.stop();

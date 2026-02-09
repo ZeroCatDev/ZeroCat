@@ -12,6 +12,21 @@ import sitemapService from '../services/sitemap.js';
 import zcconfig from '../services/config/zcconfig.js';
 
 const router = Router();
+
+// 在 needAdmin 之前：接收 query token 写入 cookie 后跳转面板
+router.get('/queues/auth', (req, res) => {
+    const { token } = req.query;
+    if (!token) {
+        return res.status(400).json({ status: 'error', message: 'Missing token parameter' });
+    }
+    res.cookie('token', token, {
+        httpOnly: true,
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+    res.redirect('/admin/queues');
+});
+
 router.use(needAdmin);
 /**
  * Admin Router
@@ -31,6 +46,25 @@ router.use("/projects", projectsRouter);
 router.use("/coderun", coderunRouter);
 router.use("/extensions", extensionsRouter);
 router.use("/notifications", notificationsRouter);
+
+// BullMQ Dashboard
+router.use("/queues", async (req, res, next) => {
+    try {
+        const dashboardEnabled = await zcconfig.get('bullmq.dashboard.enabled');
+        if (!dashboardEnabled) {
+            return res.status(404).json({ status: 'error', message: 'Dashboard is disabled' });
+        }
+        const { getDashboardRouter } = await import('../services/queue/dashboard.js');
+        const dashboardRouter = getDashboardRouter();
+        if (!dashboardRouter) {
+            return res.status(503).json({ status: 'error', message: 'Queue dashboard not available' });
+        }
+        dashboardRouter(req, res, next);
+    } catch (error) {
+        logger.error('[admin] Error loading queue dashboard:', error);
+        res.status(500).json({ status: 'error', message: 'Failed to load dashboard' });
+    }
+});
 
 // ==================== 通知管理页面 ====================
 

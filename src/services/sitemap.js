@@ -5,12 +5,10 @@ import {createGzip} from 'zlib';
 import {prisma} from './prisma.js';
 import logger from './logger.js';
 import zcconfig from './config/zcconfig.js';
-import schedulerService from './scheduler.js';
 
 class SitemapService {
     constructor() {
         this.isGenerating = false;
-        this.TASK_ID = 'sitemap-auto-update';
     }
 
     async initialize() {
@@ -20,36 +18,7 @@ class SitemapService {
             return;
         }
 
-        const autoUpdate = await zcconfig.get('sitemap.auto_update');
-        if (autoUpdate) {
-            await this.setupAutoUpdate();
-        }
-
         logger.info('[sitemap] Sitemap service initialized');
-    }
-
-    async setupAutoUpdate() {
-        // 移除旧任务（如果存在）
-        schedulerService.removeTask(this.TASK_ID);
-
-        const updateCron = await zcconfig.get('sitemap.update_cron');
-        // 将cron表达式转换为毫秒间隔（这里简化处理，使用24小时）
-        const interval = 24 * 60 * 60 * 1000; // 24小时
-
-        // 注册新任务
-        schedulerService.registerTask(this.TASK_ID, {
-            interval: interval,
-            handler: async () => {
-                try {
-                    await this.generateIncrementalSitemap();
-                } catch (error) {
-                    logger.error('[sitemap] 自动更新任务错误:', error);
-                }
-            },
-            runImmediately: false
-        });
-
-        logger.info(`[sitemap] 自动更新任务已设置，间隔: ${interval}ms`);
     }
 
     async getUrls() {
@@ -109,10 +78,6 @@ class SitemapService {
                     lastmod: user.loginTime
                 });
             }
-
-            // TODO: 添加其他动态URL
-            // 例如：标签页、搜索页、分类页等
-            // 需要根据实际业务逻辑添加
 
         } catch (error) {
             logger.error('[sitemap] Error collecting URLs:', error);
@@ -217,7 +182,6 @@ class SitemapService {
             lastFullUpdate,
             lastIncrementalUpdate,
             isGenerating: this.isGenerating,
-            isTaskScheduled: schedulerService.isTaskRunning(this.TASK_ID)
         };
     }
 }

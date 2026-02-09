@@ -64,7 +64,7 @@ const initializeTransporter = async () => {
     }
 };
 
-const sendEmail = async (to, subject, html) => {
+const sendEmailDirect = async (to, subject, html) => {
     try {
         if (!transporter) {
             const initialized = await initializeTransporter();
@@ -92,9 +92,22 @@ const sendEmail = async (to, subject, html) => {
     }
 };
 
+const sendEmail = async (to, subject, html) => {
+    try {
+        const { default: queueManager } = await import('../queue/queueManager.js');
+        if (queueManager.isInitialized()) {
+            return await queueManager.enqueueEmail(to, subject, html);
+        }
+    } catch (error) {
+        logger.warn("[email] 通过队列发送失败，回退到直接发送:", error.message);
+    }
+
+    return sendEmailDirect(to, subject, html);
+};
+
 // Initialize email service when the module is loaded
 initializeTransporter().catch(error => {
     logger.error("[email] 模块加载时初始化邮件服务失败:", error);
 });
 
-export {sendEmail};
+export {sendEmail, sendEmailDirect};

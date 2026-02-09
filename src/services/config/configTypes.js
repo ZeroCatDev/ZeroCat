@@ -570,6 +570,53 @@ export const CONFIG_TYPES = {
         description: "WebAuthn RP Origins",
         public: true,
     },
+    // BullMQ Configuration
+    "bullmq.enabled": {
+        type: "boolean",
+        required: false,
+        default: true,
+        description: "是否启用BullMQ任务队列",
+        transform: typeTransformers.boolean,
+    },
+    "bullmq.redis.db": {
+        type: "number",
+        required: false,
+        default: 0,
+        description: "BullMQ使用的Redis数据库编号",
+        transform: typeTransformers.number,
+        validate: (value) => value >= 0 && value <= 15,
+    },
+    "bullmq.email.concurrency": {
+        type: "number",
+        required: false,
+        default: 3,
+        description: "邮件Worker并发数",
+        transform: typeTransformers.number,
+        validate: (value) => value > 0 && value <= 20,
+    },
+    "bullmq.email.maxRetries": {
+        type: "number",
+        required: false,
+        default: 3,
+        description: "邮件失败最大重试次数",
+        transform: typeTransformers.number,
+        validate: (value) => value >= 0 && value <= 10,
+    },
+    "bullmq.email.retryDelay": {
+        type: "number",
+        required: false,
+        default: 60000,
+        description: "邮件重试基础延迟(ms)",
+        transform: typeTransformers.number,
+        validate: (value) => value >= 1000,
+    },
+    "bullmq.dashboard.enabled": {
+        type: "boolean",
+        required: false,
+        default: true,
+        description: "是否启用BullMQ仪表板",
+        transform: typeTransformers.boolean,
+    },
 };
 
 // 从数据库加载的动态配置
