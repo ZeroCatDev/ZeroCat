@@ -15,9 +15,11 @@ class SitemapService {
         const enabled = await zcconfig.get('sitemap.enabled');
         if (!enabled) {
             logger.info('[sitemap] Sitemap service is disabled');
+            await this.syncQueueSchedule();
             return;
         }
 
+        await this.syncQueueSchedule();
         logger.info('[sitemap] Sitemap service initialized');
     }
 
@@ -183,6 +185,17 @@ class SitemapService {
             lastIncrementalUpdate,
             isGenerating: this.isGenerating,
         };
+    }
+
+    async syncQueueSchedule() {
+        try {
+            const { default: queueManager } = await import('./queue/queueManager.js');
+            if (queueManager.isInitialized()) {
+                await queueManager.registerRepeatableJobs();
+            }
+        } catch (error) {
+            logger.warn('[sitemap] Failed to sync queue schedule:', error.message);
+        }
     }
 }
 

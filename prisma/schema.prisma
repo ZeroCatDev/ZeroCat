@@ -744,6 +744,7 @@ model ow_scratch_extensions {
   project        ow_projects?  @relation("ProjectExtensions", fields: [projectid], references: [id], onDelete: SetNull, onUpdate: SetNull)
   sample_project ow_projects? @relation("SampleProject", fields: [samples], references: [id], onDelete: SetNull, onUpdate: SetNull)
 
+  @@unique([projectid])
   @@index([projectid])
   @@index([status])
   @@index([samples])

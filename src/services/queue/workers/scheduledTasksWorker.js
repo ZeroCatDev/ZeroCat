@@ -23,6 +23,42 @@ taskHandlers.set('memory-cache-cleanup', async (data, job) => {
     await job.log('Memory cache cleanup done');
 });
 
+taskHandlers.set('extension-sync', async (data, job) => {
+    await job.log('Executing extension sync');
+    try {
+        const { getAllApprovedProjectIds } = await import('../../extensionReview.js');
+        const { prisma } = await import('../../prisma.js');
+        const approvedIds = await getAllApprovedProjectIds();
+        await job.log(`Found ${approvedIds.length} approved extensions`);
+
+        let synced = 0;
+        for (const projectId of approvedIds) {
+            const project = await prisma.ow_projects.findUnique({
+                where: { id: projectId },
+            });
+            if (!project) continue;
+
+            await prisma.ow_scratch_extensions.upsert({
+                where: { projectid: projectId },
+                update: { status: 'verified', commit: 'latest' },
+                create: {
+                    projectid: projectId,
+                    status: 'verified',
+                    commit: 'latest',
+                    branch: project.default_branch || '',
+                    image: '',
+                },
+            });
+            synced++;
+        }
+
+        await job.log(`Synced ${synced} extensions`);
+    } catch (err) {
+        await job.log(`ERROR: extension-sync failed: ${err.message}`);
+        throw err;
+    }
+});
+
 taskHandlers.set('sitemap-auto-update', async (data, job) => {
     await job.log('Executing sitemap auto update');
     try {

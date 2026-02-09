@@ -4,6 +4,7 @@ import { Router } from "express";
 import { prisma } from "../services/prisma.js";
 import { needLogin } from "../middleware/auth.js";
 import { hasProjectPermission } from "../services/auth/permissionManager.js";
+import { setReviewStatus, isAutoApproveUser } from "../services/extensionReview.js";
 
 const router = Router();
 let s3staticurl=await zcconfig.get("s3.staticurl");
@@ -135,6 +136,20 @@ router.post("/manager/create", needLogin, async (req, res, next) => {
         status: "developing",
       },
     });
+
+    // Check if user is in auto-approve list
+    const user = await prisma.ow_users.findUnique({
+      where: { id: res.locals.userid },
+      select: { username: true },
+    });
+    if (user && await isAutoApproveUser(user.username)) {
+      await setReviewStatus(projectid, "approved");
+      await prisma.ow_scratch_extensions.update({
+        where: { id: extension.id },
+        data: { status: "verified" },
+      });
+      extension.status = "verified";
+    }
 
     res.status(200).send({
       status: "success",
@@ -334,6 +349,28 @@ router.post("/manager/submit/:id", needLogin, async (req, res, next) => {
         message: "仅开发中的扩展可以提交审核",
       });
     }
+
+    // Check if user is in auto-approve list
+    const user = await prisma.ow_users.findUnique({
+      where: { id: res.locals.userid },
+      select: { username: true },
+    });
+    const autoApproved = user && await isAutoApproveUser(user.username);
+
+    if (autoApproved) {
+      await setReviewStatus(extension.projectid, "approved");
+      const updated = await prisma.ow_scratch_extensions.update({
+        where: { id: Number(id) },
+        data: { status: "verified" },
+      });
+      return res.status(200).send({
+        status: "success",
+        message: "扩展已自动通过审核",
+        data: updated,
+      });
+    }
+
+    await setReviewStatus(extension.projectid, "pending");
     const updated = await prisma.ow_scratch_extensions.update({
       where: { id: Number(id) },
       data: { status: "pending" },
@@ -572,6 +609,87 @@ router.get("/detailbyprojectid/:id", async (req, res, next) => {
   }
 });
 
+// 批量扩展详情查询接口 - 仅返回可见扩展信息，并标记是否已验证
+router.post("/detail/batch", needLogin, async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).send({
+        status: "error",
+        message: "缺少扩展ID列表",
+      });
+    }
+
+    const numericIds = ids
+      .map((id) => Number(id))
+      .filter((id) => Number.isFinite(id));
+
+    if (numericIds.length === 0) {
+      return res.status(400).send({
+        status: "error",
+        message: "扩展ID列表无效",
+      });
+    }
+
+    const extensions = await prisma.ow_scratch_extensions.findMany({
+      where: { id: { in: numericIds } },
+      include: {
+        project: {
+          select: {
+            id: true,
+            name: true,
+            title: true,
+            description: true,
+            authorid: true,
+            author: {
+              select: { id: true, username: true, display_name: true, avatar: true },
+            },
+          },
+        },
+        sample_project: {
+          select: {
+            id: true,
+            name: true,
+            title: true,
+          },
+        },
+      },
+    });
+
+    const extensionMap = new Map(
+      extensions.map((ext) => [ext.id, ext])
+    );
+
+    const data = numericIds.map((id) => {
+      const ext = extensionMap.get(id);
+      if (!ext) {
+        return { id, exists: false, verified: false };
+      }
+
+      const isVerified = ext.status === "verified";
+
+      return {
+        id,
+        exists: true,
+        verified: isVerified,
+        data: ext,
+      };
+    });
+
+    res.status(200).send({
+      status: "success",
+      data,
+    });
+  } catch (err) {
+    logger.error("Error getting batch extension detail:", err);
+    res.status(500).send({
+      status: "error",
+      message: "批量获取扩展详情时出错",
+    });
+  }
+});
+
 
 router.get("/", async (req, res, next) => {
   try {
@@ -603,12 +721,13 @@ router.get("/", async (req, res, next) => {
     });
 
     const formattedExtensions = extensions.map((ext) => {
+      logger.debug(ext)
       const result = {
         slug: String(ext.id),
         id: String(ext.id),
         name: ext.project.title,
         description: ext.project.description,
-        image: `${s3staticurl}/assets/${ext.image.substring(0, 2)}/${ext.image.substring(2, 4)}/${ext.image}.webp`,
+        image: `${s3staticurl}/assets/${ext.project.thumbnail.substring(0, 2)}/${ext.project.thumbnail.substring(2, 4)}/${ext.project.thumbnail}`,
         by: [
           {
             name: ext.project.author.display_name,
@@ -651,7 +770,6 @@ router.get("/{:id}.js", async (req, res, next) => {
     let extension = await prisma.ow_scratch_extensions.findFirst({
       where: { id: Number(id) },
       select: {
-        status: true,
         branch: true,
         commit: true,
         project: {
@@ -662,10 +780,10 @@ router.get("/{:id}.js", async (req, res, next) => {
         },
       },
     });
-    if (extension.status !== "verified"&&extension.status !== "approved") {
+    if (!extension) {
       return res.status(404).send({
         status: "error",
-        message: "扩展未审核",
+        message: "扩展不存在",
       });
     }
     if (extension.branch == "") {

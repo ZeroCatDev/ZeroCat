@@ -1,6 +1,7 @@
 import {Router} from "express";
 import {prisma} from "../../services/prisma.js";
 import logger from "../../services/logger.js";
+import { setReviewStatus, getAutoApproveUsers, setAutoApproveUsers } from "../../services/extensionReview.js";
 
 const router = Router();
 
@@ -120,6 +121,57 @@ router.get("/", async (req, res) => {
         });
     } catch (error) {
         logger.error("Error fetching extensions:", error);
+        res.status(500).json({error: "Internal server error"});
+    }
+});
+
+/**
+ * @api {get} /admin/extensions/auto-approve-users Get auto-approve users
+ * @apiName GetAutoApproveUsers
+ * @apiGroup AdminExtensions
+ * @apiPermission admin
+ *
+ * @apiSuccess {String[]} data List of usernames that are auto-approved
+ */
+router.get("/auto-approve-users", async (req, res) => {
+    try {
+        const usernames = await getAutoApproveUsers();
+        res.json({
+            status: "success",
+            data: usernames,
+        });
+    } catch (error) {
+        logger.error("Error fetching auto-approve users:", error);
+        res.status(500).json({error: "Internal server error"});
+    }
+});
+
+/**
+ * @api {put} /admin/extensions/auto-approve-users Update auto-approve users
+ * @apiName UpdateAutoApproveUsers
+ * @apiGroup AdminExtensions
+ * @apiPermission admin
+ *
+ * @apiBody {String[]} usernames List of usernames to auto-approve
+ *
+ * @apiSuccess {String[]} data Updated list of usernames
+ */
+router.put("/auto-approve-users", async (req, res) => {
+    try {
+        const {usernames} = req.body;
+        if (!Array.isArray(usernames)) {
+            return res.status(400).json({
+                error: "usernames must be an array",
+            });
+        }
+        await setAutoApproveUsers(usernames);
+        res.json({
+            status: "success",
+            message: "Auto-approve users updated successfully",
+            data: usernames,
+        });
+    } catch (error) {
+        logger.error("Error updating auto-approve users:", error);
         res.status(500).json({error: "Internal server error"});
     }
 });
@@ -506,6 +558,11 @@ router.post("/:id/approve", async (req, res) => {
             });
         }
 
+        // Write review status to ow_target_configs
+        if (extension.projectid) {
+            await setReviewStatus(extension.projectid, "approved");
+        }
+
         const updatedExtension = await prisma.ow_scratch_extensions.update({
             where: {id: parseInt(id)},
             data: {status: "verified"},
@@ -565,6 +622,11 @@ router.post("/:id/reject", async (req, res) => {
             return res.status(400).json({
                 error: "Extension is already rejected",
             });
+        }
+
+        // Write review status to ow_target_configs
+        if (extension.projectid) {
+            await setReviewStatus(extension.projectid, "rejected", reason);
         }
 
         const updatedExtension = await prisma.ow_scratch_extensions.update({

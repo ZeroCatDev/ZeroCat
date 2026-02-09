@@ -1363,6 +1363,164 @@ const ResourceLoadTracker = {
   },
 };
 
+async function checkExtensionVerification(projectData) {
+  try {
+    const extensionURLs = projectData?.extensionURLs;
+    if (!extensionURLs || typeof extensionURLs !== 'object') return true;
+
+    const apiPrefix = ZCConfig.api.url;
+    const extIdRegex = /\/extensions\/(\d+)\.js$/;
+    const ids = [];
+
+    for (const [key, url] of Object.entries(extensionURLs)) {
+      if (typeof url === 'string' && url.startsWith(apiPrefix)) {
+        const match = url.match(extIdRegex);
+        if (match) ids.push(Number(match[1]));
+      }
+    }
+
+    if (ids.length === 0) return true;
+
+    const response = await apiRequest({
+      url: ZCConfig.api.getPath("/extensions/detail/batch"),
+      type: "POST",
+      data: JSON.stringify({ ids }),
+      contentType: "application/json",
+    });
+
+    const unverified = (response.data || []).filter(item => !item.verified);
+    if (unverified.length === 0) return true;
+
+    const extList = unverified.map(item => {
+      if (item.exists && item.data?.project?.title) {
+        return `${item.data.project.title} (ID: ${item.id})`;
+      }
+      return `扩展 ID: ${item.id}`;
+    }).join('\n');
+
+    try {
+      await mdui.confirm({
+        headline: "扩展安全提示",
+        description: `以下扩展未经验证，可能存在安全风险：\n\n${extList}\n\n是否仍然继续加载？`,
+        confirmText: "继续加载",
+        cancelText: "取消",
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  } catch (error) {
+    console.error("Extension verification check failed:", error);
+    return true;
+  }
+}
+
+async function extractInlineExtensions(projectJsonStr) {
+  try {
+    const projectData = JSON.parse(projectJsonStr);
+    const extensionURLs = projectData?.extensionURLs;
+    if (!extensionURLs || typeof extensionURLs !== 'object') return projectJsonStr;
+
+    const inlineKeys = Object.entries(extensionURLs)
+      .filter(([, url]) => typeof url === 'string' && url.startsWith('data:text/javascript;base64,'))
+      .map(([key]) => key);
+
+    if (inlineKeys.length === 0) return projectJsonStr;
+
+    try {
+      await mdui.confirm({
+        headline: "检测到内联扩展",
+        description: "作品包含内联 JavaScript 扩展代码，是否将其自动上传为扩展项目？点击「取消」将不会保存。",
+        confirmText: "确认上传",
+        cancelText: "取消",
+      });
+    } catch {
+      return null;
+    }
+
+    for (const key of inlineKeys) {
+      const dataUrl = extensionURLs[key];
+      const base64 = dataUrl.replace('data:text/javascript;base64,', '');
+      const jsSource = new TextDecoder().decode(Uint8Array.from(atob(base64), c => c.charCodeAt(0)));
+
+      const randomSuffix = Math.floor(Math.random() * 900000) + 100000;
+      const createResponse = await apiRequest({
+        url: ZCConfig.api.getPath("/project/"),
+        type: "POST",
+        data: JSON.stringify({
+          name: `${key}_${randomSuffix}`,
+          title: key,
+          type: "scratch-extension",
+          state: "public",
+          description: `由作品「${projectinfo?.title || _pid}」(ID: ${_pid}) 自动创建的扩展`,
+        }),
+        contentType: "application/json",
+      });
+
+      const newProjectId = createResponse.id;
+      if (!newProjectId) {
+        throw new Error(createResponse.message || "创建扩展项目失败");
+      }
+
+      const initResponse = await apiRequest({
+        url: `${ZCConfig.api.getPath("/project/initlize")}?projectid=${newProjectId}&type=text`,
+        type: "POST",
+      });
+      if (initResponse.status === "error") {
+        throw new Error(initResponse.message || "初始化项目失败");
+      }
+
+      const saveResponse = await apiRequest({
+        url: ZCConfig.api.getPath("/project/savefile"),
+        type: "POST",
+        data: jsSource,
+        contentType: "text/plain; charset=UTF-8",
+        processData: false,
+      });
+      if (!saveResponse.accessFileToken) {
+        throw new Error(saveResponse.message || "保存扩展源码失败");
+      }
+
+      const accessFileToken = saveResponse.accessFileToken;
+
+      const commitResponse = await apiRequest({
+        url: `${ZCConfig.api.getPath("/project/commit/id/")}${newProjectId}`,
+        type: "PUT",
+        data: JSON.stringify({
+          projectid: newProjectId,
+          branch: "main",
+          accessFileToken,
+          message: "自动上传内联扩展",
+        }),
+        contentType: "application/json",
+      });
+      if (commitResponse.status === "error") {
+        throw new Error(commitResponse.message || "提交扩展失败");
+      }
+
+      const extResponse = await apiRequest({
+        url: ZCConfig.api.getPath("/extensions/manager/create"),
+        type: "POST",
+        data: JSON.stringify({
+          projectid: newProjectId,
+          branch: "main",
+        }),
+        contentType: "application/json",
+      });
+
+      const extId = extResponse.data.id;
+      extensionURLs[key] = `${ZCConfig.api.url}/extensions/${extId}.js`;
+    }
+
+    showSnackbar(`已成功创建 ${inlineKeys.length} 个扩展项目`);
+    return JSON.stringify(projectData);
+  } catch (error) {
+    console.error("Error extracting inline extensions:", error);
+    showSnackbar(`提取内联扩展失败: ${error.responseJSON?.message || error.message || error.statusText}`);
+    return null;
+  }
+}
+
 function countProjectAssets(projectData) {
   const targets = Array.isArray(projectData?.targets) ? projectData.targets : [];
   let total = 0;
@@ -1461,6 +1619,14 @@ async function downloadAndLoadProject(pid) {
     updateLoadingDescription("正在解析项目数据...");
     // The response is the file content itself, not a JSON object containing it
     const projectData = JSON.parse(fileResponse);
+
+    const canContinue = await checkExtensionVerification(projectData);
+    if (!canContinue) {
+      if (loadingDialog) loadingDialog.open = false;
+      isLoading = false;
+      return;
+    }
+
     const totalAssets = countProjectAssets(projectData);
     ResourceLoadTracker.start(totalAssets);
     await zcvm.loadProject(projectData);
@@ -1661,6 +1827,13 @@ async function commitProject() {
     }
 
     projectjson = currentProjectJson;
+
+    const processedJson = await extractInlineExtensions(projectjson);
+    if (processedJson === null) {
+      setButton("save-button", "保存", () => openCommitDialog());
+      return;
+    }
+    projectjson = processedJson;
 
     const saveResponse = await apiRequest({
       url: `${ZCConfig.api.getPath("/project/savefile")}?json=true`,

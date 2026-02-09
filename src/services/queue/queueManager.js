@@ -95,6 +95,14 @@ const queueManager = {
             { name: 'sitemap-auto-update', data: {} }
         );
 
+        // extension-sync: every 5 minutes
+        await upsertOrRemove(
+            'extension-sync',
+            true,
+            { every: 300000 },
+            { name: 'extension-sync', data: {} }
+        );
+
         logger.info('[queue-manager] Repeatable jobs synchronized');
     },
 
