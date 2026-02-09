@@ -1,6 +1,8 @@
 import { prisma } from "../services/prisma.js";
+import twitterText from "twitter-text";
 import { createNotification } from "./notifications.js";
 import zcconfig from "../services/config/zcconfig.js";
+import logger from "../services/logger.js";
 
 const POST_CHAR_LIMIT = 280;
 const MAX_MEDIA_COUNT = 4;
@@ -30,7 +32,6 @@ function dedupeMediaIds(mediaIds) {
   return [...new Set(mediaIds.map((id) => Number(id)))];
 }
 
-const URL_WEIGHT = 23;
 const EMBED_TYPES = ["project", "list", "user", "url"];
 
 function validateEmbed(embed) {
@@ -58,11 +59,16 @@ function validateEmbed(embed) {
 
 function countPostCharacters(content = "") {
   if (!content) return 0;
-  const urlRegex = /(https?:\/\/[^\s]+)/gi;
-  const urls = content.match(urlRegex) || [];
-  const contentWithoutUrls = content.replace(urlRegex, "");
-  const otherLength = Array.from(contentWithoutUrls).length;
-  return urls.length * URL_WEIGHT + otherLength;
+  return twitterText.parseTweet(content).weightedLength;
+}
+
+function analyzePostContent(content = "") {
+  const tweet = twitterText.parseTweet(content || "");
+  logger.debug(tweet);
+  return {
+    characterCount: tweet.weightedLength,
+    valid: tweet.valid,
+  };
 }
 
 function extractMentionUsernames(content = "") {
@@ -304,13 +310,14 @@ export async function createPost({ authorId, content, mediaIds = [], embed }) {
   // 去重 mediaIds
   const uniqueMediaIds = dedupeMediaIds(mediaIds);
 
-  const characterCount = countPostCharacters(content);
+  const { characterCount, valid } = analyzePostContent(content);
   if (!content || characterCount === 0) {
     throw new Error("内容不能为空");
   }
-  if (characterCount > POST_CHAR_LIMIT) {
+  if (!valid) {
     throw new Error("内容超过字数限制");
   }
+
   if (uniqueMediaIds.length > MAX_MEDIA_COUNT) {
     throw new Error(`最多只能上传${MAX_MEDIA_COUNT}张图片`);
   }
@@ -390,11 +397,11 @@ export async function replyToPost({
     throw new Error("目标推文不存在");
   }
 
-  const characterCount = countPostCharacters(content);
+  const { characterCount, valid } = analyzePostContent(content);
   if (!content || characterCount === 0) {
     throw new Error("内容不能为空");
   }
-  if (characterCount > POST_CHAR_LIMIT) {
+  if (!valid) {
     throw new Error("内容超过字数限制");
   }
   if (uniqueMediaIds.length > MAX_MEDIA_COUNT) {
@@ -586,11 +593,11 @@ export async function quotePost({
     throw new Error("目标推文不存在");
   }
 
-  const characterCount = countPostCharacters(content);
+  const { characterCount, valid } = analyzePostContent(content);
   if (!content || characterCount === 0) {
     throw new Error("内容不能为空");
   }
-  if (characterCount > POST_CHAR_LIMIT) {
+  if (!valid) {
     throw new Error("内容超过字数限制");
   }
   if (uniqueMediaIds.length > MAX_MEDIA_COUNT) {

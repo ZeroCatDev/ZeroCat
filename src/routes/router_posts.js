@@ -27,8 +27,6 @@ import {
   getUserMediaPosts,
   getUserLikedPosts,
   getUserBookmarks,
-  countPostCharacters,
-  POST_CHAR_LIMIT,
   MAX_MEDIA_COUNT,
 } from "../controllers/posts.js";
 import { handleAssetUpload, validateFileTypeFromContent } from "../services/assets.js";
@@ -365,19 +363,6 @@ router.get("/thread/:id", async (req, res) => {
   } catch (error) {
     logger.error("获取线程失败:", error);
     res.status(500).json({ status: "error", message: "获取线程失败" });
-  }
-});
-
-router.post("/count", async (req, res) => {
-  try {
-    const { content = "" } = req.body;
-    const count = countPostCharacters(content);
-    res.status(200).json({
-      status: "success",
-      data: { count, limit: POST_CHAR_LIMIT, remaining: POST_CHAR_LIMIT - count },
-    });
-  } catch (error) {
-    res.status(500).json({ status: "error", message: "计算失败" });
   }
 });
 

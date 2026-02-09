@@ -24,6 +24,24 @@ const App = {
   initialize: async function () {
     try {
       loadStyle(ZCConfig.frontend.getPath("/scratchtool/mdui.css"));
+
+      // 添加自定义样式，确保加载对话框不阻止 Scratch 弹框交互
+      const customStyle = document.createElement("style");
+      customStyle.textContent = `
+        .loading-dialog {
+          z-index: 999 !important;
+          pointer-events: none !important;
+        }
+        .loading-dialog::part(overlay) {
+          background: rgba(0, 0, 0, 0.3) !important;
+          pointer-events: none !important;
+        }
+        .loading-dialog::part(panel) {
+          pointer-events: auto !important;
+        }
+      `;
+      document.head.appendChild(customStyle);
+
       await this.loadScript(ZCConfig.frontend.getPath("/scratchtool/jquery.3.7.1.js"));
       await this.loadScript(ZCConfig.frontend.getPath("/scratchtool/mdui.global.js"));
 
@@ -196,22 +214,24 @@ function buildCloudWsUrlCandidates(token) {
     if (!results.includes(urlString)) results.push(urlString);
   };
 
+  // 根据当前页面协议决定优先使用的 WebSocket 协议
+  const isSecure = window.location.protocol === "https:";
+  const preferredProtocol = isSecure ? "wss:" : "ws:";
+  const fallbackProtocol = isSecure ? "ws:" : "wss:";
+
   for (const source of sources) {
     let base;
     try {
       base = new URL(source, window.location.origin);
     } catch (error) {
+      console.warn("[cloud] Invalid URL source:", source, error);
       continue;
     }
     base.pathname = endpointPath;
     base.hash = "";
 
-    let protocolOrder = [];
-    if (base.protocol === "wss:") protocolOrder = ["wss:", "ws:"];
-    else if (base.protocol === "ws:") protocolOrder = ["ws:", "wss:"];
-    else if (base.protocol === "https:") protocolOrder = ["wss:", "ws:"];
-    else if (base.protocol === "http:") protocolOrder = ["ws:", "wss:"];
-    else protocolOrder = window.location.protocol === "https:" ? ["wss:", "ws:"] : ["ws:", "wss:"];
+    // 优先使用与当前页面协议匹配的 WebSocket 协议，避免混合内容问题
+    const protocolOrder = [preferredProtocol, fallbackProtocol];
 
     for (const protocol of protocolOrder) {
       const candidate = new URL(base.toString());
@@ -228,15 +248,22 @@ function buildCloudWsUrlCandidates(token) {
 function normalizeCloudWsUrl(urlLike, token) {
   try {
     const url = new URL(String(urlLike || ""), window.location.origin);
-    if (url.protocol === "https:") url.protocol = "wss:";
-    else if (url.protocol === "http:") url.protocol = "ws:";
-    else if (url.protocol !== "ws:" && url.protocol !== "wss:") {
+
+    // 根据协议类型转换为对应的 WebSocket 协议
+    if (url.protocol === "https:") {
+      url.protocol = "wss:";
+    } else if (url.protocol === "http:") {
+      url.protocol = "ws:";
+    } else if (url.protocol !== "ws:" && url.protocol !== "wss:") {
+      // 如果既不是 ws 也不是 wss，根据当前页面协议选择
       url.protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     }
+
     url.hash = "";
     if (token) url.searchParams.set("token", token);
     return url.toString();
   } catch (error) {
+    console.warn("[cloud] Failed to normalize WebSocket URL:", urlLike, error);
     return "";
   }
 }
@@ -1669,12 +1696,13 @@ async function commitProject() {
     const url = new URL(window.location.href);
     url.searchParams.set("branch", branchName);
 
-    // 如果提交响应包含commit信息，则更新URL的commit参数
-    if (commitResponse.commit && commitResponse.commit.commit_id) {
-      url.searchParams.set("ref", commitResponse.commit.commit_id);
-    } else if (commitResponse.commit_id) {
-      url.searchParams.set("ref", commitResponse.commit_id);
-    }
+    // 不自动添加 ref 参数，避免加载旧版本的问题
+    // 用户需要查看特定提交时可以手动添加 ref 参数
+    // if (commitResponse.commit && commitResponse.commit.commit_id) {
+    //   url.searchParams.set("ref", commitResponse.commit.commit_id);
+    // } else if (commitResponse.commit_id) {
+    //   url.searchParams.set("ref", commitResponse.commit_id);
+    // }
 
     window.history.replaceState({}, "", url);
 

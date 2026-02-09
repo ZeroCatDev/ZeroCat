@@ -595,6 +595,7 @@ export async function getUnreadNotificationCount(userId) {
             where: {
                 user_id: userId,
                 read: false,
+                hidden: false,
             },
         });
         return count;
