@@ -39,35 +39,63 @@ const queueManager = {
         const scheduledQueue = getScheduledTasksQueue();
         if (!scheduledQueue) return;
 
+        const removeSchedulerIfSupported = async (id) => {
+            if (typeof scheduledQueue.removeJobScheduler === 'function') {
+                await scheduledQueue.removeJobScheduler(id);
+                logger.info(`[queue-manager] Job scheduler "${id}" removed`);
+                return true;
+            }
+            logger.warn(`[queue-manager] removeJobScheduler not supported, cannot remove "${id}"`);
+            return false;
+        };
+
+        const upsertOrRemove = async (id, enabled, schedule, job) => {
+            if (!enabled) {
+                await removeSchedulerIfSupported(id);
+                return;
+            }
+            await scheduledQueue.upsertJobScheduler(id, schedule, job);
+        };
+
         // hourly-cleanup: every hour
-        await scheduledQueue.upsertJobScheduler(
+        await upsertOrRemove(
             'hourly-cleanup',
+            true,
             { every: 3600000 },
             { name: 'hourly-cleanup', data: {} }
         );
 
         // daily-stats: every 24 hours
-        await scheduledQueue.upsertJobScheduler(
+        await upsertOrRemove(
             'daily-stats',
+            true,
             { every: 86400000 },
             { name: 'daily-stats', data: {} }
         );
 
         // memory-cache-cleanup: every hour
-        await scheduledQueue.upsertJobScheduler(
+        await upsertOrRemove(
             'memory-cache-cleanup',
+            true,
             { every: 3600000 },
             { name: 'memory-cache-cleanup', data: {} }
         );
 
-        // sitemap-auto-update: every 24 hours
-        await scheduledQueue.upsertJobScheduler(
+        const sitemapEnabled = await zcconfig.get('sitemap.enabled');
+        const sitemapAutoUpdate = await zcconfig.get('sitemap.auto_update');
+        const sitemapCron = await zcconfig.get('sitemap.update_cron');
+        const sitemapSchedule = sitemapCron
+            ? { pattern: sitemapCron }
+            : { every: 86400000 };
+
+        await upsertOrRemove(
             'sitemap-auto-update',
-            { every: 86400000 },
+            sitemapEnabled !== false && sitemapAutoUpdate !== false,
+            sitemapSchedule,
             { name: 'sitemap-auto-update', data: {} }
         );
 
-        logger.info('[queue-manager] Repeatable jobs registered');
+        logger.info('[queue-manager] Repeatable jobs synchronized');
     },
 
     async enqueueEmail(to, subject, html, options = {}) {

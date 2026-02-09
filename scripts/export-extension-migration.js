@@ -4,7 +4,7 @@ import "dotenv/config";
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '../generated/prisma/client.ts'
 
-const connectionString = `postgresql://zerocat:DK6WZyxhaHWQztYK@100.74.26.106:5432/zerocat`
+const connectionString = `postgresql://zerocat:zerocat_pass_change_me@127.0.0.1:5432/zerocat`
 
 const adapter = new PrismaPg({ connectionString })
 const prisma = new PrismaClient({ adapter })

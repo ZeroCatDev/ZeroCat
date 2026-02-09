@@ -101,6 +101,37 @@ router.post("/upload", needLogin, upload.single("file"), async (req, res) => {
   res.json(uploadResult.result);
 });
 
+// 原始文件上传接口（不做任何处理，保持原始格式）
+router.post("/upload-raw", needLogin, upload.single("file"), async (req, res) => {
+  const { tags, category } = req.body;
+
+  const uploadResult = await handleAssetUpload(req, res, {
+    purpose: 'scratch', // 使用scratch模式，不对文件做任何处理
+    category: category || 'raw',
+    tags: tags || '',
+    errorMessage: '原始文件上传失败',
+    successCallback: async (req, res, result) => {
+      logger.debug("原始文件上传成功:", {
+        originalname: req.file.originalname,
+        detectedMimeType: req.file.detectedMimeType,
+        detectedExtension: req.file.detectedExtension,
+        size: req.file.buffer.length,
+        md5: result.asset.md5
+      });
+      return null;
+    }
+  });
+
+  if (!uploadResult.success) {
+    return res.status(uploadResult.status).json({
+      error: uploadResult.error,
+      ...(uploadResult.details && { details: uploadResult.details })
+    });
+  }
+
+  res.json(uploadResult.result);
+});
+
 // 简化的图片上传接口（仅支持图片，自动转PNG，无安全检查）
 router.post("/image-upload", needLogin, upload.single("file"), async (req, res) => {
   const { quality = 80, tags, category } = req.body;

@@ -51,8 +51,12 @@ const initializeTransporter = async () => {
             return false;
         }
 
-        logger.debug("[email] 初始化邮件传输器:", mailConfig.config);
-        transporter = createTransport(mailConfig.config);
+        const transportOptions = {
+            ...mailConfig.config,
+            tls: mailConfig.tls,
+        };
+        logger.debug("[email] 初始化邮件传输器:", transportOptions);
+        transporter = createTransport(transportOptions);
 
         // Test the connection
         await transporter.verify();
