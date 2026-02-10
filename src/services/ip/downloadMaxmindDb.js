@@ -89,6 +89,7 @@ async function downloadDatabase() {
 
     // 构建下载URL (包含账户ID和许可证密钥)
     const url = `${DOWNLOAD_CONFIG.downloadUrl}?edition_id=${DOWNLOAD_CONFIG.edition}&license_key=${USER_CONFIG.licenseKey}&suffix=${DOWNLOAD_CONFIG.suffix}&account_id=${USER_CONFIG.accountId}`;
+    logger.debug(`[ip] 下载URL: ${url}`);
     const tempFile = path.join(
         DATA_DIR,
         `${DOWNLOAD_CONFIG.edition}.${DOWNLOAD_CONFIG.suffix}`

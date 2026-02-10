@@ -1,5 +1,33 @@
 var htmlElement = document.getElementsByTagName("html")[0];
 
+const AppState = {
+  bootstrapped: false,
+  uiMounted: false,
+  appInitialized: false,
+  listeners: {
+    commitBranchChangeBound: false,
+    cloudDialogLifecycleBound: false,
+    cloudListDelegatedBound: false,
+    quickSaveSettingBound: false,
+  },
+  save: {
+    inFlight: false,
+    phase: "idle",
+  },
+  load: {
+    seq: 0,
+    activeSeq: 0,
+    warnedRef: "",
+  },
+  settings: {
+    showDevQuickSave: false,
+  },
+};
+
+const CLOUD_UI_RENDER_INTERVAL_MS = 200;
+const CLOUD_VM_SYNC_INTERVAL_MS = 500;
+const RESOURCE_TRACKER_RENDER_INTERVAL_MS = 100;
+
 // Configuration management
 const ZCConfig = {
   frontend: {
@@ -22,33 +50,25 @@ const ZCConfig = {
 // --- Refactored Application Management & Resource Loading ---
 const App = {
   initialize: async function () {
+    if (AppState.bootstrapped) return;
+    AppState.bootstrapped = true;
     try {
       loadStyle(ZCConfig.frontend.getPath("/scratchtool/mdui.css"));
-
-      // 添加自定义样式，确保加载对话框不阻止 Scratch 弹框交互
-      const customStyle = document.createElement("style");
-      customStyle.textContent = `
-        .loading-dialog {
-          z-index: 999 !important;
-          pointer-events: none !important;
-        }
-        .loading-dialog::part(overlay) {
-          background: rgba(0, 0, 0, 0.3) !important;
-          pointer-events: none !important;
-        }
-        .loading-dialog::part(panel) {
-          pointer-events: auto !important;
-        }
-      `;
-      document.head.appendChild(customStyle);
+      ensureLoadingDialogStyle();
 
       await this.loadScript(ZCConfig.frontend.getPath("/scratchtool/jquery.3.7.1.js"));
       await this.loadScript(ZCConfig.frontend.getPath("/scratchtool/mdui.global.js"));
 
-      $(document).ready(() => {
+      const runInitialization = () => {
         initUIComponents();
-        initialize(); // This is the main application logic initialization
-      });
+        initialize();
+      };
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", runInitialization, { once: true });
+      } else {
+        runInitialization();
+      }
     } catch (error) {
       console.error("Application initialization failed:", error);
       alert(`应用初始化失败: ${error.message}`);
@@ -57,25 +77,54 @@ const App = {
 
   loadScript: (src) => {
     return new Promise((resolve, reject) => {
+      const existingScript = document.querySelector(`script[src="${src}"]`);
+      if (existingScript) {
+        resolve();
+        return;
+      }
       const script = document.createElement('script');
       script.src = src;
-      script.onload = () => resolve();
+      script.onload = () => {
+        script.dataset.loaded = "true";
+        resolve();
+      };
       script.onerror = () => reject(new Error(`Script load error for ${src}`));
       document.head.appendChild(script);
     });
   },
 };
 
+function ensureLoadingDialogStyle() {
+  if (document.getElementById("zc-loading-dialog-style")) return;
+  const customStyle = document.createElement("style");
+  customStyle.id = "zc-loading-dialog-style";
+  customStyle.textContent = `
+    .loading-dialog {
+      z-index: 999 !important;
+      pointer-events: none !important;
+    }
+    .loading-dialog::part(overlay) {
+      background: rgba(0, 0, 0, 0.3) !important;
+      pointer-events: none !important;
+    }
+    .loading-dialog::part(panel) {
+      pointer-events: auto !important;
+    }
+  `;
+  document.head.appendChild(customStyle);
+}
+
 const loadStyle = (href) => {
+  if (document.querySelector(`link[rel="stylesheet"][href="${href}"]`)) return;
   const link = document.createElement("link");
   link.rel = "stylesheet";
   link.href = href;
   document.head.appendChild(link);
 };
 
-window.onload = () => {
+window.addEventListener("load", () => {
   App.initialize();
-};
+}, { once: true });
 
 
 // 将依赖mdui的UI操作封装到这个函数中
@@ -115,6 +164,10 @@ let _pid = 0;
 let logText,
   zctab,
   assetUploadDialog,
+  commitDialogElement,
+  commitBranchNameInput,
+  commitBranchRadioGroup,
+  quickSaveSettingButton,
   cloudDialog,
   cloudProjectIdInput,
   cloudUsernameInput,
@@ -130,11 +183,90 @@ let commituser = {};
 let authorinfocard = {};
 let authorinfoavatar = {};
 
-const buttons = [
+const SETTINGS_KEYS = {
+  showDevQuickSave: "zc:scratchtool:show-dev-quick-save",
+};
+
+const DEV_QUICK_SAVE_BUTTON = {
+  id: "dev-save-button",
+  text: "开发环境保存",
+  onclick: () => quickSaveToDevelop(),
+};
+
+const defaultButtons = [
   { id: "open-zerocat-tab", text: "信息", onclick: () => updateZerocatTab() },
   { id: "save-button", text: "保存", onclick: () => openCommitDialog() },
-  { id: "open-cloud-tool", text: "云变量", onclick: () => openCloudToolDialog() },
+  { id: "set-thumbnail-button", text: "舞台截图设为封面", onclick: () => setProjectThumbnail() },
 ];
+const buttons = [];
+
+function readPersistentValue(key) {
+  try {
+    const fromStrong = window.localstrongs?.getItem?.(key);
+    if (fromStrong !== undefined && fromStrong !== null) {
+      return String(fromStrong);
+    }
+  } catch (error) {
+    console.warn("[settings] localstrongs getItem failed:", error);
+  }
+  try {
+    const fromLocal = localStorage.getItem(key);
+    if (fromLocal !== undefined && fromLocal !== null) {
+      return String(fromLocal);
+    }
+  } catch (error) {
+    console.warn("[settings] localStorage getItem failed:", error);
+  }
+  return null;
+}
+
+function writePersistentValue(key, value) {
+  const stringValue = String(value);
+  let written = false;
+  try {
+    if (window.localstrongs?.setItem) {
+      window.localstrongs.setItem(key, stringValue);
+      written = true;
+    } else if (window.localstrongs) {
+      window.localstrongs[key] = stringValue;
+      written = true;
+    }
+  } catch (error) {
+    console.warn("[settings] localstrongs setItem failed:", error);
+  }
+  try {
+    localStorage.setItem(key, stringValue);
+    written = true;
+  } catch (error) {
+    console.warn("[settings] localStorage setItem failed:", error);
+  }
+  return written;
+}
+
+function readBooleanSetting(key, fallback = false) {
+  const raw = readPersistentValue(key);
+  if (raw === null) return fallback;
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on") return true;
+  if (normalized === "0" || normalized === "false" || normalized === "no" || normalized === "off") return false;
+  return fallback;
+}
+
+function writeBooleanSetting(key, value) {
+  return writePersistentValue(key, value ? "1" : "0");
+}
+
+function rebuildDefaultButtons() {
+  buttons.length = 0;
+  buttons.push(...defaultButtons);
+  if (AppState.settings.showDevQuickSave) {
+    buttons.push(DEV_QUICK_SAVE_BUTTON);
+  }
+}
+
+function restoreDefaultButtons() {
+  rebuildDefaultButtons();
+}
 
 const cloudWsState = {
   socket: null,
@@ -143,7 +275,11 @@ const cloudWsState = {
   username: "",
   wsUrl: "",
   status: "idle",
+  lastStatusText: "",
   variables: {},
+  lastRenderedSignature: "",
+  renderTimer: null,
+  renderPending: false,
   autoConnect: true,
   autoReconnect: true,
   manualDisconnect: false,
@@ -165,6 +301,10 @@ function getCurrentTime() {
   return `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
 }
 
+function getCurrentDateTimeString() {
+  return new Date().toLocaleString();
+}
+
 // 封装showSnackbar函数，确保mdui已加载
 function showSnackbar(text) {
   if (window.UIManager) {
@@ -173,6 +313,14 @@ function showSnackbar(text) {
     // 如果mdui未加载，使用console.log作为备选
     console.log(text);
   }
+}
+
+function getErrorMessage(error, fallback = "请求失败") {
+  return error?.responseJSON?.message || error?.message || error?.statusText || fallback;
+}
+
+function buildErrorDescription(error, prefix = "错误") {
+  return `${prefix}: ${getErrorMessage(error)}`;
 }
 
 function getActiveVm() {
@@ -275,7 +423,11 @@ function appendCloudLog(text) {
 function setCloudConnectionStatus(status, detail = "") {
   cloudWsState.status = status;
   const statusText = detail ? `${status}: ${detail}` : status;
-  if (cloudConnStatusInput) cloudConnStatusInput.value = statusText;
+  if (cloudConnStatusInput && cloudConnStatusInput.value !== statusText) {
+    cloudConnStatusInput.value = statusText;
+  }
+  if (statusText === cloudWsState.lastStatusText) return;
+  cloudWsState.lastStatusText = statusText;
   appendCloudLog(`[status] ${statusText}`);
 }
 
@@ -350,10 +502,66 @@ function areCloudMapsEqual(a, b) {
   return true;
 }
 
-function renderCloudVariables() {
+function getCloudVariableSignature(variables) {
+  const names = Object.keys(variables).sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
+  return names.map((name) => `${name}\u0000${variables[name] ?? ""}`).join("\u0001");
+}
+
+function escapeAttrSelector(value) {
+  if (window.CSS && typeof window.CSS.escape === "function") {
+    return window.CSS.escape(value);
+  }
+  return String(value).replace(/["\\]/g, "\\$&");
+}
+
+function ensureCloudListDelegatedHandlers() {
+  if (AppState.listeners.cloudListDelegatedBound || !cloudVarsListContainer) return;
+  const findElementFromEvent = (event, selector) => {
+    if (event.target instanceof Element) {
+      const direct = event.target.closest(selector);
+      if (direct) return direct;
+    }
+    if (typeof event.composedPath === "function") {
+      const path = event.composedPath();
+      for (const item of path) {
+        if (item instanceof Element && item.matches(selector)) {
+          return item;
+        }
+      }
+    }
+    return null;
+  };
+
+  cloudVarsListContainer.addEventListener("click", (event) => {
+    const saveButton = findElementFromEvent(event, "mdui-button[data-cloud-save='1']");
+    if (!saveButton) return;
+    const name = saveButton.getAttribute("data-cloud-name") || "";
+    if (!name) return;
+    const valueField = cloudVarsListContainer.querySelector(`mdui-text-field[data-cloud-name="${escapeAttrSelector(name)}"]`);
+    cloudSetVariableByName(name, valueField?.value ?? "");
+  });
+
+  cloudVarsListContainer.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    const valueField = findElementFromEvent(event, "mdui-text-field[data-cloud-name]");
+    if (!valueField) return;
+    event.preventDefault();
+    const name = valueField.getAttribute("data-cloud-name") || "";
+    cloudSetVariableByName(name, valueField.value ?? "");
+  });
+
+  AppState.listeners.cloudListDelegatedBound = true;
+}
+
+function renderCloudVariables({ force = false } = {}) {
   if (!cloudVarsListContainer) return;
+  ensureCloudListDelegatedHandlers();
+
   const names = Object.keys(cloudWsState.variables).sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
-  cloudVarsListContainer.innerHTML = "";
+  const signature = getCloudVariableSignature(cloudWsState.variables);
+  if (!force && signature === cloudWsState.lastRenderedSignature) return;
+  cloudWsState.lastRenderedSignature = signature;
+
   if (cloudVarsCountInput) {
     cloudVarsCountInput.value = String(names.length);
   }
@@ -363,10 +571,11 @@ function renderCloudVariables() {
     empty.textContent = "当前没有云变量";
     empty.style.opacity = "0.75";
     empty.style.padding = "8px 0";
-    cloudVarsListContainer.appendChild(empty);
+    cloudVarsListContainer.replaceChildren(empty);
     return;
   }
 
+  const fragment = document.createDocumentFragment();
   for (const name of names) {
     const row = document.createElement("div");
     row.style.display = "grid";
@@ -384,33 +593,46 @@ function renderCloudVariables() {
     valueField.label = "变量值";
     valueField.value = cloudWsState.variables[name] ?? "";
     valueField.setAttribute("data-cloud-name", name);
-    valueField.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        cloudSetVariableByName(name, valueField.value);
-      }
-    });
 
     const saveButton = document.createElement("mdui-button");
     saveButton.variant = "filled";
     saveButton.setAttribute("variant", "filled");
     saveButton.textContent = "保存";
-    saveButton.addEventListener("click", () => {
-      cloudSetVariableByName(name, valueField.value);
-    });
+    saveButton.setAttribute("data-cloud-save", "1");
+    saveButton.setAttribute("data-cloud-name", name);
 
     row.appendChild(nameField);
     row.appendChild(valueField);
     row.appendChild(saveButton);
-    cloudVarsListContainer.appendChild(row);
+    fragment.appendChild(row);
   }
+  cloudVarsListContainer.replaceChildren(fragment);
+}
+
+function scheduleCloudVariablesRender({ force = false } = {}) {
+  if (force) {
+    if (cloudWsState.renderTimer) {
+      clearTimeout(cloudWsState.renderTimer);
+      cloudWsState.renderTimer = null;
+    }
+    cloudWsState.renderPending = false;
+    renderCloudVariables({ force: true });
+    return;
+  }
+  if (cloudWsState.renderPending) return;
+  cloudWsState.renderPending = true;
+  cloudWsState.renderTimer = setTimeout(() => {
+    cloudWsState.renderPending = false;
+    cloudWsState.renderTimer = null;
+    renderCloudVariables();
+  }, CLOUD_UI_RENDER_INTERVAL_MS);
 }
 
 function refreshCloudVariablesFromVm({ forceRender = false } = {}) {
   const vmVariables = collectVmCloudVariables();
   if (forceRender || !areCloudMapsEqual(vmVariables, cloudWsState.variables)) {
     cloudWsState.variables = vmVariables;
-    renderCloudVariables();
+    scheduleCloudVariablesRender({ force: forceRender });
   }
 }
 
@@ -418,7 +640,7 @@ function startCloudSyncTimer() {
   if (cloudSyncTimer) return;
   cloudSyncTimer = setInterval(() => {
     refreshCloudVariablesFromVm();
-  }, 400);
+  }, CLOUD_VM_SYNC_INTERVAL_MS);
 }
 
 function stopCloudSyncTimer() {
@@ -435,6 +657,7 @@ function clearCloudRetryTimer() {
 
 function scheduleCloudReconnect(reason = "") {
   if (!cloudWsState.autoReconnect) return;
+  if (cloudWsState.manualDisconnect) return;
   if (cloudWsState.retryTimer) return;
   const socket = cloudWsState.socket;
   if (socket && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN)) {
@@ -456,6 +679,10 @@ function scheduleCloudReconnect(reason = "") {
 
 function cloudAutoConnectIfNeeded({ force = false } = {}) {
   if (!cloudWsState.autoConnect) return false;
+  if (cloudWsState.manualDisconnect && !force) return false;
+  if (force) {
+    cloudWsState.manualDisconnect = false;
+  }
   const socket = cloudWsState.socket;
   if (socket && (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CLOSING)) {
     return false;
@@ -536,13 +763,13 @@ function createScratchCloudProvider() {
     createVariable: (name, value) => {
       const normalizedValue = String(value ?? "");
       cloudWsState.variables[name] = normalizedValue;
-      renderCloudVariables();
+      scheduleCloudVariablesRender();
       return sendCloudUpdate("create", { name, value: normalizedValue });
     },
     updateVariable: (name, value) => {
       const normalizedValue = String(value ?? "");
       cloudWsState.variables[name] = normalizedValue;
-      renderCloudVariables();
+      scheduleCloudVariablesRender();
       return sendCloudUpdate("set", { name, value: normalizedValue });
     },
     renameVariable: (oldName, newName) => {
@@ -550,14 +777,14 @@ function createScratchCloudProvider() {
         const value = cloudWsState.variables[oldName];
         delete cloudWsState.variables[oldName];
         cloudWsState.variables[newName] = value;
-        renderCloudVariables();
+        scheduleCloudVariablesRender();
       }
       return sendCloudUpdate("rename", { name: oldName, new_name: newName });
     },
     deleteVariable: (name) => {
       if (Object.prototype.hasOwnProperty.call(cloudWsState.variables, name)) {
         delete cloudWsState.variables[name];
-        renderCloudVariables();
+        scheduleCloudVariablesRender();
       }
       return sendCloudUpdate("delete", { name });
     },
@@ -567,6 +794,7 @@ function createScratchCloudProvider() {
 
 function handleCloudSocketMessage(data) {
   const vm = getActiveVm();
+  let changed = false;
   for (const message of parseCloudFrames(data)) {
     if (message.method === "set" && typeof message.name === "string") {
       const value = message.value;
@@ -574,12 +802,15 @@ function handleCloudSocketMessage(data) {
       const normalizedValue = String(value ?? "");
       if (cloudWsState.variables[message.name] !== normalizedValue) {
         cloudWsState.variables[message.name] = normalizedValue;
-        renderCloudVariables();
+        changed = true;
       }
       appendCloudLog(`[in] ${message.name} = ${normalizedValue}`);
       continue;
     }
     appendCloudLog(`[in] ignored method=${message.method || "unknown"}`);
+  }
+  if (changed) {
+    scheduleCloudVariablesRender();
   }
 }
 
@@ -660,7 +891,7 @@ function connectCloudWs(options = {}) {
 
   if (cloudProjectIdInput) cloudProjectIdInput.value = String(projectId);
   if (cloudUsernameInput) cloudUsernameInput.value = username;
-  renderCloudVariables();
+  scheduleCloudVariablesRender({ force: true });
 
   localStorage.setItem("zc:cloud-username", username);
 
@@ -721,6 +952,7 @@ function connectCloudWs(options = {}) {
 }
 
 function disconnectCloudWs({ manual = true } = {}) {
+  cloudWsState.manualDisconnect = manual;
   if (manual) {
     cloudWsState.retryCount = 0;
   }
@@ -773,7 +1005,7 @@ function cloudSetVariableByName(name, value) {
     const normalizedValue = String(value ?? "");
     queueCloudUpdate("set", normalizedName, normalizedValue);
     cloudWsState.variables[normalizedName] = normalizedValue;
-    renderCloudVariables();
+    scheduleCloudVariablesRender();
     appendCloudLog(`[out] queued ${normalizedName} = ${normalizedValue}`);
     showSnackbar("连接已断开，已加入队列并尝试重连");
     return;
@@ -795,7 +1027,7 @@ function cloudSetVariableByName(name, value) {
   }
 
   cloudWsState.variables[normalizedName] = normalizedValue;
-  renderCloudVariables();
+  scheduleCloudVariablesRender();
   appendCloudLog(`[out] ${normalizedName} = ${normalizedValue}`);
 }
 
@@ -869,12 +1101,19 @@ async function loadUserInfo() {
 
   // 从后端获取当前用户信息
   try {
-    const result = await apiRequest({      url: `${ZCConfig.api.getPath("/user/me")}`,
+    const result = await apiRequest({
+      url: `${ZCConfig.api.getPath("/user/me")}`,
       type: "GET",
     });
 
     if (result && result.data) {
       currentUserId = result.data.id;
+      if (!isEmbed) {
+        const hasLoginOnlyButton = buttons.length === 1 && buttons[0]?.id === "login-button";
+        if (hasLoginOnlyButton) {
+          applyToolbarButtonsBySettings();
+        }
+      }
       // 可选：缓存到 localStorage
       localStorage.setItem("zc:id", String(result.data.id));
       if (result.data.username) {
@@ -915,34 +1154,88 @@ function showLoginButton() {
   renderButtons();
 }
 
+function applyToolbarButtonsBySettings() {
+  restoreDefaultButtons();
+  renderButtons();
+}
+
+function getQuickSaveToggleButtonText(enabled) {
+  return enabled ? "已开启" : "已关闭";
+}
+
+function updateQuickSaveToggleButton() {
+  if (!quickSaveSettingButton) return;
+  const enabled = AppState.settings.showDevQuickSave;
+  const variant = enabled ? "filled" : "outlined";
+  quickSaveSettingButton.textContent = getQuickSaveToggleButtonText(enabled);
+  quickSaveSettingButton.variant = variant;
+  quickSaveSettingButton.setAttribute("variant", variant);
+}
+
+function applySavedSettings() {
+  AppState.settings.showDevQuickSave = readBooleanSetting(SETTINGS_KEYS.showDevQuickSave, false);
+  updateQuickSaveToggleButton();
+  applyToolbarButtonsBySettings();
+}
+
+function bindQuickSaveSettingListener() {
+  if (!quickSaveSettingButton || AppState.listeners.quickSaveSettingBound) return;
+  quickSaveSettingButton.addEventListener("click", () => {
+    const enabled = !AppState.settings.showDevQuickSave;
+    AppState.settings.showDevQuickSave = enabled;
+    writeBooleanSetting(SETTINGS_KEYS.showDevQuickSave, enabled);
+    updateQuickSaveToggleButton();
+    applyToolbarButtonsBySettings();
+    showSnackbar(enabled ? "已显示开发环境保存按钮" : "已隐藏开发环境保存按钮");
+  });
+  AppState.listeners.quickSaveSettingBound = true;
+}
+
 // 辅助函数：发送带 token 的 API 请求
 function apiRequest(options) {
   const token = TokenManager.getToken();
-  const headers = options.headers || {};
+  const headers = { ...(options.headers || {}) };
 
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
 
   return $.ajax({
+    timeout: 30000,
     ...options,
     headers,
   });
 }
 
+function createToolButtonFromTemplate(template, button) {
+  const renderedButton = template.cloneNode(false);
+  renderedButton.id = button.id;
+  renderedButton.textContent = button.text;
+  renderedButton.style.display = "inline-block";
+  renderedButton.setAttribute("data-zc-rendered", "1");
+  renderedButton.onclick = button.onclick || null;
+  return renderedButton;
+}
+
 function renderButtons() {
   const zerocattool = document.getElementById("zerocattool");
-  if (!zerocattool) return; // 确保元素存在
+  if (!zerocattool || !zerocattool.parentNode) return;
 
-  zerocattool.innerHTML = ""; // 清空现有按钮
-  buttons.forEach((button) => {
-    const btnTemplate = zerocattool.cloneNode(true);
-    btnTemplate.id = button.id;
-    btnTemplate.innerHTML = button.text;
-    if (button.onclick) btnTemplate.onclick = button.onclick;
-    btnTemplate.style.display = "inline-block";
-    zerocattool.parentNode.appendChild(btnTemplate);
-  });
+  const parent = zerocattool.parentNode;
+  const obsoleteButtons = parent.querySelectorAll("[data-zc-rendered='1']");
+  for (const item of obsoleteButtons) {
+    item.remove();
+  }
+
+  const fragment = document.createDocumentFragment();
+  for (const button of buttons) {
+    const oldButton = document.getElementById(button.id);
+    if (oldButton && oldButton !== zerocattool) {
+      oldButton.remove();
+    }
+    fragment.appendChild(createToolButtonFromTemplate(zerocattool, button));
+  }
+  parent.appendChild(fragment);
   zerocattool.style.display = "none";
 }
 window.renderButtons = renderButtons;
@@ -968,6 +1261,10 @@ function updateAssetUploadDialog(description, { open } = {}) {
 // --- Refactored uploadProjectAssets ---
 async function uploadProjectAssets() {
   try {
+    if (!zcvm || !Array.isArray(zcvm.assets)) {
+      showSnackbar("Scratch 引擎尚未就绪，无法保存媒体库");
+      return;
+    }
     const allAssetIds = zcvm.assets.map((asset) => asset.assetId);
 
     const checkResult = await apiRequest({
@@ -989,7 +1286,6 @@ async function uploadProjectAssets() {
     }
 
     if (toUploadFiles.length === 0) {
-      showSnackbar("媒体库无需保存");
       return;
     }
 
@@ -1043,7 +1339,7 @@ async function uploadProjectAssets() {
           failed += 1;
           if (logText) {
             logText.value += `[${getCurrentTime()}] 文件上传失败: ${asset.assetId}.${asset.dataFormat}
-Error: ${error.responseJSON?.message || error.statusText}
+Error: ${getErrorMessage(error)}
 `;
           }
         } finally {
@@ -1064,7 +1360,7 @@ Error: ${error.responseJSON?.message || error.statusText}
   } catch (error) {
     console.error("Error checking or uploading assets:", error);
     updateAssetUploadDialog("素材上传失败", { open: false });
-    showErrorAlert("媒体库保存失败", `错误: ${error.responseJSON?.message || error.statusText}`);
+    showErrorAlert("媒体库保存失败", buildErrorDescription(error));
   }
 }
 
@@ -1104,7 +1400,7 @@ async function fetchProjectInfo() {
     }
   } catch (error) {
     console.error("Error fetching project info:", error);
-    showErrorAlert("获取项目信息失败", `错误: ${error.responseJSON?.message || error.statusText}`);
+    showErrorAlert("获取项目信息失败", buildErrorDescription(error));
   }
 }
 
@@ -1157,19 +1453,14 @@ function checkUrlForTokens() {
 }
 
 let isEmbed;
-function initialize() {
-  if (window.initialized) return; // 避免初始化两次
-  window.initialized = true;
-
-  // 检查URL中是否有token信息
-  const tokenFromUrl = checkUrlForTokens();
-
-  const urlParams = new URLSearchParams(window.location.search);
-  isEmbed = urlParams.get("embed") === "true";
+function mountScratchToolShell() {
+  if (AppState.uiMounted) return;
 
   if (!isEmbed) {
-    try {
-      const zerocatTabHTML = `
+    if (!document.getElementById("zerocat-tab")) {
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `
 <mdui-dialog headline="作品" description="加载中" close-on-overlay-click id="zerocat-tab">
     <mdui-list>
         <mdui-list-subheader>作者</mdui-list-subheader>
@@ -1184,13 +1475,21 @@ function initialize() {
     <br/>
     <mdui-button id="savestatic" onclick="uploadProjectAssets()">保存媒体库</mdui-button>
     <mdui-button onclick="openCommitDialog()">保存作品</mdui-button>
+    <mdui-button onclick="openCloudToolDialog()">云变量工具</mdui-button>
     <mdui-button onclick="logText.value = ''">清空log</mdui-button>
-    <mdui-text-field autosize readonly  max-rows="5" variant="outlined" id="log-text"></mdui-text-field>
+    <mdui-text-field autosize readonly max-rows="5" variant="outlined" id="log-text"></mdui-text-field>
+    <mdui-list style="margin-top: 10px;">
+      <mdui-list-subheader>开发设置</mdui-list-subheader>
+      <mdui-list-item headline="显示快捷保存按钮" description="开启后会显示开发环境保存按钮">
+        <mdui-button slot="end-icon" id="setting-toggle-dev-quick-save" variant="outlined">已关闭</mdui-button>
+      </mdui-list-item>
+    </mdui-list>
 </mdui-dialog>
-`;
-      document.body.insertAdjacentHTML("beforeend", zerocatTabHTML);
+`
+      );
+    }
 
-      // 添加HTML创建提示框
+    if (!document.querySelector(".loading-dialog")) {
       document.body.insertAdjacentHTML(
         "beforeend",
         `
@@ -1200,54 +1499,53 @@ function initialize() {
         close-on-overlay-click
         class="loading-dialog"
 ></mdui-dialog>
+`
+      );
+    }
+
+    if (!document.getElementById("commit-dialog")) {
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `
 <mdui-dialog headline="提交作品" description="请输入提交信息" close-on-overlay-click id="commit-dialog">
     <mdui-text-field variant="outlined" label="提交信息" value="Update Project" id="commit-message"></mdui-text-field>
     <mdui-text-field variant="outlined" label="更多信息" rows id="commit-description"></mdui-text-field>
-    <mdui-radio-group value="main">
+    <mdui-radio-group value="main" id="commit-branch-mode">
         <mdui-radio value="main">提交给当前分支</mdui-radio>
         <mdui-radio value="pr">为此提交创建一个新分支</mdui-radio>
     </mdui-radio-group>
     <mdui-text-field variant="outlined" label="分支名称" value="main" id="branch-name"></mdui-text-field>
     <mdui-button onclick="commitProject()">提交</mdui-button>
 </mdui-dialog>
+`
+      );
+    }
+
+    if (!document.getElementById("cloud-tool-dialog")) {
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `
 <mdui-dialog headline="云变量工具" description="遵守标准协议，与 Scratch 云变量实时同步" close-on-overlay-click id="cloud-tool-dialog">
     <mdui-text-field variant="outlined" label="Project ID" id="cloud-project-id"></mdui-text-field>
     <mdui-text-field variant="outlined" label="Handshake User" id="cloud-username"></mdui-text-field>
     <mdui-text-field variant="outlined" label="连接状态" readonly id="cloud-conn-status"></mdui-text-field>
+    <mdui-text-field variant="outlined" label="云变量数量" readonly id="cloud-vars-count"></mdui-text-field>
     <mdui-button onclick="cloudConnect()">连接后端 WS</mdui-button>
     <mdui-button onclick="cloudDisconnect()">断开连接</mdui-button>
     <mdui-button onclick="cloudRefreshVariables()">刷新变量列表</mdui-button>
     <div id="cloud-vars-list" style="max-height: 380px; overflow: auto; margin-top: 8px;"></div>
 </mdui-dialog>
-<mdui-dialog headline="保存素材" description="正在准备上传..." close-on-overlay-click id="asset-upload-dialog"></mdui-dialog>
 `
       );
-
-      zctab = document.querySelector("#zerocat-tab");
-      authorinfocard = document.querySelector("#author-info");
-      authorinfoavatar = document.querySelector("#author-avatar");
-      logText = document.querySelector("#log-text");
-      assetUploadDialog = document.querySelector("#asset-upload-dialog");
-      cloudDialog = document.querySelector("#cloud-tool-dialog");
-      cloudProjectIdInput = document.querySelector("#cloud-project-id");
-      cloudUsernameInput = document.querySelector("#cloud-username");
-      cloudConnStatusInput = document.querySelector("#cloud-conn-status");
-      cloudVarsCountInput = document.querySelector("#cloud-vars-count");
-      cloudVarsListContainer = document.querySelector("#cloud-vars-list");
-      if (cloudProjectIdInput && _pid > 0) cloudProjectIdInput.value = String(_pid);
-      if (cloudUsernameInput) cloudUsernameInput.value = getCloudUsername();
-      setCloudConnectionStatus("idle");
-      renderCloudVariables();
-      if (cloudDialog) {
-        cloudDialog.addEventListener("close", stopCloudSyncTimer);
-        cloudDialog.addEventListener("closed", stopCloudSyncTimer);
-      }
-
-      renderButtons();
-    } catch (error) {
-      console.error("Error initializing non-embed mode:", error);
     }
-  } else {
+
+    if (!document.getElementById("asset-upload-dialog")) {
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<mdui-dialog headline="保存素材" description="正在准备上传..." close-on-overlay-click id="asset-upload-dialog"></mdui-dialog>`
+      );
+    }
+  } else if (!document.querySelector(".loading-dialog")) {
     document.body.insertAdjacentHTML(
       "beforeend",
       `
@@ -1262,7 +1560,52 @@ function initialize() {
     );
   }
 
-  const loadingDialog = document.querySelector(".loading-dialog");
+  AppState.uiMounted = true;
+}
+
+function cacheScratchToolElements() {
+  if (isEmbed) return;
+  zctab = document.querySelector("#zerocat-tab");
+  authorinfocard = document.querySelector("#author-info");
+  authorinfoavatar = document.querySelector("#author-avatar");
+  logText = document.querySelector("#log-text");
+  quickSaveSettingButton = document.querySelector("#setting-toggle-dev-quick-save");
+  assetUploadDialog = document.querySelector("#asset-upload-dialog");
+  commitDialogElement = document.querySelector("#commit-dialog");
+  commitBranchNameInput = document.querySelector("#branch-name");
+  commitBranchRadioGroup = document.querySelector("#commit-branch-mode") || document.querySelector("#commit-dialog mdui-radio-group");
+  cloudDialog = document.querySelector("#cloud-tool-dialog");
+  cloudProjectIdInput = document.querySelector("#cloud-project-id");
+  cloudUsernameInput = document.querySelector("#cloud-username");
+  cloudConnStatusInput = document.querySelector("#cloud-conn-status");
+  cloudVarsCountInput = document.querySelector("#cloud-vars-count");
+  cloudVarsListContainer = document.querySelector("#cloud-vars-list");
+
+  if (cloudProjectIdInput && _pid > 0) {
+    cloudProjectIdInput.value = String(_pid);
+  }
+  if (cloudUsernameInput) {
+    cloudUsernameInput.value = getCloudUsername();
+  }
+  setCloudConnectionStatus("idle");
+  scheduleCloudVariablesRender({ force: true });
+
+  if (cloudDialog && !AppState.listeners.cloudDialogLifecycleBound) {
+    cloudDialog.addEventListener("close", stopCloudSyncTimer);
+    cloudDialog.addEventListener("closed", stopCloudSyncTimer);
+    AppState.listeners.cloudDialogLifecycleBound = true;
+  }
+  applySavedSettings();
+  bindQuickSaveSettingListener();
+}
+
+function initialize() {
+  const tokenFromUrl = checkUrlForTokens();
+  const urlParams = new URLSearchParams(window.location.search);
+  isEmbed = urlParams.get("embed") === "true";
+
+  mountScratchToolShell();
+  cacheScratchToolElements();
 
   if (typeof ClipCCExtension !== "undefined") {
     zcvm = ClipCCExtension.api.getVmInstance();
@@ -1275,17 +1618,19 @@ function initialize() {
     return;
   }
 
+  if (AppState.appInitialized) return;
+  AppState.appInitialized = true;
   ResourceLoadTracker.install(zcvm);
 
   const msg = getQueryStringParameter("msg");
   if (msg) {
-    if (msg == "404") alert("作品不存在");
-    if (msg == "401") alert("未登录");
+    if (msg === "404") alert("作品不存在");
+    if (msg === "401") alert("未登录");
   }
 
   loadUserInfo();
   installCloudGlobalListeners();
-  cloudAutoConnectIfNeeded();
+  cloudAutoConnectIfNeeded({ force: tokenFromUrl });
   loadProject();
 }
 
@@ -1351,7 +1696,7 @@ const ResourceLoadTracker = {
   render() {
     if (!this.active) return;
     const now = Date.now();
-    if (now - this.lastRenderAt < 50) return;
+    if (now - this.lastRenderAt < RESOURCE_TRACKER_RENDER_INTERVAL_MS) return;
     this.lastRenderAt = now;
     if (this.total <= 0) {
       updateLoadingDescription("正在加载资源...");
@@ -1531,43 +1876,180 @@ function countProjectAssets(projectData) {
   return total;
 }
 
+async function warnIfRefIsNotLatest() {
+  const ref = String(getQueryStringParameter("ref") || "").trim();
+  if (!ref || ref === "latest") return;
+  if (AppState.load.warnedRef === ref) return;
+  AppState.load.warnedRef = ref;
+
+  const headline = "提交提示";
+  const description = `当前 URL 使用 ref=${ref}，这不是最后一次提交，加载的是历史版本。`;
+  const switchToLatest = async () => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("ref", "latest");
+    window.history.replaceState({}, "", url);
+    showSnackbar("已切换为加载最新版");
+  };
+  try {
+    if (window.UIManager && window.mdui?.confirm) {
+      try {
+        await mdui.confirm({
+          headline,
+          description: `${description}\n\n是否立即加载最新版？`,
+          confirmText: "加载最新版",
+          cancelText: "继续当前版本",
+        });
+        await switchToLatest();
+      } catch {
+        // 用户选择继续当前版本，不做处理
+      }
+    } else {
+      const shouldSwitch = confirm(`${headline}\n${description}\n\n点击“确定”加载最新版，点击“取消”继续当前版本。`);
+      if (shouldSwitch) {
+        await switchToLatest();
+      }
+    }
+  } catch (error) {
+    console.warn("[load] non-latest ref notice dismissed:", error);
+  }
+}
+
+function validateBranchName(branchName) {
+  const name = String(branchName || "").trim();
+  if (!name) {
+    return { ok: false, message: "分支名不能为空" };
+  }
+  if (name.length > 80) {
+    return { ok: false, message: "分支名长度不能超过 80" };
+  }
+  if (!/^[A-Za-z0-9._\/-]+$/.test(name)) {
+    return { ok: false, message: "分支名只能包含字母、数字、.、_、-、/" };
+  }
+  if (name.startsWith("/") || name.endsWith("/")) {
+    return { ok: false, message: "分支名不能以 / 开头或结尾" };
+  }
+  if (name.startsWith(".") || name.endsWith(".")) {
+    return { ok: false, message: "分支名不能以 . 开头或结尾" };
+  }
+  if (name.includes("..")) {
+    return { ok: false, message: "分支名不能包含连续的 .." };
+  }
+  if (name.includes("//")) {
+    return { ok: false, message: "分支名不能包含连续的 //" };
+  }
+  if (name.includes("@{")) {
+    return { ok: false, message: "分支名不能包含 @{" };
+  }
+  if (name.endsWith(".lock")) {
+    return { ok: false, message: "分支名不能以 .lock 结尾" };
+  }
+  return { ok: true, message: "" };
+}
+
+function setCommitBranchInputDisabled(disabled) {
+  const branchNameInput = commitBranchNameInput || document.getElementById("branch-name");
+  if (!branchNameInput) return;
+  branchNameInput.disabled = disabled;
+  if (disabled) {
+    branchNameInput.setAttribute("disabled", "");
+  } else {
+    branchNameInput.removeAttribute("disabled");
+  }
+}
+
+function getCommitBranchMode() {
+  return String(commitBranchRadioGroup?.value || "main");
+}
+
+function isCreateBranchModeForSource(source) {
+  return source === "commit-dialog" && getCommitBranchMode() === "pr";
+}
+
+function getExpectedExistingBranch() {
+  return String(getQueryStringParameter("branch") || "main").trim();
+}
+
+function validateBranchPolicy({ source, branchName }) {
+  const syntax = validateBranchName(branchName);
+  if (!syntax.ok) {
+    return { ok: false, message: syntax.message };
+  }
+
+  if (source === "commit-dialog" && getCommitBranchMode() !== "pr") {
+    const expected = getExpectedExistingBranch();
+    if (branchName !== expected) {
+      return {
+        ok: false,
+        message: `当前模式只允许提交到当前分支 ${expected}，如需新分支请切换到“创建新分支”`,
+      };
+    }
+  }
+
+  return { ok: true, message: "" };
+}
+
+async function ensureBranchExistsOrAllowed({ source, branchName }) {
+  const allowCreateBranch = isCreateBranchModeForSource(source);
+  const remote = await fetchLatestRemoteProjectSnapshot(branchName);
+  if (!remote.exists && !allowCreateBranch) {
+    return {
+      ok: false,
+      message: `分支 ${branchName} 不存在。请切换到已有分支，或在提交弹窗中选择“创建新分支”。`,
+      remote,
+    };
+  }
+  return { ok: true, remote };
+}
+
 async function loadProject() {
   if (isLoading) return;
   isLoading = true;
+  const requestSeq = ++AppState.load.seq;
+  AppState.load.activeSeq = requestSeq;
 
-  console.log("Loading project...");
-  updateLoadingDescription("正在初始化项目加载...");
+  try {
+    console.log("Loading project...");
+    updateLoadingDescription("正在初始化项目加载...");
 
-  const queryId = getQueryStringParameter("id");
-  if (queryId) {
-    _pid = Number(queryId);
-    console.log(`Project ID from query: ${_pid}`);
-    if (cloudProjectIdInput && Number.isInteger(_pid) && _pid > 0) {
-      cloudProjectIdInput.value = String(_pid);
+    const queryId = getQueryStringParameter("id");
+    if (queryId) {
+      _pid = Number(queryId);
+      console.log(`Project ID from query: ${_pid}`);
+      if (cloudProjectIdInput && Number.isInteger(_pid) && _pid > 0) {
+        cloudProjectIdInput.value = String(_pid);
+      }
+      cloudAutoConnectIfNeeded({ force: true });
     }
-    cloudAutoConnectIfNeeded({ force: true });
-  }
-  if (_pid === 0) {
-    console.log("No project ID found, redirecting to new project page.");
-    //window.location.href = `${CONFIG.API_HOST}/newproject`;
-    isLoading = false;
-    return;
-  }
 
-  console.log(`Fetching project info for ID: ${_pid}`);
-  updateLoadingDescription("正在获取项目信息...");
-  await fetchProjectInfo();
+    if (_pid === 0) {
+      console.log("No project ID found, redirecting to new project page.");
+      return;
+    }
 
-  if (zcvm) {
-    await downloadAndLoadProject(_pid);
-  } else {
-    updateLoadingDescription("正在等待Scratch引擎初始化...");
-    setTimeout(loadProject, 100);
+    await warnIfRefIsNotLatest();
+    if (requestSeq !== AppState.load.activeSeq) return;
+
+    console.log(`Fetching project info for ID: ${_pid}`);
+    updateLoadingDescription("正在获取项目信息...");
+    await fetchProjectInfo();
+    if (requestSeq !== AppState.load.activeSeq) return;
+
+    if (!zcvm) {
+      updateLoadingDescription("正在等待Scratch引擎初始化...");
+      setTimeout(loadProject, 100);
+      return;
+    }
+    await downloadAndLoadProject(_pid, { requestSeq });
+  } finally {
+    if (requestSeq === AppState.load.activeSeq) {
+      isLoading = false;
+    }
   }
 }
 
 // --- Refactored downloadAndLoadProject & helpers ---
-async function downloadAndLoadProject(pid) {
+async function downloadAndLoadProject(pid, { requestSeq = null } = {}) {
+  const isStale = () => requestSeq !== null && requestSeq !== AppState.load.activeSeq;
   console.log(`Downloading project with ID: ${pid}`);
   updateLoadingDescription("正在连接服务器获取项目数据...");
 
@@ -1584,6 +2066,7 @@ async function downloadAndLoadProject(pid) {
       url: `${ZCConfig.api.getPath("/project/")}${pid}/${branch}/${ref}`,
       type: "GET",
     });
+    if (isStale()) return;
 
     if (response.status === "error") {
       if (response.commit && response.commit.commit_message === "NoFirstCommit") {
@@ -1591,8 +2074,6 @@ async function downloadAndLoadProject(pid) {
       } else {
         showErrorAlert("加载失败", response.message, "关闭");
       }
-      if (loadingDialog) loadingDialog.open = false;
-      isLoading = false;
       return;
     }
 
@@ -1615,6 +2096,7 @@ async function downloadAndLoadProject(pid) {
       type: "GET",
       data: { accessFileToken },
     });
+    if (isStale()) return;
 
     updateLoadingDescription("正在解析项目数据...");
     // The response is the file content itself, not a JSON object containing it
@@ -1622,36 +2104,37 @@ async function downloadAndLoadProject(pid) {
 
     const canContinue = await checkExtensionVerification(projectData);
     if (!canContinue) {
-      if (loadingDialog) loadingDialog.open = false;
-      isLoading = false;
       return;
     }
 
     const totalAssets = countProjectAssets(projectData);
     ResourceLoadTracker.start(totalAssets);
     await zcvm.loadProject(projectData);
+    if (isStale()) return;
     ResourceLoadTracker.stop();
 
     console.log("Project loaded into VM successfully.");
     updateLoadingDescription("正在初始化Scratch引擎...");
     setTimeout(() => {
-      if (loadingDialog) loadingDialog.open = false;
+      if (isStale()) return;
       zcvm.renderer.draw();
     }, 10);
     zcvm.renderer.draw();
-    isLoading = false;
 
   } catch (error) {
+    if (isStale()) return;
     console.error("Error downloading or loading project:", error);
-    ResourceLoadTracker.stop();
-    if (loadingDialog) loadingDialog.open = false;
-    isLoading = false;
     showErrorAlert(
       "加载失败",
-      `作品加载失败: ${error.responseJSON?.message || error.statusText}`,
+      `作品加载失败: ${getErrorMessage(error)}`,
       "重新加载",
       () => window.location.reload()
     );
+  } finally {
+    if (!isStale() && loadingDialog) {
+      loadingDialog.open = false;
+    }
+    ResourceLoadTracker.stop();
   }
 }
 
@@ -1675,7 +2158,7 @@ async function handleUninitializedProject(pid) {
                 console.error("Error initializing project:", error);
                 showErrorAlert(
                     "初始化失败",
-                    `作品初始化失败: ${error.responseJSON?.message || error.statusText}`,
+                    `作品初始化失败: ${getErrorMessage(error)}`,
                     "重新加载",
                     () => window.location.reload()
                 );
@@ -1714,8 +2197,87 @@ async function updateCommitInfoUI(commit) {
 }
 
 
+function normalizeProjectJsonForCompare(raw) {
+  try {
+    return JSON.stringify(JSON.parse(String(raw ?? "")));
+  } catch (error) {
+    return String(raw ?? "").trim();
+  }
+}
+
+function isLikelyMissingRemoteSnapshot(response) {
+  const message = String(response?.message || "").toLowerCase();
+  const code = String(response?.code || "").toLowerCase();
+  if (response?.commit?.commit_message === "NoFirstCommit") return true;
+  if (message.includes("nofirstcommit")) return true;
+  if (message.includes("branch not found")) return true;
+  if (message.includes("not found")) return true;
+  if (message.includes("不存在")) return true;
+  if (code.includes("404")) return true;
+  return false;
+}
+
+async function fetchLatestRemoteProjectSnapshot(branchName) {
+  const response = await apiRequest({
+    url: `${ZCConfig.api.getPath("/project/")}${_pid}/${branchName}/latest`,
+    type: "GET",
+  });
+
+  if (response?.status === "error") {
+    if (isLikelyMissingRemoteSnapshot(response)) {
+      return { exists: false, commit: response?.commit || null, commitId: null, json: "" };
+    }
+    throw new Error(response?.message || "获取云端最新提交失败");
+  }
+
+  const commit = response?.commit || null;
+  const accessFileToken = response?.accessFileToken;
+  const commitFile = commit?.commit_file;
+  if (!commitFile || !accessFileToken) {
+    return { exists: false, commit, commitId: commit?.id || commit?.commit_id || null, json: "" };
+  }
+
+  const fileResponse = await apiRequest({
+    url: `${ZCConfig.api.getPath("/project/files/")}${commitFile}?content=true`,
+    type: "GET",
+    data: { accessFileToken },
+  });
+
+  const json = typeof fileResponse === "string" ? fileResponse : JSON.stringify(fileResponse);
+  return {
+    exists: true,
+    commit,
+    commitId: commit?.id || commit?.commit_id || null,
+    json,
+  };
+}
+
+async function compareWithLatestRemoteProject(branchName, localProjectJson) {
+  const remote = await fetchLatestRemoteProjectSnapshot(branchName);
+  return compareWithLatestRemoteProjectWithSnapshot(localProjectJson, remote);
+}
+
+function compareWithLatestRemoteProjectWithSnapshot(localProjectJson, remote) {
+  if (!remote.exists) {
+    return {
+      remoteExists: false,
+      different: true,
+      reason: "no_remote_snapshot",
+      remoteCommitId: remote.commitId,
+    };
+  }
+  const localNormalized = normalizeProjectJsonForCompare(localProjectJson);
+  const remoteNormalized = normalizeProjectJsonForCompare(remote.json);
+  return {
+    remoteExists: true,
+    different: localNormalized !== remoteNormalized,
+    reason: localNormalized !== remoteNormalized ? "content_different" : "content_same",
+    remoteCommitId: remote.commitId,
+  };
+}
+
 // 通用错误提示函数
-function showErrorAlert(headline, description, confirmText, onConfirm) {
+function showErrorAlert(headline, description, confirmText = "关闭", onConfirm) {
   const options = {
     headline,
     description,
@@ -1735,106 +2297,217 @@ function showErrorAlert(headline, description, confirmText, onConfirm) {
   }
 }
 
+function updateBranchInUrl(branchName) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("branch", branchName);
+  window.history.replaceState({}, "", url);
+}
+
+function onCommitBranchModeChange(event) {
+  const branchNameInput = commitBranchNameInput || document.getElementById("branch-name");
+  const branchRadioGroup = commitBranchRadioGroup || event.currentTarget;
+  if (!branchNameInput || !branchRadioGroup) return;
+
+  const currentBranch = branchRadioGroup.dataset.currentBranch || "main";
+  const selectedMode = event.target?.value || branchRadioGroup.value;
+
+  if (selectedMode === "pr") {
+    const username = localStorage.getItem("zc:username") || "user";
+    const timestamp = Date.now();
+    const newBranchName = `${username}-patch-${timestamp}`;
+    branchNameInput.value = newBranchName;
+    setCommitBranchInputDisabled(false);
+    updateBranchInUrl(newBranchName);
+    return;
+  }
+
+  branchNameInput.value = currentBranch;
+  setCommitBranchInputDisabled(true);
+  updateBranchInUrl(currentBranch);
+}
+
+function ensureCommitDialogListener() {
+  if (AppState.listeners.commitBranchChangeBound || !commitBranchRadioGroup) return;
+  commitBranchRadioGroup.addEventListener("change", onCommitBranchModeChange);
+  AppState.listeners.commitBranchChangeBound = true;
+}
+
 function openCommitDialog() {
-  const commitDialog = document.getElementById("commit-dialog");
-  const branchNameInput = document.getElementById("branch-name");
+  const commitDialog = commitDialogElement || document.getElementById("commit-dialog");
+  const branchNameInput = commitBranchNameInput || document.getElementById("branch-name");
   if (!commitDialog || !branchNameInput) {
     console.error("提交对话框未初始化");
     showSnackbar("提交对话框未初始化");
     return;
   }
+  commitDialogElement = commitDialog;
+  commitBranchNameInput = branchNameInput;
 
-  const branchRadioGroup = document.querySelector("mdui-radio-group");
+  const branchRadioGroup = commitBranchRadioGroup || document.getElementById("commit-branch-mode") || document.querySelector("#commit-dialog mdui-radio-group");
   if (!branchRadioGroup) {
     console.error("分支选择未初始化");
     showSnackbar("分支选择未初始化");
     return;
   }
+  commitBranchRadioGroup = branchRadioGroup;
+  ensureCommitDialogListener();
 
   const currentBranch = getQueryStringParameter("branch") || "main";
+  commitBranchRadioGroup.dataset.currentBranch = currentBranch;
+  commitBranchRadioGroup.value = "main";
   branchNameInput.value = currentBranch;
-  branchNameInput.disabled = true; // Disable by default
-
-  branchRadioGroup.addEventListener("change", (event) => {
-    if (event.target.value === "pr") {
-      const username = localStorage.getItem("zc:username") || 'user';
-      const timestamp = Date.now();
-      const newBranchName = `${username}-patch-${timestamp}`;
-      branchNameInput.value = newBranchName;
-      branchNameInput.disabled = false;
-
-      // 更新URL的branch参数
-      const url = new URL(window.location.href);
-      url.searchParams.set("branch", newBranchName);
-      window.history.replaceState({}, "", url);
-    } else {
-      branchNameInput.value = currentBranch;
-      branchNameInput.disabled = true;
-
-      // 恢复URL的branch参数为当前分支
-      const url = new URL(window.location.href);
-      url.searchParams.set("branch", currentBranch);
-      window.history.replaceState({}, "", url);
-    }
-  });
+  setCommitBranchInputDisabled(true);
 
   commitDialog.open = true;
 }
 
-// --- Refactored commitProject ---
-async function commitProject() {
-  const branchNameInput = document.getElementById("branch-name");
+function getSubmitProgressTexts(source) {
+  if (source === "dev-quick-save") {
+    return {
+      start: "开发保存准备中...",
+      uploadingAssets: "开发保存：上传素材...",
+      serializing: "开发保存：序列化作品...",
+      checkingRemote: "开发保存：校验云端...",
+      extractingExtensions: "开发保存：处理扩展...",
+      savingFile: "开发保存：保存文件...",
+      committing: "开发保存：提交当前分支...",
+    };
+  }
+  return {
+    start: "保存准备中...",
+    uploadingAssets: "保存中：上传素材...",
+    serializing: "保存中：序列化作品...",
+    checkingRemote: "保存中：校验云端...",
+    extractingExtensions: "保存中：处理扩展...",
+    savingFile: "保存中：保存文件...",
+    committing: "保存中：提交分支...",
+  };
+}
+
+async function submitProject({
+  force = false,
+  source = "commit-dialog",
+  branchNameOverride = "",
+  commitMessageOverride = "",
+  commitDescriptionOverride = "",
+  updateUrlBranchAfterCommit = true,
+  progressButtonId = "save-button",
+  idleButtonText = "保存",
+  successButtonText = "保存完成",
+  idleButtonHandler = () => openCommitDialog(),
+} = {}) {
+  if (AppState.save.inFlight) {
+    showSnackbar("保存进行中，请稍候");
+    return;
+  }
+
+  const branchNameInput = commitBranchNameInput || document.getElementById("branch-name");
   const commitMessageInput = document.getElementById("commit-message");
   const commitDescriptionInput = document.getElementById("commit-description");
 
-  if (!branchNameInput || !commitMessageInput || !commitDescriptionInput) {
+  const hasSubmitForm = Boolean(branchNameInput && commitMessageInput && commitDescriptionInput);
+  if (!hasSubmitForm && source !== "dev-quick-save") {
     showErrorAlert("错误", "提交表单未完全加载", "关闭");
     return;
   }
-
-  const branchName = branchNameInput.value;
-  const commitMessage = commitMessageInput.value;
-  const commitDescription = commitDescriptionInput.value;
-
-  if (!commitMessage) {
-    showErrorAlert("提交信息不能为空", "请输入提交信息", "关闭");
+  if (!zcvm) {
+    showErrorAlert("错误", "Scratch 引擎尚未就绪", "关闭");
+    return;
+  }
+  if (!Number.isInteger(_pid) || _pid <= 0) {
+    showErrorAlert("错误", "无效的项目 ID", "关闭");
     return;
   }
 
-  setButton("save-button", "保存中...", () => {});
-  const commitDialog = document.getElementById("commit-dialog");
-  if(commitDialog) commitDialog.open = false;
+  const currentUrlBranch = String(getQueryStringParameter("branch") || "").trim();
+  const branchName = String(branchNameOverride || currentUrlBranch || branchNameInput?.value || "main").trim();
+  const commitMessageRaw = String(commitMessageInput?.value || "").trim();
+  const commitDescriptionRaw = String(commitDescriptionInput?.value || "").trim();
+  const commitMessage = String(commitMessageOverride || commitMessageRaw || "Update Project").trim();
+  const commitDescription = String(commitDescriptionOverride || commitDescriptionRaw).trim();
 
+  const branchPolicy = validateBranchPolicy({ source, branchName });
+  if (!branchPolicy.ok) {
+    showErrorAlert("分支名无效", branchPolicy.message, "关闭");
+    if (source === "commit-dialog" && getCommitBranchMode() !== "pr" && branchNameInput) {
+      const expected = getExpectedExistingBranch();
+      branchNameInput.value = expected;
+      setCommitBranchInputDisabled(true);
+    }
+    return;
+  }
+
+  if (!commitMessageRaw && !commitMessageOverride && source === "commit-dialog") {
+    showErrorAlert("提交信息不能为空", "请输入提交信息", "关闭");
+    return;
+  }
+  if (!branchName) {
+    showErrorAlert("错误", "分支名不能为空", "关闭");
+    return;
+  }
+
+  AppState.save.inFlight = true;
+  const progressTexts = getSubmitProgressTexts(source);
+  const setProgressButton = (text) => {
+    if (text) setButton(progressButtonId, text, () => {});
+  };
+  setProgressButton(progressTexts.start);
+  const commitDialog = commitDialogElement || document.getElementById("commit-dialog");
+  if (commitDialog && source === "commit-dialog") commitDialog.open = false;
+
+  let finalButtonText = idleButtonText;
+  let finalButtonHandler = idleButtonHandler;
 
   try {
+    AppState.save.phase = "uploadingAssets";
+    setProgressButton(progressTexts.uploadingAssets);
     await uploadProjectAssets();
 
-    if (zcvm.runtime.isRunning) {
+    if (zcvm?.runtime?.isRunning) {
       zcvm.runtime.stopAll();
     }
 
+    AppState.save.phase = "serializing";
+    setProgressButton(progressTexts.serializing);
     const currentProjectJson = zcvm.toJSON();
-    if (projectjson === currentProjectJson) {
-      showSnackbar("作品未修改");
-      setButton("save-button", "保存", () => openCommitDialog());
+
+    if (String(projectinfo?.author?.id) !== String(currentUserId)) {
+      showSnackbar("无权限");
+      finalButtonText = "无权限";
+      finalButtonHandler = () => {};
       return;
     }
 
-    if (String(projectinfo.author.id) !== String(currentUserId)) {
-      showSnackbar("无权限");
-      setButton("save-button", "无权限", () => {});
+    AppState.save.phase = "checkingRemote";
+    setProgressButton(progressTexts.checkingRemote);
+    const branchAvailability = await ensureBranchExistsOrAllowed({ source, branchName });
+    if (!branchAvailability.ok) {
+      showErrorAlert("分支不存在", branchAvailability.message, "关闭");
       return;
+    }
+    const remoteCompare = compareWithLatestRemoteProjectWithSnapshot(currentProjectJson, branchAvailability.remote);
+    if (!remoteCompare.different) {
+      showSnackbar("云端最新版本与当前内容一致。");
+      return;
+    }
+    if (logText) {
+      const remoteTag = remoteCompare.remoteCommitId ? `云端提交 ${remoteCompare.remoteCommitId}` : "云端暂无提交";
+      logText.value += `[${getCurrentTime()}] 云端对比通过：${remoteTag}，准备提交。
+`;
     }
 
     projectjson = currentProjectJson;
 
+    AppState.save.phase = "extractingExtensions";
+    setProgressButton(progressTexts.extractingExtensions);
     const processedJson = await extractInlineExtensions(projectjson);
     if (processedJson === null) {
-      setButton("save-button", "保存", () => openCommitDialog());
       return;
     }
     projectjson = processedJson;
 
+    AppState.save.phase = "savingFile";
+    setProgressButton(progressTexts.savingFile);
     const saveResponse = await apiRequest({
       url: `${ZCConfig.api.getPath("/project/savefile")}?json=true`,
       type: "post",
@@ -1843,7 +2516,12 @@ async function commitProject() {
     });
 
     const newAccessFileToken = saveResponse.accessFileToken;
+    if (!newAccessFileToken) {
+      throw new Error("保存文件后未返回 accessFileToken");
+    }
 
+    AppState.save.phase = "committing";
+    setProgressButton(progressTexts.committing);
     const commitResponse = await apiRequest({
       url: `${ZCConfig.api.getPath("/project/commit/id/")}${_pid}`,
       type: "put",
@@ -1857,65 +2535,64 @@ async function commitProject() {
       contentType: "application/json",
     });
 
-    showSnackbar(commitResponse.message);
-
-    setButton("save-button", "保存完成", () => openCommitDialog());
+    showSnackbar(commitResponse?.message || "保存完成");
+    finalButtonText = successButtonText;
     if (logText) {
       logText.value += `[${getCurrentTime()}]保存完成
 `;
     }
 
-    // 更新URL参数
-    const url = new URL(window.location.href);
-    url.searchParams.set("branch", branchName);
-
-    // 不自动添加 ref 参数，避免加载旧版本的问题
-    // 用户需要查看特定提交时可以手动添加 ref 参数
-    // if (commitResponse.commit && commitResponse.commit.commit_id) {
-    //   url.searchParams.set("ref", commitResponse.commit.commit_id);
-    // } else if (commitResponse.commit_id) {
-    //   url.searchParams.set("ref", commitResponse.commit_id);
-    // }
-
-    window.history.replaceState({}, "", url);
+    if (updateUrlBranchAfterCommit) {
+      updateBranchInUrl(branchName);
+    }
 
   } catch (error) {
     console.error("Error committing project:", error);
-    showErrorAlert("提交作品出错", `错误: ${error.responseJSON?.message || error.statusText}`, "关闭");
-    setButton("save-button", "保存", () => openCommitDialog());
+    showErrorAlert("提交作品出错", buildErrorDescription(error), "关闭");
+  } finally {
+    AppState.save.inFlight = false;
+    AppState.save.phase = "idle";
+    setButton(progressButtonId, finalButtonText, finalButtonHandler);
   }
 }
 
 
-function saveProject({ force = false } = {}) {
-  setButton("save-button", "保存中", () => openCommitDialog());
-  uploadProjectAssets();
+async function commitProject() {
+  await submitProject({
+    source: "commit-dialog",
+    progressButtonId: "save-button",
+    idleButtonText: "保存",
+    successButtonText: "保存完成",
+    idleButtonHandler: () => openCommitDialog(),
+  });
+}
+
+async function saveProject({ force = false } = {}) {
   if (force) {
     showSnackbar("强制保存");
-    commitProject();
   }
-  if (zcvm.runtime.isRunning) {
-    zcvm.runtime.stopAll();
-  }
-  if (projectjson == zcvm.toJSON()) {
-    showSnackbar("作品未修改");
-    setButton("save-button", "保存", () => openCommitDialog());
-    return;
-  }
-  if (String(projectinfo.author.id) !== String(currentUserId)) {
-    showSnackbar("无权限");
-    setButton("save-button", "无权限", () => openCommitDialog());
-    return;
-  }
-  projectjson = zcvm.toJSON();
-  commitProject();
-  showSnackbar("保存完成");
-  setButton("save-button", "保存完成", () => openCommitDialog());
+  await submitProject({
+    force,
+    source: "quick-save",
+    progressButtonId: "save-button",
+    idleButtonText: "保存",
+    successButtonText: "保存完成",
+    idleButtonHandler: () => openCommitDialog(),
+  });
+}
 
-  if (logText) {
-    logText.value += `[${getCurrentTime()}]保存完成
-`;
-  }
+async function quickSaveToDevelop() {
+  await submitProject({
+    force: true,
+    source: "dev-quick-save",
+    commitMessageOverride: "Develop Auto Save",
+    commitDescriptionOverride: getCurrentDateTimeString(),
+    updateUrlBranchAfterCommit: false,
+    progressButtonId: "dev-save-button",
+    idleButtonText: "开发环境保存",
+    successButtonText: "开发保存完成",
+    idleButtonHandler: () => quickSaveToDevelop(),
+  });
 }
 
 function openBase64ImageInNewTab() {
@@ -1927,9 +2604,17 @@ function openBase64ImageInNewTab() {
 }
 
 async function setProjectThumbnail() {
-  if (!zcvm) return;
+  const buttonId = "set-thumbnail-button";
+  const restoreButton = () => setButton(buttonId, "舞台截图设为封面", () => setProjectThumbnail());
+  if (!zcvm) {
+    setButton(buttonId, "Scratch 未就绪", () => setProjectThumbnail());
+    setTimeout(restoreButton, 1200);
+    return;
+  }
+  setButton(buttonId, "正在截图...", () => {});
   try {
     const dataURI = await new Promise(resolve => zcvm.renderer.requestSnapshot(resolve));
+    setButton(buttonId, "正在上传封面...", () => {});
     const blob = await (await fetch(dataURI)).blob();
     const formData = new FormData();
     formData.append("file", blob, "thumbnail.png");
@@ -1943,19 +2628,17 @@ async function setProjectThumbnail() {
     });
 
     if (response.status === "success") {
+      setButton(buttonId, "封面设置成功", () => setProjectThumbnail());
       showSnackbar("封面设置成功");
     } else {
+      setButton(buttonId, "封面设置失败", () => setProjectThumbnail());
       showSnackbar(`封面设置失败: ${response.message}`);
     }
   } catch (error) {
     console.error("Error setting project thumbnail:", error);
-    showSnackbar(`封面设置失败: ${error.responseJSON?.message || error.statusText}`);
+    setButton(buttonId, "封面设置失败", () => setProjectThumbnail());
+    showSnackbar(`封面设置失败: ${getErrorMessage(error)}`);
+  } finally {
+    setTimeout(restoreButton, 1500);
   }
 }
-
-
-buttons.push({
-  id: "set-thumbnail-button",
-  text: "舞台截图设为封面",
-  onclick: () => setProjectThumbnail(),
-});
