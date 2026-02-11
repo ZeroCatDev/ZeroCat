@@ -6,9 +6,22 @@ import logger from '../logger.js';
 import {createNotification} from '../../controllers/notifications.js';
 import zcconfig from '../config/zcconfig.js';
 import twoFactor from './twoFactor.js';
+import { sendEmail } from '../email/emailService.js';
 
 const VERIFICATION_CODE_PREFIX = 'verify_code:';
 const VERIFICATION_CODE_EXPIRY = 5 * 60; // 5分钟
+
+const escapeHtml = (value = "") =>
+    String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+
+const textToHtml = (text = "") => `<div style="font-family:Arial,sans-serif;line-height:1.7;color:#222;white-space:normal;">${escapeHtml(
+    text
+).replace(/\r?\n/g, "<br>")}</div>`;
 
 /**
  * 统一的身份认证服务
@@ -72,12 +85,14 @@ export class UnifiedAuthService {
             // 生成通知内容
             const { title, content } = await this.generateNotificationContent(code, purpose, targetEmail);
 
-            // 发送邮件类型通知
+            // 邮件单独发送，不通过通知渠道触发
+            await sendEmail(targetEmail, title, textToHtml(content));
+
+            // 默认通知仅站内信/浏览器
             await createNotification({
                 notificationType: 'verification_code',
                 title,
                 content,userId,
-                pushChannels: ['email'],
                 data: {
                     email_to: targetEmail,
                     purpose,
