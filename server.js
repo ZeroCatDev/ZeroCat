@@ -12,6 +12,7 @@ import {serverConfig} from './src/index.js';
 import {execSync} from 'child_process';
 import fs from 'fs';
 import queueManager from './src/services/queue/queueManager.js';
+import smtpGateway from './src/services/smtpGateway.js';
 
 // 定义需要检查的目录列表
 const REQUIRED_DIRECTORIES = [
@@ -138,6 +139,9 @@ async function gracefulShutdown() {
 
         // 关闭BullMQ队列
         await queueManager.shutdown();
+
+        // 关闭SMTP网关
+        await smtpGateway.shutdown();
 
         // 关闭服务器
         await serverConfig.stop();
