@@ -87,6 +87,16 @@
       "custom_content"
     ]
   },
+  "oauth_smtp_mail_received": {
+    "title": "应用邮件通知",
+    "template": "应用 {{oauth_application_name}} 向你发送了邮件：{{smtp_subject}}",
+    "icon": "notification",
+    "requiresActor": false,
+    "requiresData": [
+      "oauth_application_name",
+      "smtp_subject"
+    ]
+  },
   "comment_create": {
     "title": "新评论",
     "template": "{{actor_name}} 评论说：{{comment_text}}",

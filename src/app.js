@@ -14,6 +14,7 @@ import errorHandlerService from "./services/errorHandler.js";
 import sitemapService from './services/sitemap.js';
 import codeRunManager from './services/coderunManager.js';
 import queueManager from './services/queue/queueManager.js';
+import smtpGateway from './services/smtpGateway.js';
 
 // 全局初始化标志，防止重复初始化
 global.appInitialized = global.appInitialized || false;
@@ -127,6 +128,11 @@ class Application {
 
             // Initialize CodeRunManager
             await codeRunManager.initialize();
+
+            // 初始化SMTP网关（启用时）
+            await smtpGateway.initialize().catch(error => {
+                logger.error('[app] SMTP网关初始化失败:', error);
+            });
 
             logger.info('[app] 所有服务初始化完成');
 

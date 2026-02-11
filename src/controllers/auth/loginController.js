@@ -19,6 +19,19 @@ import {
 import { createNotification } from "../notifications.js";
 import tokenUtils from "../../services/auth/tokenUtils.js";
 import twoFactor from "../../services/auth/twoFactor.js";
+import { sendEmail } from "../../services/email/emailService.js";
+
+const escapeHtml = (value = "") =>
+    String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+
+const textToHtml = (text = "") => `<div style="font-family:Arial,sans-serif;line-height:1.7;color:#222;white-space:normal;">${escapeHtml(
+    text
+).replace(/\r?\n/g, "<br>")}</div>`;
 
 /**
  * 处理用户密码登录
@@ -263,14 +276,16 @@ export const sendLoginCode = async (req, res) => {
         // 使用createNotification发送登录验证码通知
         const code = verificationResult.code;
 
-        // 发送登录验证码邮件通知
+        const mailContent = `您的登录验证码：${code}\n\n请在登录页面输入此验证码完成登录。\n\n验证码5分钟内有效，请及时使用。`;
+        await sendEmail(email, '登录验证码', textToHtml(mailContent));
+
+        // 写入站内通知（不走邮件渠道）
         await createNotification({
             userId: contact.user_id,
             title: '登录验证码',
-            content: `您的登录验证码：${code}\n\n请在登录页面输入此验证码完成登录。\n\n验证码5分钟内有效，请及时使用。`,
+            content: mailContent,
             notificationType: 'login_code_email',
             hidden: true,
-            pushChannels: ['email'],
             data: {
                 email_to: email,
                 email_username: email.split('@')[0],

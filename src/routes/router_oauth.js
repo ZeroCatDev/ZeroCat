@@ -11,8 +11,96 @@ import { generateOAuthTokens, refreshOAuthTokens, verifyOAuthClientCredentials, 
 import multer from "multer";
 import { handleAssetUpload } from "../services/assets.js";
 import { requireSudo } from "../middleware/sudo.js";
+import smtpGateway from "../services/smtpGateway.js";
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
+const OAUTH_APP_CONFIG_TARGET_TYPE = "oauth_application";
+const OAUTH_APP_SMTP_FORWARD_EMAIL_KEY = "smtp.forward_to_user_email";
+
+const parseBooleanInput = (value) => {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number") return value === 1 ? true : value === 0 ? false : null;
+    if (typeof value !== "string") return null;
+
+    const normalized = value.trim().toLowerCase();
+    if (["1", "true", "yes", "on", "enable", "enabled"].includes(normalized)) return true;
+    if (["0", "false", "no", "off", "disable", "disabled"].includes(normalized)) return false;
+    return null;
+};
+
+const parseBooleanConfigValue = (value, fallback = false) => {
+    const parsed = parseBooleanInput(value);
+    return parsed === null ? fallback : parsed;
+};
+
+const getApplicationSmtpForwardSetting = async (applicationId) => {
+    const record = await prisma.ow_target_configs.findUnique({
+        where: {
+            target_type_target_id_key: {
+                target_type: OAUTH_APP_CONFIG_TARGET_TYPE,
+                target_id: String(applicationId),
+                key: OAUTH_APP_SMTP_FORWARD_EMAIL_KEY,
+            },
+        },
+        select: {
+            value: true,
+            updated_at: true,
+        },
+    });
+
+    const enabled = parseBooleanConfigValue(record?.value, false);
+    return {
+        enabled,
+        raw_value: record?.value ?? String(enabled),
+        updated_at: record?.updated_at ?? null,
+    };
+};
+
+const setApplicationSmtpForwardSetting = async (applicationId, enabled) => {
+    return prisma.ow_target_configs.upsert({
+        where: {
+            target_type_target_id_key: {
+                target_type: OAUTH_APP_CONFIG_TARGET_TYPE,
+                target_id: String(applicationId),
+                key: OAUTH_APP_SMTP_FORWARD_EMAIL_KEY,
+            },
+        },
+        create: {
+            target_type: OAUTH_APP_CONFIG_TARGET_TYPE,
+            target_id: String(applicationId),
+            key: OAUTH_APP_SMTP_FORWARD_EMAIL_KEY,
+            value: enabled ? "true" : "false",
+        },
+        update: {
+            value: enabled ? "true" : "false",
+        },
+        select: {
+            value: true,
+            updated_at: true,
+        },
+    });
+};
+
+const getSmtpGatewayConnectionInfo = async () => {
+    let domain = "localhost";
+    try {
+        const backendUrl = await zcconfig.get("urls.backend");
+        domain = new URL(backendUrl).hostname || domain;
+    } catch (error) {
+        domain = "localhost";
+    }
+
+    return {
+        common_ports: [25, 465, 587, 2525],
+        listening_ports: smtpGateway.getListeningPorts(),
+        secure_ports: smtpGateway.getSecurePorts(),
+        domain,
+        tls: {
+            implicit_tls: true,
+            starttls: true,
+        },
+    };
+};
 
 // OAuth错误处理函数
 const OAuthErrors = {
@@ -247,6 +335,15 @@ router.get("/applications/:client_id", async (req, res) => {
         // 检查是否为应用作者，如果不是则隐藏敏感信息
         const isOwner = res.locals.userid && res.locals.userid === application.owner_id;
 
+        if (isOwner) {
+            const smtpSettings = await getApplicationSmtpForwardSetting(application.id);
+            application.smtp_settings = {
+                forward_to_user_email: smtpSettings.enabled,
+                raw_value: smtpSettings.raw_value,
+                updated_at: smtpSettings.updated_at,
+            };
+        }
+
         if (!isOwner) {
             // 非作者只能看到公开信息，隐藏敏感字段
             delete application.client_secret;
@@ -258,6 +355,119 @@ router.get("/applications/:client_id", async (req, res) => {
     } catch (error) {
         logger.error("Get OAuth application error:", error);
         res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+// 获取应用SMTP设置
+router.get("/applications/:client_id/smtp/settings", needLogin, async (req, res) => {
+    try {
+        const { client_id } = req.params;
+        const application = await prisma.ow_oauth_applications.findFirst({
+            where: {
+                client_id,
+                owner_id: res.locals.userid,
+                status: { not: "deleted" },
+            },
+            select: {
+                id: true,
+                client_id: true,
+                name: true,
+                is_verified: true,
+            },
+        });
+
+        if (!application) {
+            return res.status(404).json({ error: "Application not found" });
+        }
+
+        const [smtpSettings, gateway] = await Promise.all([
+            getApplicationSmtpForwardSetting(application.id),
+            getSmtpGatewayConnectionInfo(),
+        ]);
+
+        return res.json({
+            application_id: application.id,
+            client_id: application.client_id,
+            application_name: application.name,
+            is_verified: application.is_verified,
+            forward_to_user_email: smtpSettings.enabled,
+            raw_value: smtpSettings.raw_value,
+            updated_at: smtpSettings.updated_at,
+            gateway,
+            auth: {
+                username: "必须为应用 client_id",
+                password: "必须使用应用 client_secret",
+            },
+            sender_rule: "MAIL FROM 不做业务校验，可任意填写",
+            recipient_rules: [
+                "已验证应用：RCPT TO 只校验邮箱格式，自动原文转发到该邮箱（可未注册）",
+                "未验证应用：RCPT TO 必须能匹配站内用户，邮件会转为站内信+浏览器通知",
+                "用户匹配支持：authorized_email / 用户邮箱 / username@域名 / uid-<id>@域名",
+            ],
+            delivery_policy: application.is_verified
+                ? "当前应用已验证：自动原文转发到收件邮箱"
+                : "当前应用未验证：仅站内信和浏览器通知，不发送原文邮件",
+        });
+    } catch (error) {
+        logger.error("Get OAuth application SMTP settings error:", error);
+        return res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+// 更新应用SMTP设置
+router.put("/applications/:client_id/smtp/settings", needLogin, async (req, res) => {
+    try {
+        const { client_id } = req.params;
+        const application = await prisma.ow_oauth_applications.findFirst({
+            where: {
+                client_id,
+                owner_id: res.locals.userid,
+                status: { not: "deleted" },
+            },
+            select: {
+                id: true,
+                client_id: true,
+                name: true,
+                is_verified: true,
+            },
+        });
+
+        if (!application) {
+            return res.status(404).json({ error: "Application not found" });
+        }
+
+        if (req.body?.forward_to_user_email === undefined) {
+            return res.status(400).json({
+                error: "缺少参数 forward_to_user_email",
+            });
+        }
+
+        const enabled = parseBooleanInput(req.body.forward_to_user_email);
+        if (enabled === null) {
+            return res.status(400).json({
+                error: "forward_to_user_email 必须是布尔值",
+            });
+        }
+
+        const saved = await setApplicationSmtpForwardSetting(application.id, enabled);
+        const gateway = await getSmtpGatewayConnectionInfo();
+
+        return res.json({
+            application_id: application.id,
+            client_id: application.client_id,
+            application_name: application.name,
+            is_verified: application.is_verified,
+            forward_to_user_email: parseBooleanConfigValue(saved.value, false),
+            raw_value: saved.value,
+            updated_at: saved.updated_at,
+            gateway,
+            effective_delivery_policy: application.is_verified
+                ? "已验证应用始终原文转发到收件邮箱"
+                : "未验证应用仅站内信和浏览器通知",
+        });
+    } catch (error) {
+        logger.error("Update OAuth application SMTP settings error:", error);
+        return res.status(500).json({ error: "Internal server error" });
     }
 });
 

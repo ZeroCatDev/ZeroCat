@@ -1,10 +1,10 @@
-import { createTransport } from 'nodemailer';
 import { createQueues, getEmailQueue, getScheduledTasksQueue } from './queues.js';
 import { createEmailWorker, getEmailWorker } from './workers/emailWorker.js';
 import { createScheduledTasksWorker, getScheduledTasksWorker } from './workers/scheduledTasksWorker.js';
 import { closeAll as closeAllConnections } from './redisConnectionFactory.js';
 import zcconfig from '../config/zcconfig.js';
 import logger from '../logger.js';
+import { encodeMailOptionsForJob } from './mailJobCodec.js';
 
 let initialized = false;
 
@@ -107,17 +107,22 @@ const queueManager = {
     },
 
     async enqueueEmail(to, subject, html, options = {}) {
+        return this.enqueueMail({ to, subject, html }, options);
+    },
+
+    async enqueueMail(mailOptions = {}, options = {}) {
         const emailQueue = getEmailQueue();
         if (!emailQueue || !initialized) {
-            logger.warn('[queue-manager] Queue not initialized, sending email directly');
-            return this._sendEmailDirect(to, subject, html);
+            throw new Error('BullMQ email queue is not initialized');
         }
 
         try {
             const maxRetries = await zcconfig.get('bullmq.email.maxRetries') || 3;
             const retryDelay = await zcconfig.get('bullmq.email.retryDelay') || 60000;
+            const encodedMailOptions = encodeMailOptionsForJob(mailOptions);
+            const recipient = encodedMailOptions?.to || '(unknown recipient)';
 
-            const job = await emailQueue.add('send-email', { to, subject, html }, {
+            const job = await emailQueue.add('send-email', { mailOptions: encodedMailOptions }, {
                 attempts: maxRetries,
                 backoff: {
                     type: 'exponential',
@@ -126,32 +131,12 @@ const queueManager = {
                 ...options,
             });
 
-            logger.info(`[queue-manager] Email job ${job.id} enqueued for ${to}`);
+            logger.info(`[queue-manager] Email job ${job.id} enqueued for ${recipient}`);
             return { jobId: job.id, queued: true };
         } catch (error) {
-            logger.error('[queue-manager] Failed to enqueue email, sending directly:', error.message);
-            return this._sendEmailDirect(to, subject, html);
+            logger.error('[queue-manager] Failed to enqueue email job:', error.message);
+            throw error;
         }
-    },
-
-    async _sendEmailDirect(to, subject, html) {
-        const host = await zcconfig.get('mail.host');
-        const port = await zcconfig.get('mail.port');
-        const secure = await zcconfig.get('mail.secure');
-        const user = await zcconfig.get('mail.auth.user');
-        const pass = await zcconfig.get('mail.auth.pass');
-        const fromName = await zcconfig.get('mail.from_name');
-        const fromAddress = await zcconfig.get('mail.from_address');
-
-        if (!host || !port || !user || !pass) {
-            throw new Error('Email service is not available or not properly configured');
-        }
-
-        const transporter = createTransport({ host, port, secure, auth: { user, pass } });
-        const from = fromName ? `${fromName} <${fromAddress}>` : fromAddress;
-
-        await transporter.sendMail({ from, to, subject, html });
-        return { queued: false, sentDirectly: true };
     },
 
     async shutdown() {

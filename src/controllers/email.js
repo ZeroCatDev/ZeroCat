@@ -6,6 +6,7 @@ import {TOTP} from "otpauth";
 import logger from '../services/logger.js';
 import memoryCache from '../services/memoryCache.js';
 import zcconfig from "../services/config/zcconfig.js";
+import { sendEmail } from "../services/email/emailService.js";
 
 // 创建TOTP实例的通用函数
 function createTotpInstance(secret) {
@@ -160,12 +161,29 @@ const EMAIL_SUBJECTS = {
     LOGIN: '登录验证码'
 };
 
+const escapeHtml = (value = "") =>
+    String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+
+const textToHtml = (text = "") => `<div style="font-family:Arial,sans-serif;line-height:1.7;color:#222;white-space:normal;">${escapeHtml(
+    text
+).replace(/\r?\n/g, "<br>")}</div>`;
+
 // Send verification email
 const sendVerificationEmail = async (contactValue, contactHash, template = 'DEFAULT') => {
     await rateLimitEmailVerification(contactValue);
 
     const token = generateEmailToken(contactHash);
     const verifyUrl = `${await zcconfig.get("urls.frontend")}/app/account/email/verify?email=${encodeURIComponent(contactValue)}&token=${encodeURIComponent(token)}`;
+    const templateKey = Object.prototype.hasOwnProperty.call(EMAIL_TEMPLATES, template) ? template : "DEFAULT";
+    const subject = EMAIL_SUBJECTS[templateKey] || EMAIL_SUBJECTS.DEFAULT;
+    const textContent = EMAIL_TEMPLATES[templateKey](token, verifyUrl).trim();
+
+    await sendEmail(contactValue, subject, textToHtml(textContent));
 
     // 查找用户ID以发送隐藏通知
     const contact = await prisma.ow_users_contacts.findFirst({
@@ -180,11 +198,10 @@ const sendVerificationEmail = async (contactValue, contactHash, template = 'DEFA
     // 使用createNotification发送验证邮件通知
     await createNotification({
         userId,
-        title: '验证您的邮箱',
-        content: `您的验证码：${token}\n\n此验证码将在5分钟内有效。\n\n您也可以点击以下链接完成验证：\n${verifyUrl}`,
+        title: subject,
+        content: textContent,
         notificationType: 'email_verification',
         hidden: true,
-        pushChannels: ['email'],
         data: {
             email_to: contactValue,
             email_username: contactValue.split('@')[0],
