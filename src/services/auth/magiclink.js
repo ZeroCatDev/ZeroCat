@@ -6,6 +6,19 @@ import logger from '../logger.js';
 import {checkRateLimit, VerificationType} from './verification.js';
 import {createJWT} from './tokenUtils.js';
 import { createNotification } from '../../controllers/notifications.js';
+import { sendEmail } from '../email/emailService.js';
+
+const escapeHtml = (value = "") =>
+    String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+
+const textToHtml = (text = "") => `<div style="font-family:Arial,sans-serif;line-height:1.7;color:#222;white-space:normal;">${escapeHtml(
+    text
+).replace(/\r?\n/g, "<br>")}</div>`;
 
 // 生成魔术链接
 export async function generateMagicLinkForLogin(userId, email, options = {}) {
@@ -89,14 +102,17 @@ export async function sendMagicLinkEmail(email, magicLink, options = {}) {
             password_reset: '点击下方链接重置您的密码'
         };
         
-        // 使用createNotification发送魔术链接通知
+        const title = titleMap[templateType] || '魔术链接';
+        const content = `${contentMap[templateType] || '点击下方链接继续操作'}：\n\n${magicLink}\n\n链接将在30分钟后失效，请及时使用。`;
+        await sendEmail(email, title, textToHtml(content));
+
+        // 写入站内通知（不走邮件渠道）
         await createNotification({
             userId: options.userId,
-            title: titleMap[templateType] || '魔术链接',
-            content: `${contentMap[templateType] || '点击下方链接继续操作'}：\n\n${magicLink}\n\n链接将在30分钟后失效，请及时使用。`,
+            title,
+            content,
             notificationType: 'magic_link_email',
             hidden: true,
-            pushChannels: ['email'],
             data: {
                 email_to: email,
                 email_username: email.split('@')[0],
