@@ -124,6 +124,7 @@ export class UnifiedAuthService {
                 title,
                 content,userId,
                 pushChannels: ['email'],
+                hidden: true,
                 data: {
                     email_to: targetEmail,
                     purpose,
