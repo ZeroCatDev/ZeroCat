@@ -108,6 +108,7 @@ function shouldUseTrgm(keyword) {
 function buildProjectTrgmWhere({ keyword, type, state, useridArray, tagsArray }) {
   const params = [keyword];
   const conditions = [
+    "p.authorid IS NOT NULL",
     `(COALESCE(p.name, '') % $1 OR COALESCE(p.title, '') % $1 OR COALESCE(p.description, '') % $1)`,
   ];
 
@@ -438,6 +439,7 @@ router.get("/", async (req, res, next) => {
     const { orderBy, order } = buildProjectOrder(orderbyQuery);
 
     const projectAnd = [
+      { authorid: { not: null } },
       type ? { type: { equals: String(type) } } : undefined,
       state.length > 0 ? { state: { in: state } } : undefined,
       useridArray.length > 0 ? { authorid: { in: useridArray } } : undefined,

@@ -1,7 +1,7 @@
 import logger from "../../services/logger.js";
 import {emailTest, hash, userpwTest} from "../../services/global.js";
 import { prisma } from "../../services/prisma.js";
-import redisClient from "../../services/redis.js";
+import crypto from "crypto";
 import {
     checkRateLimit,
     createTemporaryToken,
@@ -11,6 +11,7 @@ import {
     verifyCode
 } from "../../services/auth/verification.js";
 import {generateMagicLinkForLogin, sendMagicLinkEmail} from "../../services/auth/magiclink.js";
+import {sendVerificationCode, verifyEmailCode} from "../../services/auth/unifiedAuth.js";
 import {createEvent} from "../events.js";
 
 /**
@@ -265,11 +266,13 @@ export const verifyEmail = async (req, res) => {
 };
 
 /**
- * 发送找回密码邮件
+ * 发送找回密码验证码
  */
 export const retrievePassword = async (req, res) => {
     try {
         const {email} = req.body;
+        const responseMessage = "如果此邮箱已注册，验证码将发送到您的邮箱";
+        let codeId = crypto.randomUUID();
 
         if (!email || !emailTest(email)) {
             return res.status(200).json({
@@ -291,7 +294,11 @@ export const retrievePassword = async (req, res) => {
             // 安全起见，不告诉用户邮箱是否存在
             return res.status(200).json({
                 status: "success",
-                message: "如果此邮箱已注册，重置密码链接将发送到您的邮箱",
+                message: responseMessage,
+                data: {
+                    code_id: codeId,
+                    expires_in: 300
+                }
             });
         }
 
@@ -304,7 +311,11 @@ export const retrievePassword = async (req, res) => {
             // 安全起见，不告诉用户邮箱是否存在
             return res.status(200).json({
                 status: "success",
-                message: "如果此邮箱已注册，重置密码链接将发送到您的邮箱",
+                message: responseMessage,
+                data: {
+                    code_id: codeId,
+                    expires_in: 300
+                }
             });
         }
 
@@ -317,28 +328,28 @@ export const retrievePassword = async (req, res) => {
             });
         }
 
-        // 生成魔术链接
-        const options = {
-            templateType: 'password_reset',
-            expiresIn: 1800, // 30分钟有效
-            redirect: '/app/account/reset-password'
-        };
-
-        const magicLinkResult = await generateMagicLinkForLogin(user.id, email, options);
-
-        if (magicLinkResult.success) {
-            await sendMagicLinkEmail(email, magicLinkResult.magicLink, options);
+        const sendCodeResult = await sendVerificationCode(user.id, email, "reset_password");
+        if (!sendCodeResult.success) {
+            return res.status(200).json({
+                status: "error",
+                message: sendCodeResult.message || "发送验证码失败",
+            });
         }
+        codeId = sendCodeResult.codeId;
 
         return res.status(200).json({
             status: "success",
-            message: "重置密码链接已发送到您的邮箱",
+            message: "重置密码验证码已发送到您的邮箱",
+            data: {
+                code_id: codeId,
+                expires_in: 300
+            }
         });
     } catch (error) {
-        logger.error("发送找回密码邮件时出错:", error);
+        logger.error("发送找回密码验证码时出错:", error);
         return res.status(200).json({
             status: "error",
-            message: "发送找回密码邮件失败",
+            message: "发送找回密码验证码失败",
         });
     }
 };
@@ -348,39 +359,50 @@ export const retrievePassword = async (req, res) => {
  */
 export const resetPassword = async (req, res) => {
     try {
-        const {token, password} = req.body;
+        const {
+            code_id: snakeCaseCodeId,
+            codeId: camelCaseCodeId,
+            code,
+            new_password: snakeCaseNewPassword,
+            newPassword: camelCaseNewPassword
+        } = req.body;
+        const codeId = snakeCaseCodeId || camelCaseCodeId;
+        const newPassword = snakeCaseNewPassword || camelCaseNewPassword;
 
-        if (!token || !password) {
+        if (!codeId || !code || !newPassword) {
             return res.status(200).json({
                 status: "error",
-                message: "令牌和新密码都是必需的",
+                message: "验证码ID、验证码和新密码都是必需的",
             });
         }
 
-        if (!userpwTest(password)) {
+        if (!userpwTest(newPassword)) {
             return res.status(200).json({
                 status: "error",
                 message: "密码格式不正确，密码至少需要8位，包含数字和字母",
             });
         }
 
-        // 从Redis中验证token
-        const redisKey = `magic_link:${token}`;
-        const magicLinkData = await redisClient.get(redisKey);
-
-        if (!magicLinkData || magicLinkData.used) {
+        const verifyResult = await verifyEmailCode(codeId, code);
+        if (!verifyResult.valid) {
             return res.status(200).json({
                 status: "error",
-                message: "重置链接已过期或已被使用",
+                message: verifyResult.message || "验证码无效或已过期",
             });
         }
 
-        // 获取用户信息
-        const userId = magicLinkData.userId;
+        if (verifyResult.data?.purpose !== "reset_password") {
+            return res.status(200).json({
+                status: "error",
+                message: "验证码用途不正确",
+            });
+        }
+
+        const userId = verifyResult.data?.userId;
         if (!userId) {
             return res.status(200).json({
                 status: "error",
-                message: "无效的重置链接",
+                message: "无效的验证码数据",
             });
         }
 
@@ -399,13 +421,9 @@ export const resetPassword = async (req, res) => {
         await prisma.ow_users.update({
             where: {id: user.id},
             data: {
-                password: hash(password),
+                password: hash(newPassword),
             },
         });
-
-        // 标记token为已使用
-        magicLinkData.used = true;
-        await redisClient.set(redisKey, magicLinkData, 3600); // 1小时后过期
 
         // 撤销所有其他登录令牌（可选）
         await prisma.ow_auth_tokens.updateMany({
@@ -416,7 +434,6 @@ export const resetPassword = async (req, res) => {
             data: {
                 revoked: true,
                 revoked_at: new Date(),
-                revoked_reason: "password_reset",
             },
         });
 

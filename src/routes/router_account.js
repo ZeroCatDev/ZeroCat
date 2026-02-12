@@ -42,6 +42,7 @@ router.post("/register", geetestMiddleware, registerController.registerUser);
 router.post("/register/verify-email", registerController.verifyEmail);
 router.post("/register/resend-verification-email", registerController.resendVerificationEmail);
 router.post("/register/change-register-email", registerController.changeRegisterEmail);
+router.post("/send-code", geetestMiddleware, registerController.retrievePassword);
 router.post("/retrievePassword", geetestMiddleware, registerController.retrievePassword);
 router.post("/reset-password", registerController.resetPassword);
 router.post("/set-password", registerController.setPassword);

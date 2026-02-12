@@ -28,29 +28,75 @@ export class UnifiedAuthService {
      */
     async sendVerificationCode(userId, email = null, purpose = 'login') {
         try {
-            let targetEmail = email;
+            if (!userId) {
+                return { success: false, message: '缺少用户信息' };
+            }
 
-            // 如果未指定邮箱，获取用户的主邮箱
+            let targetEmail = typeof email === 'string' ? email.trim() : null;
+
+            // 如果未指定邮箱，优先读取联系方式表中的主邮箱，再回退到用户表邮箱字段
             if (!targetEmail) {
-                const user = await prisma.ow_users.findUnique({
-                    where: { id: userId },
-                    select: { email: true }
+                const primaryContact = await prisma.ow_users_contacts.findFirst({
+                    where: {
+                        user_id: userId,
+                        contact_type: 'email',
+                        is_primary: true,
+                        verified: true
+                    },
+                    select: { contact_value: true }
                 });
 
-                if (!user?.email) {
+                if (primaryContact?.contact_value) {
+                    targetEmail = primaryContact.contact_value;
+                }
+
+                if (!targetEmail) {
+                    const anyVerifiedContact = await prisma.ow_users_contacts.findFirst({
+                        where: {
+                            user_id: userId,
+                            contact_type: 'email',
+                            verified: true
+                        },
+                        select: { contact_value: true }
+                    });
+
+                    if (anyVerifiedContact?.contact_value) {
+                        targetEmail = anyVerifiedContact.contact_value;
+                    }
+                }
+
+                if (!targetEmail) {
+                    const user = await prisma.ow_users.findUnique({
+                        where: { id: userId },
+                        select: { email: true }
+                    });
+                    targetEmail = user?.email || null;
+                }
+
+                if (!targetEmail) {
                     return { success: false, message: '用户未绑定邮箱' };
                 }
-                targetEmail = user.email;
             } else {
-                // 验证指定的邮箱是否属于该用户
-                const userEmail = await prisma.ow_users.findFirst({
-                    where: {
-                        id: userId,
-                        email: targetEmail
-                    }
-                });
+                // 验证指定邮箱是否归属于该用户（兼容用户表和联系方式表两种存储）
+                const [contactEmail, userEmail] = await Promise.all([
+                    prisma.ow_users_contacts.findFirst({
+                        where: {
+                            user_id: userId,
+                            contact_type: 'email',
+                            contact_value: targetEmail
+                        },
+                        select: { contact_id: true }
+                    }),
+                    prisma.ow_users.findFirst({
+                        where: {
+                            id: userId,
+                            email: targetEmail
+                        },
+                        select: { id: true }
+                    })
+                ]);
 
-                if (!userEmail) {
+                if (!contactEmail && !userEmail) {
                     return { success: false, message: '指定的邮箱不属于当前用户' };
                 }
             }
@@ -119,7 +165,7 @@ export class UnifiedAuthService {
             }
 
             // 如果提供了用户ID，验证是否匹配
-            if (userId && storedData.userId !== userId) {
+            if (userId && Number(storedData.userId) !== Number(userId)) {
                 return { valid: false, message: '验证码不属于当前用户' };
             }
 

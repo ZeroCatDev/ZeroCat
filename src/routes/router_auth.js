@@ -50,6 +50,7 @@ router.post('/send-code', (req, res, next) => {
  * - password: 密码（password方式）
  * - code_id: 验证码ID（email方式）
  * - code: 验证码（email方式）
+ * - new_password: 新密码（reset_password时必填）
  */
 router.post('/authenticate', (req, res, next) => {
     // 根据purpose决定是否需要登录

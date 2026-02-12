@@ -4,11 +4,9 @@ import {
     authenticate
 } from '../../services/auth/unifiedAuth.js';
 import { prisma } from '../../services/prisma.js'
+import { hash, userpwTest } from '../../services/global.js';
 
 import { generateSudoToken } from '../../services/auth/sudoAuth.js';
-import { createUserLoginTokens } from '../../services/auth/tokenUtils.js';
-import { needLogin } from '../../middleware/auth.js';
-import { requireSudo } from '../../middleware/sudo.js';
 
 /**
  * 发送验证码统一接口
@@ -33,20 +31,43 @@ export async function sendCode(req, res) {
 
         // 对于登录和重置密码，如果没有提供userId但提供了email，尝试查找用户
         if (['login', 'reset_password'].includes(purpose) && !userId && email) {
-            const user = await prisma.ow_users.findFirst({
-                where: { email },
-                select: { id: true }
+            const emailContact = await prisma.ow_users_contacts.findFirst({
+                where: {
+                    contact_type: 'email',
+                    contact_value: email,
+                    ...(purpose === 'reset_password' ? { verified: true } : {})
+                },
+                select: {
+                    user_id: true,
+                    user: {
+                        select: {
+                            status: true
+                        }
+                    }
+                }
             });
+            const fallbackUser = !emailContact
+                ? await prisma.ow_users.findFirst({
+                    where: { email },
+                    select: {
+                        id: true,
+                        status: true
+                    }
+                })
+                : null;
 
-            if (!user) {
+            const resolvedUserId = emailContact?.user_id || fallbackUser?.id || null;
+            const resolvedUserStatus = emailContact?.user?.status || fallbackUser?.status || null;
+
+            if (!resolvedUserId || resolvedUserStatus !== 'active') {
                 return res.status(404).json({
                     status: 'error',
                     message: '该邮箱未注册',
                     code: 'EMAIL_NOT_FOUND'
                 });
             }
-            logger.info(`[unified-auth-controller] 通过邮箱查找到用户: ${user.id}`);
-            userId = user.id;
+            logger.info(`[unified-auth-controller] 通过邮箱查找到用户: ${resolvedUserId}`);
+            userId = resolvedUserId;
         }
 
         if (!userId) {
@@ -95,8 +116,11 @@ export async function auth(req, res) {
             identifier,
             password,
             code_id: codeId,
-            code
+            code,
+            new_password: snakeCaseNewPassword,
+            newPassword: camelCaseNewPassword
         } = req.body;
+        const newPassword = snakeCaseNewPassword || camelCaseNewPassword;
 
         let { userId } = req.body;
 
@@ -150,6 +174,48 @@ export async function auth(req, res) {
                 break;
 
             case 'reset_password':
+                if (!newPassword) {
+                    return res.status(400).json({
+                        status: 'error',
+                        message: '新密码是必需的',
+                        code: 'MISSING_NEW_PASSWORD'
+                    });
+                }
+
+                if (!userpwTest(newPassword)) {
+                    return res.status(400).json({
+                        status: 'error',
+                        message: '密码格式不正确，密码至少需要8位，包含数字和字母',
+                        code: 'INVALID_PASSWORD_FORMAT'
+                    });
+                }
+
+                await prisma.ow_users.update({
+                    where: { id: authResult.user.id },
+                    data: {
+                        password: hash(newPassword)
+                    }
+                });
+
+                // 重置密码后撤销现有登录令牌
+                await prisma.ow_auth_tokens.updateMany({
+                    where: {
+                        user_id: authResult.user.id,
+                        revoked: false,
+                    },
+                    data: {
+                        revoked: true,
+                        revoked_at: new Date(),
+                    }
+                });
+
+                responseData = {
+                    verified: true,
+                    user_id: authResult.user.id,
+                    password_reset: true
+                };
+                break;
+
             case 'change_email':
             case 'delete_account':
                 // 这些操作需要额外的业务逻辑，这里只返回认证成功状态
