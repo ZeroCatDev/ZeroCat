@@ -113,11 +113,6 @@ export const EventConfig = {
         notifyTargets: ["user_followers"],
         notificationData: ['project_name']
     },
-    project_publish: {
-        public: true,
-        notifyTargets: ["user_followers"],
-        notificationData: ['project_name']
-    },
     comment_create: {
         public: false,
         notifyTargets: ["project_owner", "thread_participants", "mentioned_users"],
