@@ -5,6 +5,50 @@ import {AudienceDataDependencies, EventConfig,} from "../config/eventConfig.js";
 
 // 重新导出这些常量供外部使用
 export {EventConfig};
+const NON_PRIMARY_BRANCH_AUDIENCE_TYPES = new Set([
+    "project_followers",
+    "project_owner_followers"
+]);
+const DEFAULT_PRIMARY_BRANCH = "main";
+
+function normalizeText(value) {
+    if (value === null || value === undefined) return "";
+    return String(value).trim();
+}
+
+async function getEffectiveNotifyTargets(event, eventConfig, eventData = {}) {
+    const configuredTargets = Array.isArray(eventConfig.notifyTargets)
+        ? eventConfig.notifyTargets
+        : [];
+    if (event.event_type !== "project_commit" || configuredTargets.length === 0) {
+        return configuredTargets;
+    }
+
+    const branch = normalizeText(eventData.branch);
+    if (!branch) {
+        return configuredTargets;
+    }
+
+    let defaultBranch = normalizeText(eventData.default_branch || eventData.project_default_branch);
+    if (!defaultBranch && event.target_type === "project") {
+        const project = await prisma.ow_projects.findUnique({
+            where: {id: Number(event.target_id)},
+            select: {default_branch: true}
+        });
+        defaultBranch = normalizeText(project?.default_branch);
+    }
+
+    const normalizedBranch = branch.toLowerCase();
+    const normalizedDefaultBranch = (defaultBranch || DEFAULT_PRIMARY_BRANCH).toLowerCase();
+    if (normalizedBranch !== normalizedDefaultBranch) {
+        logger.debug(
+            `事件 ${event.event_type} 分支 ${branch} 非主分支 ${defaultBranch || DEFAULT_PRIMARY_BRANCH}，仅向核心受众发送通知`
+        );
+        return configuredTargets.filter(audienceType => !NON_PRIMARY_BRANCH_AUDIENCE_TYPES.has(audienceType));
+    }
+
+    return configuredTargets;
+}
 
 /**
  * 创建事件并异步发送通知
@@ -191,13 +235,23 @@ async function processNotifications(event, eventConfig, eventData) {
     try {
         const actorId = Number(event.actor_id);
         const targetId = Number(event.target_id);
+        const notifyTargets = await getEffectiveNotifyTargets(event, eventConfig, eventData);
+        if (notifyTargets.length === 0) {
+            logger.debug(`事件 ${event.event_type} 未配置可通知受众`);
+            return;
+        }
+
+        const inlineCopy = {
+            title: normalizeText(eventData.notification_title),
+            content: normalizeText(eventData.notification_content)
+        };
 
         // 收集所有需要通知的用户ID
         const notificationUsers = new Set();
         const audienceResults = {};
 
         // 为每个受众类型获取用户
-        for (const audienceType of eventConfig.notifyTargets) {
+        for (const audienceType of notifyTargets) {
             try {
                 const audienceUsers = await getAudienceUsers(audienceType, event, eventData, audienceResults);
                 audienceResults[audienceType] = audienceUsers;
@@ -233,7 +287,9 @@ async function processNotifications(event, eventConfig, eventData) {
                 actorId,
                 targetType: event.target_type,
                 targetId,
-                data: eventData
+                data: eventData,
+                ...(inlineCopy.title ? {title: inlineCopy.title} : {}),
+                ...(inlineCopy.content ? {content: inlineCopy.content} : {})
             }).catch(error => {
                 logger.error(`为用户 ${userId} 创建通知失败:`, error);
                 return null;

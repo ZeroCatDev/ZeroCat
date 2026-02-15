@@ -25,8 +25,13 @@ const NotificationTemplates = JSON.parse(
  * @returns {string} 渲染后的字符串
  */
 function renderTemplate(template, vars) {
+    if (!template || typeof template !== 'string') {
+        return '';
+    }
+
     return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-        return vars[key] || match;
+        const value = vars?.[key];
+        return value === undefined || value === null ? '' : String(value);
     });
 }
 
@@ -356,70 +361,58 @@ async function sendEmailNotificationDirect(emailData) {
  */
 export async function createNotification(notificationData) {
     try {
-        const template = NotificationTemplates[notificationData.notificationType] || {
-            title: notificationData.notificationType,
-            template: "{{content}}",
-            icon: "notification",
+        const notificationType = notificationData.notificationType
+            ? String(notificationData.notificationType)
+            : 'custom_notification';
+
+        const template = NotificationTemplates[notificationType] || {
+            title: notificationType,
+            icon: 'notification',
             requiresActor: false,
         };
 
-        // 获取行为者信息
-        let actor = null;
-        if (notificationData.actorId && template.requiresActor) {
-            actor = await prisma.ow_users.findUnique({
-                where: { id: Number(notificationData.actorId) },
-                select: {
-                    id: true,
-                    username: true,
-                    display_name: true,
-                    avatar: true,
-                },
-            });
-        }
-
-        // 获取目标信息
-        let target = null;
-        if (notificationData.targetType && notificationData.targetId) {
-            target = await getTargetInfo(notificationData.targetType, notificationData.targetId);
-        }
-
-        // 准备模板变量
-        const templateVars = {
-            actor_name: actor?.display_name || actor?.username || '未知用户',
-            target_name: target?.name || target?.title || target?.display_name || '未知对象',
-            ...notificationData.data,
+        const data = notificationData.data || {};
+        const normalizeNotificationText = (value) => {
+            if (value === null || value === undefined) return '';
+            return String(value).trim();
         };
 
-        // 生成通知内容
-        const title = notificationData.title || template.title;
-        const content = notificationData.content || renderTemplate(template.template, templateVars);
+        // 通知文案以调用方传入为准，不再走集中模板渲染。
+        const title =
+            normalizeNotificationText(notificationData.title) ||
+            normalizeNotificationText(data.notification_title) ||
+            normalizeNotificationText(data.custom_title) ||
+            '通知';
 
-        // 生成链接
-        let link = notificationData.link;
+        const content =
+            normalizeNotificationText(notificationData.content) ||
+            normalizeNotificationText(data.notification_content) ||
+            normalizeNotificationText(data.custom_content) ||
+            normalizeNotificationText(data.content) ||
+            '您有一条新通知';
+
+        const link = notificationData.link || null;
 
         // 默认推送渠道设置
         const defaultChannels = notificationData.hidden ? [] : ['browser'];
-        const pushChannels = notificationData.pushChannels || defaultChannels;
-
-        // 推送结果记录
-        const pushResults = {};
-        let hasError = false;
+        const pushChannels = Array.isArray(notificationData.pushChannels)
+            ? notificationData.pushChannels
+            : defaultChannels;
 
         // 在数据库中创建通知
         const notificationCreateData = {
-            title: title,
-            content: content,
-            link: link,
+            title,
+            content,
+            link,
             metadata: {
-                template_used: notificationData.notificationType,
-                template_vars: templateVars,
-                ...notificationData.data,
+                template_used: notificationType,
+                ...data,
             },
-            notification_type: notificationData.notificationType ? String(notificationData.notificationType) : undefined,
+            notification_type: notificationType,
             actor_id: notificationData.actorId ? Number(notificationData.actorId) : null,
             target_type: notificationData.targetType ? String(notificationData.targetType) : null,
             target_id: notificationData.targetId ? Number(notificationData.targetId) : null,
-            data: notificationData.data || {},
+            data,
             high_priority: notificationData.highPriority || false,
             hidden: notificationData.hidden || false,
             push_channels: pushChannels,
@@ -429,7 +422,7 @@ export async function createNotification(notificationData) {
         };
 
         // 如果有userId，则设置user_id字段
-        if (notificationData.userId) {
+        if (notificationData.userId !== undefined && notificationData.userId !== null) {
             notificationCreateData.user_id = Number(notificationData.userId);
         }
 
@@ -447,14 +440,18 @@ export async function createNotification(notificationData) {
                 link,
                 template,
                 pushChannels,
-                notificationData
+                notificationData: {
+                    ...notificationData,
+                    notificationType,
+                    data
+                }
             });
         }
 
-        logger.debug(`创建通知 ID ${notification.id} 给用户 ${notificationData.userId}`);
+        logger.debug('创建通知 ID ' + notification.id + ' 给用户 ' + notificationData.userId);
         return notification;
     } catch (error) {
-        logger.error("创建通知出错:", error);
+        logger.error('创建通知出错:', error);
         throw error;
     }
 }

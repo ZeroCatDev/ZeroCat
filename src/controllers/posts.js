@@ -277,6 +277,8 @@ async function notifyMentions(mentionedUsers, actorId, postId) {
     mentionedUsers.map((user) =>
       createNotification({
         notificationType: "post_mention",
+        title: "推文提及",
+        content: "有人在推文中提到了你",
         userId: user.id,
         actorId,
         targetType: "post",
@@ -462,6 +464,8 @@ export async function replyToPost({
   if (target.author_id && target.author_id !== authorId) {
     await createNotification({
       notificationType: "post_reply",
+      title: "推文回复",
+      content: "有人回复了你的推文",
       userId: target.author_id,
       actorId: authorId,
       targetType: "post",
@@ -516,6 +520,8 @@ export async function retweetPost({ authorId, retweetPostId }) {
   if (target.author_id && target.author_id !== authorId) {
     await createNotification({
       notificationType: "post_retweet",
+      title: "推文转推",
+      content: "有人转推了你的推文",
       userId: target.author_id,
       actorId: authorId,
       targetType: "post",
@@ -656,6 +662,8 @@ export async function quotePost({
   if (target.author_id && target.author_id !== authorId) {
     await createNotification({
       notificationType: "post_quote",
+      title: "推文引用",
+      content: "有人引用了你的推文",
       userId: target.author_id,
       actorId: authorId,
       targetType: "post",
@@ -709,6 +717,8 @@ export async function likePost({ userId, postId }) {
   if (target.author_id && target.author_id !== userId) {
     await createNotification({
       notificationType: "post_like",
+      title: "推文点赞",
+      content: "有人点赞了你的推文",
       userId: target.author_id,
       actorId: userId,
       targetType: "post",

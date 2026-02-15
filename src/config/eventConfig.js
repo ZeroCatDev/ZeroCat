@@ -100,12 +100,12 @@ export const EventConfig = {
     },
     project_update: {
         public: true,
-        notifyTargets: ["project_owner", "project_followers", "project_owner_followers"],
+        notifyTargets: ["project_owner"],
         notificationData: ['project_name']
     },
     project_fork: {
         public: true,
-        notifyTargets: ["project_owner", "project_owner_followers"],
+        notifyTargets: ["project_owner"],
         notificationData: ['project_name']
     },
     project_create: {
@@ -115,17 +115,13 @@ export const EventConfig = {
     },
     project_publish: {
         public: true,
-        notifyTargets: ["user_followers", "project_owner_followers"],
+        notifyTargets: ["user_followers"],
         notificationData: ['project_name']
     },
     comment_create: {
         public: false,
         notifyTargets: ["project_owner", "thread_participants", "mentioned_users"],
         notificationData: ['project_name', 'comment_text']
-    },
-    user_profile_update: {
-        public: true,
-        notifyTargets: ["user_followers"]
     },
     user_login: {
         public: false,
@@ -135,29 +131,41 @@ export const EventConfig = {
         public: true,
         notifyTargets: []
     },
+    user_profile_update: {
+        public: true,
+        notifyTargets: []
+    },
+    user_account_deleted: {
+        public: false,
+        notifyTargets: []
+    },
     project_rename: {
         public: true,
-        notifyTargets: ["project_followers", "project_owner_followers"],
+        notifyTargets: ["project_owner"],
         notificationData: ['project_name']
     },
     project_info_update: {
         public: true,
-        notifyTargets: ["project_followers", "project_owner_followers"],
+        notifyTargets: ["project_owner"],
         notificationData: ['project_name']
+    },
+    project_delete: {
+        public: true,
+        notifyTargets: []
     },
     project_star: {
         public: true,
-        notifyTargets: ["project_owner", "project_owner_followers"],
+        notifyTargets: ["project_owner"],
         notificationData: ['project_name']
     },
     project_like: {
         public: true,
-        notifyTargets: ["project_owner", "project_owner_followers"],
+        notifyTargets: ["project_owner"],
         notificationData: ['project_name']
     },
     project_collect: {
         public: true,
-        notifyTargets: ["project_owner", "project_owner_followers"],
+        notifyTargets: ["project_owner"],
         notificationData: ['project_name']
     },
     user_follow: {

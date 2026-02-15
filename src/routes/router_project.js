@@ -436,6 +436,8 @@ router.post("/", needLogin, async (req, res, next) => {
         project_title: result.title,
         project_description: result.description,
         project_state: result.state,
+        notification_title: "新建项目",
+        notification_content: `创建了新项目 ${result.title || result.name}`,
       },
       isPrivate // 传入是否强制私密
     );
@@ -738,6 +740,7 @@ router.put("/commit/id/:id", needLogin, async (req, res, next) => {
         commit_id: commitId,
         commit_message: message,
         branch: branch,
+        default_branch: project.default_branch || 'main',
         commit_file: sha256,
         // 添加项目相关信息
         project_name: project.name,
@@ -745,6 +748,8 @@ router.put("/commit/id/:id", needLogin, async (req, res, next) => {
         project_type: project.type,
         project_description: project.description,
         project_state: project.state,
+        notification_title: "代码推送",
+        notification_content: `${branch} 分支有新提交：${message || commitId.slice(0, 8)}`,
       },
       isPrivate // 传入是否强制私密
     );
@@ -1272,6 +1277,10 @@ router.put("/id/:id", needLogin, async (req, res, next) => {
         project_type: updatedData.type || project.type,
         project_description: updatedData.description || project.description,
         project_state: updatedData.state || project.state,
+        notification_title: "项目信息更新",
+        notification_content: changes.updated_fields.length > 0
+          ? `更新了 ${changes.updated_fields.join("、")}`
+          : "更新了项目信息",
       },
       project.state === "private" // 根据项目状态决定是否私密
     );
@@ -1569,6 +1578,8 @@ router.put("/rename/:id", needLogin, async (req, res, next) => {
         project_title: project.title,
         project_type: project.type,
         project_state: project.state,
+        notification_title: "项目重命名",
+        notification_content: `将项目 ${project.name} 重命名为 ${newName}`,
       },
       project.state === "private" // 根据项目状态决定是否私密
     );
@@ -1752,7 +1763,19 @@ router.post("/fork", needLogin, async (req, res, next) => {
       res.locals.userid,
       "project",
       Number(forkedProject.id),
-      { NotificationTo: [project.authorid] },
+      {
+        NotificationTo: [project.authorid],
+        event_type: "project_fork",
+        actor_id: res.locals.userid,
+        target_type: "project",
+        target_id: Number(forkedProject.id),
+        project_name: forkedProject.name,
+        project_title: forkedProject.title,
+        source_project_name: project.name,
+        source_project_title: project.title,
+        notification_title: "项目派生",
+        notification_content: `派生了你的项目 ${project.title || project.name}`,
+      },
       isPrivate
     );
   } catch (err) {

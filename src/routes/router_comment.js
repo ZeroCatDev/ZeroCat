@@ -206,12 +206,16 @@ router.post("/api/comment", needLogin, async (req, res, next) => {
             await createEvent("comment_reply", userid, targetType, targetId, {
                 comment_text: comment,
                 target_user: user_id,
+                notification_title: "收到回复",
+                notification_content: `有人回复了你的评论：${comment}`,
             });
         } else {
             // 如果没有 rid，说明是新评论
             await createEvent("comment_create", userid, targetType, targetId, {
                 comment_text: comment,
                 target_user: user_id,
+                notification_title: "新评论",
+                notification_content: `有人评论了你的内容：${comment}`,
             });
         }
     } catch (err) {

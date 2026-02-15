@@ -1,7 +1,6 @@
 import { prisma } from '../services/prisma.js';
 
 import logger from "../services/logger.js";
-import {createEvent} from "./events.js";
 
 
 /**
@@ -55,17 +54,6 @@ export async function starProject(userId, projectId) {
             }
         });
 
-        // 创建收藏事件
-        await createEvent({
-            eventType: "project_star",
-            actorId: parsedUserId,
-
-            targetType: "project",
-            targetId: parsedProjectId,
-            eventData: {
-                NotificationTo: [project.authorid]
-            }
-        });
 
 
         return star;

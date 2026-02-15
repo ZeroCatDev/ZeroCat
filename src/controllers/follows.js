@@ -61,7 +61,10 @@ export async function followUser(followerId, followedId, note = "") {
             followerId,
             "user",
             followedId,
-            {}
+            {
+                notification_title: "新关注",
+                notification_content: "有人开始关注你了",
+            }
         );
 
         logger.debug(`Created follow notification for user ${followedId}`);

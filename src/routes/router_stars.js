@@ -34,7 +34,9 @@ router.post("/star", needLogin, async (req, res) => {
                 actor_id: res.locals.userid,
                 target_type: "project",
                 target_id: projectId,
-                action: "star"
+                action: "star",
+                notification_title: "项目收藏",
+                notification_content: "有人收藏了你的项目",
             }
         );
 
