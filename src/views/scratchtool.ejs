@@ -1876,14 +1876,48 @@ function countProjectAssets(projectData) {
   return total;
 }
 
+function normalizeRefValue(ref) {
+  return String(ref ?? "").trim();
+}
+
+function isLatestRefValue(ref) {
+  return normalizeRefValue(ref).toLowerCase() === "latest";
+}
+
+function isSameCommitRef(leftRef, rightRef) {
+  const left = normalizeRefValue(leftRef);
+  const right = normalizeRefValue(rightRef);
+  if (!left || !right) return false;
+  return left === right;
+}
+
 async function warnIfRefIsNotLatest() {
-  const ref = String(getQueryStringParameter("ref") || "").trim();
-  if (!ref || ref === "latest") return;
-  if (AppState.load.warnedRef === ref) return;
-  AppState.load.warnedRef = ref;
+  const ref = normalizeRefValue(getQueryStringParameter("ref"));
+  if (!ref || isLatestRefValue(ref)) return;
+
+  const branch = String(getQueryStringParameter("branch") || "main").trim() || "main";
+  let latestCommitId = "";
+  try {
+    if (Number.isInteger(_pid) && _pid > 0) {
+      const latestRemote = await fetchLatestRemoteProjectSnapshot(branch);
+      if (!latestRemote?.exists) return;
+      latestCommitId = normalizeRefValue(latestRemote?.commitId);
+      if (isSameCommitRef(ref, latestCommitId)) {
+        return;
+      }
+    }
+  } catch (error) {
+    console.warn("[load] failed to verify whether ref is latest:", error);
+  }
+
+  const warnedRef = `${branch}:${ref}`;
+  if (AppState.load.warnedRef === warnedRef) return;
+  AppState.load.warnedRef = warnedRef;
 
   const headline = "提交提示";
-  const description = `当前 URL 使用 ref=${ref}，这不是最后一次提交，加载的是历史版本。`;
+  const description = latestCommitId
+    ? `当前 URL 使用 ref=${ref}，最新提交是 ${latestCommitId}，加载的是历史版本。`
+    : `当前 URL 使用 ref=${ref}，这不是最后一次提交，加载的是历史版本。`;
   const switchToLatest = async () => {
     const url = new URL(window.location.href);
     url.searchParams.set("ref", "latest");
@@ -2060,6 +2094,8 @@ async function downloadAndLoadProject(pid, { requestSeq = null } = {}) {
 
   const branch = getQueryStringParameter("branch") || "main";
   const ref = getQueryStringParameter("ref") || "latest";
+  const requestedRef = normalizeRefValue(ref);
+  const requestedLatest = !requestedRef || isLatestRefValue(requestedRef);
 
   try {
     const response = await apiRequest({
@@ -2083,7 +2119,8 @@ async function downloadAndLoadProject(pid, { requestSeq = null } = {}) {
     // 更新URL查询参数，将commit.id和branch写入URL
     if (commit) {
       const url = new URL(window.location.href);
-      url.searchParams.set("ref", commit.id);
+      const commitId = normalizeRefValue(commit.id || commit.commit_id);
+      url.searchParams.set("ref", requestedLatest ? "latest" : (commitId || requestedRef));
       url.searchParams.set("branch", branch);
       window.history.replaceState({}, "", url);
     }
