@@ -272,6 +272,91 @@ async function buildListResponse(rawPosts, limit, viewerId = null) {
   };
 }
 
+function buildEmbedSubsetClauses(value, path = []) {
+  const field = path.length > 0 ? `embed.${path.join(".")}` : "embed";
+
+  if (value === undefined) return [];
+
+  if (value === null || Array.isArray(value)) {
+    if (path.length === 0) {
+      throw new Error("embeddata 必须是对象");
+    }
+
+    return [{
+      embed: {
+        path,
+        equals: value,
+      },
+    }];
+  }
+
+  if (typeof value === "object") {
+    const clauses = [];
+
+    for (const [rawKey, childValue] of Object.entries(value)) {
+      const key = typeof rawKey === "string" ? rawKey.trim() : "";
+      if (!key) {
+        throw new Error("embeddata 字段名不能为空");
+      }
+
+      clauses.push(...buildEmbedSubsetClauses(childValue, [...path, key]));
+    }
+
+    return clauses;
+  }
+
+  if (typeof value === "string") {
+    if (!value.trim()) {
+      throw new Error(`${field} 不能为空字符串`);
+    }
+
+    return [{
+      embed: {
+        path,
+        equals: value,
+      },
+    }];
+  }
+
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new Error(`${field} 必须是有限数字`);
+    }
+
+    return [{
+      embed: {
+        path,
+        equals: value,
+      },
+    }];
+  }
+
+  if (typeof value === "boolean") {
+    return [{
+      embed: {
+        path,
+        equals: value,
+      },
+    }];
+  }
+
+  throw new Error(`${field} 类型不支持`);
+}
+
+function normalizePositiveInt(value, fallback, max = 100) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) return fallback;
+  return Math.min(parsed, max);
+}
+
+function normalizeCursor(cursor) {
+  if (cursor === undefined || cursor === null || cursor === "") return null;
+  const parsed = Number(cursor);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error("cursor 必须是正整数");
+  }
+  return parsed;
+}
 async function notifyMentions(mentionedUsers, actorId, postId) {
   await Promise.all(
     mentionedUsers.map((user) =>
@@ -1001,6 +1086,47 @@ export async function getPostById(postId, viewerId = null) {
   };
 }
 
+export async function getRelatedPosts({
+  embedData,
+  cursor,
+  limit = 20,
+  includeReplies = false,
+  viewerId = null,
+}) {
+  await initStaticUrl();
+
+  if (
+    embedData === null ||
+    typeof embedData !== "object" ||
+    Array.isArray(embedData)
+  ) {
+    throw new Error("embeddata 必须是对象");
+  }
+
+  const clauses = buildEmbedSubsetClauses(embedData);
+  if (clauses.length === 0) {
+    throw new Error("embeddata 至少提供一个筛选条件");
+  }
+
+  const safeLimit = normalizePositiveInt(limit, 20);
+  const safeCursor = normalizeCursor(cursor);
+
+  const rawPosts = await prisma.ow_posts.findMany({
+    where: {
+      is_deleted: false,
+      embed: { not: null },
+      ...(includeReplies ? {} : { post_type: { not: "reply" } }),
+      ...(safeCursor ? { id: { lt: safeCursor } } : {}),
+      AND: clauses,
+    },
+    orderBy: { id: "desc" },
+    take: safeLimit,
+    select: buildLeanSelect(),
+  });
+
+  return buildListResponse(rawPosts, safeLimit, viewerId);
+}
+
 export async function getUserPosts({
   userId,
   cursor,
@@ -1593,3 +1719,4 @@ export async function getUserBookmarks({ userId, cursor, limit = 20, viewerId })
 }
 
 export { countPostCharacters, POST_CHAR_LIMIT, MAX_MEDIA_COUNT };
+

@@ -18,6 +18,7 @@ import {
   getHomeFeed,
   getThread,
   getMentions,
+  getRelatedPosts,
   getPostRetweets,
   getPostQuotes,
   getPostLikes,
@@ -42,6 +43,46 @@ const upload = multer({
   },
 });
 
+const pickQueryValue = (value) => (Array.isArray(value) ? value[0] : value);
+
+const parseBooleanQuery = (value, fallback = false) => {
+  const picked = pickQueryValue(value);
+  if (picked === undefined || picked === null || String(picked).trim() === "") {
+    return fallback;
+  }
+  return String(picked).trim().toLowerCase() === "true";
+};
+
+const parseEmbedDataQuery = (value) => {
+  const picked = pickQueryValue(value);
+  if (picked === undefined || picked === null) {
+    throw new Error("embeddata 不能为空");
+  }
+
+  let parsed = picked;
+  if (typeof picked === "string") {
+    const trimmed = picked.trim();
+    if (!trimmed) {
+      throw new Error("embeddata 不能为空");
+    }
+
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      throw new Error("embeddata 必须是合法 JSON");
+    }
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("embeddata 必须是对象");
+  }
+
+  if (Object.keys(parsed).length === 0) {
+    throw new Error("embeddata 至少提供一个筛选条件");
+  }
+
+  return parsed;
+};
 router.post("/upload-image", needLogin, upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
@@ -236,6 +277,25 @@ router.get("/mentions", needLogin, async (req, res) => {
   } catch (error) {
     logger.error("获取提及失败:", error);
     res.status(500).json({ status: "error", message: "获取提及失败" });
+  }
+});
+
+router.get("/related", async (req, res) => {
+  try {
+    const embedData = parseEmbedDataQuery(req.query.embeddata);
+
+    const data = await getRelatedPosts({
+      embedData,
+      cursor: pickQueryValue(req.query.cursor),
+      limit: pickQueryValue(req.query.limit) ?? 20,
+      includeReplies: parseBooleanQuery(req.query.include_replies, false),
+      viewerId: res.locals.userid || null,
+    });
+
+    res.status(200).json({ status: "success", data });
+  } catch (error) {
+    logger.error("获取关联帖子失败:", error);
+    res.status(400).json({ status: "error", message: error.message });
   }
 });
 
@@ -452,3 +512,4 @@ router.get("/:id", async (req, res) => {
 });
 
 export default router;
+
