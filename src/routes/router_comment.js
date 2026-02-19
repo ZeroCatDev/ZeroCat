@@ -1,139 +1,277 @@
-import logger from "../services/logger.js";
-import {needLogin, strictTokenCheck} from "../middleware/auth.js";
-import {UAParser} from "ua-parser-js";
-import ipLocation from "../services/ip/ipLocation.js";
-
-import {Router} from "express";
-import {prisma} from "../services/prisma.js";
-import {createEvent} from "../controllers/events.js";
+import { Router } from 'express';
+import crypto from 'crypto';
+import logger from '../services/logger.js';
+import zcconfig from '../services/config/zcconfig.js';
+import { walineSpaceResolver, isSpaceAdmin } from '../middleware/walineSpaceResolver.js';
+import { createWalineToken } from '../services/commentService/walineAuth.js';
+import {
+    getOrCreateSpaceUser,
+    getSpaceUser,
+    listSpaceUsers,
+    updateSpaceUser,
+} from '../services/commentService/spaceManager.js';
+import {
+    checkIpRate,
+    checkDuplicate,
+    createComment,
+    getComments,
+    getCommentCount,
+    getRecentComments,
+    getCommentList,
+    updateComment,
+    deleteComment,
+} from '../services/commentService/commentManager.js';
+import { getArticleCounter, updateArticleCounter } from '../services/commentService/counterManager.js';
+import { formatComment, toWalineType } from '../services/commentService/walineFormatter.js';
 
 const router = Router();
-// 中间件，确保所有请求均经过该处理
 
-// 获取排序条件
-const getSortCondition = (req) => {
-    const sortBy = req.query.sortBy;
-    if (sortBy == "insertedAt_desc") return {id: "desc"};
-    if (sortBy == "insertedAt_asc") return {id: "asc"};
-    if (sortBy == "like_desc") return {like: "desc"};
-    return {};
-};
+// 所有 /:spaceCuid/* 路由使用空间解析中间件
+router.use('/:spaceCuid', walineSpaceResolver);
 
-// 转换评论数据
-const transformComment = async (comments) => {
-    return Promise.all(
-        comments.map(async (comment) => {
-            const time = new Date(comment.insertedAt).getTime();
-            const objectId = comment.id;
+// ============================================================
+// 评论 API
+// ============================================================
 
-            // 使用 UAParser 解析 UA
-            const parser = new UAParser(comment.user_ua || "");
-            const result = parser.getResult();
-            const browser = result.browser.name || "未知";
-            const os = result.os.name || "未知";
-
-            // 获取 IP 地址位置信息
-            let ipInfo = await ipLocation.getIPLocation(comment.user_ip);
-
-            return {
-                ...comment,
-                time,
-                objectId,
-                browser,
-                os,
-                addr: ipInfo.address,
-                most_specific_country_or_region: ipInfo.most_specific_country_or_region,
-            };
-        })
-    );
-};
-
-// 读取评论
-router.get("/api/comment", async (req, res, next) => {
+/**
+ * GET /comment/:spaceCuid/api/comment
+ * 评论列表 / 计数 / 最新 / 管理列表
+ */
+router.get('/:spaceCuid/api/comment', async (req, res, next) => {
     try {
-        const {path, page, pageSize} = req.query;
-        const sort = getSortCondition(req);
-        logger.debug(req.query);
-        const comments = await prisma.ow_comment.findMany({
-            where: {
-                page_type: path.split("-")[0],
-                page_id: path.split("-")[1],
-                pid: null,
-                rid: null,
-                type: "comment",
-            },
-            orderBy: sort,
-            take: Number(pageSize) || 10,
-            skip: Number((page - 1) * pageSize),
-            include: {
-                user: {
-                    select: {
-                        id: true,
-                        username: true,
-                        display_name: true,
-                        avatar: true,
-                        type: true,
-                        motto: true,
-                    },
-                },
-            },
-        });
+        const space = req.commentSpace;
+        const config = req.spaceConfig;
+        const { type } = req.query;
 
-        const transformedComments = await transformComment(comments);
+        // type=count - 获取评论数量
+        if (type === 'count') {
+            let urls = req.query.url;
+            if (!urls) return res.json({ errno: 0, data: 0 });
+            if (typeof urls === 'string') {
+                // 检查是否是逗号分隔
+                if (urls.includes(',')) urls = urls.split(',');
+            }
+            const count = await getCommentCount(space.id, urls);
+            return res.json({ errno: 0, data: count });
+        }
 
-        const ids = transformedComments.map((comment) => comment.id);
+        // type=recent - 获取最新评论
+        if (type === 'recent') {
+            const data = await getRecentComments(space.id, req.query.count);
+            return res.json({ errno: 0, data });
+        }
 
-        const childrenComments = await prisma.ow_comment.findMany({
-            where: {
-                page_type: path.split("-")[0],
-                page_id: path.split("-")[1],
-                rid: {in: ids},
-                type: "comment",
+        // type=list - 管理列表 (需要管理员)
+        if (type === 'list') {
+            if (!isSpaceAdmin(req)) {
+                return res.status(401).json({ errno: 1003, errmsg: 'Unauthorized' });
+            }
+            const data = await getCommentList(space.id, {
+                ...req.query,
+                userId: req.walineUser?.userId,
+            });
+            return res.json({ errno: 0, data });
+        }
+
+        // 默认 - 评论列表
+        const pageUrl = req.query.path || req.query.url;
+        if (!pageUrl) {
+            return res.json({ errno: 0, data: { page: 1, totalPages: 0, pageSize: 10, count: 0, data: [] } });
+        }
+
+        const admin = isSpaceAdmin(req);
+        const data = await getComments(space.id, { url: pageUrl, ...req.query }, { isAdmin: admin, config });
+        return res.json({ errno: 0, data });
+    } catch (err) {
+        next(err);
+    }
+});
+
+/**
+ * POST /comment/:spaceCuid/api/comment
+ * 发表评论
+ */
+router.post('/:spaceCuid/api/comment', async (req, res, next) => {
+    try {
+        const space = req.commentSpace;
+        const config = req.spaceConfig;
+        const ip = req.ipInfo?.clientIP || req.ip;
+
+        // 检查 login=force
+        if (config.login === 'force' && !req.walineUser) {
+            return res.status(401).json({ errno: 1003, errmsg: 'Login required' });
+        }
+
+        const { comment, url } = req.body;
+        if (!comment || !url) {
+            return res.status(400).json({ errno: 1004, errmsg: 'Missing comment or url' });
+        }
+
+        // IP 频率限制
+        const ipqps = parseInt(config.ipqps) || 60;
+        const allowed = await checkIpRate(space.id, ip, ipqps);
+        if (!allowed) {
+            return res.status(429).json({ errno: 1005, errmsg: 'Too many requests, please try again later' });
+        }
+
+        // 重复内容检测
+        const isDuplicate = await checkDuplicate(space.id, ip, comment);
+        if (isDuplicate) {
+            return res.status(400).json({ errno: 1006, errmsg: 'Duplicate comment' });
+        }
+
+        const ua = req.headers['user-agent'] || '';
+
+        const record = await createComment(
+            space.id,
+            {
+                comment,
+                url,
+                pid: req.body.pid || null,
+                rid: req.body.rid || null,
+                nick: req.body.nick || null,
+                mail: req.body.mail || null,
+                link: req.body.link || null,
+                ua,
+                ip,
             },
-            include: {
-                user: {
-                    select: {
-                        id: true,
-                        username: true,
-                        display_name: true,
-                        avatar: true,
-                        type: true,
-                        motto: true,
-                    },
-                },
-            },
-        });
-
-        const transformedChildrenComments = await transformComment(
-            childrenComments
+            config,
+            req.walineUser,
         );
 
-        const result = transformedComments.map((comment) => {
-            const children = transformedChildrenComments.filter(
-                (child) => child.rid == comment.id
-            );
-            return {...comment, children};
+        // 格式化返回
+        const spaceUser = req.walineUser?.userId
+            ? await getSpaceUser(space.id, req.walineUser.userId)
+            : null;
+        const formatted = await formatComment(record, {
+            isAdmin: isSpaceAdmin(req),
+            spaceUser,
+            zcUser: req.walineUser?.zcUser || null,
+            disableUserAgent: config.disableUserAgent === 'true',
+            disableRegion: config.disableRegion === 'true',
         });
 
-        const count = await prisma.ow_comment.count({
-            where: {
-                page_type: path.split("-")[0],
-                page_id: path.split("-")[1],
-                pid: null,
-                rid: null,
-                type: "comment",
-            },
+        return res.json({ errno: 0, errmsg: '', data: formatted });
+    } catch (err) {
+        if (err.errno === 1009) {
+            return res.status(403).json({ errno: 1009, errmsg: err.message });
+        }
+        next(err);
+    }
+});
+
+/**
+ * PUT /comment/:spaceCuid/api/comment/:id
+ * 更新评论
+ */
+router.put('/:spaceCuid/api/comment/:id', async (req, res, next) => {
+    try {
+        const space = req.commentSpace;
+
+        // 点赞操作允许匿名用户，其他编辑操作需要登录
+        const isLikeOnly = Object.keys(req.body).length === 1 && req.body.like !== undefined;
+        if (!req.walineUser && !isLikeOnly) {
+            return res.status(401).json({ errno: 1003, errmsg: 'Login required' });
+        }
+
+        const admin = isSpaceAdmin(req);
+        const updated = await updateComment(
+            space.id,
+            req.params.id,
+            req.body,
+            req.walineUser?.userId,
+            admin,
+        );
+
+        if (!updated) {
+            return res.status(403).json({ errno: 1007, errmsg: 'Forbidden or not found' });
+        }
+
+        const spaceUser = req.walineUser?.userId
+            ? await getSpaceUser(space.id, req.walineUser.userId)
+            : null;
+        const formatted = await formatComment(updated, {
+            isAdmin: admin,
+            spaceUser,
+            zcUser: req.walineUser?.zcUser || null,
         });
 
-        res.status(200).send({
+        return res.json({ errno: 0, errmsg: '', data: formatted });
+    } catch (err) {
+        next(err);
+    }
+});
+
+/**
+ * DELETE /comment/:spaceCuid/api/comment/:id
+ * 删除评论
+ */
+router.delete('/:spaceCuid/api/comment/:id', async (req, res, next) => {
+    try {
+        const space = req.commentSpace;
+        if (!req.walineUser) {
+            return res.status(401).json({ errno: 1003, errmsg: 'Login required' });
+        }
+
+        const admin = isSpaceAdmin(req);
+        const deleted = await deleteComment(
+            space.id,
+            req.params.id,
+            req.walineUser.userId,
+            admin,
+        );
+
+        if (!deleted) {
+            return res.status(403).json({ errno: 1007, errmsg: 'Forbidden or not found' });
+        }
+
+        return res.json({ errno: 0, errmsg: '' });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// ============================================================
+// Token API (用户认证)
+// ============================================================
+
+/**
+ * GET /comment/:spaceCuid/api/token
+ * 获取当前用户信息
+ */
+router.get('/:spaceCuid/api/token', async (req, res, next) => {
+    try {
+        if (!req.walineUser) {
+            return res.json({ errno: 0, data: {} });
+        }
+
+        const space = req.commentSpace;
+        const spaceUser = req.walineSpaceUser;
+        const zcUser = req.walineUser.zcUser;
+
+        const mail = spaceUser?.email || zcUser?.email || '';
+        const mailMd5 = mail
+            ? crypto.createHash('md5').update(mail.trim().toLowerCase()).digest('hex')
+            : '';
+
+        // 拼接 avatar 完整 URL
+        const staticUrl = await zcconfig.get('s3.staticurl');
+        const rawAvatar = spaceUser?.avatar || zcUser?.avatar || '';
+        const avatarUrl = rawAvatar ? `${staticUrl}/assets/${rawAvatar.substring(0, 2)}/${rawAvatar.substring(2, 4)}/${rawAvatar}.webp` : '';
+
+        return res.json({
             errno: 0,
-            errmsg: "",
             data: {
-                page,
-                totalPages: Math.ceil(count / pageSize),
-                pageSize,
-                count,
-                data: result,
+                nick: spaceUser?.display_name || zcUser?.display_name || '',
+                mail,
+                link: spaceUser?.url || zcUser?.url || '',
+                avatar: avatarUrl,
+                type: toWalineType(spaceUser?.type),
+                label: spaceUser?.label || zcUser?.label || '',
+                objectId: String(req.walineUser.userId),
+                mailMd5,
+                username: zcUser?.username || '',
+                display_name: zcUser?.display_name || '',
             },
         });
     } catch (err) {
@@ -141,105 +279,200 @@ router.get("/api/comment", async (req, res, next) => {
     }
 });
 
-// 创建评论
-router.post("/api/comment", needLogin, async (req, res, next) => {
+/**
+ * POST /comment/:spaceCuid/api/token
+ * 引导至 ZeroCat 登录 (返回登录URL)
+ */
+router.post('/:spaceCuid/api/token', async (req, res, next) => {
     try {
-        const {url, comment, pid, rid} = req.body;
-        const {userid} = res.locals;
-        const user_ua = req.headers["user-agent"] || "";
-
-        const newComment = await prisma.ow_comment.create({
+        const frontendUrl = await zcconfig.get('urls.frontend');
+        return res.json({
+            errno: 0,
             data: {
-                user_id: userid,
-                type: "comment",
-                user_ip: req.ipInfo?.clientIP || req.ip,
-                page_type: url.split("-")[0],
-                page_id: url.split("-")[1] || null,
-                text: comment,
-                link: `/user/${userid}`,
-                user_ua,
-                pid: pid || null,
-                rid: rid || null,
+                url: `${frontendUrl}/app/commentservice/login?space=${req.commentSpace.cuid}`,
             },
         });
-
-        const transformedComment = (await transformComment([newComment]))[0];
-        res.status(200).send({
-            errno: 0,
-            errmsg: "",
-            data: transformedComment,
-        });
-
-        let user_id, targetType, targetId;
-        if (url.split("-")[0] == "user") {
-            targetType = "user";
-            targetId = url.split("-")[1];
-            user_id = targetId;
-        } else if (url.split("-")[0] == "project") {
-            const project = await prisma.ow_projects.findUnique({
-                where: {
-                    id: Number(url.split("-")[1]),
-                },
-            });
-            user_id = project.authorid;
-            targetType = "project";
-            targetId = url.split("-")[1];
-        } else if (url.split("-")[0] == "projectlist") {
-            targetType = "projectlist";
-            targetId = url.split("-")[1];
-            const projectlist = await prisma.ow_projectlists.findUnique({
-                where: {
-                    id: Number(url.split("-")[1]),
-                },
-            });
-            user_id = projectlist.authorid;
-        } else {
-            user_id = userid;
-            targetType = "user";
-            targetId = userid;
-        }
-
-        // 创建事件 - 区分新评论和回复评论
-        if (rid) {
-            // 如果有 rid，说明是回复评论
-            //await createEvent("comment_reply", userid, "comment", rid, { comment_text: comment, target_user: user_id });
-            await createEvent("comment_reply", userid, targetType, targetId, {
-                comment_text: comment,
-                target_user: user_id,
-                notification_title: "收到回复",
-                notification_content: `有人回复了你的评论：${comment}`,
-            });
-        } else {
-            // 如果没有 rid，说明是新评论
-            await createEvent("comment_create", userid, targetType, targetId, {
-                comment_text: comment,
-                target_user: user_id,
-                notification_title: "新评论",
-                notification_content: `有人评论了你的内容：${comment}`,
-            });
-        }
     } catch (err) {
         next(err);
     }
 });
 
-// 删除评论
-router.delete("/api/comment/:id", strictTokenCheck, async (req, res, next) => {
+/**
+ * DELETE /comment/:spaceCuid/api/token
+ * 登出 (no-op, 客户端清除即可)
+ */
+router.delete('/:spaceCuid/api/token', (req, res) => {
+    res.json({ errno: 0, errmsg: '' });
+});
+
+// ============================================================
+// User API
+// ============================================================
+
+/**
+ * GET /comment/:spaceCuid/api/user
+ * 用户列表 (管理员)
+ */
+router.get('/:spaceCuid/api/user', async (req, res, next) => {
     try {
-        const {id} = req.params;
-        const {user_id} = res.locals;
-
-        const comment = await prisma.ow_comment.findFirst({
-            where: {id: Number(id)},
-        });
-
-        if (comment.user_id == user_id || true) {
-            await prisma.ow_comment.delete({
-                where: {id: Number(id)},
-            });
+        if (!isSpaceAdmin(req)) {
+            return res.status(401).json({ errno: 1003, errmsg: 'Unauthorized' });
         }
 
-        res.status(200).send({errno: 0, errmsg: "", data: ""});
+        const data = await listSpaceUsers(
+            req.commentSpace.id,
+            parseInt(req.query.page) || 1,
+            parseInt(req.query.pageSize) || 20,
+            { type: req.query.type || null, keyword: req.query.keyword || null },
+        );
+
+        const users = data.users.map(u => ({
+            objectId: String(u.user_id),
+            display_name: u.display_name || u.user?.display_name || '',
+            email: u.email || '',
+            url: u.url || '',
+            avatar: u.avatar || u.user?.avatar || '',
+            type: u.type,
+            label: u.label || '',
+        }));
+
+        return res.json({
+            errno: 0,
+            data: {
+                page: data.page,
+                totalPages: data.totalPages,
+                pageSize: data.pageSize,
+                count: data.count,
+                data: users,
+            },
+        });
+    } catch (err) {
+        next(err);
+    }
+});
+
+/**
+ * PUT /comment/:spaceCuid/api/user
+ * 更新自己的资料
+ */
+router.put('/:spaceCuid/api/user', async (req, res, next) => {
+    try {
+        if (!req.walineUser) {
+            return res.status(401).json({ errno: 1003, errmsg: 'Login required' });
+        }
+
+        const space = req.commentSpace;
+        const spaceUser = await getOrCreateSpaceUser(space.id, req.walineUser.userId, {
+            display_name: req.walineUser.nick,
+        });
+
+        const updateData = {};
+        if (req.body.display_name !== undefined) updateData.display_name = req.body.display_name;
+        if (req.body.url !== undefined) updateData.url = req.body.url;
+        if (req.body.avatar !== undefined) updateData.avatar = req.body.avatar;
+
+        const updated = await updateSpaceUser(space.id, req.walineUser.userId, updateData);
+        return res.json({ errno: 0, data: updated });
+    } catch (err) {
+        next(err);
+    }
+});
+
+/**
+ * PUT /comment/:spaceCuid/api/user/:id
+ * 管理员: 更新用户
+ */
+router.put('/:spaceCuid/api/user/:id', async (req, res, next) => {
+    try {
+        if (!isSpaceAdmin(req)) {
+            return res.status(401).json({ errno: 1003, errmsg: 'Unauthorized' });
+        }
+
+        const updated = await updateSpaceUser(
+            req.commentSpace.id,
+            parseInt(req.params.id),
+            req.body,
+        );
+        return res.json({ errno: 0, data: updated });
+    } catch (err) {
+        next(err);
+    }
+});
+
+/**
+ * DELETE /comment/:spaceCuid/api/user/:id
+ * 管理员: 封禁用户 (设置type=banned)
+ */
+router.delete('/:spaceCuid/api/user/:id', async (req, res, next) => {
+    try {
+        if (!isSpaceAdmin(req)) {
+            return res.status(401).json({ errno: 1003, errmsg: 'Unauthorized' });
+        }
+
+        await updateSpaceUser(
+            req.commentSpace.id,
+            parseInt(req.params.id),
+            { type: 'banned' },
+        );
+
+        return res.json({ errno: 0, errmsg: '' });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// ============================================================
+// Article API (页面计数器)
+// ============================================================
+
+/**
+ * GET /comment/:spaceCuid/api/article
+ * 获取页面计数器
+ */
+router.get('/:spaceCuid/api/article', async (req, res, next) => {
+    try {
+        let urls = req.query.path || req.query.url;
+        if (!urls) return res.json({ errno: 0, data: [] });
+
+        if (typeof urls === 'string' && urls.includes(',')) {
+            urls = urls.split(',');
+        }
+
+        const data = await getArticleCounter(req.commentSpace.id, urls);
+        return res.json({ errno: 0, data });
+    } catch (err) {
+        next(err);
+    }
+});
+
+/**
+ * POST /comment/:spaceCuid/api/article
+ * 更新页面计数器
+ */
+router.post('/:spaceCuid/api/article', async (req, res, next) => {
+    try {
+        const url = req.body.path || req.body.url;
+        if (!url) return res.status(400).json({ errno: 1004, errmsg: 'Missing url' });
+
+        const time = await updateArticleCounter(req.commentSpace.id, url);
+        return res.json({ errno: 0, data: time });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// ============================================================
+// UI 路由
+// ============================================================
+
+/**
+ * GET /comment/:spaceCuid/ui/login
+ * 重定向到 ZeroCat 前端登录
+ */
+router.get('/:spaceCuid/ui/login', async (req, res, next) => {
+    try {
+        const frontendUrl = await zcconfig.get('urls.frontend');
+        return res.redirect(302, `${frontendUrl}/app/commentservice/login?space=${req.commentSpace.cuid}`);
     } catch (err) {
         next(err);
     }

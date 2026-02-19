@@ -28,7 +28,7 @@ importers:
         version: 7.3.0(prisma@7.3.0(@types/react@19.2.10)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))
       '@sentry/cli':
         specifier: ^2.58.4
-        version: 2.58.4
+        version: 2.58.4(encoding@0.1.13)
       '@sentry/node':
         specifier: ^10.38.0
         version: 10.38.0
@@ -37,7 +37,7 @@ importers:
         version: 10.38.0
       '@simplewebauthn/server':
         specifier: ^10.0.1
-        version: 10.0.1
+        version: 10.0.1(encoding@0.1.13)
       axios:
         specifier: ^1.9.0
         version: 1.9.0
@@ -79,7 +79,7 @@ importers:
         version: 3.1.10
       email-templates:
         specifier: ^12.0.3
-        version: 12.0.3(ejs@3.1.10)(handlebars@4.7.8)(mustache@4.2.0)(pug@3.0.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(underscore@1.13.7)
+        version: 12.0.3(ejs@3.1.10)(encoding@0.1.13)(handlebars@4.7.8)(mustache@4.2.0)(nunjucks@3.2.4)(pug@3.0.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(underscore@1.13.7)
       express:
         specifier: ^5.1.0
         version: 5.1.0
@@ -151,7 +151,7 @@ importers:
         version: 3.1.0
       ua-parser-js:
         specifier: ^2.0.3
-        version: 2.0.3
+        version: 2.0.3(encoding@0.1.13)
       uuid:
         specifier: ^11.1.0
         version: 11.1.0
@@ -1159,6 +1159,7 @@ packages:
 
   '@simplewebauthn/types@10.0.0':
     resolution: {integrity: sha512-SFXke7xkgPRowY2E+8djKbdEznTVnD5R6GO7GPTthpHrokLvNKw8C3lFZypTxLI7KkCfGPfhtqB3d7OVGGa9jQ==}
+    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
 
   '@smithy/abort-controller@4.0.4':
     resolution: {integrity: sha512-gJnEjZMvigPDQWHrW3oPrFhQtkrgqBkyjj3pCIdF3A5M6vsZODG93KNlfJprv6bp4245bdT32fsHK4kkH3KYDA==}
@@ -1424,6 +1425,9 @@ packages:
   '@types/triple-beam@1.3.5':
     resolution: {integrity: sha512-6WaYesThRMCl19iryMYP7/x2OVgCtbIVflDGFpWnb9irXI3UjYE4AzmYuiUKY1AJstGijoY+MgUszMgRxIYTYw==}
 
+  a-sync-waterfall@1.0.1:
+    resolution: {integrity: sha512-RYTOHHdWipFUliRFMCS4X2Yn2X8M87V/OpSqWzKKOGhzqyUxzyVmhHDH9sAvG+ZuQf/TAOFsLCpMw09I1ufUnA==}
+
   accepts@2.0.0:
     resolution: {integrity: sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng==}
     engines: {node: '>= 0.6'}
@@ -1669,6 +1673,10 @@ packages:
   combined-stream@1.0.8:
     resolution: {integrity: sha512-FQN4MRfuJeHf7cBbBMJFXhKSDq+2kAArBlmRBvcvFE5BB1HZKXtSFASDhdlz9zOYwxh8lDdnvmMOe/+5cdoEdg==}
     engines: {node: '>= 0.8'}
+
+  commander@5.1.0:
+    resolution: {integrity: sha512-P0CysNDQ7rtVw4QIQtm+MRxV66vKFSvlsQvGYXZWR3qFU0jlMKHZZZgw8e+8DSah4UDKMqnknRDQz+xuQXQ/Zg==}
+    engines: {node: '>= 6'}
 
   commander@6.2.1:
     resolution: {integrity: sha512-U7VdrJFnJgo4xjrHpTzu0yrHPGImdsmD95ZlgYSEajAn2JKzDhDTPG9kBTefmObL2w/ngeZnilk+OV9CG3d7UA==}
@@ -1921,6 +1929,9 @@ packages:
   encoding-japanese@2.2.0:
     resolution: {integrity: sha512-EuJWwlHPZ1LbADuKTClvHtwbaFn4rOD+dRAbWysqEOXRc2Uui0hJInNJrsdH0c+OhJA4nrCBdSkW4DD5YxAo6A==}
     engines: {node: '>=8.10.0'}
+
+  encoding@0.1.13:
+    resolution: {integrity: sha512-ETBauow1T35Y/WZMkio9jiM0Z5xjHHmJ4XmjZOq1l/dXz3lr2sRn87nJy20RupqSh1F2m3HHPSp8ShIPQJrJ3A==}
 
   entities@2.2.0:
     resolution: {integrity: sha512-p92if5Nz619I0w+akJrLZH0MX0Pb5DX39XOwQTtXSdQQOaYH03S1uIQp4mhOZtAXrxq4ViO67YTiLBo2638o9A==}
@@ -2617,6 +2628,16 @@ packages:
 
   nth-check@2.1.1:
     resolution: {integrity: sha512-lqjrjmaOoAnWfMmBPL+XNnynZh2+swxiX3WUE0s4yEHI6m+AwrK2UZOimIRl3X/4QctVqS8AiZjFqyOGrMXb/w==}
+
+  nunjucks@3.2.4:
+    resolution: {integrity: sha512-26XRV6BhkgK0VOxfbU5cQI+ICFUtMLixv1noZn1tGU38kQH5A5nmmbk/O45xdyBhD1esk47nKrY0mvQpZIhRjQ==}
+    engines: {node: '>= 6.9.0'}
+    hasBin: true
+    peerDependencies:
+      chokidar: ^3.3.0
+    peerDependenciesMeta:
+      chokidar:
+        optional: true
 
   nypm@0.6.1:
     resolution: {integrity: sha512-hlacBiRiv1k9hZFiphPUkfSQ/ZfQzZDzC+8z0wL3lvDAOUu/2NnChkKuMoMjNur/9OpKuz2QsIeiPVN0xM5Q0w==}
@@ -4030,12 +4051,13 @@ snapshots:
     dependencies:
       minipass: 7.1.2
 
-  '@ladjs/consolidate@1.0.4(ejs@3.1.10)(handlebars@4.7.8)(lodash@4.17.21)(mustache@4.2.0)(pug@3.0.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(underscore@1.13.7)':
+  '@ladjs/consolidate@1.0.4(ejs@3.1.10)(handlebars@4.7.8)(lodash@4.17.21)(mustache@4.2.0)(nunjucks@3.2.4)(pug@3.0.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(underscore@1.13.7)':
     optionalDependencies:
       ejs: 3.1.10
       handlebars: 4.7.8
       lodash: 4.17.21
       mustache: 4.2.0
+      nunjucks: 3.2.4
       pug: 3.0.3
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
@@ -4526,10 +4548,10 @@ snapshots:
   '@sentry/cli-win32-x64@2.58.4':
     optional: true
 
-  '@sentry/cli@2.58.4':
+  '@sentry/cli@2.58.4(encoding@0.1.13)':
     dependencies:
       https-proxy-agent: 5.0.1
-      node-fetch: 2.7.0
+      node-fetch: 2.7.0(encoding@0.1.13)
       progress: 2.0.3
       proxy-from-env: 1.1.0
       which: 2.0.2
@@ -4621,7 +4643,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@simplewebauthn/server@10.0.1':
+  '@simplewebauthn/server@10.0.1(encoding@0.1.13)':
     dependencies:
       '@hexagon/base64': 1.1.28
       '@levischuck/tiny-cbor': 0.2.11
@@ -4631,7 +4653,7 @@ snapshots:
       '@peculiar/asn1-schema': 2.4.0
       '@peculiar/asn1-x509': 2.4.0
       '@simplewebauthn/types': 10.0.0
-      cross-fetch: 4.1.0
+      cross-fetch: 4.1.0(encoding@0.1.13)
     transitivePeerDependencies:
       - encoding
 
@@ -5034,6 +5056,9 @@ snapshots:
 
   '@types/triple-beam@1.3.5': {}
 
+  a-sync-waterfall@1.0.1:
+    optional: true
+
   accepts@2.0.0:
     dependencies:
       mime-types: 3.0.1
@@ -5329,6 +5354,9 @@ snapshots:
     dependencies:
       delayed-stream: 1.0.0
 
+  commander@5.1.0:
+    optional: true
+
   commander@6.2.1: {}
 
   compressible@2.0.18:
@@ -5404,9 +5432,9 @@ snapshots:
     dependencies:
       luxon: 3.7.2
 
-  cross-fetch@4.1.0:
+  cross-fetch@4.1.0(encoding@0.1.13):
     dependencies:
-      node-fetch: 2.7.0
+      node-fetch: 2.7.0(encoding@0.1.13)
     transitivePeerDependencies:
       - encoding
 
@@ -5558,13 +5586,13 @@ snapshots:
     dependencies:
       jake: 10.9.2
 
-  email-templates@12.0.3(ejs@3.1.10)(handlebars@4.7.8)(mustache@4.2.0)(pug@3.0.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(underscore@1.13.7):
+  email-templates@12.0.3(ejs@3.1.10)(encoding@0.1.13)(handlebars@4.7.8)(mustache@4.2.0)(nunjucks@3.2.4)(pug@3.0.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(underscore@1.13.7):
     dependencies:
-      '@ladjs/consolidate': 1.0.4(ejs@3.1.10)(handlebars@4.7.8)(lodash@4.17.21)(mustache@4.2.0)(pug@3.0.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(underscore@1.13.7)
+      '@ladjs/consolidate': 1.0.4(ejs@3.1.10)(handlebars@4.7.8)(lodash@4.17.21)(mustache@4.2.0)(nunjucks@3.2.4)(pug@3.0.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(underscore@1.13.7)
       '@ladjs/i18n': 8.0.3
       get-paths: 0.0.7
       html-to-text: 9.0.5
-      juice: 10.0.1
+      juice: 10.0.1(encoding@0.1.13)
       lodash: 4.17.21
       nodemailer: 6.10.1
     optionalDependencies:
@@ -5627,6 +5655,11 @@ snapshots:
   encodeurl@2.0.0: {}
 
   encoding-japanese@2.2.0:
+    optional: true
+
+  encoding@0.1.13:
+    dependencies:
+      iconv-lite: 0.6.3
     optional: true
 
   entities@2.2.0: {}
@@ -6156,13 +6189,13 @@ snapshots:
       promise: 7.3.1
     optional: true
 
-  juice@10.0.1:
+  juice@10.0.1(encoding@0.1.13):
     dependencies:
       cheerio: 1.0.0-rc.12
       commander: 6.2.1
       mensch: 0.3.4
       slick: 1.12.2
-      web-resource-inliner: 6.0.1
+      web-resource-inliner: 6.0.1(encoding@0.1.13)
     transitivePeerDependencies:
       - encoding
 
@@ -6443,9 +6476,11 @@ snapshots:
 
   node-fetch-native@1.6.6: {}
 
-  node-fetch@2.7.0:
+  node-fetch@2.7.0(encoding@0.1.13):
     dependencies:
       whatwg-url: 5.0.0
+    optionalDependencies:
+      encoding: 0.1.13
 
   node-gyp-build-optional-packages@5.2.2:
     dependencies:
@@ -6469,6 +6504,13 @@ snapshots:
   nth-check@2.1.1:
     dependencies:
       boolbase: 1.0.0
+
+  nunjucks@3.2.4:
+    dependencies:
+      a-sync-waterfall: 1.0.1
+      asap: 2.0.6
+      commander: 5.1.0
+    optional: true
 
   nypm@0.6.1:
     dependencies:
@@ -7129,12 +7171,12 @@ snapshots:
 
   ua-is-frozen@0.1.2: {}
 
-  ua-parser-js@2.0.3:
+  ua-parser-js@2.0.3(encoding@0.1.13):
     dependencies:
       '@types/node-fetch': 2.6.12
       detect-europe-js: 0.1.2
       is-standalone-pwa: 0.1.1
-      node-fetch: 2.7.0
+      node-fetch: 2.7.0(encoding@0.1.13)
       ua-is-frozen: 0.1.2
     transitivePeerDependencies:
       - encoding
@@ -7188,13 +7230,13 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  web-resource-inliner@6.0.1:
+  web-resource-inliner@6.0.1(encoding@0.1.13):
     dependencies:
       ansi-colors: 4.1.3
       escape-goat: 3.0.0
       htmlparser2: 5.0.1
       mime: 2.6.0
-      node-fetch: 2.7.0
+      node-fetch: 2.7.0(encoding@0.1.13)
       valid-data-url: 3.0.1
     transitivePeerDependencies:
       - encoding

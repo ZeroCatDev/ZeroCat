@@ -133,6 +133,8 @@ model ow_users {
   likes                   ow_posts_like[]         @relation("LikeAuthor")
   bookmarks               ow_posts_bookmark[]     @relation("BookmarkAuthor")
   mentioned_in_posts      ow_posts_mention[]      @relation("UserMentions")
+  comment_spaces          ow_comment_spaces[]     @relation("CommentSpaceOwner")
+  comment_service_users   ow_comment_service_users[] @relation("CommentServiceUser")
 
   @@index([email])
   @@index([status])
@@ -986,4 +988,106 @@ model ow_posts_media {
   @@index([post_id])
   @@index([asset_id])
   @@map("ow_posts_media")
+}
+
+// 评论空间表
+model ow_comment_spaces {
+  id          Int       @id @default(autoincrement())
+  cuid        String    @unique @db.VarChar(32)
+  owner_id    Int
+  name        String    @db.VarChar(128)
+  domain      String?   @db.VarChar(255)
+  status      String    @default("active") @db.VarChar(32)
+  jwt_secret  String    @db.VarChar(255)
+  created_at  DateTime  @default(now()) @db.Timestamp(6)
+  updated_at  DateTime  @updatedAt @db.Timestamp(6)
+
+  owner       ow_users  @relation("CommentSpaceOwner", fields: [owner_id], references: [id], onDelete: Cascade)
+  comments    ow_comment_service[]
+  users       ow_comment_service_users[]
+  counters    ow_comment_service_counter[]
+
+  @@index([owner_id])
+  @@index([status])
+  @@map("ow_comment_spaces")
+}
+
+// SaaS评论表
+model ow_comment_service {
+  id          Int       @id @default(autoincrement())
+  space_id    Int
+  user_id     String?   @db.VarChar(64)
+  nick        String?   @db.VarChar(128)
+  mail        String?   @db.VarChar(255)
+  link        String?   @db.VarChar(255)
+  comment     String    @db.Text
+  url         String    @db.VarChar(1024)
+  ua          String?   @db.Text
+  ip          String?   @db.VarChar(100)
+  status      String    @default("approved") @db.VarChar(32)
+  pid         String?   @db.VarChar(64)
+  rid         String?   @db.VarChar(64)
+  like        Int       @default(0)
+  sticky      Boolean   @default(false)
+  insertedAt  DateTime  @default(now()) @db.Timestamp(6)
+  createdAt   DateTime  @default(now()) @db.Timestamp(6)
+  updatedAt   DateTime  @updatedAt @db.Timestamp(6)
+
+  space       ow_comment_spaces @relation(fields: [space_id], references: [id], onDelete: Cascade)
+
+  @@index([space_id, url, status])
+  @@index([space_id, insertedAt(sort: Desc)])
+  @@index([space_id, rid])
+  @@index([space_id, user_id])
+  @@index([space_id, ip])
+  @@index([comment(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_ow_comment_service_comment_trgm")
+  @@map("ow_comment_service")
+}
+
+// 空间用户映射表
+model ow_comment_service_users {
+  id            Int       @id @default(autoincrement())
+  space_id      Int
+  user_id       Int
+  type          String    @default("guest") @db.VarChar(32)
+  display_name  String?   @db.VarChar(128)
+  email         String?   @db.VarChar(255)
+  url           String?   @db.VarChar(255)
+  avatar        String?   @db.VarChar(255)
+  label         String?   @db.VarChar(255)
+  created_at    DateTime  @default(now()) @db.Timestamp(6)
+  updated_at    DateTime  @updatedAt @db.Timestamp(6)
+
+  space         ow_comment_spaces @relation(fields: [space_id], references: [id], onDelete: Cascade)
+  user          ow_users @relation("CommentServiceUser", fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([space_id, user_id])
+  @@index([space_id])
+  @@index([user_id])
+  @@map("ow_comment_service_users")
+}
+
+// 页面计数器表
+model ow_comment_service_counter {
+  id          Int       @id @default(autoincrement())
+  space_id    Int
+  url         String    @db.VarChar(1024)
+  time        Int       @default(0)
+  reaction0   Int       @default(0)
+  reaction1   Int       @default(0)
+  reaction2   Int       @default(0)
+  reaction3   Int       @default(0)
+  reaction4   Int       @default(0)
+  reaction5   Int       @default(0)
+  reaction6   Int       @default(0)
+  reaction7   Int       @default(0)
+  reaction8   Int       @default(0)
+  created_at  DateTime  @default(now()) @db.Timestamp(6)
+  updated_at  DateTime  @updatedAt @db.Timestamp(6)
+
+  space       ow_comment_spaces @relation(fields: [space_id], references: [id], onDelete: Cascade)
+
+  @@unique([space_id, url])
+  @@index([space_id])
+  @@map("ow_comment_service_counter")
 }

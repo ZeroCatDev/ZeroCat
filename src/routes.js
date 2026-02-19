@@ -100,9 +100,13 @@ async function registerBusinessRoutes(app) {
         const projectModule = await import('./routes/router_project.js');
         app.use("/project", projectModule.default);
 
-        // 评论路由
+        // 评论路由 (Waline兼容SaaS评论服务)
         const commentModule = await import('./routes/router_comment.js');
         app.use("/comment", commentModule.default);
+
+        // 评论空间管理路由
+        const commentServiceModule = await import('./routes/router_commentservice.js');
+        app.use("/commentservice", commentServiceModule.default);
 
         // 用户路由
         const userModule = await import('./routes/router_user.js');

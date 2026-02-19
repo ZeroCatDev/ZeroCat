@@ -110,19 +110,30 @@ export async function configureMiddleware(app) {
 
     // CORS配置
     const corslist = (await zcconfig.get("cors"));
-    const corsOptionsDelegate = (origin, callback) => {
-        if (!origin || corslist.includes(new URL(origin).hostname)) {
-            return callback(null, true);
-        } else {
-            logger.error("CORS限制，请求来源：" + origin);
-            return callback(new Error("CORS限制，请求来源可能存在风险"));
-        }
-    };
 
     app.use(
-        cors({
-            credentials: true,
-            origin: (origin, callback) => corsOptionsDelegate(origin, callback),
+        cors((req, callback) => {
+            const origin = req.headers.origin;
+
+            // /comment 和 /commentservice 路由对外提供 Waline API，允许任意来源
+            if (req.path.startsWith('/comment')) {
+                return callback(null, { origin: true, credentials: true });
+            }
+
+            // 无 origin (如服务端请求) 直接放行
+            if (!origin) {
+                return callback(null, { origin: true, credentials: true });
+            }
+
+            // 白名单放行
+            try {
+                if (corslist.includes(new URL(origin).hostname)) {
+                    return callback(null, { origin: true, credentials: true });
+                }
+            } catch {}
+
+            logger.error("CORS限制，请求来源：" + origin);
+            return callback(new Error("CORS限制，请求来源可能存在风险"));
         })
     );
 
