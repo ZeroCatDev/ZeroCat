@@ -18,6 +18,16 @@ const DEFAULT_SPACE_CONFIG = {
     // 通知
     disableAuthorNotify: 'false',
     authorEmail: '',
+    // 通知渠道开关
+    notifyEmailAdmin: 'true',
+    notifyEmailReply: 'true',
+    notifyWechat: 'false',
+    notifyQywx: 'false',
+    notifyQq: 'false',
+    notifyTelegram: 'false',
+    notifyPushplus: 'false',
+    notifyDiscord: 'false',
+    notifyLark: 'false',
     smtpHost: '',
     smtpPort: '',
     smtpUser: '',
@@ -26,6 +36,42 @@ const DEFAULT_SPACE_CONFIG = {
     smtpService: '',
     senderName: '',
     senderEmail: '',
+    // 邮件模板自定义
+    mailSubject: '',
+    mailTemplate: '',
+    mailSubjectAdmin: '',
+    mailTemplateAdmin: '',
+    // 微信 Server酱
+    scKey: '',
+    scTemplate: '',
+    // 企业微信
+    qywxAm: '',
+    qywxProxy: '',
+    qywxProxyPort: '',
+    wxTemplate: '',
+    // QQ Qmsg酱
+    qmsgKey: '',
+    qqId: '',
+    qmsgHost: '',
+    qqTemplate: '',
+    // Telegram
+    tgBotToken: '',
+    tgChatId: '',
+    tgTemplate: '',
+    // PushPlus
+    pushPlusKey: '',
+    pushPlusTopic: '',
+    pushPlusChannel: '',
+    pushPlusTemplate: '',
+    pushPlusWebhook: '',
+    pushPlusCallbackUrl: '',
+    // Discord
+    discordWebhook: '',
+    discordTemplate: '',
+    // 飞书
+    larkWebhook: '',
+    larkSecret: '',
+    larkTemplate: '',
     // 反垃圾
     spamChecker: 'akismet',    // '' | 'akismet'
     akismetKey: '',
@@ -192,6 +238,8 @@ const ENUM_CONFIGS = {
 const BOOLEAN_CONFIGS = [
     'audit', 'disableUserAgent', 'disableRegion', 'disableAuthorNotify',
     'smtpSecure',
+    'notifyEmailAdmin', 'notifyEmailReply', 'notifyWechat', 'notifyQywx', 'notifyQq',
+    'notifyTelegram', 'notifyPushplus', 'notifyDiscord', 'notifyLark',
     'markdownHighlight', 'markdownEmoji', 'markdownSub',
     'markdownSup',
 ];
