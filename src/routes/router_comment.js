@@ -2,6 +2,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import logger from '../services/logger.js';
 import zcconfig from '../services/config/zcconfig.js';
+import { prisma } from '../services/prisma.js';
 import { walineSpaceResolver, isSpaceAdmin } from '../middleware/walineSpaceResolver.js';
 import { createWalineToken } from '../services/commentService/walineAuth.js';
 import {
@@ -456,6 +457,76 @@ router.post('/:spaceCuid/api/article', async (req, res, next) => {
 
         const time = await updateArticleCounter(req.commentSpace.id, url);
         return res.json({ errno: 0, data: time });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// ============================================================
+// RSS
+// ============================================================
+
+/**
+ * GET /comment/:spaceCuid/api/comment/rss
+ * RSS 订阅 — 返回最近评论的标准 RSS 2.0
+ * 可选 ?path=/xxx 按页面路径过滤
+ */
+router.get('/:spaceCuid/api/comment/rss', async (req, res, next) => {
+    try {
+        const space = req.commentSpace;
+        const pathFilter = req.query.path || null;
+
+        const where = { space_id: space.id, status: 'approved' };
+        if (pathFilter) where.url = pathFilter;
+
+        const comments = await prisma.ow_comment_service.findMany({
+            where,
+            orderBy: { insertedAt: 'desc' },
+            take: 50,
+        });
+
+        // 构建 base link
+        const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+        const now = new Date().toUTCString();
+        const lastBuild = comments.length > 0
+            ? comments[0].insertedAt.toUTCString()
+            : now;
+
+        const escapeXml = (s) =>
+            String(s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+
+        const items = comments.map(c => {
+            const commentUrl = c.url || '/';
+            const nick = c.nick || 'Anonymous';
+            return `        <item>
+            <title><![CDATA[${nick} commented on ${commentUrl}]]></title>
+            <description><![CDATA[${c.comment}]]></description>
+            <link>${escapeXml(baseUrl)}/#${c.id}</link>
+            <guid isPermaLink="false">${c.id}</guid>
+            <pubDate>${c.insertedAt.toUTCString()}</pubDate>
+        </item>`;
+        }).join('\n');
+
+        const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0">
+    <channel>
+        <title><![CDATA[${space.name} Recent Comments]]></title>
+        <description><![CDATA[Recent comments.]]></description>
+        <link>${escapeXml(baseUrl)}</link>
+        <generator>ZeroCat Comment Service</generator>
+        <lastBuildDate>${lastBuild}</lastBuildDate>
+        <pubDate>${lastBuild}</pubDate>
+${items}
+    </channel>
+</rss>`;
+
+        res.set('Content-Type', 'application/rss+xml; charset=utf-8');
+        return res.send(xml);
     } catch (err) {
         next(err);
     }

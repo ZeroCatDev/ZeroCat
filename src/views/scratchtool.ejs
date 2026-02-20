@@ -178,6 +178,7 @@ let logText,
   currentUserId = null,  // 当前用户ID，由后端API获取
   projectjson = "null",
   projectinfo = {};
+window.projectinfo = projectinfo;
 let commitInfo = {};
 let commituser = {};
 let authorinfocard = {};
@@ -1381,6 +1382,7 @@ async function fetchProjectInfo() {
     }
 
     projectinfo = result;
+    window.projectinfo = projectinfo;
     if (!isEmbed) {
       authorinfocard.headline = result.author.username;
       authorinfocard.description = result.author.zcusername;
