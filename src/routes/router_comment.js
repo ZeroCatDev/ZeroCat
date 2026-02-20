@@ -26,6 +26,7 @@ import { getArticleCounter, updateArticleCounter } from '../services/commentServ
 import { formatComment, toWalineType } from '../services/commentService/walineFormatter.js';
 import { verifyCaptcha } from '../services/commentService/captchaService.js';
 import queueManager from '../services/queue/queueManager.js';
+import { renderMarkdown } from '../services/commentService/markdown.js';
 
 const router = Router();
 
@@ -525,9 +526,10 @@ router.get('/:spaceCuid/api/comment/rss', async (req, res, next) => {
         const items = comments.map(c => {
             const commentUrl = c.url || '/';
             const nick = c.nick || 'Anonymous';
+            const renderedComment = renderMarkdown(c.comment);
             return `        <item>
             <title><![CDATA[${nick} commented on ${commentUrl}]]></title>
-            <description><![CDATA[${c.comment}]]></description>
+            <description><![CDATA[${renderedComment}]]></description>
             <link>${escapeXml(baseUrl)}/#${c.id}</link>
             <guid isPermaLink="false">${c.id}</guid>
             <pubDate>${c.insertedAt.toUTCString()}</pubDate>

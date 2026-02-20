@@ -10,7 +10,11 @@
       "Bash(node -e:*)",
       "Bash(cd:*)",
       "Bash(ls \"D:\\\\ZeroCat\\\\ZeroCat\\\\node_modules\\\\@waline\\\\vercel\"\" 2>/dev/null || echo \"not found \")",
-      "Bash(node --check:*)"
+      "Bash(node --check:*)",
+      "Bash(npm:*)",
+      "Bash(node --version:*)",
+      "Bash(node test_md.mjs:*)",
+      "Bash(del \"D:\\\\ZeroCat\\\\ZeroCat\\\\test_md.mjs\")"
     ],
     "deny": []
   }

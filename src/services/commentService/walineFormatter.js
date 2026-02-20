@@ -2,6 +2,7 @@ import { UAParser } from 'ua-parser-js';
 import crypto from 'crypto';
 import ipLocation from '../ip/ipLocation.js';
 import zcconfig from '../config/zcconfig.js';
+import { renderMarkdown } from './markdown.js';
 
 /**
  * 将内部角色映射为 Waline 客户端识别的 type
@@ -92,9 +93,12 @@ export async function formatComment(comment, options = {}) {
         avatar = getDefaultAvatar(nick, mail);
     }
 
+    // Markdown → HTML → DOMPurify (与 Waline 一致)
+    const renderedComment = renderMarkdown(comment.comment);
+
     const formatted = {
         objectId: String(comment.id),
-        comment: comment.comment,
+        comment: renderedComment,
         insertedAt: comment.insertedAt.toISOString(),
         createdAt: comment.createdAt.toISOString(),
         updatedAt: comment.updatedAt.toISOString(),

@@ -7,6 +7,7 @@ import { getSpaceUser } from './spaceManager.js';
 import { sanitizeComment } from './sanitizer.js';
 import { checkAkismetSpam } from './akismetService.js';
 import { batchGetUserLevels } from './levelService.js';
+import { renderMarkdown } from './markdown.js';
 
 /**
  * IP 频率检查
@@ -501,7 +502,8 @@ export async function searchMyComments(userId, keyword, page = 1, pageSize = 10)
 
     const data = sorted.map(c => ({
         objectId: String(c.id),
-        comment: c.comment,
+        comment: renderMarkdown(c.comment),
+        orig: c.comment,
         url: c.url,
         status: c.status,
         insertedAt: c.insertedAt.toISOString(),

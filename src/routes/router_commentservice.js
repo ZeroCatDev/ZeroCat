@@ -26,6 +26,7 @@ import {
     deleteComment,
 } from '../services/commentService/commentManager.js';
 import { toWalineType } from '../services/commentService/walineFormatter.js';
+import { renderMarkdown } from '../services/commentService/markdown.js';
 
 const router = Router();
 
@@ -513,7 +514,8 @@ router.get('/my/comments', needLogin, async (req, res, next) => {
 
         const data = comments.map(c => ({
             objectId: String(c.id),
-            comment: c.comment,
+            comment: renderMarkdown(c.comment),
+            orig: c.comment,
             url: c.url,
             status: c.status,
             insertedAt: c.insertedAt.toISOString(),

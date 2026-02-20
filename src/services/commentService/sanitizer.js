@@ -1,27 +1,24 @@
+/**
+ * 评论输入消毒 (defense-in-depth)
+ *
+ * 注意：真正的 Markdown → HTML 渲染及 XSS 消毒在 markdown.js 的输出管线中完成。
+ * 本模块仅在写入数据库前做一次轻量清洗，剥离明显的恶意 HTML 标签，
+ * 同时保留 Markdown 源文本不被破坏。
+ */
+
 import DOMPurify from 'isomorphic-dompurify';
 
-const ALLOWED_TAGS = [
-    'a', 'b', 'i', 'em', 'strong', 'p', 'br', 'ul', 'ol', 'li',
-    'blockquote', 'code', 'pre', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-    'hr', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
-    'del', 'sup', 'sub', 'span', 'div',
-];
-
-const ALLOWED_ATTR = [
-    'href', 'src', 'alt', 'title', 'class', 'target', 'rel',
-    'width', 'height',
-];
-
 /**
- * 使用 DOMPurify 消毒评论 HTML
- * @param {string} html - 原始 HTML
- * @returns {string} 消毒后的 HTML
+ * 使用 DOMPurify 消毒评论原始输入
+ * 与 Waline 保持一致的禁止标签/属性
+ * @param {string} html - 原始输入
+ * @returns {string} 消毒后文本
  */
 export function sanitizeComment(html) {
     if (!html) return '';
     return DOMPurify.sanitize(html, {
-        ALLOWED_TAGS,
-        ALLOWED_ATTR,
+        FORBID_TAGS: ['form', 'input', 'style', 'script', 'iframe', 'object', 'embed'],
+        FORBID_ATTR: ['autoplay', 'style', 'onerror', 'onload', 'onclick'],
     });
 }
 
