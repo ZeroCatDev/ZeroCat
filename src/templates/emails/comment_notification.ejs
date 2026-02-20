@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.08);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            padding: 24px 30px;
+        }
+        .header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+        .header .sub { margin-top: 4px; font-size: 13px; opacity: .85; }
+        .body { padding: 24px 30px; }
+        .meta { font-size: 13px; color: #888; margin-bottom: 12px; }
+        .meta span { margin-right: 14px; }
+        .quote-box {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 14px 18px;
+            margin: 16px 0;
+            border-radius: 0 6px 6px 0;
+            word-break: break-word;
+        }
+        .quote-box.parent {
+            border-left-color: #ccc;
+            background: #fafafa;
+        }
+        .quote-box .label { font-size: 12px; color: #999; margin-bottom: 6px; }
+        .btn-row { text-align: center; margin: 24px 0 8px; }
+        .btn {
+            display: inline-block;
+            padding: 10px 28px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            margin: 0 6px;
+        }
+        .btn.secondary { background: linear-gradient(135deg, #6c757d 0%, #495057 100%); }
+        .footer {
+            background: #f8f9fa;
+            padding: 16px 30px;
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+            border-top: 1px solid #eee;
+        }
+        .footer a { color: #667eea; text-decoration: none; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1><%= title %></h1>
+        <% if (locals.spaceName) { %>
+        <div class="sub"><%= spaceName %></div>
+        <% } %>
+    </div>
+
+    <div class="body">
+        <div class="meta">
+            <span><strong><%= nick %></strong></span>
+            <% if (locals.pageUrl) { %><span>页面: <%= pageUrl %></span><% } %>
+            <% if (locals.time) { %><span><%= time %></span><% } %>
+        </div>
+
+        <div class="quote-box">
+            <div class="label">评论内容</div>
+            <%- commentHtml %>
+        </div>
+
+        <% if (locals.parentNick && locals.parentHtml) { %>
+        <div class="quote-box parent">
+            <div class="label"><%= parentNick %> 的原评论</div>
+            <%- parentHtml %>
+        </div>
+        <% } %>
+
+        <div class="btn-row">
+            <% if (locals.buttons && locals.buttons.length > 0) { %>
+                <% locals.buttons.forEach(function(b) { %>
+                <a href="<%= b.url %>" class="btn <%= b.style || '' %>"><%= b.text %></a>
+                <% }); %>
+            <% } else if (locals.link) { %>
+                <a href="<%= link %>" class="btn">查看详情</a>
+            <% } %>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>此邮件由 <a href="<%= frontendUrl %>"><%= siteName %></a> 评论系统自动发送</p>
+        <p>&copy; <%= year %> <%= siteName %></p>
+    </div>
+</div>
+</body>
+</html>

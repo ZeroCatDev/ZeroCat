@@ -617,6 +617,14 @@ export const CONFIG_TYPES = {
         description: "是否启用BullMQ仪表板",
         transform: typeTransformers.boolean,
     },
+    // Comment Service Configuration
+    "commentservice.akismet.keys": {
+        type: "array",
+        required: false,
+        default: [],
+        description: "Akismet API 密钥池",
+        transform: typeTransformers.array,
+    },
 };
 
 // 从数据库加载的动态配置

@@ -1,7 +1,8 @@
 import { createTransport } from 'nodemailer';
-import { createQueues, getEmailQueue, getScheduledTasksQueue } from './queues.js';
+import { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue } from './queues.js';
 import { createEmailWorker, getEmailWorker } from './workers/emailWorker.js';
 import { createScheduledTasksWorker, getScheduledTasksWorker } from './workers/scheduledTasksWorker.js';
+import { createCommentNotificationWorker, getCommentNotificationWorker } from './workers/commentNotificationWorker.js';
 import { closeAll as closeAllConnections } from './redisConnectionFactory.js';
 import zcconfig from '../config/zcconfig.js';
 import logger from '../logger.js';
@@ -23,6 +24,7 @@ const queueManager = {
             // Create workers
             await createEmailWorker();
             await createScheduledTasksWorker();
+            await createCommentNotificationWorker();
 
             // Register repeatable jobs
             await this.registerRepeatableJobs();
@@ -106,6 +108,37 @@ const queueManager = {
         logger.info('[queue-manager] Repeatable jobs synchronized');
     },
 
+    async enqueueCommentNotification(type, commentId, spaceId, spaceCuid) {
+        const queue = getCommentNotificationQueue();
+        if (!queue || !initialized) {
+            logger.warn('[queue-manager] Comment notification queue not available, skipping');
+            return null;
+        }
+
+        // 用 type+commentId 做 jobId 去重，避免重复通知
+        const jobId = `cn-${type}-${commentId}`;
+
+        try {
+            const job = await queue.add('comment-notification', {
+                type,
+                commentId,
+                spaceId,
+                spaceCuid,
+            }, {
+                jobId,
+                attempts: 3,
+                backoff: { type: 'exponential', delay: 30000 },
+                delay: 5000, // 5秒延迟，留出即时编辑窗口
+            });
+
+            logger.info(`[queue-manager] Comment notification job ${job.id} enqueued (${type})`);
+            return { jobId: job.id, queued: true };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue comment notification:', error.message);
+            return null;
+        }
+    },
+
     async enqueueEmail(to, subject, html, options = {}) {
         const emailQueue = getEmailQueue();
         if (!emailQueue || !initialized) {
@@ -163,16 +196,20 @@ const queueManager = {
             // Close workers first
             const emailWorker = getEmailWorker();
             const scheduledWorker = getScheduledTasksWorker();
+            const commentNotificationWorker = getCommentNotificationWorker();
 
             if (emailWorker) await emailWorker.close();
             if (scheduledWorker) await scheduledWorker.close();
+            if (commentNotificationWorker) await commentNotificationWorker.close();
 
             // Close queues
             const emailQueue = getEmailQueue();
             const scheduledQueue = getScheduledTasksQueue();
+            const commentNotificationQueue = getCommentNotificationQueue();
 
             if (emailQueue) await emailQueue.close();
             if (scheduledQueue) await scheduledQueue.close();
+            if (commentNotificationQueue) await commentNotificationQueue.close();
 
             // Close redis connections
             await closeAllConnections();

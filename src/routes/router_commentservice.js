@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import logger from '../services/logger.js';
 import zcconfig from '../services/config/zcconfig.js';
 import { parseToken, needLogin } from '../middleware/auth.js';
+import queueManager from '../services/queue/queueManager.js';
 import { prisma } from '../services/prisma.js';
 import { createWalineToken } from '../services/commentService/walineAuth.js';
 import {
@@ -210,6 +211,11 @@ router.put('/spaces/:cuid/config', needLogin, async (req, res, next) => {
         if (!updated) {
             return res.status(404).json({ status: 'error', message: '空间不存在或无权限' });
         }
+
+        // 部分字段校验未通过时，返回已保存的合法部分 + 错误列表
+        if (updated.errors) {
+            return res.json({ status: 'partial', data: updated.config, errors: updated.errors });
+        }
         return res.json({ status: 'success', data: updated });
     } catch (err) {
         next(err);
@@ -259,6 +265,15 @@ router.put('/spaces/:cuid/comments/:id', needLogin, async (req, res, next) => {
 
         if (!updated) {
             return res.status(404).json({ status: 'error', message: '评论不存在' });
+        }
+
+        // 审核通过时，为有 pid 的评论触发回复通知
+        if (req.body.status === 'approved' && updated.pid) {
+            try {
+                queueManager.enqueueCommentNotification('reply_notification', updated.id, space.id, space.cuid);
+            } catch (e) {
+                logger.warn('[commentservice] Failed to enqueue approve notification:', e.message);
+            }
         }
 
         return res.json({ status: 'success', data: updated });

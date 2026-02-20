@@ -24,6 +24,8 @@ import {
 } from '../services/commentService/commentManager.js';
 import { getArticleCounter, updateArticleCounter } from '../services/commentService/counterManager.js';
 import { formatComment, toWalineType } from '../services/commentService/walineFormatter.js';
+import { verifyCaptcha } from '../services/commentService/captchaService.js';
+import queueManager from '../services/queue/queueManager.js';
 
 const router = Router();
 
@@ -58,7 +60,7 @@ router.get('/:spaceCuid/api/comment', async (req, res, next) => {
 
         // type=recent - 获取最新评论
         if (type === 'recent') {
-            const data = await getRecentComments(space.id, req.query.count);
+            const data = await getRecentComments(space.id, req.query.count, config);
             return res.json({ errno: 0, data });
         }
 
@@ -70,7 +72,7 @@ router.get('/:spaceCuid/api/comment', async (req, res, next) => {
             const data = await getCommentList(space.id, {
                 ...req.query,
                 userId: req.walineUser?.userId,
-            });
+            }, config);
             return res.json({ errno: 0, data });
         }
 
@@ -106,6 +108,14 @@ router.post('/:spaceCuid/api/comment', async (req, res, next) => {
         const { comment, url } = req.body;
         if (!comment || !url) {
             return res.status(400).json({ errno: 1004, errmsg: 'Missing comment or url' });
+        }
+
+        // 验证码校验
+        const turnstileToken = req.body.turnstileToken || req.body['cf-turnstile-response'] || null;
+        const recaptchaToken = req.body.recaptchaToken || req.body['g-recaptcha-response'] || null;
+        const captchaResult = await verifyCaptcha(config, turnstileToken, recaptchaToken, ip);
+        if (!captchaResult.pass) {
+            return res.status(403).json({ errno: 1010, errmsg: captchaResult.reason || 'Captcha verification failed' });
         }
 
         // IP 频率限制
@@ -151,6 +161,18 @@ router.post('/:spaceCuid/api/comment', async (req, res, next) => {
             disableUserAgent: config.disableUserAgent === 'true',
             disableRegion: config.disableRegion === 'true',
         });
+
+        // 异步入队通知（不阻塞响应）
+        try {
+            if (record.status === 'approved' || record.status === 'waiting') {
+                queueManager.enqueueCommentNotification('admin_new_comment', record.id, space.id, space.cuid);
+            }
+            if (record.status === 'approved' && record.pid) {
+                queueManager.enqueueCommentNotification('reply_notification', record.id, space.id, space.cuid);
+            }
+        } catch (notifyErr) {
+            logger.warn('[comment] Failed to enqueue notification:', notifyErr.message);
+        }
 
         return res.json({ errno: 0, errmsg: '', data: formatted });
     } catch (err) {

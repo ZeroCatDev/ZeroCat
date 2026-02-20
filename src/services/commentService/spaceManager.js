@@ -13,6 +13,37 @@ const DEFAULT_SPACE_CONFIG = {
     secureDomains: '',
     avatarProxy: '',
     levels: '',
+    // 显示
+    gravatarStr: 'https://seccdn.libravatar.org/avatar/{{mail|md5}}',
+    // 通知
+    disableAuthorNotify: 'false',
+    authorEmail: '',
+    smtpHost: '',
+    smtpPort: '',
+    smtpUser: '',
+    smtpPass: '',
+    smtpSecure: '',
+    smtpService: '',
+    senderName: '',
+    senderEmail: '',
+    // 反垃圾
+    spamChecker: 'akismet',    // '' | 'akismet'
+    akismetKey: '',
+    // 验证码
+    captchaType: '',           // '' | 'turnstile' | 'recaptchaV3'
+    recaptchaV3Key: '',
+    recaptchaV3Secret: '',
+    turnstileKey: '',
+    turnstileSecret: '',
+    // Markdown
+    markdownConfig: '',
+    markdownHighlight: 'true',
+    markdownEmoji: 'true',
+    markdownSub: 'true',
+    markdownSup: 'true',
+    markdownTex: 'katex',     // 'false' | 'mathjax' | 'katex'
+    markdownMathjax: '',       // MathJax CDN / 配置（markdownTex='mathjax' 时生效）
+    markdownKatex: '',         // KaTeX CDN / 配置（markdownTex='katex' 时生效）
 };
 
 /**
@@ -136,6 +167,70 @@ export async function getSpaceConfig(cuid) {
     return result;
 }
 
+// 检测字符串中是否存在可能的 JS 注入
+const DANGEROUS_PATTERNS = [
+    /<script[\s>]/i,
+    /javascript\s*:/i,
+    /\bon\w+\s*=/i,             // onclick=, onerror= ...
+    /data\s*:\s*text\/html/i,
+    /expression\s*\(/i,         // CSS expression()
+    /url\s*\(\s*['"]?\s*javascript/i,
+];
+
+function containsDangerousContent(str) {
+    return DANGEROUS_PATTERNS.some(re => re.test(str));
+}
+
+// 枚举类型约束
+const ENUM_CONFIGS = {
+    spamChecker: ['', 'akismet'],
+    captchaType: ['', 'turnstile', 'recaptchaV3'],
+    markdownTex: ['false', 'mathjax', 'katex'],
+};
+
+// 布尔值约束
+const BOOLEAN_CONFIGS = [
+    'audit', 'disableUserAgent', 'disableRegion', 'disableAuthorNotify',
+    'smtpSecure',
+    'markdownHighlight', 'markdownEmoji', 'markdownSub',
+    'markdownSup',
+];
+
+// 需要安全检查的自由文本配置（可能被前端渲染到页面）
+const SANITIZE_CONFIGS = [
+    'markdownConfig', 'markdownMathjax', 'markdownKatex', 'gravatarStr',
+];
+
+/**
+ * 校验单个配置值，返回 null 表示通过，否则返回错误信息
+ */
+function validateConfigValue(key, value) {
+    const strVal = String(value);
+
+    // 枚举校验
+    if (ENUM_CONFIGS[key]) {
+        if (!ENUM_CONFIGS[key].includes(strVal)) {
+            return `Invalid value for ${key}, allowed: ${ENUM_CONFIGS[key].join(', ')}`;
+        }
+    }
+
+    // 布尔校验
+    if (BOOLEAN_CONFIGS.includes(key)) {
+        if (strVal !== '' && strVal !== 'true' && strVal !== 'false') {
+            return `${key} must be 'true', 'false' or empty`;
+        }
+    }
+
+    // 安全文本校验（防 JS 注入）
+    if (SANITIZE_CONFIGS.includes(key) && strVal) {
+        if (containsDangerousContent(strVal)) {
+            return `${key} contains potentially dangerous content`;
+        }
+    }
+
+    return null;
+}
+
 /**
  * 更新空间配置
  */
@@ -145,9 +240,17 @@ export async function updateSpaceConfig(cuid, ownerId, configData) {
 
     const allowedKeys = Object.keys(DEFAULT_SPACE_CONFIG);
     const updates = [];
+    const errors = [];
 
     for (const [key, value] of Object.entries(configData)) {
         if (!allowedKeys.includes(key)) continue;
+
+        const err = validateConfigValue(key, value);
+        if (err) {
+            errors.push(err);
+            continue;
+        }
+
         updates.push(
             prisma.ow_target_configs.upsert({
                 where: {
@@ -169,7 +272,12 @@ export async function updateSpaceConfig(cuid, ownerId, configData) {
     }
 
     await Promise.all(updates);
-    return getSpaceConfig(cuid);
+    const result = await getSpaceConfig(cuid);
+
+    if (errors.length > 0) {
+        return { config: result, errors };
+    }
+    return result;
 }
 
 /**

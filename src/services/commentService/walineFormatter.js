@@ -48,7 +48,7 @@ function getDefaultAvatar(nick, mail) {
  * @returns {Promise<object>} Waline 兼容评论对象
  */
 export async function formatComment(comment, options = {}) {
-    const { isAdmin = false, spaceUser = null, zcUser = null, disableUserAgent = false, disableRegion = false } = options;
+    const { isAdmin = false, spaceUser = null, zcUser = null, disableUserAgent = false, disableRegion = false, userLevelMap = null } = options;
 
     let browser = '';
     let os = '';
@@ -124,6 +124,14 @@ export async function formatComment(comment, options = {}) {
         }
         formatted.label = spaceUser.label || '';
         formatted.type = toWalineType(spaceUser.type);
+    }
+
+    // 用户等级
+    if (userLevelMap && comment.user_id) {
+        const userId = Number(comment.user_id);
+        if (userLevelMap.has(userId)) {
+            formatted.level = userLevelMap.get(userId);
+        }
     }
 
     // 管理员可以看到 mail 和 ip

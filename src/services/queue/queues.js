@@ -5,6 +5,7 @@ import logger from '../logger.js';
 export const QUEUE_NAMES = {
     EMAIL: 'email',
     SCHEDULED_TASKS: 'scheduled-tasks',
+    COMMENT_NOTIFICATION: 'comment-notification',
 };
 
 const QUEUE_OPTIONS = {
@@ -20,10 +21,17 @@ const QUEUE_OPTIONS = {
             removeOnFail: { count: 200 },
         },
     },
+    [QUEUE_NAMES.COMMENT_NOTIFICATION]: {
+        defaultJobOptions: {
+            removeOnComplete: { count: 200 },
+            removeOnFail: { count: 500 },
+        },
+    },
 };
 
 let emailQueue = null;
 let scheduledTasksQueue = null;
+let commentNotificationQueue = null;
 
 async function createQueues() {
     const connection = await createConnection('queue-shared');
@@ -38,8 +46,13 @@ async function createQueues() {
         ...QUEUE_OPTIONS[QUEUE_NAMES.SCHEDULED_TASKS],
     });
 
+    commentNotificationQueue = new Queue(QUEUE_NAMES.COMMENT_NOTIFICATION, {
+        connection,
+        ...QUEUE_OPTIONS[QUEUE_NAMES.COMMENT_NOTIFICATION],
+    });
+
     logger.info('[queues] All queues created');
-    return { emailQueue, scheduledTasksQueue };
+    return { emailQueue, scheduledTasksQueue, commentNotificationQueue };
 }
 
 function getEmailQueue() {
@@ -50,4 +63,8 @@ function getScheduledTasksQueue() {
     return scheduledTasksQueue;
 }
 
-export { createQueues, getEmailQueue, getScheduledTasksQueue };
+function getCommentNotificationQueue() {
+    return commentNotificationQueue;
+}
+
+export { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue };

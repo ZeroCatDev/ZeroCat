@@ -9,7 +9,8 @@
       "Bash(ls -la \"D:\\\\ZeroCat\\\\ZeroCat\\\\src\\\\public\"\" 2>/dev/null || echo \"No public directory \")",
       "Bash(node -e:*)",
       "Bash(cd:*)",
-      "Bash(ls \"D:\\\\ZeroCat\\\\ZeroCat\\\\node_modules\\\\@waline\\\\vercel\"\" 2>/dev/null || echo \"not found \")"
+      "Bash(ls \"D:\\\\ZeroCat\\\\ZeroCat\\\\node_modules\\\\@waline\\\\vercel\"\" 2>/dev/null || echo \"not found \")",
+      "Bash(node --check:*)"
     ],
     "deny": []
   }

@@ -1,8 +1,12 @@
 import { prisma } from '../prisma.js';
 import redisClient from '../redis.js';
 import logger from '../logger.js';
+import zcconfig from '../config/zcconfig.js';
 import { formatComment, formatCommentsWithChildren } from './walineFormatter.js';
 import { getSpaceUser } from './spaceManager.js';
+import { sanitizeComment } from './sanitizer.js';
+import { checkAkismetSpam } from './akismetService.js';
+import { batchGetUserLevels } from './levelService.js';
 
 /**
  * IP 频率检查
@@ -80,6 +84,24 @@ export async function createComment(spaceId, data, config, userInfo = null) {
         status = 'spam';
     }
 
+    // Akismet 反垃圾检查
+    if (status !== 'spam' && config.spamChecker === 'akismet') {
+        try {
+            const siteUrl = await zcconfig.get('urls.backend') || '';
+            const isSpam = await checkAkismetSpam({
+                comment, nick, mail, url, ip, ua, siteUrl,
+            }, config);
+            if (isSpam) {
+                status = 'spam';
+            }
+        } catch (err) {
+            logger.warn('[comment] Akismet check error:', err.message);
+        }
+    }
+
+    // DOMPurify 消毒
+    const sanitizedComment = sanitizeComment(comment);
+
     const record = await prisma.ow_comment_service.create({
         data: {
             space_id: spaceId,
@@ -87,7 +109,7 @@ export async function createComment(spaceId, data, config, userInfo = null) {
             nick: userInfo?.nick || nick || 'Anonymous',
             mail: userInfo?.mail || mail || null,
             link: userInfo?.link || link || null,
-            comment,
+            comment: sanitizedComment,
             url,
             ua: ua || null,
             ip: ip || null,
@@ -191,6 +213,12 @@ export async function getComments(spaceId, query, options = {}) {
         disableRegion: config.disableRegion === 'true',
     };
 
+    // 用户等级
+    if (config.levels && userIds.length > 0) {
+        const userLevelMap = await batchGetUserLevels(spaceId, userIds, config.levels);
+        formatOptions.userLevelMap = userLevelMap;
+    }
+
     const data = await formatCommentsWithChildren(rootComments, childComments, formatOptions, spaceUsersMap, zcUsersMap);
 
     return {
@@ -222,7 +250,7 @@ export async function getCommentCount(spaceId, urls) {
 /**
  * 获取最新评论 (type=recent)
  */
-export async function getRecentComments(spaceId, count = 10) {
+export async function getRecentComments(spaceId, count = 10, config = {}) {
     const comments = await prisma.ow_comment_service.findMany({
         where: { space_id: spaceId, status: 'approved' },
         orderBy: { insertedAt: 'desc' },
@@ -252,11 +280,18 @@ export async function getRecentComments(spaceId, count = 10) {
         }
     }
 
+    // 用户等级
+    let userLevelMap = null;
+    if (config.levels && userIds.length > 0) {
+        userLevelMap = await batchGetUserLevels(spaceId, userIds, config.levels);
+    }
+
     return Promise.all(
         comments.map(c =>
             formatComment(c, {
                 spaceUser: c.user_id ? spaceUsersMap.get(Number(c.user_id)) || null : null,
                 zcUser: c.user_id ? zcUsersMap.get(Number(c.user_id)) || null : null,
+                userLevelMap,
             })
         )
     );
@@ -266,7 +301,7 @@ export async function getRecentComments(spaceId, count = 10) {
  * 管理列表 (type=list, 管理员用)
  * 支持 keyword 参数进行 pg_trgm 搜索
  */
-export async function getCommentList(spaceId, query) {
+export async function getCommentList(spaceId, query, config = {}) {
     const { page = 1, pageSize = 10, status, owner, keyword } = query;
     const pageNum = Math.max(1, parseInt(page) || 1);
     const size = Math.min(100, Math.max(1, parseInt(pageSize) || 10));
@@ -315,12 +350,19 @@ export async function getCommentList(spaceId, query) {
         }
     }
 
+    // 用户等级 (管理列表)
+    let userLevelMap = null;
+    if (config.levels && userIds.length > 0) {
+        userLevelMap = await batchGetUserLevels(spaceId, userIds, config.levels);
+    }
+
     const data = await Promise.all(
         comments.map(c =>
             formatComment(c, {
                 isAdmin: true,
                 spaceUser: c.user_id ? spaceUsersMap.get(Number(c.user_id)) || null : null,
                 zcUser: c.user_id ? zcUsersMap.get(Number(c.user_id)) || null : null,
+                userLevelMap,
             })
         )
     );
@@ -486,7 +528,7 @@ export async function updateComment(spaceId, commentId, data, userId = null, isA
     }
 
     const updateData = {};
-    if (data.comment !== undefined) updateData.comment = data.comment;
+    if (data.comment !== undefined) updateData.comment = sanitizeComment(data.comment);
     if (data.nick !== undefined) updateData.nick = data.nick;
     if (data.mail !== undefined) updateData.mail = data.mail;
     if (data.link !== undefined) updateData.link = data.link;
