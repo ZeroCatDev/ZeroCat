@@ -625,6 +625,20 @@ export const CONFIG_TYPES = {
         description: "Akismet API 密钥池",
         transform: typeTransformers.array,
     },
+    "commentservice.sensitive_words": {
+        type: "json",
+        required: false,
+        default: [],
+        description: "全局敏感词列表（字符串数组）",
+    },
+    "commentservice.sensitive_ban_duration": {
+        type: "number",
+        required: false,
+        default: 3600,
+        description: "敏感词触发后IP封禁时长（秒）",
+        transform: typeTransformers.number,
+        validate: (value) => value > 0,
+    },
 };
 
 // 从数据库加载的动态配置

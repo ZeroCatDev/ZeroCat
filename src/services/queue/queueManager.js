@@ -1,8 +1,9 @@
 import { createTransport } from 'nodemailer';
-import { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue } from './queues.js';
+import { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue, getDataTaskQueue } from './queues.js';
 import { createEmailWorker, getEmailWorker } from './workers/emailWorker.js';
 import { createScheduledTasksWorker, getScheduledTasksWorker } from './workers/scheduledTasksWorker.js';
 import { createCommentNotificationWorker, getCommentNotificationWorker } from './workers/commentNotificationWorker.js';
+import { createDataTaskWorker, getDataTaskWorker } from './workers/dataTaskWorker.js';
 import { closeAll as closeAllConnections } from './redisConnectionFactory.js';
 import zcconfig from '../config/zcconfig.js';
 import logger from '../logger.js';
@@ -25,6 +26,7 @@ const queueManager = {
             await createEmailWorker();
             await createScheduledTasksWorker();
             await createCommentNotificationWorker();
+            await createDataTaskWorker();
 
             // Register repeatable jobs
             await this.registerRepeatableJobs();
@@ -139,6 +141,37 @@ const queueManager = {
         }
     },
 
+    async enqueueDataTask(taskId, type, spaceId, spaceCuid, spaceName, userId, importData = null) {
+        const queue = getDataTaskQueue();
+        if (!queue || !initialized) {
+            logger.warn('[queue-manager] Data task queue not available');
+            return null;
+        }
+
+        try {
+            const job = await queue.add('data-task', {
+                taskId,
+                type,
+                spaceId,
+                spaceCuid,
+                spaceName,
+                userId,
+                importData,
+            }, {
+                jobId: `dt-${taskId}`,
+                attempts: 1,
+                removeOnComplete: { age: 3600 },
+                removeOnFail: { age: 86400 },
+            });
+
+            logger.info(`[queue-manager] Data task job ${job.id} enqueued (${type})`);
+            return { jobId: job.id, queued: true };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue data task:', error.message);
+            return null;
+        }
+    },
+
     async enqueueEmail(to, subject, html, options = {}) {
         const emailQueue = getEmailQueue();
         if (!emailQueue || !initialized) {
@@ -197,19 +230,23 @@ const queueManager = {
             const emailWorker = getEmailWorker();
             const scheduledWorker = getScheduledTasksWorker();
             const commentNotificationWorker = getCommentNotificationWorker();
+            const dataTaskWorker = getDataTaskWorker();
 
             if (emailWorker) await emailWorker.close();
             if (scheduledWorker) await scheduledWorker.close();
             if (commentNotificationWorker) await commentNotificationWorker.close();
+            if (dataTaskWorker) await dataTaskWorker.close();
 
             // Close queues
             const emailQueue = getEmailQueue();
             const scheduledQueue = getScheduledTasksQueue();
             const commentNotificationQueue = getCommentNotificationQueue();
+            const dataTaskQueue = getDataTaskQueue();
 
             if (emailQueue) await emailQueue.close();
             if (scheduledQueue) await scheduledQueue.close();
             if (commentNotificationQueue) await commentNotificationQueue.close();
+            if (dataTaskQueue) await dataTaskQueue.close();
 
             // Close redis connections
             await closeAllConnections();

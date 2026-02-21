@@ -25,10 +25,56 @@ import {
 import { getArticleCounter, updateArticleCounter } from '../services/commentService/counterManager.js';
 import { formatComment, toWalineType } from '../services/commentService/walineFormatter.js';
 import { verifyCaptcha } from '../services/commentService/captchaService.js';
+import {
+    checkSensitiveWords,
+    isSensitiveBanned,
+    banIpForSensitiveWord,
+    logSensitiveViolation,
+} from '../services/commentService/sensitiveWordService.js';
 import queueManager from '../services/queue/queueManager.js';
 import { renderMarkdown } from '../services/commentService/markdown.js';
 
 const router = Router();
+
+// Waline 示例页面 (在 walineSpaceResolver 之前，跳过域名校验)
+router.get('/:spaceCuid', (req, res, next) => {
+    // 仅当浏览器直接访问时返回 HTML；API 请求放行到后续路由
+    const accept = req.headers.accept || '';
+    if (!accept.includes('text/html')) return next();
+
+    const spaceCuid = req.params.cuid || req.params.spaceCuid;
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Waline Example</title>
+</head>
+<body>
+  <div id="waline" style="max-width: 800px;margin: 0 auto;"></div>
+  <link href='//unpkg.com/@waline/client@v3/dist/waline.css' rel='stylesheet' />
+  <script type="module">
+    import { init } from 'https://unpkg.com/@waline/client@v3/dist/waline.js';
+
+    console.log(
+      '%c @waline/server %c v1.39.0 ',
+      'color: white; background: #0078E7; padding:5px 0;',
+      'padding:4px;border:1px solid #0078E7;'
+    );
+    const params = new URLSearchParams(location.search.slice(1));
+    const waline = init({
+      el: '#waline',
+      path: params.get('path') || '/',
+      lang: params.get('lng') || undefined,
+      serverURL: location.protocol + '//' + location.host + location.pathname.replace(/\\/+$/, ''),
+      recaptchaV3Key: '',
+      turnstileKey: '',
+    });
+  </script>
+</body>
+</html>`;
+    res.type('html').send(html);
+});
 
 // 所有 /:spaceCuid/* 路由使用空间解析中间件
 router.use('/:spaceCuid', walineSpaceResolver);
@@ -68,7 +114,7 @@ router.get('/:spaceCuid/api/comment', async (req, res, next) => {
         // type=list - 管理列表 (需要管理员)
         if (type === 'list') {
             if (!isSpaceAdmin(req)) {
-                return res.status(401).json({ errno: 1003, errmsg: 'Unauthorized' });
+                return res.status(401).json({ errno: 1003, errmsg: '无权限' });
             }
             const data = await getCommentList(space.id, {
                 ...req.query,
@@ -103,12 +149,12 @@ router.post('/:spaceCuid/api/comment', async (req, res, next) => {
 
         // 检查 login=force
         if (config.login === 'force' && !req.walineUser) {
-            return res.status(401).json({ errno: 1003, errmsg: 'Login required' });
+            return res.status(401).json({ errno: 1003, errmsg: '请先登录' });
         }
 
         const { comment, url } = req.body;
         if (!comment || !url) {
-            return res.status(400).json({ errno: 1004, errmsg: 'Missing comment or url' });
+            return res.status(400).json({ errno: 1004, errmsg: '缺少评论内容或页面地址' });
         }
 
         // 验证码校验
@@ -116,20 +162,34 @@ router.post('/:spaceCuid/api/comment', async (req, res, next) => {
         const recaptchaToken = req.body.recaptchaToken || req.body['g-recaptcha-response'] || null;
         const captchaResult = await verifyCaptcha(config, turnstileToken, recaptchaToken, ip);
         if (!captchaResult.pass) {
-            return res.status(403).json({ errno: 1010, errmsg: captchaResult.reason || 'Captcha verification failed' });
+            return res.status(403).json({ errno: 1010, errmsg: captchaResult.reason || '验证码校验失败' });
         }
 
         // IP 频率限制
         const ipqps = parseInt(config.ipqps) || 60;
         const allowed = await checkIpRate(space.id, ip, ipqps);
         if (!allowed) {
-            return res.status(429).json({ errno: 1005, errmsg: 'Too many requests, please try again later' });
+            return res.status(429).json({ errno: 1005, errmsg: '请求过于频繁，请稍后再试' });
         }
 
         // 重复内容检测
         const isDuplicate = await checkDuplicate(space.id, ip, comment);
         if (isDuplicate) {
-            return res.status(400).json({ errno: 1006, errmsg: 'Duplicate comment' });
+            return res.status(400).json({ errno: 1006, errmsg: '请勿重复发送相同评论' });
+        }
+
+        // 全局敏感词封禁检查
+        const sensitiveIpBanned = await isSensitiveBanned(ip);
+        if (sensitiveIpBanned) {
+            return res.status(403).json({ errno: 1011, errmsg: '您的IP因发送敏感内容已被临时封禁' });
+        }
+
+        // 全局敏感词检查
+        const sensitiveResult = await checkSensitiveWords(comment);
+        if (sensitiveResult.hit) {
+            await banIpForSensitiveWord(ip);
+            await logSensitiveViolation(space.id, ip, req.body.nick || req.walineUser?.nick || '', sensitiveResult.word, comment);
+            return res.status(403).json({ errno: 1012, errmsg: '评论包含敏感词，禁止发送' });
         }
 
         const ua = req.headers['user-agent'] || '';
@@ -195,7 +255,7 @@ router.put('/:spaceCuid/api/comment/:id', async (req, res, next) => {
         // 点赞操作允许匿名用户，其他编辑操作需要登录
         const isLikeOnly = Object.keys(req.body).length === 1 && req.body.like !== undefined;
         if (!req.walineUser && !isLikeOnly) {
-            return res.status(401).json({ errno: 1003, errmsg: 'Login required' });
+            return res.status(401).json({ errno: 1003, errmsg: '请先登录' });
         }
 
         const admin = isSpaceAdmin(req);
@@ -208,7 +268,7 @@ router.put('/:spaceCuid/api/comment/:id', async (req, res, next) => {
         );
 
         if (!updated) {
-            return res.status(403).json({ errno: 1007, errmsg: 'Forbidden or not found' });
+            return res.status(403).json({ errno: 1007, errmsg: '无权限或评论不存在' });
         }
 
         const spaceUser = req.walineUser?.userId
@@ -234,7 +294,7 @@ router.delete('/:spaceCuid/api/comment/:id', async (req, res, next) => {
     try {
         const space = req.commentSpace;
         if (!req.walineUser) {
-            return res.status(401).json({ errno: 1003, errmsg: 'Login required' });
+            return res.status(401).json({ errno: 1003, errmsg: '请先登录' });
         }
 
         const admin = isSpaceAdmin(req);
@@ -246,7 +306,7 @@ router.delete('/:spaceCuid/api/comment/:id', async (req, res, next) => {
         );
 
         if (!deleted) {
-            return res.status(403).json({ errno: 1007, errmsg: 'Forbidden or not found' });
+            return res.status(403).json({ errno: 1007, errmsg: '无权限或评论不存在' });
         }
 
         return res.json({ errno: 0, errmsg: '' });
@@ -340,7 +400,7 @@ router.delete('/:spaceCuid/api/token', (req, res) => {
 router.get('/:spaceCuid/api/user', async (req, res, next) => {
     try {
         if (!isSpaceAdmin(req)) {
-            return res.status(401).json({ errno: 1003, errmsg: 'Unauthorized' });
+            return res.status(401).json({ errno: 1003, errmsg: '无权限' });
         }
 
         const data = await listSpaceUsers(
@@ -382,7 +442,7 @@ router.get('/:spaceCuid/api/user', async (req, res, next) => {
 router.put('/:spaceCuid/api/user', async (req, res, next) => {
     try {
         if (!req.walineUser) {
-            return res.status(401).json({ errno: 1003, errmsg: 'Login required' });
+            return res.status(401).json({ errno: 1003, errmsg: '请先登录' });
         }
 
         const space = req.commentSpace;
@@ -409,7 +469,7 @@ router.put('/:spaceCuid/api/user', async (req, res, next) => {
 router.put('/:spaceCuid/api/user/:id', async (req, res, next) => {
     try {
         if (!isSpaceAdmin(req)) {
-            return res.status(401).json({ errno: 1003, errmsg: 'Unauthorized' });
+            return res.status(401).json({ errno: 1003, errmsg: '无权限' });
         }
 
         const updated = await updateSpaceUser(
@@ -430,7 +490,7 @@ router.put('/:spaceCuid/api/user/:id', async (req, res, next) => {
 router.delete('/:spaceCuid/api/user/:id', async (req, res, next) => {
     try {
         if (!isSpaceAdmin(req)) {
-            return res.status(401).json({ errno: 1003, errmsg: 'Unauthorized' });
+            return res.status(401).json({ errno: 1003, errmsg: '无权限' });
         }
 
         await updateSpaceUser(
@@ -476,7 +536,7 @@ router.get('/:spaceCuid/api/article', async (req, res, next) => {
 router.post('/:spaceCuid/api/article', async (req, res, next) => {
     try {
         const url = req.body.path || req.body.url;
-        if (!url) return res.status(400).json({ errno: 1004, errmsg: 'Missing url' });
+        if (!url) return res.status(400).json({ errno: 1004, errmsg: '缺少页面地址' });
 
         const time = await updateArticleCounter(req.commentSpace.id, url);
         return res.json({ errno: 0, data: time });

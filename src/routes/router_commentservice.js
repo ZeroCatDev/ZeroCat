@@ -2,7 +2,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import logger from '../services/logger.js';
 import zcconfig from '../services/config/zcconfig.js';
-import { parseToken, needLogin } from '../middleware/auth.js';
+import { parseToken, needLogin, needAdmin } from '../middleware/auth.js';
 import queueManager from '../services/queue/queueManager.js';
 import { prisma } from '../services/prisma.js';
 import { createWalineToken } from '../services/commentService/walineAuth.js';
@@ -18,6 +18,9 @@ import {
     listSpaceUsers,
     updateSpaceUser,
     getSpaceStats,
+    adminListSpaces,
+    adminGetSpace,
+    adminUpdateSpaceStatus,
 } from '../services/commentService/spaceManager.js';
 import {
     getCommentList,
@@ -27,6 +30,12 @@ import {
 } from '../services/commentService/commentManager.js';
 import { toWalineType } from '../services/commentService/walineFormatter.js';
 import { renderMarkdown } from '../services/commentService/markdown.js';
+import {
+    createTask,
+    getTask,
+    listTasks,
+    getExportData,
+} from '../services/commentService/dataService.js';
 
 const router = Router();
 
@@ -408,12 +417,12 @@ router.post('/ui/login', needLogin, async (req, res, next) => {
     try {
         const { spaceCuid } = req.body;
         if (!spaceCuid) {
-            return res.status(400).json({ errno: 1, errmsg: 'Missing spaceCuid' });
+            return res.status(400).json({ errno: 1, errmsg: '缺少 spaceCuid' });
         }
 
         const space = await getSpaceByGuid(spaceCuid);
         if (!space || space.status !== 'active') {
-            return res.status(404).json({ errno: 1, errmsg: 'Space not found' });
+            return res.status(404).json({ errno: 1, errmsg: '评论空间不存在' });
         }
 
         const userId = res.locals.userid;
@@ -429,7 +438,7 @@ router.post('/ui/login', needLogin, async (req, res, next) => {
         });
 
         if (!user) {
-            return res.status(404).json({ errno: 1, errmsg: 'User not found' });
+            return res.status(404).json({ errno: 1, errmsg: '用户不存在' });
         }
 
         // 确保空间用户映射存在
@@ -472,6 +481,159 @@ router.post('/ui/login', needLogin, async (req, res, next) => {
                 bio: user.bio || '',
             },
         });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// ============================================================
+// 数据导入导出
+// ============================================================
+
+/**
+ * POST /commentservice/spaces/:cuid/data/export
+ * 发起导出任务
+ */
+router.post('/spaces/:cuid/data/export', needLogin, async (req, res, next) => {
+    try {
+        const space = await getSpaceByGuid(req.params.cuid);
+        if (!space || space.owner_id !== res.locals.userid) {
+            return res.status(404).json({ status: 'error', message: '空间不存在或无权限' });
+        }
+
+        const taskId = crypto.randomUUID();
+        await createTask(taskId, space.id, res.locals.userid, 'export', {
+            spaceCuid: space.cuid,
+            spaceName: space.name,
+        });
+
+        const enqueued = await queueManager.enqueueDataTask(
+            taskId, 'export', space.id, space.cuid, space.name, res.locals.userid,
+        );
+
+        if (!enqueued) {
+            return res.status(503).json({ status: 'error', message: '任务队列不可用，请稍后重试' });
+        }
+
+        return res.json({ status: 'success', data: { taskId } });
+    } catch (err) {
+        next(err);
+    }
+});
+
+/**
+ * POST /commentservice/spaces/:cuid/data/import
+ * 发起导入任务
+ * Body: Waline CSV 字段的评论对象数组
+ * [{id, nick, updatedAt, mail, ua, ip, status, insertedAt, createdAt, comment, pid, rid, link, url, user_id}, ...]
+ */
+router.post('/spaces/:cuid/data/import', needLogin, async (req, res, next) => {
+    try {
+        const space = await getSpaceByGuid(req.params.cuid);
+        if (!space || space.owner_id !== res.locals.userid) {
+            return res.status(404).json({ status: 'error', message: '空间不存在或无权限' });
+        }
+
+        const importData = req.body;
+        if (!Array.isArray(importData) || importData.length === 0) {
+            return res.status(400).json({
+                status: 'error',
+                message: '请提供评论数组',
+            });
+        }
+
+        const taskId = crypto.randomUUID();
+        await createTask(taskId, space.id, res.locals.userid, 'import', {
+            spaceCuid: space.cuid,
+            spaceName: space.name,
+        });
+
+        const enqueued = await queueManager.enqueueDataTask(
+            taskId, 'import', space.id, space.cuid, space.name, res.locals.userid, importData,
+        );
+
+        if (!enqueued) {
+            return res.status(503).json({ status: 'error', message: '任务队列不可用，请稍后重试' });
+        }
+
+        return res.json({ status: 'success', data: { taskId } });
+    } catch (err) {
+        next(err);
+    }
+});
+
+/**
+ * GET /commentservice/spaces/:cuid/data/tasks
+ * 查看空间的导入导出任务列表
+ */
+router.get('/spaces/:cuid/data/tasks', needLogin, async (req, res, next) => {
+    try {
+        const space = await getSpaceByGuid(req.params.cuid);
+        if (!space || space.owner_id !== res.locals.userid) {
+            return res.status(404).json({ status: 'error', message: '空间不存在或无权限' });
+        }
+
+        const tasks = await listTasks(space.id);
+        return res.json({ status: 'success', data: tasks });
+    } catch (err) {
+        next(err);
+    }
+});
+
+/**
+ * GET /commentservice/spaces/:cuid/data/tasks/:taskId
+ * 查看任务详情/进度
+ */
+router.get('/spaces/:cuid/data/tasks/:taskId', needLogin, async (req, res, next) => {
+    try {
+        const space = await getSpaceByGuid(req.params.cuid);
+        if (!space || space.owner_id !== res.locals.userid) {
+            return res.status(404).json({ status: 'error', message: '空间不存在或无权限' });
+        }
+
+        const task = await getTask(req.params.taskId);
+        if (!task || task.space_id !== space.id) {
+            return res.status(404).json({ status: 'error', message: '任务不存在' });
+        }
+
+        return res.json({ status: 'success', data: task });
+    } catch (err) {
+        next(err);
+    }
+});
+
+/**
+ * GET /commentservice/spaces/:cuid/data/tasks/:taskId/download
+ * 下载导出结果 (仅导出任务，完成后 1 小时内有效)
+ */
+router.get('/spaces/:cuid/data/tasks/:taskId/download', needLogin, async (req, res, next) => {
+    try {
+        const space = await getSpaceByGuid(req.params.cuid);
+        if (!space || space.owner_id !== res.locals.userid) {
+            return res.status(404).json({ status: 'error', message: '空间不存在或无权限' });
+        }
+
+        const task = await getTask(req.params.taskId);
+        if (!task || task.space_id !== space.id) {
+            return res.status(404).json({ status: 'error', message: '任务不存在' });
+        }
+        if (task.type !== 'export') {
+            return res.status(400).json({ status: 'error', message: '该任务不是导出任务' });
+        }
+        if (task.status !== 'completed') {
+            return res.status(400).json({ status: 'error', message: '任务尚未完成' });
+        }
+
+        const csvData = await getExportData(req.params.taskId);
+        if (!csvData) {
+            return res.status(410).json({ status: 'error', message: '导出数据已过期，请重新导出' });
+        }
+
+        const filename = `comments-${space.cuid}-${new Date().toISOString().slice(0, 10)}.csv`;
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        // BOM 前缀确保 Excel 正确识别 UTF-8
+        return res.send('\ufeff' + csvData);
     } catch (err) {
         next(err);
     }
@@ -528,6 +690,181 @@ router.get('/my/comments', needLogin, async (req, res, next) => {
                 page,
                 totalPages: Math.ceil(count / pageSize),
                 pageSize,
+                count,
+                data,
+            },
+        });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// ============================================================
+// 管理员：敏感词管理
+// ============================================================
+
+/**
+ * GET /commentservice/admin/sensitive-words
+ * 获取敏感词列表
+ */
+router.get('/admin/sensitive-words', needAdmin, async (req, res, next) => {
+    try {
+        let words = await zcconfig.get('commentservice.sensitive_words');
+        if (typeof words === 'string') {
+            try { words = JSON.parse(words); } catch { words = []; }
+        }
+        if (!Array.isArray(words)) words = [];
+        return res.json({ status: 'success', data: { words } });
+    } catch (err) {
+        next(err);
+    }
+});
+
+/**
+ * PUT /commentservice/admin/sensitive-words
+ * 更新敏感词列表
+ */
+router.put('/admin/sensitive-words', needAdmin, async (req, res, next) => {
+    try {
+        const { words } = req.body;
+        if (!Array.isArray(words)) {
+            return res.status(400).json({ status: 'error', message: 'words 必须是字符串数组' });
+        }
+        const cleaned = words.map(w => String(w).trim()).filter(Boolean);
+        await zcconfig.set('commentservice.sensitive_words', JSON.stringify(cleaned));
+        return res.json({ status: 'success', data: { words: cleaned } });
+    } catch (err) {
+        next(err);
+    }
+});
+
+/**
+ * GET /commentservice/admin/sensitive-ban-duration
+ * 获取敏感词封禁时长
+ */
+router.get('/admin/sensitive-ban-duration', needAdmin, async (req, res, next) => {
+    try {
+        const duration = await zcconfig.get('commentservice.sensitive_ban_duration');
+        return res.json({ status: 'success', data: { duration: (typeof duration === 'number' && duration > 0) ? duration : 3600 } });
+    } catch (err) {
+        next(err);
+    }
+});
+
+/**
+ * PUT /commentservice/admin/sensitive-ban-duration
+ * 更新敏感词封禁时长
+ */
+router.put('/admin/sensitive-ban-duration', needAdmin, async (req, res, next) => {
+    try {
+        const { duration } = req.body;
+        if (typeof duration !== 'number' || duration <= 0) {
+            return res.status(400).json({ status: 'error', message: '封禁时长必须是正整数（秒）' });
+        }
+        await zcconfig.set('commentservice.sensitive_ban_duration', duration);
+        return res.json({ status: 'success', data: { duration } });
+    } catch (err) {
+        next(err);
+    }
+});
+
+// ============================================================
+// 管理员：空间管理
+// ============================================================
+
+/**
+ * GET /commentservice/admin/spaces
+ * 分页列出所有评论空间
+ */
+router.get('/admin/spaces', needAdmin, async (req, res, next) => {
+    try {
+        const result = await adminListSpaces({
+            page: req.query.page,
+            limit: req.query.limit,
+            status: req.query.status || null,
+            search: req.query.search || null,
+        });
+        return res.json({ status: 'success', data: result });
+    } catch (err) {
+        next(err);
+    }
+});
+
+/**
+ * GET /commentservice/admin/spaces/:spaceId
+ * 获取单个空间详情
+ */
+router.get('/admin/spaces/:spaceId', needAdmin, async (req, res, next) => {
+    try {
+        const space = await adminGetSpace(req.params.spaceId);
+        if (!space) {
+            return res.status(404).json({ status: 'error', message: '空间不存在' });
+        }
+        return res.json({ status: 'success', data: space });
+    } catch (err) {
+        next(err);
+    }
+});
+
+/**
+ * PUT /commentservice/admin/spaces/:spaceId/status
+ * 修改空间状态
+ */
+router.put('/admin/spaces/:spaceId/status', needAdmin, async (req, res, next) => {
+    try {
+        const { status } = req.body;
+        if (!status) {
+            return res.status(400).json({ status: 'error', message: '缺少 status 字段' });
+        }
+        const updated = await adminUpdateSpaceStatus(req.params.spaceId, status);
+        const { jwt_secret, ...safe } = updated;
+        return res.json({ status: 'success', data: safe });
+    } catch (err) {
+        next(err);
+    }
+});
+
+/**
+ * GET /commentservice/admin/violations
+ * 查看敏感词违规日志
+ */
+router.get('/admin/violations', needAdmin, async (req, res, next) => {
+    try {
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+
+        const [rows, countRows] = await Promise.all([
+            prisma.$queryRawUnsafe(
+                `SELECT "key", "value", "created_at" FROM ow_cache_kv
+                 WHERE "user_id" = 0 AND "key" LIKE 'cs:violation:%'
+                 ORDER BY "created_at" DESC
+                 LIMIT $1 OFFSET $2`,
+                limit,
+                (page - 1) * limit,
+            ),
+            prisma.$queryRawUnsafe(
+                `SELECT COUNT(*)::int AS total FROM ow_cache_kv
+                 WHERE "user_id" = 0 AND "key" LIKE 'cs:violation:%'`,
+            ),
+        ]);
+
+        const count = countRows[0]?.total || 0;
+        const data = rows.map(r => {
+            let parsed = {};
+            try { parsed = JSON.parse(r.value); } catch {}
+            return {
+                key: r.key,
+                ...parsed,
+                created_at: r.created_at,
+            };
+        });
+
+        return res.json({
+            status: 'success',
+            data: {
+                page,
+                totalPages: Math.ceil(count / limit),
+                pageSize: limit,
                 count,
                 data,
             },

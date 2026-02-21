@@ -68,7 +68,7 @@ export async function createComment(spaceId, data, config, userInfo = null) {
 
         // 被封禁的用户不能发评论
         if (spaceUser && spaceUser.type === 'banned') {
-            throw Object.assign(new Error('You have been banned from this space'), { statusCode: 403, errno: 1009 });
+            throw Object.assign(new Error('您已被该空间封禁'), { statusCode: 403, errno: 1009 });
         }
 
         if (spaceUser && (spaceUser.type === 'administrator' || spaceUser.type === 'moderator')) {

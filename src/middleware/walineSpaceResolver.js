@@ -10,7 +10,7 @@ import { getSpaceConfig, getSpaceUser } from '../services/commentService/spaceMa
 export const walineSpaceResolver = async (req, res, next) => {
     const { spaceCuid } = req.params;
     if (!spaceCuid) {
-        return res.status(400).json({ errno: 1001, errmsg: 'Missing spaceCuid' });
+        return res.status(400).json({ errno: 1001, errmsg: '缺少 spaceCuid 参数' });
     }
 
     try {
@@ -19,8 +19,16 @@ export const walineSpaceResolver = async (req, res, next) => {
             where: { cuid: spaceCuid },
         });
 
-        if (!space || space.status !== 'active') {
-            return res.status(404).json({ errno: 1002, errmsg: 'Space not found or inactive' });
+        if (!space) {
+            return res.status(404).json({ errno: 1002, errmsg: '评论空间不存在' });
+        }
+
+        if (space.status === 'banned') {
+            return res.status(403).json({ errno: 1002, errmsg: '该评论空间已被封禁' });
+        }
+
+        if (space.status !== 'active') {
+            return res.status(404).json({ errno: 1002, errmsg: '评论空间不存在或未启用' });
         }
 
         // 加载配置
@@ -43,7 +51,7 @@ export const walineSpaceResolver = async (req, res, next) => {
                     hostname === d || hostname.endsWith('.' + d)
                 );
                 if (!matched) {
-                    return res.status(403).json({ errno: 1008, errmsg: 'Domain not allowed' });
+                    return res.status(403).json({ errno: 1008, errmsg: '域名不在允许列表中' });
                 }
             } catch {
                 // origin 解析失败，跳过校验

@@ -166,10 +166,19 @@ export async function listSpaces(ownerId) {
 
 /**
  * 更新空间
+ * @param {string} cuid
+ * @param {number} ownerId
+ * @param {object} data
+ * @param {boolean} isAdmin - 是否为站点管理员
  */
-export async function updateSpace(cuid, ownerId, data) {
+export async function updateSpace(cuid, ownerId, data, isAdmin = false) {
     const space = await prisma.ow_comment_spaces.findUnique({ where: { cuid } });
     if (!space || space.owner_id !== ownerId) return null;
+
+    // 如果空间已被封禁，非管理员不允许修改 status
+    if (space.status === 'banned' && !isAdmin && data.status !== undefined) {
+        return null;
+    }
 
     const updateData = {};
     if (data.name !== undefined) updateData.name = data.name;
@@ -488,6 +497,81 @@ export async function getSpaceStats(spaceId) {
     return { commentCount, userCount, waitingCount, spamCount };
 }
 
+// ============================================================
+// 管理员空间管理
+// ============================================================
+
+/**
+ * 管理员：分页列出所有评论空间
+ * @param {object} options - { page, limit, status, search }
+ */
+export async function adminListSpaces({ page = 1, limit = 20, status, search } = {}) {
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const size = Math.min(100, Math.max(1, parseInt(limit) || 20));
+
+    const where = {};
+    if (status) where.status = status;
+    if (search && search.trim()) {
+        where.OR = [
+            { name: { contains: search.trim(), mode: 'insensitive' } },
+            { cuid: { contains: search.trim(), mode: 'insensitive' } },
+        ];
+    }
+
+    const [spaces, count] = await Promise.all([
+        prisma.ow_comment_spaces.findMany({
+            where,
+            orderBy: { created_at: 'desc' },
+            skip: (pageNum - 1) * size,
+            take: size,
+            select: {
+                id: true,
+                cuid: true,
+                name: true,
+                domain: true,
+                status: true,
+                owner_id: true,
+                created_at: true,
+            },
+        }),
+        prisma.ow_comment_spaces.count({ where }),
+    ]);
+
+    return {
+        page: pageNum,
+        totalPages: Math.ceil(count / size),
+        pageSize: size,
+        count,
+        data: spaces,
+    };
+}
+
+/**
+ * 管理员：获取单个空间完整信息
+ * @param {number} spaceId
+ */
+export async function adminGetSpace(spaceId) {
+    const space = await prisma.ow_comment_spaces.findUnique({
+        where: { id: parseInt(spaceId) },
+    });
+    if (!space) return null;
+
+    const { jwt_secret, ...safe } = space;
+    return safe;
+}
+
+/**
+ * 管理员：直接修改空间状态（无限制）
+ * @param {number} spaceId
+ * @param {string} status
+ */
+export async function adminUpdateSpaceStatus(spaceId, status) {
+    return prisma.ow_comment_spaces.update({
+        where: { id: parseInt(spaceId) },
+        data: { status },
+    });
+}
+
 export default {
     createSpace,
     getSpaceByGuid,
@@ -501,4 +585,7 @@ export default {
     listSpaceUsers,
     updateSpaceUser,
     getSpaceStats,
+    adminListSpaces,
+    adminGetSpace,
+    adminUpdateSpaceStatus,
 };

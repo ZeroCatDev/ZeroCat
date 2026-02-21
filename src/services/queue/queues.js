@@ -6,6 +6,7 @@ export const QUEUE_NAMES = {
     EMAIL: 'email',
     SCHEDULED_TASKS: 'scheduled-tasks',
     COMMENT_NOTIFICATION: 'comment-notification',
+    DATA_TASK: 'comment-data-task',
 };
 
 const QUEUE_OPTIONS = {
@@ -27,11 +28,18 @@ const QUEUE_OPTIONS = {
             removeOnFail: { count: 500 },
         },
     },
+    [QUEUE_NAMES.DATA_TASK]: {
+        defaultJobOptions: {
+            removeOnComplete: { count: 100 },
+            removeOnFail: { count: 200 },
+        },
+    },
 };
 
 let emailQueue = null;
 let scheduledTasksQueue = null;
 let commentNotificationQueue = null;
+let dataTaskQueue = null;
 
 async function createQueues() {
     const connection = await createConnection('queue-shared');
@@ -51,8 +59,13 @@ async function createQueues() {
         ...QUEUE_OPTIONS[QUEUE_NAMES.COMMENT_NOTIFICATION],
     });
 
+    dataTaskQueue = new Queue(QUEUE_NAMES.DATA_TASK, {
+        connection,
+        ...QUEUE_OPTIONS[QUEUE_NAMES.DATA_TASK],
+    });
+
     logger.info('[queues] All queues created');
-    return { emailQueue, scheduledTasksQueue, commentNotificationQueue };
+    return { emailQueue, scheduledTasksQueue, commentNotificationQueue, dataTaskQueue };
 }
 
 function getEmailQueue() {
@@ -67,4 +80,8 @@ function getCommentNotificationQueue() {
     return commentNotificationQueue;
 }
 
-export { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue };
+function getDataTaskQueue() {
+    return dataTaskQueue;
+}
+
+export { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue, getDataTaskQueue };
