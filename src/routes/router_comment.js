@@ -522,8 +522,9 @@ router.get('/:spaceCuid/api/article', async (req, res, next) => {
             urls = urls.split(',');
         }
 
-        const data = await getArticleCounter(req.commentSpace.id, urls);
-        return res.json({ errno: 0, data });
+        const type = req.query.type || null;
+        const data = await getArticleCounter(req.commentSpace.id, urls, type);
+        return res.json({ errno: 0, errmsg: '', data });
     } catch (err) {
         next(err);
     }
@@ -538,7 +539,8 @@ router.post('/:spaceCuid/api/article', async (req, res, next) => {
         const url = req.body.path || req.body.url;
         if (!url) return res.status(400).json({ errno: 1004, errmsg: '缺少页面地址' });
 
-        const time = await updateArticleCounter(req.commentSpace.id, url);
+        const type = req.body.type || 'time';
+        const time = await updateArticleCounter(req.commentSpace.id, url, type);
         return res.json({ errno: 0, data: time });
     } catch (err) {
         next(err);

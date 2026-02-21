@@ -524,8 +524,8 @@ router.post('/spaces/:cuid/data/export', needLogin, async (req, res, next) => {
 /**
  * POST /commentservice/spaces/:cuid/data/import
  * 发起导入任务
- * Body: Waline CSV 字段的评论对象数组
- * [{id, nick, updatedAt, mail, ua, ip, status, insertedAt, createdAt, comment, pid, rid, link, url, user_id}, ...]
+ * Body: Waline JSON 格式
+ * { __version, type, version, time, tables, data: { Comment: [...], Counter: [...], Users: [...] } }
  */
 router.post('/spaces/:cuid/data/import', needLogin, async (req, res, next) => {
     try {
@@ -535,10 +535,10 @@ router.post('/spaces/:cuid/data/import', needLogin, async (req, res, next) => {
         }
 
         const importData = req.body;
-        if (!Array.isArray(importData) || importData.length === 0) {
+        if (!importData?.data || !Array.isArray(importData.data.Comment) || importData.data.Comment.length === 0) {
             return res.status(400).json({
                 status: 'error',
-                message: '请提供评论数组',
+                message: '请提供有效的 Waline JSON 数据 (需包含 data.Comment 数组)',
             });
         }
 
@@ -549,7 +549,7 @@ router.post('/spaces/:cuid/data/import', needLogin, async (req, res, next) => {
         });
 
         const enqueued = await queueManager.enqueueDataTask(
-            taskId, 'import', space.id, space.cuid, space.name, res.locals.userid, importData,
+            taskId, 'import', space.id, space.cuid, space.name, res.locals.userid, importData.data,
         );
 
         if (!enqueued) {
@@ -624,16 +624,15 @@ router.get('/spaces/:cuid/data/tasks/:taskId/download', needLogin, async (req, r
             return res.status(400).json({ status: 'error', message: '任务尚未完成' });
         }
 
-        const csvData = await getExportData(req.params.taskId);
-        if (!csvData) {
+        const jsonData = await getExportData(req.params.taskId);
+        if (!jsonData) {
             return res.status(410).json({ status: 'error', message: '导出数据已过期，请重新导出' });
         }
 
-        const filename = `comments-${space.cuid}-${new Date().toISOString().slice(0, 10)}.csv`;
-        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        const filename = `comments-${space.cuid}-${new Date().toISOString().slice(0, 10)}.json`;
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        // BOM 前缀确保 Excel 正确识别 UTF-8
-        return res.send('\ufeff' + csvData);
+        return res.send(jsonData);
     } catch (err) {
         next(err);
     }

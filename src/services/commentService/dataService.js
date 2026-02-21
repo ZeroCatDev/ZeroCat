@@ -1,12 +1,14 @@
 import { prisma } from '../prisma.js';
 import redisClient from '../redis.js';
 import logger from '../logger.js';
+import zcconfig from '../config/zcconfig.js';
 import { getOrCreateSpaceUser } from './spaceManager.js';
 import { sanitizeComment } from './sanitizer.js';
-import { Parser } from '@json2csv/plainjs';
 
 const TASK_TTL = 86400; // 24h
 const DATA_TTL = 3600;  // 1h (导出数据)
+
+const WALINE_VERSION = '1.39.0';
 
 // ============================================================
 // 任务追踪 (Redis)
@@ -80,103 +82,176 @@ export async function listTasks(spaceId) {
 }
 
 // ============================================================
-// CSV 序列化 (Waline 标准格式, @json2csv/plainjs)
-// ============================================================
-
-const WALINE_FIELDS = [
-    'id', 'nick', 'updatedAt', 'mail', 'ua', 'ip',
-    'status', 'insertedAt', 'createdAt', 'comment',
-    'pid', 'rid', 'link', 'url', 'user_id',
-];
-
-const csvParser = new Parser({
-    fields: WALINE_FIELDS,
-    defaultValue: '',
-    header: true,
-    eol: '\r\n',
-});
-
-/**
- * ISO 日期 → "YYYY-MM-DD HH:MM:SS" (Waline 标准格式)
- */
-function formatDateForCsv(date) {
-    if (!date) return '';
-    const d = date instanceof Date ? date : new Date(date);
-    if (isNaN(d.getTime())) return '';
-    return d.toISOString().replace('T', ' ').replace(/\.\d{3}Z$/i, '');
-}
-
-// ============================================================
-// 导出
+// 导出 (Waline JSON 格式)
 // ============================================================
 
 /**
- * 导出空间数据为 Waline 标准 CSV 格式
+ * 导出空间数据为 Waline JSON 格式
  */
 export async function exportSpaceData(spaceId, spaceCuid, spaceName, taskId, progressCb) {
-    const comments = await prisma.ow_comment_service.findMany({
-        where: { space_id: spaceId },
-        orderBy: { id: 'asc' },
-    });
+    const [comments, counters, spaceUsers] = await Promise.all([
+        prisma.ow_comment_service.findMany({
+            where: { space_id: spaceId },
+            orderBy: { id: 'asc' },
+        }),
+        prisma.ow_comment_service_counter.findMany({
+            where: { space_id: spaceId },
+            orderBy: { id: 'asc' },
+        }),
+        prisma.ow_comment_service_users.findMany({
+            where: { space_id: spaceId },
+            orderBy: { user_id: 'asc' },
+            include: {
+                user: {
+                    select: {
+                        id: true, username: true, display_name: true,
+                        email: true, avatar: true, url: true,
+                    },
+                },
+            },
+        }),
+    ]);
 
-    const total = comments.length;
+    const total = comments.length + counters.length + spaceUsers.length;
+    let processed = 0;
     if (progressCb) await progressCb(0, total);
 
-    // 构建 DB id → 顺序 id 映射 (Waline CSV 使用从 1 开始的顺序编号)
+    // 获取静态资源和前端地址
+    const [staticUrl, frontendUrl] = await Promise.all([
+        zcconfig.get('s3.staticurl'),
+        zcconfig.get('urls.frontend'),
+    ]);
+
+    // 构建 DB id → 顺序 objectId 映射
     const idMap = {};
-    comments.forEach((c, i) => {
-        idMap[c.id] = i + 1;
-    });
+    comments.forEach((c, i) => { idMap[c.id] = i + 1; });
 
-    const records = [];
-    comments.forEach((c, i) => {
-        if (progressCb && i > 0 && i % 100 === 0) progressCb(i, total);
+    // ── Comment ──
+    const commentData = comments.map((c, i) => {
+        if (progressCb && i > 0 && i % 100 === 0) progressCb(processed + i, total);
 
-        const pid = c.pid ? (idMap[Number(c.pid)] || null) : null;
-        const rid = c.rid ? (idMap[Number(c.rid)] || null) : null;
+        const pid = c.pid ? (idMap[Number(c.pid)] ?? null) : null;
+        const rid = c.rid ? (idMap[Number(c.rid)] ?? null) : null;
 
-        records.push({
-            id: String(idMap[c.id]),
-            nick: c.nick || '',
-            updatedAt: formatDateForCsv(c.updatedAt),
-            mail: c.mail || '',
-            ua: c.ua || '',
-            ip: c.ip || '',
-            status: c.status || 'approved',
-            insertedAt: formatDateForCsv(c.insertedAt),
-            createdAt: formatDateForCsv(c.createdAt),
+        return {
+            user_id: c.user_id ? (Number(c.user_id) || null) : null,
             comment: c.comment || '',
-            pid: pid,
-            rid: rid,
-            link: c.link || '',
-            url: c.url || '',
-            user_id: c.user_id || '',
-        });
+            ip: c.ip || '',
+            link: c.link || null,
+            mail: c.mail || null,
+            nick: c.nick || null,
+            pid,
+            rid,
+            sticky: c.sticky ? true : null,
+            status: c.status || 'approved',
+            like: c.like || null,
+            ua: c.ua || null,
+            url: c.url || '/',
+            objectId: idMap[c.id],
+            insertedAt: c.insertedAt?.toISOString() || null,
+            createdAt: c.createdAt?.toISOString() || null,
+            updatedAt: c.updatedAt?.toISOString() || null,
+        };
     });
+    processed += comments.length;
+    if (progressCb) await progressCb(processed, total);
 
-    const csv = csvParser.parse(records);
+    // ── Counter ──
+    const counterData = counters.map((c, i) => ({
+        time: c.time || null,
+        reaction0: c.reaction0 || null,
+        reaction1: c.reaction1 || null,
+        reaction2: c.reaction2 || null,
+        reaction3: c.reaction3 || null,
+        reaction4: c.reaction4 || null,
+        reaction5: c.reaction5 || null,
+        reaction6: c.reaction6 || null,
+        reaction7: c.reaction7 || null,
+        reaction8: c.reaction8 || null,
+        url: c.url,
+        objectId: i + 1,
+        createdAt: c.created_at?.toISOString() || null,
+        updatedAt: c.updated_at?.toISOString() || null,
+    }));
+    processed += counters.length;
+    if (progressCb) await progressCb(processed, total);
 
+    // ── Users ──
+    const userData = spaceUsers.map((su, i) => {
+        const zcUser = su.user; // 关联的 ZeroCat 用户
+
+        const displayName = su.display_name || zcUser?.display_name || zcUser?.username || '';
+        const email = su.email || zcUser?.email || '';
+
+        // 头像: 优先空间用户头像 hash，其次 ZeroCat 用户头像 hash，拼接完整 URL
+        const rawAvatar = su.avatar || zcUser?.avatar || '';
+        const avatarUrl = rawAvatar
+            ? `${staticUrl}/assets/${rawAvatar.substring(0, 2)}/${rawAvatar.substring(2, 4)}/${rawAvatar}.webp`
+            : null;
+
+        // URL: 优先空间用户自定义 url，其次 ZeroCat 用户 url，兜底拼接用户主页
+        const userUrl = su.url || zcUser?.url || (zcUser?.username ? `${frontendUrl}/user/${zcUser.username}` : null);
+
+        return {
+            display_name: displayName,
+            email,
+            password: null,
+            type: su.type || 'guest',
+            label: su.label || null,
+            url: userUrl,
+            avatar: avatarUrl,
+            github: null,
+            twitter: null,
+            facebook: null,
+            google: null,
+            weibo: null,
+            qq: null,
+            oidc: null,
+            '2fa': null,
+            objectId: i + 1,
+            createdAt: su.created_at?.toISOString() || null,
+            updatedAt: su.updated_at?.toISOString() || null,
+        };
+    });
+    processed += spaceUsers.length;
     if (progressCb) await progressCb(total, total);
 
-    // CSV 字符串存入 Redis，1 小时有效
-    await redisClient.set(`cs:datatask:data:${taskId}`, csv, DATA_TTL);
+    // 构建 Waline JSON
+    const walineJson = {
+        __version: WALINE_VERSION,
+        type: 'waline',
+        version: 1,
+        time: Date.now(),
+        tables: ['Comment', 'Counter', 'Users'],
+        data: {
+            Comment: commentData,
+            Counter: counterData,
+            Users: userData,
+        },
+    };
+
+    // JSON 字符串存入 Redis，1 小时有效
+    await redisClient.set(`cs:datatask:data:${taskId}`, JSON.stringify(walineJson), DATA_TTL);
 
     return {
         commentCount: comments.length,
+        counterCount: counters.length,
+        userCount: spaceUsers.length,
     };
 }
 
 /**
- * 获取导出数据 (CSV 字符串)
+ * 获取导出数据 (JSON 字符串)
  */
 export async function getExportData(taskId) {
     const data = await redisClient.get(`cs:datatask:data:${taskId}`);
-    if (!data || typeof data !== 'string') return null;
-    return data;
+    if (!data) return null;
+    // redisClient.get 会自动 JSON.parse，所以拿回来的可能是对象
+    return typeof data === 'string' ? data : JSON.stringify(data);
 }
 
 // ============================================================
-// 导入
+// 导入 (Waline JSON 格式)
 // ============================================================
 
 // DB VarChar 字段长度限制
@@ -205,41 +280,41 @@ function truncate(val, max) {
 }
 
 /**
- * Waline CSV 日期 "YYYY-MM-DD HH:MM:SS" → Date 对象
+ * 解析日期字符串 → Date 对象
+ * 支持 ISO 格式 "2026-01-01T12:00:00.000Z" 和 "2026-01-01 12:00:00"
  */
-function parseCsvDate(val) {
-    if (!val || typeof val !== 'string' || val.trim() === '') return new Date();
-    const trimmed = val.trim();
-    // "2025-01-01 12:00:00" → "2025-01-01T12:00:00.000Z"
-    const iso = trimmed.includes('T') ? trimmed : trimmed.replace(' ', 'T') + '.000Z';
+function parseDate(val) {
+    if (!val) return new Date();
+    if (val instanceof Date) return isNaN(val.getTime()) ? new Date() : val;
+    const str = String(val).trim();
+    if (!str) return new Date();
+    const iso = str.includes('T') ? str : str.replace(' ', 'T') + '.000Z';
     const d = new Date(iso);
     return isNaN(d.getTime()) ? new Date() : d;
 }
 
 /**
- * 将前端传入的 Waline CSV 对象数组预处理为可插入的格式
+ * 预处理 Waline JSON Comment 数组为可插入格式
  *
- * CSV 字段:  id, nick, updatedAt, mail, ua, ip, status, insertedAt, createdAt, comment, pid, rid, link, url, user_id
- * DB 字段差异:
- *   - CSV id 是顺序编号 (1,2,3...)，不写入 DB，仅用于 pid/rid 映射
- *   - CSV pid/rid 引用 CSV id，需重映射到新 DB id
- *   - CSV user_id 是原系统用户 id，导入时通过邮箱重新关联
- *   - CSV 日期是 "YYYY-MM-DD HH:MM:SS" 字符串，需转 Date
- *   - CSV 空字段是 "" 空字符串，DB 期望 null
- *   - 各 VarChar 字段有长度限制
+ * Waline JSON 字段:
+ *   objectId - 顺序编号 (1,2,3...)，仅用于 pid/rid 映射
+ *   pid/rid  - 引用其他 Comment 的 objectId
+ *   user_id  - Waline 内部用户 id，导入时通过邮箱重新关联
+ *   日期字段  - ISO 8601 字符串
  */
-function normalizeImportData(input) {
+function normalizeComments(input) {
     if (!Array.isArray(input)) {
-        throw new Error('请提供 Waline CSV 评论数组');
+        throw new Error('Comment 数据必须是数组');
     }
 
-    const comments = input.map((row, idx) => {
-        const csvId = String(row.id || idx + 1);
+    return input.map((row, idx) => {
+        const objectId = String(row.objectId ?? idx + 1);
 
         return {
-            _csv_id: csvId,
-            _csv_pid: row.pid && String(row.pid).trim() !== '' ? String(row.pid).trim() : null,
-            _csv_rid: row.rid && String(row.rid).trim() !== '' ? String(row.rid).trim() : null,
+            _obj_id: objectId,
+            _obj_pid: row.pid != null ? String(row.pid).trim() : null,
+            _obj_rid: row.rid != null ? String(row.rid).trim() : null,
+            _waline_user_id: row.user_id != null ? String(row.user_id) : null,
             nick: truncate(row.nick, COL_LIMITS.nick) || 'Anonymous',
             mail: truncate(row.mail, COL_LIMITS.mail),
             link: truncate(row.link, COL_LIMITS.link),
@@ -248,30 +323,46 @@ function normalizeImportData(input) {
             ua: row.ua && String(row.ua).trim() !== '' ? String(row.ua).trim() : null,
             ip: truncate(row.ip, COL_LIMITS.ip),
             status: VALID_STATUS.has(row.status) ? row.status : 'approved',
-            insertedAt: parseCsvDate(row.insertedAt),
-            createdAt: parseCsvDate(row.createdAt),
-            updatedAt: parseCsvDate(row.updatedAt),
+            like: typeof row.like === 'number' ? row.like : 0,
+            sticky: row.sticky === true,
+            insertedAt: parseDate(row.insertedAt),
+            createdAt: parseDate(row.createdAt),
+            updatedAt: parseDate(row.updatedAt),
         };
     });
-    return comments;
 }
 
 /**
- * 导入评论到空间
+ * 导入 Waline JSON 数据到空间
+ * @param {number} spaceId
+ * @param {object} data - Waline JSON 的 data 部分 { Comment, Counter?, Users? }
+ * @param {string} taskId
+ * @param {function} progressCb
  */
-export async function importSpaceData(spaceId, inputData, taskId, progressCb) {
-    const comments = normalizeImportData(inputData);
+export async function importSpaceData(spaceId, data, taskId, progressCb) {
+    const commentInput = Array.isArray(data.Comment) ? data.Comment : [];
+    const counterInput = Array.isArray(data.Counter) ? data.Counter : [];
+    const userInput = Array.isArray(data.Users) ? data.Users : [];
 
-    const total = comments.length;
+    const comments = normalizeComments(commentInput);
+
+    const total = comments.length + counterInput.length;
     let processed = 0;
     if (progressCb) await progressCb(0, total);
 
     // ── 阶段 1: 邮箱 → 用户映射 ──
+    // 收集所有邮箱：来自 Comment 的 mail 和 Users 的 email
     const emailToUser = new Map();
-    const emails = [...new Set(
-        comments.map(c => c.mail).filter(Boolean).map(e => e.toLowerCase())
-    )];
+    const allEmails = new Set();
 
+    for (const c of comments) {
+        if (c.mail) allEmails.add(c.mail.toLowerCase());
+    }
+    for (const u of userInput) {
+        if (u.email) allEmails.add(u.email.toLowerCase());
+    }
+
+    const emails = [...allEmails];
     if (emails.length > 0) {
         const BATCH = 200;
         for (let i = 0; i < emails.length; i += BATCH) {
@@ -286,17 +377,24 @@ export async function importSpaceData(spaceId, inputData, taskId, progressCb) {
         }
     }
 
-    // ── 阶段 2: 插入评论 (CSV id → DB id 重映射) ──
-    const csvIdToDbId = new Map(); // CSV 顺序 id → 新 DB id
+    // 构建 Waline user objectId → email 映射 (用于关联 user_id 没有 mail 的评论)
+    const walineUserIdToEmail = new Map();
+    for (const u of userInput) {
+        if (u.objectId != null && u.email) {
+            walineUserIdToEmail.set(String(u.objectId), u.email.toLowerCase());
+        }
+    }
 
-    // 分离: 无 pid 为根评论，有 pid 为子评论
-    const rootComments = comments.filter(c => !c._csv_pid);
-    const childComments = comments.filter(c => c._csv_pid);
+    // ── 阶段 2: 插入评论 (objectId → DB id 重映射) ──
+    const objIdToDbId = new Map();
+
+    const rootComments = comments.filter(c => !c._obj_pid);
+    const childComments = comments.filter(c => c._obj_pid);
 
     // 先插入根评论
     for (const c of rootComments) {
-        const record = await _createComment(spaceId, c, emailToUser, null, null);
-        csvIdToDbId.set(c._csv_id, record.id);
+        const record = await _createComment(spaceId, c, emailToUser, walineUserIdToEmail, null, null);
+        objIdToDbId.set(c._obj_id, record.id);
         processed++;
         if (progressCb && processed % 50 === 0) await progressCb(processed, total);
     }
@@ -309,16 +407,16 @@ export async function importSpaceData(spaceId, inputData, taskId, progressCb) {
         const stillRemaining = [];
 
         for (const c of remaining) {
-            const newPid = csvIdToDbId.get(c._csv_pid);
+            const newPid = objIdToDbId.get(c._obj_pid);
             if (newPid === undefined) {
                 stillRemaining.push(c);
                 continue;
             }
 
-            const newRid = c._csv_rid ? (csvIdToDbId.get(c._csv_rid) ?? newPid) : newPid;
+            const newRid = c._obj_rid ? (objIdToDbId.get(c._obj_rid) ?? newPid) : newPid;
 
-            const record = await _createComment(spaceId, c, emailToUser, newPid, newRid);
-            csvIdToDbId.set(c._csv_id, record.id);
+            const record = await _createComment(spaceId, c, emailToUser, walineUserIdToEmail, newPid, newRid);
+            objIdToDbId.set(c._obj_id, record.id);
             processed++;
             if (progressCb && processed % 50 === 0) await progressCb(processed, total);
         }
@@ -326,8 +424,8 @@ export async function importSpaceData(spaceId, inputData, taskId, progressCb) {
         if (stillRemaining.length === remaining.length) {
             // 无法解析父级，降级为根评论
             for (const c of stillRemaining) {
-                const record = await _createComment(spaceId, c, emailToUser, null, null);
-                csvIdToDbId.set(c._csv_id, record.id);
+                const record = await _createComment(spaceId, c, emailToUser, walineUserIdToEmail, null, null);
+                objIdToDbId.set(c._obj_id, record.id);
                 processed++;
             }
             break;
@@ -337,10 +435,53 @@ export async function importSpaceData(spaceId, inputData, taskId, progressCb) {
         maxPasses--;
     }
 
+    // ── 阶段 3: 导入计数器 ──
+    let counterCount = 0;
+    for (const counter of counterInput) {
+        if (!counter.url) continue;
+
+        const url = String(counter.url).slice(0, 1024);
+        await prisma.ow_comment_service_counter.upsert({
+            where: {
+                space_id_url: { space_id: spaceId, url },
+            },
+            update: {
+                time: counter.time ?? 0,
+                reaction0: counter.reaction0 ?? 0,
+                reaction1: counter.reaction1 ?? 0,
+                reaction2: counter.reaction2 ?? 0,
+                reaction3: counter.reaction3 ?? 0,
+                reaction4: counter.reaction4 ?? 0,
+                reaction5: counter.reaction5 ?? 0,
+                reaction6: counter.reaction6 ?? 0,
+                reaction7: counter.reaction7 ?? 0,
+                reaction8: counter.reaction8 ?? 0,
+            },
+            create: {
+                space_id: spaceId,
+                url,
+                time: counter.time ?? 0,
+                reaction0: counter.reaction0 ?? 0,
+                reaction1: counter.reaction1 ?? 0,
+                reaction2: counter.reaction2 ?? 0,
+                reaction3: counter.reaction3 ?? 0,
+                reaction4: counter.reaction4 ?? 0,
+                reaction5: counter.reaction5 ?? 0,
+                reaction6: counter.reaction6 ?? 0,
+                reaction7: counter.reaction7 ?? 0,
+                reaction8: counter.reaction8 ?? 0,
+            },
+        });
+        counterCount++;
+        processed++;
+        if (progressCb && processed % 50 === 0) await progressCb(processed, total);
+    }
+
     if (progressCb) await progressCb(total, total);
 
     return {
         commentCount: comments.length,
+        counterCount,
         usersMapped: emailToUser.size,
     };
 }
@@ -348,24 +489,27 @@ export async function importSpaceData(spaceId, inputData, taskId, progressCb) {
 /**
  * 内部: 创建单条评论
  * @param {number} spaceId
- * @param {object} c - normalizeImportData 产出的评论对象
+ * @param {object} c - normalizeComments 产出的评论对象
  * @param {Map} emailToUser - 邮箱 → ow_users 映射
+ * @param {Map} walineUserIdToEmail - Waline user objectId → email 映射
  * @param {number|null} pid - 已映射的新 DB pid
  * @param {number|null} rid - 已映射的新 DB rid
  */
-async function _createComment(spaceId, c, emailToUser, pid, rid) {
+async function _createComment(spaceId, c, emailToUser, walineUserIdToEmail, pid, rid) {
     let userId = null;
 
     // 通过邮箱关联 ZeroCat 用户
-    if (c.mail) {
-        const zcUser = emailToUser.get(c.mail.toLowerCase());
+    // 优先使用评论自带的 mail，其次通过 Waline user_id 查 Users 表的 email
+    const mail = c.mail?.toLowerCase() || walineUserIdToEmail.get(c._waline_user_id) || null;
+
+    if (mail) {
+        const zcUser = emailToUser.get(mail);
         if (zcUser) {
             userId = zcUser.id;
             try {
                 await getOrCreateSpaceUser(spaceId, zcUser.id, {
                     display_name: zcUser.display_name || zcUser.username,
                     email: zcUser.email,
-                    avatar: zcUser.avatar,
                 });
             } catch (err) {
                 logger.warn(`[data-import] getOrCreateSpaceUser failed uid=${zcUser.id}:`, err.message);
@@ -387,8 +531,8 @@ async function _createComment(spaceId, c, emailToUser, pid, rid) {
             status: c.status,
             pid: pid != null ? truncate(String(pid), COL_LIMITS.pid) : null,
             rid: rid != null ? truncate(String(rid), COL_LIMITS.rid) : null,
-            like: 0,
-            sticky: false,
+            like: c.like,
+            sticky: c.sticky,
             insertedAt: c.insertedAt,
             createdAt: c.createdAt,
             updatedAt: c.updatedAt,
@@ -414,9 +558,9 @@ export async function notifyTaskComplete(userId, type, spaceName, result, error 
     if (error) {
         content = `空间「${spaceName}」的数据${isExport ? '导出' : '导入'}任务失败: ${error}`;
     } else if (isExport) {
-        content = `空间「${spaceName}」的数据导出已完成，共导出 ${result.commentCount} 条评论 (Waline CSV 格式)。请在 1 小时内下载导出文件。`;
+        content = `空间「${spaceName}」的数据导出已完成，共导出 ${result.commentCount} 条评论、${result.counterCount} 条计数器、${result.userCount} 位用户。请在 1 小时内下载导出文件。`;
     } else {
-        content = `空间「${spaceName}」的数据导入已完成，共导入 ${result.commentCount} 条评论，关联 ${result.usersMapped} 位用户。`;
+        content = `空间「${spaceName}」的数据导入已完成，共导入 ${result.commentCount} 条评论、${result.counterCount} 条计数器，关联 ${result.usersMapped} 位用户。`;
     }
 
     try {
