@@ -9,6 +9,19 @@ import { checkAkismetSpam } from './akismetService.js';
 import { batchGetUserLevels } from './levelService.js';
 import { renderMarkdown } from './markdown.js';
 
+function buildVisibleCommentWhere(userId = null) {
+    if (userId) {
+        return {
+            OR: [
+                { status: 'approved' },
+                { user_id: String(userId) },
+            ],
+        };
+    }
+
+    return { status: 'approved' };
+}
+
 /**
  * IP 频率检查
  * @param {number} spaceId
@@ -234,28 +247,41 @@ export async function getComments(spaceId, query, options = {}) {
 /**
  * 获取评论数量 (Waline 兼容的 type=count)
  */
-export async function getCommentCount(spaceId, urls) {
+export async function getCommentCount(spaceId, urls = null, options = {}) {
+    const { userId = null, forceArray = false } = options;
+    const visibleWhere = buildVisibleCommentWhere(userId);
+
+    if (!urls || (Array.isArray(urls) && urls.length === 0)) {
+        return prisma.ow_comment_service.count({
+            where: { space_id: spaceId, ...visibleWhere },
+        });
+    }
+
     if (!Array.isArray(urls)) urls = [urls];
 
     const counts = await Promise.all(
         urls.map(url =>
             prisma.ow_comment_service.count({
-                where: { space_id: spaceId, url, status: 'approved' },
+                where: { space_id: spaceId, url, ...visibleWhere },
             })
         )
     );
 
-    return counts.length === 1 ? counts[0] : counts;
+    return forceArray || counts.length > 1 ? counts : counts[0];
 }
 
 /**
  * 获取最新评论 (type=recent)
  */
-export async function getRecentComments(spaceId, count = 10, config = {}) {
+export async function getRecentComments(spaceId, count = 10, config = {}, options = {}) {
+    const { userId = null, isAdmin = false } = options;
+    const where = { space_id: spaceId, ...buildVisibleCommentWhere(userId) };
+    const take = Math.max(1, Math.min(50, parseInt(count, 10) || 10));
+
     const comments = await prisma.ow_comment_service.findMany({
-        where: { space_id: spaceId, status: 'approved' },
+        where,
         orderBy: { insertedAt: 'desc' },
-        take: Math.min(50, parseInt(count) || 10),
+        take,
     });
 
     const userIds = [...new Set(
@@ -290,8 +316,11 @@ export async function getRecentComments(spaceId, count = 10, config = {}) {
     return Promise.all(
         comments.map(c =>
             formatComment(c, {
+                isAdmin,
                 spaceUser: c.user_id ? spaceUsersMap.get(Number(c.user_id)) || null : null,
                 zcUser: c.user_id ? zcUsersMap.get(Number(c.user_id)) || null : null,
+                disableUserAgent: config.disableUserAgent === 'true',
+                disableRegion: config.disableRegion === 'true',
                 userLevelMap,
             })
         )

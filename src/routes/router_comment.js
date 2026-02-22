@@ -36,6 +36,26 @@ import { renderMarkdown } from '../services/commentService/markdown.js';
 
 const router = Router();
 
+function parseWalineListParam(input, { preserveEmpty = false } = {}) {
+    if (input === undefined || input === null) return [];
+
+    const rawList = Array.isArray(input) ? input : [input];
+    const result = [];
+
+    for (const raw of rawList) {
+        if (raw === undefined || raw === null) continue;
+        const parts = String(raw).split(',');
+        for (const part of parts) {
+            const value = part.trim();
+            if (value || preserveEmpty) {
+                result.push(value);
+            }
+        }
+    }
+
+    return result;
+}
+
 // Waline 示例页面 (在 walineSpaceResolver 之前，跳过域名校验)
 router.get('/:spaceCuid', (req, res, next) => {
     // 仅当浏览器直接访问时返回 HTML；API 请求放行到后续路由
@@ -95,20 +115,26 @@ router.get('/:spaceCuid/api/comment', async (req, res, next) => {
 
         // type=count - 获取评论数量
         if (type === 'count') {
-            let urls = req.query.url;
-            if (!urls) return res.json({ errno: 0, data: 0 });
-            if (typeof urls === 'string') {
-                // 检查是否是逗号分隔
-                if (urls.includes(',')) urls = urls.split(',');
-            }
-            const count = await getCommentCount(space.id, urls);
-            return res.json({ errno: 0, data: count });
+            const hasUrlParam = req.query.url !== undefined;
+            const urls = parseWalineListParam(req.query.url);
+            const count = await getCommentCount(
+                space.id,
+                urls.length > 0 ? urls : null,
+                {
+                    userId: req.walineUser?.userId || null,
+                    forceArray: hasUrlParam && urls.length > 0,
+                },
+            );
+            return res.json({ errno: 0, errmsg: '', data: count });
         }
 
         // type=recent - 获取最新评论
         if (type === 'recent') {
-            const data = await getRecentComments(space.id, req.query.count, config);
-            return res.json({ errno: 0, data });
+            const data = await getRecentComments(space.id, req.query.count, config, {
+                userId: req.walineUser?.userId || null,
+                isAdmin: isSpaceAdmin(req),
+            });
+            return res.json({ errno: 0, errmsg: '', data });
         }
 
         // type=list - 管理列表 (需要管理员)
@@ -515,12 +541,8 @@ router.delete('/:spaceCuid/api/user/:id', async (req, res, next) => {
  */
 router.get('/:spaceCuid/api/article', async (req, res, next) => {
     try {
-        let urls = req.query.path || req.query.url;
-        if (!urls) return res.json({ errno: 0, data: [] });
-
-        if (typeof urls === 'string' && urls.includes(',')) {
-            urls = urls.split(',');
-        }
+        const urls = parseWalineListParam(req.query.path ?? req.query.url, { preserveEmpty: true });
+        if (urls.length === 0) return res.json({ errno: 0, errmsg: '', data: [] });
 
         const type = req.query.type || null;
         const data = await getArticleCounter(req.commentSpace.id, urls, type);
@@ -536,12 +558,13 @@ router.get('/:spaceCuid/api/article', async (req, res, next) => {
  */
 router.post('/:spaceCuid/api/article', async (req, res, next) => {
     try {
-        const url = req.body.path || req.body.url;
+        const [url] = parseWalineListParam(req.body.path ?? req.body.url ?? req.query.path ?? req.query.url, { preserveEmpty: true });
         if (!url) return res.status(400).json({ errno: 1004, errmsg: '缺少页面地址' });
 
-        const type = req.body.type || 'time';
-        const time = await updateArticleCounter(req.commentSpace.id, url, type);
-        return res.json({ errno: 0, data: time });
+        const type = req.body.type || req.query.type || 'time';
+        const action = req.body.action || req.query.action || 'inc';
+        const { field, value } = await updateArticleCounter(req.commentSpace.id, url, type, action);
+        return res.json({ errno: 0, errmsg: '', data: [{ [field]: value }] });
     } catch (err) {
         next(err);
     }
