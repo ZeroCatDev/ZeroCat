@@ -830,6 +830,36 @@ export async function getUserInfoForToken(user, email = null) {
 }
 
 /**
+ * 设置 refresh token cookie
+ * @param {object} res Express response 对象
+ * @param {string} refreshToken 刷新令牌
+ * @param {Date} refreshExpiresAt 刷新令牌过期时间
+ */
+export function setRefreshTokenCookie(res, refreshToken, refreshExpiresAt) {
+    const maxAge = new Date(refreshExpiresAt).getTime() - Date.now();
+    res.cookie('refresh_token', refreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+        path: '/account',
+        maxAge: Math.max(0, maxAge),
+    });
+}
+
+/**
+ * 清除 refresh token cookie
+ * @param {object} res Express response 对象
+ */
+export function clearRefreshTokenCookie(res) {
+    res.clearCookie('refresh_token', {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+        path: '/account',
+    });
+}
+
+/**
  * 生成登录响应对象
  * @param {object} user 用户对象
  * @param {object} tokenResult 令牌结果
@@ -847,7 +877,6 @@ export function generateLoginResponse(user, tokenResult, email, additionalData =
         avatar: user.avatar,
         email: email,
         token: tokenResult.accessToken,
-        refresh_token: tokenResult.refreshToken,
         expires_at: tokenResult.expiresAt,
         refresh_expires_at: tokenResult.refreshExpiresAt,
         ...additionalData
@@ -858,6 +887,8 @@ export default {
     createUserLoginTokens,
     getUserInfoForToken,
     generateLoginResponse,
+    setRefreshTokenCookie,
+    clearRefreshTokenCookie,
     parseDeviceInfo,
     generateToken,
     verifyToken,

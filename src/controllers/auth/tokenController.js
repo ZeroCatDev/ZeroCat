@@ -2,19 +2,86 @@ import logger from "../../services/logger.js";
 import authUtils from "../../services/auth/auth.js";
 import {prisma} from "../../services/prisma.js";
 import ipLocation from "../../services/ip/ipLocation.js";
+import zcconfig from "../../services/config/zcconfig.js";
+import { setRefreshTokenCookie } from "../../services/auth/tokenUtils.js";
+
+/**
+ * 验证 Origin/Referer 是否在允许的来源列表中（CSRF 防护）
+ * @param {object} req Express request 对象
+ * @returns {Promise<{valid: boolean, message?: string}>}
+ */
+async function validateOriginForCSRF(req) {
+    let origin = req.headers['origin'];
+
+    // 如果没有 Origin，尝试从 Referer 提取
+    if (!origin) {
+        const referer = req.headers['referer'];
+        if (referer) {
+            try {
+                const refererUrl = new URL(referer);
+                origin = refererUrl.origin;
+            } catch {
+                // 无效的 Referer
+            }
+        }
+    }
+
+    // Cookie 场景下必须有 Origin 或 Referer
+    if (!origin) {
+        return { valid: false, message: '缺少 Origin 或 Referer 头' };
+    }
+
+    try {
+        const originHostname = new URL(origin).hostname;
+
+        // 检查 CORS 白名单
+        const corslist = await zcconfig.get("cors");
+        if (Array.isArray(corslist) && corslist.includes(originHostname)) {
+            return { valid: true };
+        }
+
+        // 检查 urls.frontend
+        const frontendUrl = await zcconfig.get("urls.frontend");
+        if (frontendUrl) {
+            const frontendHostname = new URL(frontendUrl).hostname;
+            if (originHostname === frontendHostname) {
+                return { valid: true };
+            }
+        }
+    } catch {
+        // URL 解析失败
+    }
+
+    return { valid: false, message: '来源不在允许列表中' };
+}
 
 /**
  * 刷新令牌
  */
 export const refreshToken = async (req, res) => {
     try {
-        const {refresh_token} = req.body;
+        // 优先从 cookie 读取 refresh token，回退到 body（兼容非浏览器客户端）
+        const fromCookie = !!(req.cookies && req.cookies.refresh_token);
+        const refresh_token = fromCookie
+            ? req.cookies.refresh_token
+            : req.body.refresh_token;
 
         if (!refresh_token) {
             return res.status(400).json({
                 status: "error",
                 message: "刷新令牌是必需的",
             });
+        }
+
+        // 当 refresh token 来自 Cookie 时，执行 CSRF 验证
+        if (fromCookie) {
+            const csrfCheck = await validateOriginForCSRF(req);
+            if (!csrfCheck.valid) {
+                return res.status(403).json({
+                    status: "error",
+                    message: csrfCheck.message || "CSRF 验证失败",
+                });
+            }
         }
 
         const result = await authUtils.refreshAccessToken(
@@ -24,6 +91,11 @@ export const refreshToken = async (req, res) => {
         );
 
         if (result.success) {
+            // 如果是 Cookie 方式，重新设置 cookie（更新 maxAge）
+            if (fromCookie) {
+                setRefreshTokenCookie(res, refresh_token, result.refreshExpiresAt);
+            }
+
             return res.status(200).json({
                 status: "success",
                 message: "令牌已刷新",

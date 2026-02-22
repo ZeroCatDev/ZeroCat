@@ -49,6 +49,7 @@ export async function finalizeLoginWithTotp(req, res) {
     return res.status(500).json({ status: 'error', message: '创建登录令牌失败' });
   }
   const response = tokenUtils.generateLoginResponse({ id: data.userId }, tokenResult, data.userInfo.email || null);
+  tokenUtils.setRefreshTokenCookie(res, tokenResult.refreshToken, tokenResult.refreshExpiresAt);
   res.json(response);
 }
 

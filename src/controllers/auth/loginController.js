@@ -188,6 +188,7 @@ export const loginWithPassword = async (req, res, next) => {
         await redisClient.delete(attemptKey);
 
         const response = tokenUtils.generateLoginResponse(user, tokenResult, userEmail);
+        tokenUtils.setRefreshTokenCookie(res, tokenResult.refreshToken, tokenResult.refreshExpiresAt);
         return res.status(200).json(response);
     } catch (err) {
         logger.error("密码登录失败:", err);
@@ -402,6 +403,7 @@ export const loginWithCode = async (req, res) => {
         }
 
         const response = tokenUtils.generateLoginResponse(user, tokenResult, email);
+        tokenUtils.setRefreshTokenCookie(res, tokenResult.refreshToken, tokenResult.refreshExpiresAt);
         return res.status(200).json(response);
     } catch (error) {
         logger.error("验证码登录时出错:", error);
@@ -660,6 +662,7 @@ export const validateMagicLinkAndLogin = async (req, res) => {
             : null;
 
         const response = tokenUtils.generateLoginResponse(user, tokenResult, userEmail, {callback: callbackData});
+        tokenUtils.setRefreshTokenCookie(res, tokenResult.refreshToken, tokenResult.refreshExpiresAt);
         return res.status(200).json(response);
     } catch (error) {
         logger.error("验证魔术链接时出错:", error);
@@ -679,6 +682,7 @@ export const logout = async (req, res) => {
         const result = await authUtils.revokeToken(res.locals.tokeninfo.token_id);
 
         if (result.success) {
+            tokenUtils.clearRefreshTokenCookie(res);
             return res.status(200).json({
                 status: "success",
                 message: "登出成功",
