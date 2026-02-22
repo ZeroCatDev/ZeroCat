@@ -350,6 +350,16 @@ export async function importSpaceData(spaceId, data, taskId, progressCb) {
     let processed = 0;
     if (progressCb) await progressCb(0, total);
 
+    // ── 阶段 0: 清空空间已有数据 ──
+    logger.info(`[data-import] Clearing existing data for space ${spaceId}...`);
+    const [deletedComments, deletedCounters] = await prisma.$transaction([
+        prisma.ow_comment_service.deleteMany({ where: { space_id: spaceId } }),
+        prisma.ow_comment_service_counter.deleteMany({ where: { space_id: spaceId } }),
+    ]);
+    logger.info(
+        `[data-import] Cleared ${deletedComments.count} comments and ${deletedCounters.count} counters for space ${spaceId}`,
+    );
+
     // ── 阶段 1: 邮箱 → 用户映射 ──
     // 收集所有邮箱：来自 Comment 的 mail 和 Users 的 email
     const emailToUser = new Map();
@@ -560,7 +570,7 @@ export async function notifyTaskComplete(userId, type, spaceName, result, error 
     } else if (isExport) {
         content = `空间「${spaceName}」的数据导出已完成，共导出 ${result.commentCount} 条评论、${result.counterCount} 条计数器、${result.userCount} 位用户。请在 1 小时内下载导出文件。`;
     } else {
-        content = `空间「${spaceName}」的数据导入已完成，共导入 ${result.commentCount} 条评论、${result.counterCount} 条计数器，关联 ${result.usersMapped} 位用户。`;
+        content = `空间「${spaceName}」的数据导入已完成（已清空原有数据），共导入 ${result.commentCount} 条评论、${result.counterCount} 条计数器，关联 ${result.usersMapped} 位用户。`;
     }
 
     try {
