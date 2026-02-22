@@ -156,7 +156,11 @@ router.get('/:spaceCuid/api/comment', async (req, res, next) => {
         }
 
         const admin = isSpaceAdmin(req);
-        const data = await getComments(space.id, { url: pageUrl, ...req.query }, { isAdmin: admin, config });
+        const data = await getComments(
+            space.id,
+            { url: pageUrl, ...req.query },
+            { isAdmin: admin, config, userId: req.walineUser?.userId || null },
+        );
         return res.json({ errno: 0, data });
     } catch (err) {
         next(err);
@@ -542,7 +546,7 @@ router.delete('/:spaceCuid/api/user/:id', async (req, res, next) => {
 router.get('/:spaceCuid/api/article', async (req, res, next) => {
     try {
         const urls = parseWalineListParam(req.query.path ?? req.query.url, { preserveEmpty: true });
-        if (urls.length === 0) return res.json({ errno: 0, errmsg: '', data: [] });
+        if (urls.length === 0) return res.json({ errno: 0, errmsg: '', data: 0 });
 
         const type = req.query.type || null;
         const data = await getArticleCounter(req.commentSpace.id, urls, type);

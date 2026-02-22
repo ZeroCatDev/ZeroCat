@@ -181,10 +181,32 @@ export async function formatCommentsWithChildren(comments, children, options = {
     }
 
     // 挂载 children
-    return formattedRoots.map(root => ({
-        ...root,
-        children: childrenByRid[root.objectId] || [],
-    }));
+    return formattedRoots.map(root => {
+        const rootChildren = childrenByRid[root.objectId] || [];
+        const commentMap = new Map();
+        commentMap.set(root.objectId, root);
+        for (const child of rootChildren) {
+            commentMap.set(child.objectId, child);
+        }
+
+        const childrenWithReplyUser = rootChildren.map(child => {
+            const parent = child.pid ? commentMap.get(String(child.pid)) : null;
+            if (!parent) return child;
+            return {
+                ...child,
+                reply_user: {
+                    nick: parent.nick,
+                    link: parent.link,
+                    avatar: parent.avatar,
+                },
+            };
+        });
+
+        return {
+            ...root,
+            children: childrenWithReplyUser,
+        };
+    });
 }
 
 export default { formatComment, formatCommentsWithChildren, toWalineType };

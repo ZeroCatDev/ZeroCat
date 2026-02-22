@@ -144,21 +144,27 @@ export async function createComment(spaceId, data, config, userInfo = null) {
  */
 export async function getComments(spaceId, query, options = {}) {
     const { url: pageUrl, page = 1, pageSize = 10, sortBy } = query;
-    const { isAdmin = false, config = {} } = options;
+    const { isAdmin = false, config = {}, userId = null } = options;
 
     const pageNum = Math.max(1, parseInt(page) || 1);
     const size = Math.min(100, Math.max(1, parseInt(pageSize) || 10));
 
-    const where = {
+    const rootWhere = {
         space_id: spaceId,
         url: pageUrl,
         pid: null,
         rid: null,
     };
+    const totalWhere = {
+        space_id: spaceId,
+        url: pageUrl,
+    };
 
-    // 非管理员只看已通过的评论
+    // 可见性：管理员可见全部；普通登录用户可见 approved + 自己；匿名仅 approved
     if (!isAdmin) {
-        where.status = 'approved';
+        const visibleWhere = buildVisibleCommentWhere(userId);
+        Object.assign(rootWhere, visibleWhere);
+        Object.assign(totalWhere, visibleWhere);
     }
 
     // 排序
@@ -166,14 +172,15 @@ export async function getComments(spaceId, query, options = {}) {
     if (sortBy === 'insertedAt_asc') orderBy = { insertedAt: 'asc' };
     if (sortBy === 'like_desc') orderBy = { like: 'desc' };
 
-    const [rootComments, count] = await Promise.all([
+    const [rootComments, rootCount, totalCount] = await Promise.all([
         prisma.ow_comment_service.findMany({
-            where,
+            where: rootWhere,
             orderBy,
             skip: (pageNum - 1) * size,
             take: size,
         }),
-        prisma.ow_comment_service.count({ where }),
+        prisma.ow_comment_service.count({ where: rootWhere }),
+        prisma.ow_comment_service.count({ where: totalWhere }),
     ]);
 
     // 获取子评论
@@ -186,7 +193,7 @@ export async function getComments(spaceId, query, options = {}) {
             rid: { in: rootIds },
         };
         if (!isAdmin) {
-            childWhere.status = 'approved';
+            Object.assign(childWhere, buildVisibleCommentWhere(userId));
         }
         childComments = await prisma.ow_comment_service.findMany({
             where: childWhere,
@@ -237,9 +244,9 @@ export async function getComments(spaceId, query, options = {}) {
 
     return {
         page: pageNum,
-        totalPages: Math.ceil(count / size),
+        totalPages: Math.ceil(rootCount / size),
         pageSize: size,
-        count,
+        count: totalCount,
         data,
     };
 }
@@ -347,7 +354,7 @@ export async function getCommentList(spaceId, query, config = {}) {
         where.user_id = String(query.userId);
     }
 
-    const [comments, count] = await Promise.all([
+    const [comments, count, spamCount, waitingCount] = await Promise.all([
         prisma.ow_comment_service.findMany({
             where,
             orderBy: { insertedAt: 'desc' },
@@ -355,6 +362,8 @@ export async function getCommentList(spaceId, query, config = {}) {
             take: size,
         }),
         prisma.ow_comment_service.count({ where }),
+        prisma.ow_comment_service.count({ where: { space_id: spaceId, status: 'spam' } }),
+        prisma.ow_comment_service.count({ where: { space_id: spaceId, status: 'waiting' } }),
     ]);
 
     const userIds = [...new Set(
@@ -401,6 +410,8 @@ export async function getCommentList(spaceId, query, config = {}) {
         page: pageNum,
         totalPages: Math.ceil(count / size),
         pageSize: size,
+        spamCount,
+        waitingCount,
         count,
         data,
     };
@@ -438,16 +449,18 @@ async function _searchComments(spaceId, keyword, { pageNum, size, status, owner,
         ${whereSql} AND (c.comment ILIKE '%' || $1 || '%' OR ${scoreExpr} > 0.1)
     `;
 
-    const [rows, countRows] = await Promise.all([
+    const [rows, countRows, spamCount, waitingCount] = await Promise.all([
         prisma.$queryRawUnsafe(dataSql, ...params, size, (pageNum - 1) * size),
         prisma.$queryRawUnsafe(countSql, ...params),
+        prisma.ow_comment_service.count({ where: { space_id: spaceId, status: 'spam' } }),
+        prisma.ow_comment_service.count({ where: { space_id: spaceId, status: 'waiting' } }),
     ]);
 
     const count = countRows[0]?.total || 0;
     const ids = rows.map(r => r.id);
 
     if (ids.length === 0) {
-        return { page: pageNum, totalPages: 0, pageSize: size, count: 0, data: [] };
+        return { page: pageNum, totalPages: 0, pageSize: size, spamCount, waitingCount, count: 0, data: [] };
     }
 
     // 用 Prisma 查出完整记录
@@ -486,7 +499,7 @@ async function _searchComments(spaceId, keyword, { pageNum, size, status, owner,
         )
     );
 
-    return { page: pageNum, totalPages: Math.ceil(count / size), pageSize: size, count, data };
+    return { page: pageNum, totalPages: Math.ceil(count / size), pageSize: size, spamCount, waitingCount, count, data };
 }
 
 /**
