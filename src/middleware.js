@@ -253,6 +253,7 @@ export async function tokenAuthMiddleware(req, res, next) {
         return res.status(401).json({
             status: "error",
             message: "未登录",
+            code: "ZC_ERROR_NEED_LOGIN",
         });
     }
 
@@ -264,6 +265,7 @@ export async function tokenAuthMiddleware(req, res, next) {
             return res.status(401).json({
                 status: "error",
                 message: "未登录",
+                code: "ZC_ERROR_NEED_LOGOUT",
             });
         }
 
@@ -275,6 +277,7 @@ export async function tokenAuthMiddleware(req, res, next) {
         return res.status(401).json({
             status: "error",
             message: "Token验证失败",
+            code: "ZC_ERROR_NEED_LOGOUT",
         });
     }
 }

@@ -250,13 +250,14 @@ router.delete("/:id", needLogin, async (req, res) => {
 
 router.get("/feed", async (req, res) => {
   try {
-    const { cursor, limit = 20, include_replies = "false" } = req.query;
+    const { cursor, limit = 20, include_replies = "false", following_only = "false" } = req.query;
     const viewerId = res.locals.userid || null;
     const data = await getHomeFeed({
       userId: viewerId,
       cursor,
       limit,
       includeReplies: include_replies === "true",
+      followingOnly: following_only === "true",
     });
     res.status(200).json({ status: "success", data });
   } catch (error) {

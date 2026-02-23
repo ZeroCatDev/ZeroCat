@@ -156,7 +156,7 @@ export const strictTokenCheck = async (req, res, next) => {
         return res.status(401).json({
             status: "error",
             message: "未提供有效的授权令牌",
-            code: 401,
+            code: "ZC_ERROR_NEED_LOGIN",
         });
     }
 
@@ -171,7 +171,7 @@ export const strictTokenCheck = async (req, res, next) => {
             return res.status(401).json({
                 status: "error",
                 message: "未提供授权令牌",
-                code: 401,
+                code: "ZC_ERROR_NEED_LOGIN",
             });
         }
 
@@ -191,7 +191,7 @@ export const strictTokenCheck = async (req, res, next) => {
             return res.status(401).json({
                 status: "error",
                 message: message,
-                code: 401,
+                code: "ZC_ERROR_NEED_LOGOUT",
             });
         }
 
@@ -201,7 +201,7 @@ export const strictTokenCheck = async (req, res, next) => {
         return res.status(500).json({
             status: "error",
             message: "服务器错误",
-            code: 500,
+            code: "ZC_ERROR_NEED_LOGOUT",
         });
     }
 };
@@ -250,7 +250,7 @@ export const needLogin = async (req, res, next) => {
                         return res.status(401).json({
                             status: "error",
                             message: "无效的认证令牌",
-                            code: "ZC_ERROR_INVALID_TOKEN",
+                            code: "ZC_ERROR_NEED_LOGOUT",
                         });
                     }
                 }
@@ -259,7 +259,7 @@ export const needLogin = async (req, res, next) => {
                 return res.status(401).json({
                     status: "error",
                     message: "令牌验证失败",
-                    code: "ZC_ERROR_TOKEN_VERIFICATION_FAILED",
+                    code: "ZC_ERROR_NEED_LOGOUT",
                 });
             }
         }
@@ -294,7 +294,7 @@ export const needAdmin = async (req, res, next) => {
             return res.status(403).json({
                 status: "error",
                 message: "需要管理员权限",
-                code: 403,
+                code: "ZC_ERROR_FORBIDDEN",
             });
         }
 

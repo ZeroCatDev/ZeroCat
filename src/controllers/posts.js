@@ -1155,11 +1155,12 @@ export async function getHomeFeed({
   cursor,
   limit = 20,
   includeReplies = false,
+  followingOnly = false,
 }) {
   await initStaticUrl();
-  let authorIds = null;
 
-  if (userId) {
+  let authorFilter = {};
+  if (followingOnly && userId) {
     const follows = await prisma.ow_user_relationships.findMany({
       where: {
         source_user_id: Number(userId),
@@ -1167,17 +1168,18 @@ export async function getHomeFeed({
       },
       select: { target_user_id: true },
     });
-    authorIds = [
+    const authorIds = [
       Number(userId),
       ...follows.map((rel) => rel.target_user_id).filter(Boolean),
     ];
+    authorFilter = { author_id: { in: authorIds } };
   }
 
   const rawPosts = await prisma.ow_posts.findMany({
     where: {
       is_deleted: false,
       ...(includeReplies ? {} : { post_type: { not: "reply" } }),
-      ...(authorIds ? { author_id: { in: authorIds } } : {}),
+      ...authorFilter,
       ...(cursor ? { id: { lt: Number(cursor) } } : {}),
     },
     orderBy: { id: "desc" },

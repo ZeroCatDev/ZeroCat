@@ -106,7 +106,7 @@ export const refreshToken = async (req, res) => {
             return res.status(401).json({
                 status: "error",
                 message: result.message || "刷新令牌失败",
-                code: "ZC_ERROR_REFRESH_TOKEN_EXPIRED",
+                code: "ZC_ERROR_NEED_LOGOUT",
             });
         }
     } catch (error) {
@@ -114,7 +114,7 @@ export const refreshToken = async (req, res) => {
         return res.status(500).json({
             status: "error",
             message: "刷新令牌失败",
-            code: "ZC_ERROR_INVALID_REFRESH_TOKEN",
+            code: "ZC_ERROR_NEED_LOGOUT",
         });
     }
 };
