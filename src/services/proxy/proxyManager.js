@@ -1,11 +1,10 @@
 import zcconfig from '../config/zcconfig.js';
 import logger from '../logger.js';
-import HttpProxyAgent from 'http-proxy-agent';
-import HttpsProxyAgent from 'https-proxy-agent';
+import axios from 'axios';
 
-// Handle both ESM and CommonJS imports
-const Http = typeof HttpProxyAgent === 'object' && HttpProxyAgent.default ? HttpProxyAgent.default : HttpProxyAgent;
-const Https = typeof HttpsProxyAgent === 'object' && HttpsProxyAgent.default ? HttpsProxyAgent.default : HttpsProxyAgent;
+// Cached proxy config (parsed from URL)
+let cachedProxyConfig = null;
+let cachedProxyUrl = null;
 
 /**
  * 获取代理URL
@@ -32,49 +31,28 @@ export async function getProxyUrl() {
 }
 
 /**
- * 为fetch请求创建proxy agent
+ * 将代理URL解析为axios proxy配置（按proxyUrl缓存，URL变化时重建）
  */
-export async function createProxyAgent(url) {
-    const proxyUrl = await getProxyUrl();
-    if (!proxyUrl) {
-        return null;
+function getProxyConfig(proxyUrl) {
+    if (cachedProxyConfig && cachedProxyUrl === proxyUrl) {
+        return cachedProxyConfig;
     }
 
-    try {
-        if (url.startsWith('http://')) {
-            return new Http(proxyUrl);
-        } else if (url.startsWith('https://')) {
-            return new Https(proxyUrl);
-        }
-        return null;
-    } catch (error) {
-        logger.error('[ProxyManager] 创建代理agent失败:', error);
-        return null;
-    }
-}
-
-/**
- * 发送支持代理的fetch请求
- */
-export async function fetchWithProxy(url, options = {}) {
-    const useProxy = options.useProxy !== false;
-
-    if (useProxy) {
-        try {
-            const agent = await createProxyAgent(url);
-            if (agent) {
-                return fetch(url, {
-                    ...options,
-                    agent: agent
-                });
+    const parsed = new URL(proxyUrl);
+    cachedProxyConfig = {
+        protocol: parsed.protocol.replace(':', ''),
+        host: parsed.hostname,
+        port: parseInt(parsed.port) || (parsed.protocol === 'https:' ? 443 : 80),
+        ...(parsed.username && {
+            auth: {
+                username: decodeURIComponent(parsed.username),
+                password: decodeURIComponent(parsed.password || '')
             }
-        } catch (error) {
-            logger.error('[ProxyManager] 使用代理请求失败:', error);
-        }
-    }
-
-    // 不使用代理或代理失败时，直接发送请求
-    return fetch(url, options);
+        })
+    };
+    cachedProxyUrl = proxyUrl;
+    logger.debug('[ProxyManager] 创建新的代理配置:', proxyUrl);
+    return cachedProxyConfig;
 }
 
 /**
@@ -84,9 +62,59 @@ export async function isOAuthProxyEnabled() {
     return await zcconfig.get('oauth.proxy.enabled', false);
 }
 
+/**
+ * 将axios响应包装为fetch-like响应，使调用方无需修改
+ */
+function wrapAxiosResponse(axiosResponse) {
+    const { status, data, headers } = axiosResponse;
+    const body = typeof data === 'string' ? data : JSON.stringify(data);
+    return {
+        ok: status >= 200 && status < 300,
+        status,
+        headers,
+        json: async () => typeof data === 'string' ? JSON.parse(data) : data,
+        text: async () => body
+    };
+}
+
+/**
+ * 发送支持代理的fetch请求
+ * 内部自动检查 isOAuthProxyEnabled()，调用方无需手动检查
+ * 返回 fetch-like 响应对象（含 ok, status, json(), text()）
+ */
+export async function fetchWithProxy(url, options = {}) {
+    // 剥离自定义属性
+    const { useProxy: _useProxy, body, headers, method, ...rest } = options;
+
+    const axiosConfig = {
+        url,
+        method: method || 'GET',
+        headers: headers || {},
+        data: body,
+        // 不自动抛出错误，让调用方通过 response.ok 判断
+        validateStatus: () => true,
+        // 保持原始响应数据，不自动转换
+        transformResponse: [(data) => data],
+    };
+
+    const oauthProxyEnabled = await isOAuthProxyEnabled();
+    if (oauthProxyEnabled) {
+        try {
+            const proxyUrl = await getProxyUrl();
+            if (proxyUrl) {
+                axiosConfig.proxy = getProxyConfig(proxyUrl);
+            }
+        } catch (error) {
+            logger.error('[ProxyManager] 配置代理失败:', error);
+        }
+    }
+
+    const response = await axios(axiosConfig);
+    return wrapAxiosResponse(response);
+}
+
 export default {
     getProxyUrl,
-    createProxyAgent,
     fetchWithProxy,
     isOAuthProxyEnabled
 };

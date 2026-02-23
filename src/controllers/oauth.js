@@ -4,7 +4,7 @@ import zcconfig from "../services/config/zcconfig.js";
 import crypto from 'crypto';
 
 import base32Encode from 'base32-encode';
-import {fetchWithProxy, isOAuthProxyEnabled} from '../services/proxy/proxyManager.js';
+import {fetchWithProxy} from '../services/proxy/proxyManager.js';
 
 // Generate a Base32 hash for TOTP
 const generateContactHash = () => {
@@ -26,7 +26,8 @@ export const OAUTH_PROVIDERS = {
         enabled: false,
         clientId: null,
         clientSecret: null,
-        redirectUri: null
+        redirectUri: null,
+        mapUserInfo: (data) => ({ id: data.sub, email: data.email, name: data.name })
     },
     microsoft: {
         id: 'microsoft',
@@ -39,7 +40,8 @@ export const OAUTH_PROVIDERS = {
         enabled: false,
         clientId: null,
         clientSecret: null,
-        redirectUri: null
+        redirectUri: null,
+        mapUserInfo: (data) => ({ id: data.id, email: data.mail || data.userPrincipalName, name: data.displayName })
     },
     github: {
         id: 'github',
@@ -52,7 +54,8 @@ export const OAUTH_PROVIDERS = {
         enabled: false,
         clientId: null,
         clientSecret: null,
-        redirectUri: null
+        redirectUri: null,
+        mapUserInfo: null // GitHub needs special handling (parallel user + emails requests)
     },
     "40code": {
         id: '40code',
@@ -66,7 +69,8 @@ export const OAUTH_PROVIDERS = {
         enabled: false,
         clientId: null,
         clientSecret: null,
-        redirectUri: null
+        redirectUri: null,
+        mapUserInfo: (data) => ({ id: data.id.toString(), email: data.email, name: data.nickname })
     },
     linuxdo: {
         id: 'linuxdo',
@@ -79,7 +83,8 @@ export const OAUTH_PROVIDERS = {
         enabled: false,
         clientId: null,
         clientSecret: null,
-        redirectUri: null
+        redirectUri: null,
+        mapUserInfo: (data) => ({ id: data.id.toString(), email: data.email, name: data.name || data.username })
     }
 };
 
@@ -143,16 +148,19 @@ async function getAccessToken(provider, code) {
     });
 
     try {
-        const useProxy = await isOAuthProxyEnabled();
         const response = await fetchWithProxy(config.tokenUrl, {
             method: 'POST',
             headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
-            body: params.toString(),
-            useProxy: useProxy
+            body: params.toString()
         });
+
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(`HTTP ${response.status}: ${text}`);
+        }
 
         return await response.json();
     } catch (error) {
@@ -161,119 +169,64 @@ async function getAccessToken(provider, code) {
     }
 }
 
-// 获取用户信息的函数映射
-const getUserInfoFunctions = {
-    google: async (accessToken) => {
-        try {
-            const useProxy = await isOAuthProxyEnabled();
-            const response = await fetchWithProxy(OAUTH_PROVIDERS.google.userInfoUrl, {
-                headers: {'Authorization': `Bearer ${accessToken}`},
-                useProxy: useProxy
-            });
-            const data = await response.json();
-            return {
-                id: data.sub,
-                email: data.email,
-                name: data.name
-            };
-        } catch (error) {
-            logger.error('[oauth] 获取Google用户信息失败:', error);
-            throw error;
-        }
-    },
+// 获取 GitHub 用户信息（需要并行请求 user + emails）
+async function getGitHubUserInfo(accessToken) {
+    const headers = {
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': 'application/json'
+    };
 
-    microsoft: async (accessToken) => {
-        try {
-            const useProxy = await isOAuthProxyEnabled();
-            const response = await fetchWithProxy(OAUTH_PROVIDERS.microsoft.userInfoUrl, {
-                headers: {'Authorization': `Bearer ${accessToken}`},
-                useProxy: useProxy
-            });
-            const data = await response.json();
-            return {
-                id: data.id,
-                email: data.mail || data.userPrincipalName,
-                name: data.displayName
-            };
-        } catch (error) {
-            logger.error('[oauth] 获取Microsoft用户信息失败:', error);
-            throw error;
-        }
-    },
+    const [userResponse, emailsResponse] = await Promise.all([
+        fetchWithProxy(OAUTH_PROVIDERS.github.userInfoUrl, { headers }),
+        fetchWithProxy('https://api.github.com/user/emails', { headers })
+    ]);
 
-    github: async (accessToken) => {
-        try {
-            const useProxy = await isOAuthProxyEnabled();
-            const [userResponse, emailsResponse] = await Promise.all([
-                fetchWithProxy(OAUTH_PROVIDERS.github.userInfoUrl, {
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`,
-                        'Accept': 'application/json'
-                    },
-                    useProxy: useProxy
-                }),
-                fetchWithProxy('https://api.github.com/user/emails', {
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`,
-                        'Accept': 'application/json'
-                    },
-                    useProxy: useProxy
-                })
-            ]);
-
-            const userData = await userResponse.json();
-            const emailsData = await emailsResponse.json();
-            const primaryEmail = emailsData.find(email => email.primary)?.email || emailsData[0]?.email;
-
-            return {
-                id: userData.id.toString(),
-                email: primaryEmail,
-                name: userData.name || userData.login
-            };
-        } catch (error) {
-            logger.error('[oauth] 获取GitHub用户信息失败:', error);
-            throw error;
-        }
-    },
-
-    "40code": async (accessToken) => {
-        try {
-            const useProxy = await isOAuthProxyEnabled();
-            const response = await fetchWithProxy(OAUTH_PROVIDERS["40code"].userInfoUrl, {
-                headers: {'Authorization': `Bearer ${accessToken}`},
-                useProxy: useProxy
-            });
-            const data = await response.json();
-            return {
-                id: data.id.toString(),
-                email: data.email,
-                name: data.nickname,
-            };
-        } catch (error) {
-            logger.error('[oauth] 获取40code用户信息失败:', error);
-            throw error;
-        }
-    },
-
-    linuxdo: async (accessToken) => {
-        try {
-            const useProxy = await isOAuthProxyEnabled();
-            const response = await fetchWithProxy(OAUTH_PROVIDERS.linuxdo.userInfoUrl, {
-                headers: {'Authorization': `Bearer ${accessToken}`},
-                useProxy: useProxy
-            });
-            const data = await response.json();
-            return {
-                id: data.id.toString(),
-                email: data.email,
-                name: data.name || data.username
-            };
-        } catch (error) {
-            logger.error('[oauth] 获取Linux.do用户信息失败:', error);
-            throw error;
-        }
+    if (!userResponse.ok) {
+        const text = await userResponse.text();
+        throw new Error(`GitHub user API HTTP ${userResponse.status}: ${text}`);
     }
-};
+    if (!emailsResponse.ok) {
+        const text = await emailsResponse.text();
+        throw new Error(`GitHub emails API HTTP ${emailsResponse.status}: ${text}`);
+    }
+
+    const userData = await userResponse.json();
+    const emailsData = await emailsResponse.json();
+    const primaryEmail = emailsData.find(email => email.primary)?.email || emailsData[0]?.email;
+
+    return {
+        id: userData.id.toString(),
+        email: primaryEmail,
+        name: userData.name || userData.login
+    };
+}
+
+// 通用获取用户信息函数
+async function getUserInfo(provider, accessToken) {
+    const config = OAUTH_PROVIDERS[provider];
+
+    // GitHub 需要特殊处理
+    if (!config.mapUserInfo) {
+        return getGitHubUserInfo(accessToken);
+    }
+
+    try {
+        const response = await fetchWithProxy(config.userInfoUrl, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(`HTTP ${response.status}: ${text}`);
+        }
+
+        const data = await response.json();
+        return config.mapUserInfo(data);
+    } catch (error) {
+        logger.error(`[oauth] 获取${provider}用户信息失败:`, error);
+        throw error;
+    }
+}
 
 // 生成唯一用户名
 async function generateUniqueUsername(baseName) {
@@ -317,7 +270,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
         // 获取用户信息
         let userInfo;
         try {
-            userInfo = await getUserInfoFunctions[provider](accessToken);
+            userInfo = await getUserInfo(provider, accessToken);
         } catch (error) {
             logger.error(`[oauth] 获取${provider}用户信息失败:`, error.message);
             throw new Error(`获取${provider}用户信息失败: ${error.message}`);

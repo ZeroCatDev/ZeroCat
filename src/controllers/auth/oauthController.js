@@ -93,6 +93,15 @@ export const authWithOAuth = async (req, res) => {
  * 处理OAuth回调
  */
 export const handleOAuthCallbackRequest = async (req, res) => {
+    const frontendUrl = await zcconfig.get("urls.frontend");
+
+    const redirectTo = (path, message) => {
+        const url = message
+            ? `${frontendUrl}${path}?message=${encodeURIComponent(message)}`
+            : `${frontendUrl}${path}`;
+        return res.redirect(url);
+    };
+
     try {
         const {provider} = req.params;
         const {code, state} = req.query;
@@ -101,21 +110,13 @@ export const handleOAuthCallbackRequest = async (req, res) => {
 
         if (!code || !state) {
             logger.warn(`[oauthController] 无效的OAuth回调请求: 缺少code或state`);
-            return res.redirect(
-                `${await zcconfig.get(
-                    "urls.frontend"
-                )}/app/account/oauth/login/error?message=${encodeURIComponent('无效的请求参数')}`
-            );
+            return redirectTo('/app/account/oauth/login/error', '无效的请求参数');
         }
 
         const cachedState = memoryCache.get(`oauth_state:${state}`);
         if (!cachedState) {
             logger.warn(`[oauthController] state验证失败: state=${state}`);
-            return res.redirect(
-                `${await zcconfig.get(
-                    "urls.frontend"
-                )}/app/account/oauth/login/error?message=${encodeURIComponent('无效的state')}`
-            );
+            return redirectTo('/app/account/oauth/login/error', '无效的state');
         }
 
         // 根据 state 的类型处理不同的逻辑
@@ -136,26 +137,14 @@ export const handleOAuthCallbackRequest = async (req, res) => {
                 // 处理绑定结果
                 if (bindingResult.success) {
                     logger.info(`[oauthController] OAuth绑定成功: provider=${provider}, userId=${userIdToBind}`);
-                    return res.redirect(
-                        `${await zcconfig.get(
-                            "urls.frontend"
-                        )}/app/account/oauth/bind/success`
-                    );
+                    return redirectTo('/app/account/oauth/bind/success');
                 } else {
                     logger.warn(`[oauthController] OAuth绑定失败: ${bindingResult.message}`);
-                    return res.redirect(
-                        `${await zcconfig.get(
-                            "urls.frontend"
-                        )}/app/account/oauth/bind/error?message=${encodeURIComponent(bindingResult.message)}`
-                    );
+                    return redirectTo('/app/account/oauth/bind/error', bindingResult.message);
                 }
             } catch (error) {
                 logger.error(`[oauthController] OAuth绑定过程发生异常:`, error);
-                return res.redirect(
-                    `${await zcconfig.get(
-                        "urls.frontend"
-                    )}/app/account/oauth/bind/error?message=${encodeURIComponent('OAuth绑定失败: ' + error.message)}`
-                );
+                return redirectTo('/app/account/oauth/bind/error', 'OAuth绑定失败: ' + error.message);
             }
         } else {
             // 登录/注册操作
@@ -168,16 +157,8 @@ export const handleOAuthCallbackRequest = async (req, res) => {
                 if (callbackResult && callbackResult.user && callbackResult.contact) {
                     const {user, contact} = callbackResult;
 
-                    // 查询用户主邮箱
-                    const userEmail = await prisma.ow_users_contacts.findFirst({
-                        where: {
-                            user_id: user.id,
-                            contact_type: 'email',
-                            is_primary: true
-                        }
-                    });
-
-                    const email = userEmail ? userEmail.contact_value : null;
+                    // contact 已经是主邮箱联系方式（由 handleOAuthCallback 返回）
+                    const email = contact.contact_type === 'email' ? contact.contact_value : null;
 
                     // 准备要存储的用户数据
                     const userData = {
@@ -194,46 +175,28 @@ export const handleOAuthCallbackRequest = async (req, res) => {
                         const tokenResult = await createTemporaryToken(user.id, 'oauth_login', {userData});
                         if (!tokenResult.success) {
                             logger.error(`[oauthController] 创建临时令牌失败: ${tokenResult.message}`);
-                            return res.redirect(
-                                `${await zcconfig.get(
-                                    "urls.frontend"
-                                )}/app/account/oauth/login/error?message=${encodeURIComponent('创建会话令牌失败')}`
-                            );
+                            return redirectTo('/app/account/oauth/login/error', '创建会话令牌失败');
                         }
                         tempToken = tokenResult.token;
                     } catch (tokenError) {
                         logger.error(`[oauthController] 创建临时令牌异常:`, tokenError);
-                        return res.redirect(
-                            `${await zcconfig.get(
-                                "urls.frontend"
-                            )}/app/account/oauth/login/error?message=${encodeURIComponent('会话创建失败')}`
-                        );
+                        return redirectTo('/app/account/oauth/login/error', '会话创建失败');
                     }
 
                     logger.info(`[oauthController] OAuth登录/注册成功: userId=${user.id}, username=${user.username}, provider=${provider}`);
 
                     // 重定向到前端，并传递临时令牌
                     return res.redirect(
-                        `${await zcconfig.get(
-                            "urls.frontend"
-                        )}/app/account/oauth/callback?temp_token=${tempToken}`
+                        `${frontendUrl}/app/account/oauth/callback?temp_token=${tempToken}`
                     );
                 } else {
                     logger.error(`[oauthController] OAuth回调结果无效:`, callbackResult);
-                    return res.redirect(
-                        `${await zcconfig.get(
-                            "urls.frontend"
-                        )}/app/account/oauth/login/error?message=${encodeURIComponent('登录失败: 无效的OAuth响应')}`
-                    );
+                    return redirectTo('/app/account/oauth/login/error', '登录失败: 无效的OAuth响应');
                 }
             } catch (error) {
                 logger.error(`[oauthController] OAuth登录/注册过程发生异常:`, error);
                 const errorMsg = error.message || '登录失败';
-                return res.redirect(
-                    `${await zcconfig.get(
-                        "urls.frontend"
-                    )}/app/account/oauth/login/error?message=${encodeURIComponent('OAuth登录失败: ' + errorMsg)}`
-                );
+                return redirectTo('/app/account/oauth/login/error', 'OAuth登录失败: ' + errorMsg);
             }
         }
     } catch (error) {
@@ -241,9 +204,7 @@ export const handleOAuthCallbackRequest = async (req, res) => {
         logger.error(`[oauthController] 错误堆栈: ${error.stack}`);
         try {
             return res.redirect(
-                `${await zcconfig.get(
-                    "urls.frontend"
-                )}/app/account/oauth/login/error?message=${encodeURIComponent('系统错误: OAuth处理失败')}`
+                `${frontendUrl}/app/account/oauth/login/error?message=${encodeURIComponent('系统错误: OAuth处理失败')}`
             );
         } catch (redirectError) {
             res.status(500).json({
