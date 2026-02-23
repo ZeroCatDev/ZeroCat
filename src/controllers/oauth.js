@@ -4,6 +4,7 @@ import zcconfig from "../services/config/zcconfig.js";
 import crypto from 'crypto';
 
 import base32Encode from 'base32-encode';
+import {fetchWithProxy, isOAuthProxyEnabled} from '../services/proxy/proxyManager.js';
 
 // Generate a Base32 hash for TOTP
 const generateContactHash = () => {
@@ -141,93 +142,136 @@ async function getAccessToken(provider, code) {
         grant_type: 'authorization_code'
     });
 
-    const response = await fetch(config.tokenUrl, {
-        method: 'POST',
-        headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: params.toString()
-    });
+    try {
+        const useProxy = await isOAuthProxyEnabled();
+        const response = await fetchWithProxy(config.tokenUrl, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: params.toString(),
+            useProxy: useProxy
+        });
 
-    return await response.json();
+        return await response.json();
+    } catch (error) {
+        logger.error(`[oauth] 获取${provider}访问令牌失败:`, error);
+        throw error;
+    }
 }
 
 // 获取用户信息的函数映射
 const getUserInfoFunctions = {
     google: async (accessToken) => {
-        const response = await fetch(OAUTH_PROVIDERS.google.userInfoUrl, {
-            headers: {'Authorization': `Bearer ${accessToken}`}
-        });
-        const data = await response.json();
-        return {
-            id: data.sub,
-            email: data.email,
-            name: data.name
-        };
+        try {
+            const useProxy = await isOAuthProxyEnabled();
+            const response = await fetchWithProxy(OAUTH_PROVIDERS.google.userInfoUrl, {
+                headers: {'Authorization': `Bearer ${accessToken}`},
+                useProxy: useProxy
+            });
+            const data = await response.json();
+            return {
+                id: data.sub,
+                email: data.email,
+                name: data.name
+            };
+        } catch (error) {
+            logger.error('[oauth] 获取Google用户信息失败:', error);
+            throw error;
+        }
     },
 
     microsoft: async (accessToken) => {
-        const response = await fetch(OAUTH_PROVIDERS.microsoft.userInfoUrl, {
-            headers: {'Authorization': `Bearer ${accessToken}`}
-        });
-        const data = await response.json();
-        return {
-            id: data.id,
-            email: data.mail || data.userPrincipalName,
-            name: data.displayName
-        };
+        try {
+            const useProxy = await isOAuthProxyEnabled();
+            const response = await fetchWithProxy(OAUTH_PROVIDERS.microsoft.userInfoUrl, {
+                headers: {'Authorization': `Bearer ${accessToken}`},
+                useProxy: useProxy
+            });
+            const data = await response.json();
+            return {
+                id: data.id,
+                email: data.mail || data.userPrincipalName,
+                name: data.displayName
+            };
+        } catch (error) {
+            logger.error('[oauth] 获取Microsoft用户信息失败:', error);
+            throw error;
+        }
     },
 
     github: async (accessToken) => {
-        const [userResponse, emailsResponse] = await Promise.all([
-            fetch(OAUTH_PROVIDERS.github.userInfoUrl, {
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Accept': 'application/json'
-                }
-            }),
-            fetch('https://api.github.com/user/emails', {
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Accept': 'application/json'
-                }
-            })
-        ]);
+        try {
+            const useProxy = await isOAuthProxyEnabled();
+            const [userResponse, emailsResponse] = await Promise.all([
+                fetchWithProxy(OAUTH_PROVIDERS.github.userInfoUrl, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Accept': 'application/json'
+                    },
+                    useProxy: useProxy
+                }),
+                fetchWithProxy('https://api.github.com/user/emails', {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Accept': 'application/json'
+                    },
+                    useProxy: useProxy
+                })
+            ]);
 
-        const userData = await userResponse.json();
-        const emailsData = await emailsResponse.json();
-        const primaryEmail = emailsData.find(email => email.primary)?.email || emailsData[0]?.email;
+            const userData = await userResponse.json();
+            const emailsData = await emailsResponse.json();
+            const primaryEmail = emailsData.find(email => email.primary)?.email || emailsData[0]?.email;
 
-        return {
-            id: userData.id.toString(),
-            email: primaryEmail,
-            name: userData.name || userData.login
-        };
+            return {
+                id: userData.id.toString(),
+                email: primaryEmail,
+                name: userData.name || userData.login
+            };
+        } catch (error) {
+            logger.error('[oauth] 获取GitHub用户信息失败:', error);
+            throw error;
+        }
     },
 
     "40code": async (accessToken) => {
-        const response = await fetch(OAUTH_PROVIDERS["40code"].userInfoUrl, {
-            headers: {'Authorization': `Bearer ${accessToken}`}
-        });
-        const data = await response.json();
-        return {
-            id: data.id.toString(),
-            email: data.email,
-            name: data.nickname,
-        };
+        try {
+            const useProxy = await isOAuthProxyEnabled();
+            const response = await fetchWithProxy(OAUTH_PROVIDERS["40code"].userInfoUrl, {
+                headers: {'Authorization': `Bearer ${accessToken}`},
+                useProxy: useProxy
+            });
+            const data = await response.json();
+            return {
+                id: data.id.toString(),
+                email: data.email,
+                name: data.nickname,
+            };
+        } catch (error) {
+            logger.error('[oauth] 获取40code用户信息失败:', error);
+            throw error;
+        }
     },
 
     linuxdo: async (accessToken) => {
-        const response = await fetch(OAUTH_PROVIDERS.linuxdo.userInfoUrl, {
-            headers: {'Authorization': `Bearer ${accessToken}`}
-        });
-        const data = await response.json();
-        return {
-            id: data.id.toString(),
-            email: data.email,
-            name: data.name || data.username
-        };
+        try {
+            const useProxy = await isOAuthProxyEnabled();
+            const response = await fetchWithProxy(OAUTH_PROVIDERS.linuxdo.userInfoUrl, {
+                headers: {'Authorization': `Bearer ${accessToken}`},
+                useProxy: useProxy
+            });
+            const data = await response.json();
+            return {
+                id: data.id.toString(),
+                email: data.email,
+                name: data.name || data.username
+            };
+        } catch (error) {
+            logger.error('[oauth] 获取Linux.do用户信息失败:', error);
+            throw error;
+        }
     }
 };
 
@@ -252,22 +296,54 @@ async function generateUniqueUsername(baseName) {
 }
 
 export async function handleOAuthCallback(provider, code, userIdToBind = null) {
-    logger.info(`handleOAuthCallback: ${provider}, ${code}, ${userIdToBind}`);
+    logger.info(`[oauth] handleOAuthCallback: ${provider}, code: ${code.substring(0, 10)}..., userIdToBind: ${userIdToBind}`);
     try {
-        const tokenData = await getAccessToken(provider, code);
+        // 获取访问令牌
+        let tokenData;
+        try {
+            tokenData = await getAccessToken(provider, code);
+        } catch (error) {
+            logger.error(`[oauth] 获取${provider}的访问令牌失败:`, error.message);
+            throw new Error(`获取${provider}访问令牌失败: ${error.message}`);
+        }
+
+        if (!tokenData.access_token) {
+            logger.error(`[oauth] ${provider}未返回access_token`, tokenData);
+            throw new Error(`${provider}未返回有效的访问令牌`);
+        }
+
         const accessToken = tokenData.access_token;
 
         // 获取用户信息
-        const userInfo = await getUserInfoFunctions[provider](accessToken);
-        logger.debug(userInfo);
+        let userInfo;
+        try {
+            userInfo = await getUserInfoFunctions[provider](accessToken);
+        } catch (error) {
+            logger.error(`[oauth] 获取${provider}用户信息失败:`, error.message);
+            throw new Error(`获取${provider}用户信息失败: ${error.message}`);
+        }
+
+        if (!userInfo || !userInfo.id) {
+            logger.error(`[oauth] 无法获取${provider}用户ID`, userInfo);
+            throw new Error(`无法获取${provider}的有效用户信息`);
+        }
+
+        logger.debug(`[oauth] ${provider}用户信息:`, {
+            id: userInfo.id,
+            email: userInfo.email,
+            name: userInfo.name
+        });
 
         if (userIdToBind) {
             // 绑定操作
+            logger.info(`[oauth] 处理OAuth绑定操作: provider=${provider}, targetUserId=${userIdToBind}`);
+
             const user = await prisma.ow_users.findUnique({
                 where: {id: userIdToBind}
             });
 
             if (!user) {
+                logger.error(`[oauth] 绑定目标用户不存在: ${userIdToBind}`);
                 return {success: false, message: "[oauth] 绑定的用户不存在"};
             }
 
@@ -279,42 +355,65 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
                 }
             });
 
+            if (existingOAuthContact && existingOAuthContact.user_id !== userIdToBind) {
+                logger.warn(`[oauth] OAuth账号已被其他用户绑定: provider=${provider}, oauthId=${userInfo.id}, existingUserId=${existingOAuthContact.user_id}`);
+                return {success: false, message: "[oauth] 该OAuth账号已被其他用户绑定"};
+            }
+
             // 绑定 OAuth 账号到指定用户
             try {
-                await prisma.ow_users_contacts.create({
-                    data: {
-                        user_id: user.id,
-                        contact_value: userInfo.id,
-                        contact_info: generateContactHash(),
-                        contact_type: "oauth_" + provider,
-                        verified: true,
-                        metadata: userInfo
-                    }
-                });
+                if (!existingOAuthContact) {
+                    await prisma.ow_users_contacts.create({
+                        data: {
+                            user_id: user.id,
+                            contact_value: userInfo.id,
+                            contact_info: generateContactHash(),
+                            contact_type: "oauth_" + provider,
+                            verified: true,
+                            metadata: userInfo
+                        }
+                    });
+                    logger.info(`[oauth] 成功绑定OAuth账号: userId=${user.id}, provider=${provider}`);
+                }
             } catch (error) {
-                return {success: false, message: "[oauth] 绑定 OAuth 账号时出错"};
-                // 继续处理，不抛出异常
+                logger.error(`[oauth] 绑定OAuth账号失败:`, error);
+                return {success: false, message: "[oauth] 绑定OAuth账号失败: " + error.message};
             }
 
-            try {
-                await prisma.ow_users_contacts.create({
-                    data: {
-                        user_id: user.id,
-                        contact_value: userInfo.email,
-                        contact_info: generateContactHash(),
-                        contact_type: 'email',
-                        is_primary: false,
-                        verified: false
+            // 添加邮箱联系方式（如果邮箱不存在）
+            if (userInfo.email) {
+                try {
+                    const emailContact = await prisma.ow_users_contacts.findFirst({
+                        where: {
+                            user_id: user.id,
+                            contact_value: userInfo.email,
+                            contact_type: 'email'
+                        }
+                    });
+
+                    if (!emailContact) {
+                        await prisma.ow_users_contacts.create({
+                            data: {
+                                user_id: user.id,
+                                contact_value: userInfo.email,
+                                contact_info: generateContactHash(),
+                                contact_type: 'email',
+                                is_primary: false,
+                                verified: false
+                            }
+                        });
+                        logger.debug(`[oauth] 为绑定用户添加邮箱: userId=${user.id}, email=${userInfo.email}`);
                     }
-                });
-            } catch (error) {
-                logger.error('[oauth] 添加邮箱时出错:', error);
-                // 继续处理，不抛出异常
+                } catch (error) {
+                    logger.warn(`[oauth] 添加邮箱联系方式失败（不中断绑定操作）:`, error);
+                }
             }
 
-            return {success: true};
+            return {success: true, message: "OAuth账号绑定成功"};
         } else {
-            // 登录操作（现有逻辑）
+            // 登录/注册操作
+            logger.info(`[oauth] 处理OAuth登录/注册: provider=${provider}, oauthId=${userInfo.id}, email=${userInfo.email}`);
+
             let contact = await prisma.ow_users_contacts.findFirst({
                 where: {
                     contact_value: userInfo.id,
@@ -323,7 +422,9 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
             });
 
             if (!contact) {
-                // Check if the email is already associated with another user
+                logger.debug(`[oauth] OAuth账号未绑定，检查邮箱是否存在...`);
+
+                // 检查邮箱是否已与其他用户关联
                 const emailContact = await prisma.ow_users_contacts.findFirst({
                     where: {
                         contact_value: userInfo.email,
@@ -333,50 +434,77 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
 
                 let userId;
                 if (emailContact) {
-                    // If found, associate with that user
+                    // 邮箱已存在，关联该用户
                     userId = emailContact.user_id;
-                    logger.info(`[oauth] 关联 OAuth 账号到现有用户: ${userId}`);
+                    logger.info(`[oauth] OAuth邮箱已关联现有用户: userId=${userId}, provider=${provider}`);
                 } else {
-                    // Create a new user
+                    // 创建新用户
+                    logger.info(`[oauth] 创建新用户: provider=${provider}`);
                     const username = await generateUniqueUsername(userInfo.name || 'user');
 
-                    // 创建新用户
-                    const newUser = await prisma.ow_users.create({
-                        data: {
-                            username: username,
-                            password: null,  // OAuth 用户不需要密码
-                            display_name: userInfo.name || username,
-                            type: 'user',  // 设置为普通用户
-                            regTime: new Date(),
-                            createdAt: new Date()  // 添加 createdAt 字段
-                        }
-                    });
-                    userId = newUser.id;
-                    logger.info(`[oauth] 创建新用户: ${userId}, username: ${username}`);
+                    try {
+                        const newUser = await prisma.ow_users.create({
+                            data: {
+                                username: username,
+                                password: null,  // OAuth 用户不需要密码
+                                display_name: userInfo.name || username,
+                                type: 'user',  // 设置为普通用户
+                                regTime: new Date(),
+                                createdAt: new Date()
+                            }
+                        });
+                        userId = newUser.id;
+                        logger.info(`[oauth] 成功创建新用户: userId=${userId}, username=${username}, provider=${provider}`);
+                    } catch (error) {
+                        logger.error(`[oauth] 创建新用户失败:`, error);
+                        throw new Error(`创建新用户失败: ${error.message}`);
+                    }
 
                     // 创建 email 联系方式
-                    await prisma.ow_users_contacts.create({
-                        data: {
-                            user_id: userId,
-                            contact_value: userInfo.email,
-                            contact_info: generateContactHash(),
-                            contact_type: 'email',
-                            is_primary: true,
-                            verified: true
+                    try {
+                        await prisma.ow_users_contacts.create({
+                            data: {
+                                user_id: userId,
+                                contact_value: userInfo.email,
+                                contact_info: generateContactHash(),
+                                contact_type: 'email',
+                                is_primary: true,
+                                verified: true
+                            }
+                        });
+                        logger.debug(`[oauth] 为新用户添加邮箱: userId=${userId}, email=${userInfo.email}`);
+                    } catch (error) {
+                        // 尝试删除刚创建的用户
+                        logger.error(`[oauth] 为新用户添加邮箱失败，尝试删除用户:`, error);
+                        try {
+                            await prisma.ow_users.delete({
+                                where: {id: userId}
+                            });
+                            logger.info(`[oauth] 已删除创建失败的用户: userId=${userId}`);
+                        } catch (deleteError) {
+                            logger.error(`[oauth] 删除用户失败:`, deleteError);
                         }
-                    });
+                        throw new Error(`添加用户邮箱失败: ${error.message}`);
+                    }
                 }
 
                 // 创建 OAuth 联系方式
-                contact = await prisma.ow_users_contacts.create({
-                    data: {
-                        user_id: userId,
-                        contact_value: userInfo.id,
-                        contact_info: generateContactHash(),
-                        contact_type: "oauth_" + provider,
-                        verified: true
-                    }
-                });
+                try {
+                    contact = await prisma.ow_users_contacts.create({
+                        data: {
+                            user_id: userId,
+                            contact_value: userInfo.id,
+                            contact_info: generateContactHash(),
+                            contact_type: "oauth_" + provider,
+                            verified: true,
+                            metadata: userInfo
+                        }
+                    });
+                    logger.info(`[oauth] 成功创建OAuth联系方式: userId=${userId}, provider=${provider}`);
+                } catch (error) {
+                    logger.error(`[oauth] 创建OAuth联系方式失败:`, error);
+                    throw new Error(`创建OAuth联系方式失败: ${error.message}`);
+                }
             }
 
             // 获取用户信息
@@ -385,6 +513,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
             });
 
             if (!user) {
+                logger.error(`[oauth] 用户不存在: userId=${contact.user_id}`);
                 throw new Error('[oauth] 用户不存在');
             }
 
@@ -397,13 +526,15 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
                 }
             });
 
+            logger.info(`[oauth] OAuth登录成功: userId=${user.id}, username=${user.username}, provider=${provider}`);
+
             return {
                 user,
                 contact: primaryEmail || contact  // 优先返回主邮箱联系方式
             };
         }
     } catch (error) {
-        logger.error('[oauth] OAuth callback error:', error);
+        logger.error('[oauth] OAuth callback 发生错误:', error);
         throw error;
     }
 }

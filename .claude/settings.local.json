@@ -15,7 +15,8 @@
       "Bash(node --version:*)",
       "Bash(node test_md.mjs:*)",
       "Bash(del \"D:\\\\ZeroCat\\\\ZeroCat\\\\test_md.mjs\")",
-      "WebSearch"
+      "WebSearch",
+      "Bash(node -c:*)"
     ],
     "deny": []
   }

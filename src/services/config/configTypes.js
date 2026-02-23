@@ -639,6 +639,20 @@ export const CONFIG_TYPES = {
         transform: typeTransformers.number,
         validate: (value) => value > 0,
     },
+    // 海外代理配置
+    "proxy.url": {
+        type: "string",
+        required: false,
+        description: "HTTP/HTTPS代理URL (例如: http://proxy.example.com:8080 或 http://user:pass@proxy.example.com:8080)",
+        validate: (value) => !value || value.startsWith('http://') || value.startsWith('https://'),
+    },
+    "oauth.proxy.enabled": {
+        type: "boolean",
+        required: false,
+        default: false,
+        description: "是否为OAuth请求启用代理",
+        transform: typeTransformers.boolean,
+    },
 };
 
 // 从数据库加载的动态配置
