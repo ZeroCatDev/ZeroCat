@@ -105,14 +105,19 @@ function shouldUseTrgm(keyword) {
   return keyword && String(keyword).trim().length >= TRGM_SEARCH_MIN_LENGTH;
 }
 
+function escapeIlike(str) {
+  return String(str).replace(/[%_\\]/g, "\\$&");
+}
+
 function buildProjectTrgmWhere({ keyword, type, state, useridArray, tagsArray }) {
-  const params = [keyword];
+  const ilikePattern = `%${escapeIlike(keyword)}%`;
+  const params = [keyword, ilikePattern];
   const conditions = [
     "p.authorid IS NOT NULL",
-    `(COALESCE(p.name, '') % $1 OR COALESCE(p.title, '') % $1 OR COALESCE(p.description, '') % $1)`,
+    `(COALESCE(p.name, '') % $1 OR COALESCE(p.title, '') % $1 OR COALESCE(p.description, '') % $1 OR p.name ILIKE $2 OR p.title ILIKE $2 OR p.description ILIKE $2)`,
   ];
 
-  let paramIndex = 2;
+  let paramIndex = 3;
 
   if (type) {
     conditions.push(`p.type = $${paramIndex}`);
@@ -195,11 +200,12 @@ async function searchProjectsByTrgm({
 }
 
 async function searchUsersByTrgm({ keyword, userStatus, skip, take }) {
-  const params = [keyword];
+  const ilikePattern = `%${escapeIlike(keyword)}%`;
+  const params = [keyword, ilikePattern];
   const conditions = [
-    `(COALESCE(u.username, '') % $1 OR COALESCE(u.display_name, '') % $1 OR COALESCE(u.bio, '') % $1 OR COALESCE(u.motto, '') % $1 OR COALESCE(u.location, '') % $1 OR COALESCE(u.region, '') % $1)`,
+    `(COALESCE(u.username, '') % $1 OR COALESCE(u.display_name, '') % $1 OR COALESCE(u.bio, '') % $1 OR COALESCE(u.motto, '') % $1 OR COALESCE(u.location, '') % $1 OR COALESCE(u.region, '') % $1 OR u.username ILIKE $2 OR u.display_name ILIKE $2 OR u.bio ILIKE $2 OR u.motto ILIKE $2 OR u.location ILIKE $2 OR u.region ILIKE $2)`,
   ];
-  let paramIndex = 2;
+  let paramIndex = 3;
 
   if (userStatus) {
     conditions.push(`u.status = $${paramIndex}`);
@@ -236,12 +242,13 @@ async function searchUsersByTrgm({ keyword, userStatus, skip, take }) {
 }
 
 async function searchPostsByTrgm({ keyword, postType, useridArray, skip, take }) {
-  const params = [keyword];
+  const ilikePattern = `%${escapeIlike(keyword)}%`;
+  const params = [keyword, ilikePattern];
   const conditions = [
     "p.is_deleted = false",
-    "COALESCE(p.content, '') % $1",
+    "(COALESCE(p.content, '') % $1 OR p.content ILIKE $2)",
   ];
-  let paramIndex = 2;
+  let paramIndex = 3;
 
   if (postType) {
     conditions.push(`p.post_type = $${paramIndex}`);

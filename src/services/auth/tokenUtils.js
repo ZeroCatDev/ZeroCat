@@ -279,6 +279,41 @@ export async function createUserLoginTokens(userId, userInfo, ipAddress, userAge
 }
 
 /**
+ * 检查指定令牌的刷新令牌是否仍然有效
+ * @param {string} tokenId 令牌ID
+ * @returns {Promise<boolean>} 刷新令牌是否有效
+ */
+async function checkRefreshTokenValid(tokenId) {
+    try {
+        // 检查令牌是否在黑名单中（已被显式撤销）
+        const blacklistKey = `token:blacklist:${tokenId}`;
+        const blacklistData = await redisClient.get(blacklistKey);
+        if (blacklistData) return false;
+
+        // 尝试从Redis获取令牌详情
+        const tokenKey = `token:details:${tokenId}`;
+        const tokenData = await redisClient.get(tokenKey);
+
+        if (tokenData) {
+            return !tokenData.revoked && tokenData.refresh_expires_at > Date.now();
+        }
+
+        // 回退到数据库查询
+        const tokenRecord = await prisma.ow_auth_tokens.findFirst({
+            where: {
+                id: tokenId,
+                revoked: false,
+                refresh_expires_at: {gt: new Date()}
+            }
+        });
+        return !!tokenRecord;
+    } catch (error) {
+        logger.error(`检查刷新令牌有效性时出错: ${error.message}`);
+        return false;
+    }
+}
+
+/**
  * 验证令牌
  * @param {string} token JWT令牌
  * @param {string} ipAddress 用户IP地址
