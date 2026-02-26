@@ -1,9 +1,10 @@
 import { createTransport } from 'nodemailer';
-import { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue, getDataTaskQueue } from './queues.js';
+import { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue, getDataTaskQueue, getSocialSyncQueue } from './queues.js';
 import { createEmailWorker, getEmailWorker } from './workers/emailWorker.js';
 import { createScheduledTasksWorker, getScheduledTasksWorker } from './workers/scheduledTasksWorker.js';
 import { createCommentNotificationWorker, getCommentNotificationWorker } from './workers/commentNotificationWorker.js';
 import { createDataTaskWorker, getDataTaskWorker } from './workers/dataTaskWorker.js';
+import { createSocialSyncWorker, getSocialSyncWorker } from './workers/socialSyncWorker.js';
 import { closeAll as closeAllConnections } from './redisConnectionFactory.js';
 import zcconfig from '../config/zcconfig.js';
 import logger from '../logger.js';
@@ -27,6 +28,7 @@ const queueManager = {
             await createScheduledTasksWorker();
             await createCommentNotificationWorker();
             await createDataTaskWorker();
+            await createSocialSyncWorker();
 
             // Register repeatable jobs
             await this.registerRepeatableJobs();
@@ -172,6 +174,38 @@ const queueManager = {
         }
     },
 
+    async enqueueSocialPostSync(userId, postId, trigger = 'auto') {
+        const queue = getSocialSyncQueue();
+        if (!queue || !initialized) {
+            logger.warn('[queue-manager] Social sync queue not available');
+            return null;
+        }
+
+        try {
+            const job = await queue.add(
+                'sync-post',
+                {
+                    userId: Number(userId),
+                    postId: Number(postId),
+                    trigger,
+                },
+                {
+                    jobId: `ss-post-${postId}`,
+                    attempts: 3,
+                    backoff: { type: 'exponential', delay: 10000 },
+                    removeOnComplete: { age: 86400 },
+                    removeOnFail: { age: 604800 },
+                }
+            );
+
+            logger.info(`[queue-manager] Social sync job ${job.id} enqueued for post=${postId}`);
+            return { jobId: job.id, queued: true };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue social sync job:', error.message);
+            return null;
+        }
+    },
+
     async enqueueEmail(to, subject, html, options = {}) {
         const emailQueue = getEmailQueue();
         if (!emailQueue || !initialized) {
@@ -231,22 +265,26 @@ const queueManager = {
             const scheduledWorker = getScheduledTasksWorker();
             const commentNotificationWorker = getCommentNotificationWorker();
             const dataTaskWorker = getDataTaskWorker();
+            const socialSyncWorker = getSocialSyncWorker();
 
             if (emailWorker) await emailWorker.close();
             if (scheduledWorker) await scheduledWorker.close();
             if (commentNotificationWorker) await commentNotificationWorker.close();
             if (dataTaskWorker) await dataTaskWorker.close();
+            if (socialSyncWorker) await socialSyncWorker.close();
 
             // Close queues
             const emailQueue = getEmailQueue();
             const scheduledQueue = getScheduledTasksQueue();
             const commentNotificationQueue = getCommentNotificationQueue();
             const dataTaskQueue = getDataTaskQueue();
+            const socialSyncQueue = getSocialSyncQueue();
 
             if (emailQueue) await emailQueue.close();
             if (scheduledQueue) await scheduledQueue.close();
             if (commentNotificationQueue) await commentNotificationQueue.close();
             if (dataTaskQueue) await dataTaskQueue.close();
+            if (socialSyncQueue) await socialSyncQueue.close();
 
             // Close redis connections
             await closeAllConnections();

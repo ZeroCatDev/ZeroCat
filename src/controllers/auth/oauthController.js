@@ -2,9 +2,16 @@ import logger from "../../services/logger.js";
 import {prisma} from "../../services/prisma.js";
 import crypto from "crypto";
 import memoryCache from "../../services/memoryCache.js";
-import {generateAuthUrl, handleOAuthCallback, OAUTH_PROVIDERS,} from "../oauth.js";
+import {createDpopKeyPair, createPkcePair, generateAuthUrl, handleOAuthCallback, handleOAuthSyncBind, OAUTH_PROVIDERS,} from "../oauth.js";
 import zcconfig from "../../services/config/zcconfig.js";
 import {createTemporaryToken} from "../../services/auth/verification.js";
+
+const BLUESKY_SCOPE_LOGIN = 'atproto transition:email';
+const BLUESKY_SCOPE_BIND = 'atproto transition:generic transition:email';
+
+function resolveBlueskyScope(flow) {
+    return flow === 'bind' ? BLUESKY_SCOPE_BIND : BLUESKY_SCOPE_LOGIN;
+}
 
 /**
  * 获取支持的OAuth提供商列表
@@ -31,6 +38,8 @@ export const getOAuthProviders = async (req, res) => {
 export const bindOAuth = async (req, res) => {
     try {
         const {provider} = req.params;
+        const pds = provider === 'bluesky' ? String(req.query?.pds || '').trim() : '';
+        const blueskyScope = provider === 'bluesky' ? resolveBlueskyScope('bind') : null;
         if (!OAUTH_PROVIDERS[provider]) {
             return res.status(400).json({
                 status: "error",
@@ -40,12 +49,32 @@ export const bindOAuth = async (req, res) => {
 
         const state =
             crypto.randomBytes(16).toString("hex") + `:bind:${res.locals.userid}`;
-        const authUrl = await generateAuthUrl(provider, state);
+        const pkce = provider === 'bluesky' ? createPkcePair() : null;
+        const dpop = provider === 'bluesky' ? createDpopKeyPair() : null;
+        const authUrl = await generateAuthUrl(provider, state, {
+            ...(pds ? { pds } : {}),
+            ...(pkce ? { codeChallenge: pkce.challenge } : {}),
+            ...(blueskyScope ? { scope: blueskyScope } : {}),
+        });
 
         // 存储 state 与用户 ID 的映射，用于回调时识别绑定操作
         memoryCache.set(
             `oauth_state:${state}`,
-            {type: "bind", userId: res.locals.userid},
+            {
+                type: 'bind',
+                userId: res.locals.userid,
+                context: {
+                    ...(pds ? { pds } : {}),
+                    ...(pkce ? { codeVerifier: pkce.verifier } : {}),
+                    ...(blueskyScope ? { scope: blueskyScope } : {}),
+                    ...(dpop
+                        ? {
+                            dpopPrivateKeyPem: dpop.privateKeyPem,
+                            dpopPublicJwk: dpop.publicJwk,
+                        }
+                        : {}),
+                },
+            },
             600
         ); // 10分钟有效期
 
@@ -65,6 +94,9 @@ export const bindOAuth = async (req, res) => {
 export const authWithOAuth = async (req, res) => {
     try {
         const {provider} = req.params;
+        const tokenPurpose = 'auth';
+        const pds = provider === 'bluesky' ? String(req.query?.pds || '').trim() : '';
+        const blueskyScope = provider === 'bluesky' ? resolveBlueskyScope('login') : null;
         if (!OAUTH_PROVIDERS[provider]) {
             logger.error("不支持的 OAuth 提供商:", provider);
             return res.status(400).json({
@@ -74,10 +106,34 @@ export const authWithOAuth = async (req, res) => {
         }
 
         const state = crypto.randomBytes(16).toString("hex");
-        const authUrl = await generateAuthUrl(provider, state);
+        const pkce = provider === 'bluesky' ? createPkcePair() : null;
+        const dpop = provider === 'bluesky' ? createDpopKeyPair() : null;
+        const authUrl = await generateAuthUrl(provider, state, {
+            ...(pds ? { pds } : {}),
+            ...(pkce ? { codeChallenge: pkce.challenge } : {}),
+            ...(blueskyScope ? { scope: blueskyScope } : {}),
+        });
 
         // 存储 state 用于验证回调
-        memoryCache.set(`oauth_state:${state}`, true, 600); // 10分钟有效期
+        memoryCache.set(
+            `oauth_state:${state}`,
+            {
+                type: 'login',
+                context: {
+                    tokenPurpose,
+                    ...(pds ? { pds } : {}),
+                    ...(pkce ? { codeVerifier: pkce.verifier } : {}),
+                    ...(blueskyScope ? { scope: blueskyScope } : {}),
+                    ...(dpop
+                        ? {
+                            dpopPrivateKeyPem: dpop.privateKeyPem,
+                            dpopPublicJwk: dpop.publicJwk,
+                        }
+                        : {}),
+                },
+            },
+            600
+        ); // 10分钟有效期
 
         res.redirect(authUrl);
     } catch (error) {
@@ -104,16 +160,79 @@ export const handleOAuthCallbackRequest = async (req, res) => {
 
     try {
         const {provider} = req.params;
-        const {code, state} = req.query;
+        const {code, state, error, error_description: errorDescription} = req.query;
 
         logger.debug(`[oauthController] 接收OAuth回调: provider=${provider}, code=${code?.substring(0, 10)}...`);
 
-        if (!code || !state) {
-            logger.warn(`[oauthController] 无效的OAuth回调请求: 缺少code或state`);
+        if (!state) {
+            logger.warn('[oauthController] 无效的OAuth回调请求: 缺少state');
+            return redirectTo('/app/account/oauth/login/error', '无效的请求参数');
+        }
+
+        if (error) {
+            const reason = String(errorDescription || error || 'OAuth授权失败');
+            const syncState = provider === 'bluesky' ? memoryCache.get(`bluesky_sync_state:${state}`) : null;
+            const cachedStateForError = memoryCache.get(`oauth_state:${state}`);
+
+            if (syncState) {
+                memoryCache.delete(`bluesky_sync_state:${state}`);
+                logger.warn(`[oauthController] Bluesky同步授权被拒绝: ${reason}`);
+                return redirectTo('/app/account/social/sync/bluesky/error', reason);
+            }
+
+            if (cachedStateForError) {
+                memoryCache.delete(`oauth_state:${state}`);
+                const path = cachedStateForError.type === 'bind'
+                    ? '/app/account/oauth/bind/error'
+                    : '/app/account/oauth/login/error';
+                logger.warn(`[oauthController] OAuth授权被拒绝: provider=${provider}, type=${cachedStateForError.type}, reason=${reason}`);
+                return redirectTo(path, reason);
+            }
+
+            logger.warn(`[oauthController] OAuth授权被拒绝且state未命中缓存: provider=${provider}, state=${state}, reason=${reason}`);
+            return redirectTo('/app/account/oauth/login/error', reason);
+        }
+
+        if (!code) {
+            logger.warn('[oauthController] 无效的OAuth回调请求: 缺少code');
             return redirectTo('/app/account/oauth/login/error', '无效的请求参数');
         }
 
         const cachedState = memoryCache.get(`oauth_state:${state}`);
+
+        // 检查是否为 Bluesky 同步授权回调（独立 state key，与登录/绑定隔离）
+        if (!cachedState && provider === 'bluesky') {
+            const syncState = memoryCache.get(`bluesky_sync_state:${state}`);
+            if (syncState) {
+                const userIdToSync = syncState.userId;
+                logger.info(`[oauthController] 处理Bluesky同步令牌回调: userId=${userIdToSync}`);
+                memoryCache.delete(`bluesky_sync_state:${state}`);
+
+                try {
+                    const syncResult = await handleOAuthSyncBind(provider, code, userIdToSync, {
+                        pds: syncState.pds || '',
+                        codeVerifier: syncState.codeVerifier,
+                        scope: syncState.scope,
+                        clientId: syncState.clientId,
+                        redirectUri: syncState.redirectUri,
+                        dpopPrivateKeyPem: syncState.dpopPrivateKeyPem,
+                        dpopPublicJwk: syncState.dpopPublicJwk,
+                    });
+
+                    if (syncResult.success) {
+                        logger.info(`[oauthController] Bluesky同步令牌绑定成功: userId=${userIdToSync}`);
+                        return redirectTo('/app/account/social/sync/bluesky/success');
+                    } else {
+                        logger.warn(`[oauthController] Bluesky同步令牌绑定失败: ${syncResult.message}`);
+                        return redirectTo('/app/account/social/sync/bluesky/error', syncResult.message);
+                    }
+                } catch (error) {
+                    logger.error(`[oauthController] Bluesky同步令牌绑定异常:`, error);
+                    return redirectTo('/app/account/social/sync/bluesky/error', 'Bluesky同步绑定失败: ' + error.message);
+                }
+            }
+        }
+
         if (!cachedState) {
             logger.warn(`[oauthController] state验证失败: state=${state}`);
             return redirectTo('/app/account/oauth/login/error', '无效的state');
@@ -121,29 +240,28 @@ export const handleOAuthCallbackRequest = async (req, res) => {
 
         // 根据 state 的类型处理不同的逻辑
         if (cachedState.type === "bind") {
+            // ---- 身份绑定（创建/更新 oauth 联系方式，保存 auth 令牌）----
             const userIdToBind = cachedState.userId;
-            logger.info(`[oauthController] 处理OAuth绑定回调: provider=${provider}, userId=${userIdToBind}`);
-
-            // 清除 state
+            logger.info(`[oauthController] 处理OAuth身份绑定回调: provider=${provider}, userId=${userIdToBind}`);
             memoryCache.delete(`oauth_state:${state}`);
 
             try {
                 const bindingResult = await handleOAuthCallback(
                     provider,
                     code,
-                    userIdToBind
+                    userIdToBind,
+                    cachedState?.context || {}
                 );
 
-                // 处理绑定结果
                 if (bindingResult.success) {
-                    logger.info(`[oauthController] OAuth绑定成功: provider=${provider}, userId=${userIdToBind}`);
+                    logger.info(`[oauthController] OAuth身份绑定成功: provider=${provider}, userId=${userIdToBind}`);
                     return redirectTo('/app/account/oauth/bind/success');
                 } else {
-                    logger.warn(`[oauthController] OAuth绑定失败: ${bindingResult.message}`);
+                    logger.warn(`[oauthController] OAuth身份绑定失败: ${bindingResult.message}`);
                     return redirectTo('/app/account/oauth/bind/error', bindingResult.message);
                 }
             } catch (error) {
-                logger.error(`[oauthController] OAuth绑定过程发生异常:`, error);
+                logger.error(`[oauthController] OAuth身份绑定过程发生异常:`, error);
                 return redirectTo('/app/account/oauth/bind/error', 'OAuth绑定失败: ' + error.message);
             }
         } else {
@@ -152,7 +270,12 @@ export const handleOAuthCallbackRequest = async (req, res) => {
             memoryCache.delete(`oauth_state:${state}`);
 
             try {
-                const callbackResult = await handleOAuthCallback(provider, code);
+                const callbackResult = await handleOAuthCallback(
+                    provider,
+                    code,
+                    null,
+                    cachedState?.context || {}
+                );
 
                 if (callbackResult && callbackResult.user && callbackResult.contact) {
                     const {user, contact} = callbackResult;
@@ -220,14 +343,22 @@ export const handleOAuthCallbackRequest = async (req, res) => {
  */
 export const getBoundOAuthAccounts = async (req, res) => {
     try {
-        const userId = req.body.userid; // 假设用户 ID 存储在请求的用户信息中
+        const userId = res.locals.userid;
 
         // 查找用户的所有 OAuth 联系方式
         const oauthContacts = await prisma.ow_users_contacts.findMany({
             where: {
                 user_id: userId,
                 contact_type: {
-                    in: ["oauth_google", "oauth_microsoft", "oauth_github", "oauth_linuxdo", "oauth_40code"], // 只查找 OAuth 联系方式
+                    in: [
+                        "oauth_google",
+                        "oauth_microsoft",
+                        "oauth_github",
+                        "oauth_linuxdo",
+                        "oauth_40code",
+                        "oauth_twitter",
+                        "oauth_bluesky",
+                    ], // 只查找 OAuth 联系方式
                 },
             },
             select: {

@@ -3,6 +3,7 @@ import twitterText from "twitter-text";
 import { createNotification } from "./notifications.js";
 import zcconfig from "../services/config/zcconfig.js";
 import logger from "../services/logger.js";
+import queueManager from "../services/queue/queueManager.js";
 
 const POST_CHAR_LIMIT = 280;
 const MAX_MEDIA_COUNT = 4;
@@ -456,6 +457,10 @@ export async function createPost({ authorId, content, mediaIds = [], embed }) {
     await notifyMentions(mentionedUsers, authorId, post.id);
   }
 
+  queueManager.enqueueSocialPostSync(authorId, post.id, "create").catch((error) => {
+    logger.warn("推文社交同步入队失败(create):", error.message);
+  });
+
   const formattedPost = formatPost(post);
   return {
     post: formattedPost,
@@ -562,6 +567,10 @@ export async function replyToPost({
   if (mentionedUsers.length > 0) {
     await notifyMentions(mentionedUsers, authorId, post.id);
   }
+
+  queueManager.enqueueSocialPostSync(authorId, post.id, "reply").catch((error) => {
+    logger.warn("推文社交同步入队失败(reply):", error.message);
+  });
 
   const formattedPost = formatPost(post);
   const refIds = collectReferencedIds([formattedPost]);
@@ -760,6 +769,10 @@ export async function quotePost({
   if (mentionedUsers.length > 0) {
     await notifyMentions(mentionedUsers, authorId, post.id);
   }
+
+  queueManager.enqueueSocialPostSync(authorId, post.id, "quote").catch((error) => {
+    logger.warn("推文社交同步入队失败(quote):", error.message);
+  });
 
   const formattedPost = formatPost(post);
   const refIds = collectReferencedIds([formattedPost]);

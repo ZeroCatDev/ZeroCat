@@ -7,6 +7,7 @@ export const QUEUE_NAMES = {
     SCHEDULED_TASKS: 'scheduled-tasks',
     COMMENT_NOTIFICATION: 'comment-notification',
     DATA_TASK: 'comment-data-task',
+    SOCIAL_SYNC: 'social-sync',
 };
 
 const QUEUE_OPTIONS = {
@@ -34,38 +35,51 @@ const QUEUE_OPTIONS = {
             removeOnFail: { count: 200 },
         },
     },
+    [QUEUE_NAMES.SOCIAL_SYNC]: {
+        defaultJobOptions: {
+            removeOnComplete: { count: 200 },
+            removeOnFail: { count: 500 },
+        },
+    },
 };
 
 let emailQueue = null;
 let scheduledTasksQueue = null;
 let commentNotificationQueue = null;
 let dataTaskQueue = null;
+let socialSyncQueue = null;
 
 async function createQueues() {
-    const connection = await createConnection('queue-shared');
+    const sharedConnection = await createConnection('queue-shared');
+    const socialSyncConnection = await createConnection('queue-social-sync');
 
     emailQueue = new Queue(QUEUE_NAMES.EMAIL, {
-        connection,
+        connection: sharedConnection,
         ...QUEUE_OPTIONS[QUEUE_NAMES.EMAIL],
     });
 
     scheduledTasksQueue = new Queue(QUEUE_NAMES.SCHEDULED_TASKS, {
-        connection,
+        connection: sharedConnection,
         ...QUEUE_OPTIONS[QUEUE_NAMES.SCHEDULED_TASKS],
     });
 
     commentNotificationQueue = new Queue(QUEUE_NAMES.COMMENT_NOTIFICATION, {
-        connection,
+        connection: sharedConnection,
         ...QUEUE_OPTIONS[QUEUE_NAMES.COMMENT_NOTIFICATION],
     });
 
     dataTaskQueue = new Queue(QUEUE_NAMES.DATA_TASK, {
-        connection,
+        connection: sharedConnection,
         ...QUEUE_OPTIONS[QUEUE_NAMES.DATA_TASK],
     });
 
+    socialSyncQueue = new Queue(QUEUE_NAMES.SOCIAL_SYNC, {
+        connection: socialSyncConnection,
+        ...QUEUE_OPTIONS[QUEUE_NAMES.SOCIAL_SYNC],
+    });
+
     logger.info('[queues] All queues created');
-    return { emailQueue, scheduledTasksQueue, commentNotificationQueue, dataTaskQueue };
+    return { emailQueue, scheduledTasksQueue, commentNotificationQueue, dataTaskQueue, socialSyncQueue };
 }
 
 function getEmailQueue() {
@@ -84,4 +98,8 @@ function getDataTaskQueue() {
     return dataTaskQueue;
 }
 
-export { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue, getDataTaskQueue };
+function getSocialSyncQueue() {
+    return socialSyncQueue;
+}
+
+export { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue, getDataTaskQueue, getSocialSyncQueue };

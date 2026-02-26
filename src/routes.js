@@ -148,6 +148,10 @@ async function registerBusinessRoutes(app) {
         const postsModule = await import('./routes/router_posts.js');
         app.use("/posts", postsModule.default);
 
+        // 外部社交平台集成路由
+        const socialModule = await import('./routes/router_social.js');
+        app.use('/social', socialModule.default);
+
         // 统一认证路由
         const authModule = await import('./routes/router_auth.js');
         app.use("/auth", authModule.default);

@@ -1,0 +1,284 @@
+import { Router } from 'express';
+import logger from '../services/logger.js';
+import { needLogin } from '../middleware/auth.js';
+import zcconfig from '../services/config/zcconfig.js';
+import memoryCache from '../services/memoryCache.js';
+import queueManager from '../services/queue/queueManager.js';
+import {
+    buildTwitterSyncAuthorizeUrl,
+    createPkcePair,
+    exchangeTwitterSyncCode,
+    getSocialIntegrationOverview,
+    getTwitterSyncAppConfig,
+    removeTwitterSyncAppConfig,
+    saveTwitterSyncTokens,
+    setTwitterSyncAppConfig,
+    setUserBlueskyPds,
+    setUserSocialSyncSettings,
+} from '../services/social/socialSync.js';
+import {
+    createDpopKeyPair,
+    generateAuthUrl,
+    OAUTH_PROVIDERS,
+} from '../controllers/oauth.js';
+import crypto from 'crypto';
+
+const router = Router();
+const BLUESKY_SYNC_SCOPE = 'atproto repo:app.bsky.feed.post?action=create';
+
+router.get('/bluesky/sync/client-metadata.json', async (req, res) => {
+    try {
+        const backendUrl = await zcconfig.get('urls.backend');
+        const frontendUrl = await zcconfig.get('urls.frontend');
+        const siteName = await zcconfig.get('site.name');
+        const siteEmail = await zcconfig.get('site.email');
+        const configuredClientName = await zcconfig.get('oauth.bluesky.client_name');
+
+        const backendBase = String(backendUrl || '').replace(/\/+$/, '');
+        const frontendBase = String(frontendUrl || '').replace(/\/+$/, '');
+        const metadataUrl = `${backendBase}/social/bluesky/sync/client-metadata.json`;
+
+        const metadata = {
+            client_id: metadataUrl,
+            client_name: configuredClientName || siteName || 'ZeroCat',
+            client_uri: backendBase,
+            logo_uri: `${backendBase}/favicon.ico`,
+            redirect_uris: [
+                `${backendBase}/social/bluesky/sync/oauth/callback`,
+            ],
+            grant_types: ['authorization_code', 'refresh_token'],
+            response_types: ['code'],
+            token_endpoint_auth_method: 'none',
+            dpop_bound_access_tokens: true,
+            application_type: 'web',
+            scope: BLUESKY_SYNC_SCOPE,
+        };
+
+        if (siteEmail) {
+            metadata.contacts = [siteEmail];
+        }
+
+        metadata.tos_uri = `${frontendBase}/app/legal/privacy`;
+        metadata.policy_uri = `${frontendBase}/app/legal/terms`;
+
+        res.setHeader('Cache-Control', 'public, max-age=300');
+        res.status(200).json(metadata);
+    } catch (error) {
+        logger.error('[social] Build Bluesky sync client metadata failed:', error);
+        res.status(500).json({ status: 'error', message: '生成Bluesky同步client metadata失败' });
+    }
+});
+
+router.get('/overview', needLogin, async (req, res) => {
+    try {
+        const data = await getSocialIntegrationOverview(res.locals.userid);
+        res.status(200).json({ status: 'success', data });
+    } catch (error) {
+        logger.error('[social] get overview failed:', error);
+        res.status(500).json({ status: 'error', message: '获取社交集成信息失败' });
+    }
+});
+
+router.post('/sync/settings', needLogin, async (req, res) => {
+    try {
+        const { twitter, bluesky } = req.body || {};
+        if (twitter === undefined && bluesky === undefined) {
+            return res.status(400).json({ status: 'error', message: '至少提供一个同步开关字段' });
+        }
+
+        const data = await setUserSocialSyncSettings(res.locals.userid, { twitter, bluesky });
+        res.status(200).json({ status: 'success', data });
+    } catch (error) {
+        logger.error('[social] update sync settings failed:', error);
+        res.status(400).json({ status: 'error', message: error.message || '更新同步设置失败' });
+    }
+});
+
+router.get('/twitter/sync/app', needLogin, async (req, res) => {
+    try {
+        const data = await getTwitterSyncAppConfig(res.locals.userid, { masked: true });
+        res.status(200).json({ status: 'success', data });
+    } catch (error) {
+        logger.error('[social] get twitter sync app config failed:', error);
+        res.status(500).json({ status: 'error', message: '获取 Twitter 同步应用配置失败' });
+    }
+});
+
+router.post('/twitter/sync/app', needLogin, async (req, res) => {
+    try {
+        const data = await setTwitterSyncAppConfig(res.locals.userid, req.body || {});
+        res.status(200).json({ status: 'success', data });
+    } catch (error) {
+        logger.error('[social] set twitter sync app config failed:', error);
+        res.status(400).json({ status: 'error', message: error.message || '设置 Twitter 同步应用配置失败' });
+    }
+});
+
+router.delete('/twitter/sync/app', needLogin, async (req, res) => {
+    try {
+        await removeTwitterSyncAppConfig(res.locals.userid);
+        res.status(200).json({ status: 'success', message: 'Twitter 同步应用配置已删除' });
+    } catch (error) {
+        logger.error('[social] remove twitter sync app config failed:', error);
+        res.status(500).json({ status: 'error', message: '删除 Twitter 同步应用配置失败' });
+    }
+});
+
+router.get('/twitter/sync/oauth/start', needLogin, async (req, res) => {
+    try {
+        const appConfig = await getTwitterSyncAppConfig(res.locals.userid, { masked: false });
+        if (!appConfig?.clientId || !appConfig?.clientSecret || !appConfig?.redirectUri) {
+            return res.status(400).json({ status: 'error', message: '请先设置 Twitter 同步 OAuth App 配置' });
+        }
+
+        const state = crypto.randomBytes(16).toString('hex');
+        const { verifier, challenge } = createPkcePair();
+
+        memoryCache.set(
+            `twitter_sync_state:${state}`,
+            {
+                userId: res.locals.userid,
+                verifier,
+            },
+            600
+        );
+
+        const authUrl = buildTwitterSyncAuthorizeUrl({
+            appConfig,
+            state,
+            codeChallenge: challenge,
+        });
+
+        return res.redirect(authUrl);
+    } catch (error) {
+        logger.error('[social] start twitter sync oauth failed:', error);
+        return res.status(500).json({ status: 'error', message: '启动 Twitter 同步授权失败' });
+    }
+});
+
+router.get('/twitter/sync/oauth/callback', async (req, res) => {
+    const frontend = await zcconfig.get('urls.frontend');
+    const redirect = (ok, message = '') => {
+        const suffix = ok
+            ? `/app/account/social/sync/twitter/success${message ? `?message=${encodeURIComponent(message)}` : ''}`
+            : `/app/account/social/sync/twitter/error${message ? `?message=${encodeURIComponent(message)}` : ''}`;
+        return res.redirect(`${frontend}${suffix}`);
+    };
+
+    try {
+        const { code, state } = req.query || {};
+        if (!code || !state) {
+            return redirect(false, '缺少 code 或 state');
+        }
+
+        const cached = memoryCache.get(`twitter_sync_state:${state}`);
+        if (!cached?.userId || !cached?.verifier) {
+            return redirect(false, '授权状态已失效');
+        }
+
+        memoryCache.delete(`twitter_sync_state:${state}`);
+
+        const appConfig = await getTwitterSyncAppConfig(cached.userId, { masked: false });
+        if (!appConfig?.clientId || !appConfig?.clientSecret || !appConfig?.redirectUri) {
+            return redirect(false, '未找到同步应用配置');
+        }
+
+        const tokens = await exchangeTwitterSyncCode({
+            appConfig,
+            code: String(code),
+            codeVerifier: cached.verifier,
+        });
+
+        await saveTwitterSyncTokens(cached.userId, tokens);
+        return redirect(true);
+    } catch (error) {
+        logger.error('[social] twitter sync oauth callback failed:', error);
+        return redirect(false, error.message || 'Twitter 同步授权失败');
+    }
+});
+
+router.post('/bluesky/pds', needLogin, async (req, res) => {
+    try {
+        const { pds } = req.body || {};
+        if (!pds) {
+            return res.status(400).json({ status: 'error', message: 'pds 不能为空' });
+        }
+
+        const data = await setUserBlueskyPds(res.locals.userid, pds);
+        return res.status(200).json({ status: 'success', data: { pds: data } });
+    } catch (error) {
+        logger.error('[social] set bluesky pds failed:', error);
+        return res.status(400).json({ status: 'error', message: error.message || '设置 Bluesky PDS 失败' });
+    }
+});
+
+router.get('/bluesky/sync/oauth/start', needLogin, async (req, res) => {
+    try {
+        const provider = 'bluesky';
+        if (!OAUTH_PROVIDERS[provider]?.enabled) {
+            return res.status(400).json({ status: 'error', message: 'Bluesky OAuth 未启用' });
+        }
+
+        const backendUrl = await zcconfig.get('urls.backend');
+        const backendBase = String(backendUrl || '').replace(/\/+$/, '');
+        const pds = String(req.query?.pds || '').trim();
+        const scope = BLUESKY_SYNC_SCOPE;
+        const syncClientId = `${backendBase}/social/bluesky/sync/client-metadata.json`;
+        const syncRedirectUri = `${backendBase}/social/bluesky/sync/oauth/callback`;
+
+        const state = crypto.randomBytes(16).toString('hex');
+        const pkce = createPkcePair();
+        const dpop = createDpopKeyPair();
+
+        const authUrl = await generateAuthUrl(provider, state, {
+            ...(pds ? { pds } : {}),
+            codeChallenge: pkce.challenge,
+            scope,
+            clientId: syncClientId,
+            redirectUri: syncRedirectUri,
+        });
+
+        memoryCache.set(`bluesky_sync_state:${state}`, {
+            userId: res.locals.userid,
+            pds,
+            codeVerifier: pkce.verifier,
+            scope,
+            clientId: syncClientId,
+            redirectUri: syncRedirectUri,
+            dpopPrivateKeyPem: dpop.privateKeyPem,
+            dpopPublicJwk: dpop.publicJwk,
+        }, 600);
+
+        return res.redirect(authUrl);
+    } catch (error) {
+        logger.error('[social] start bluesky sync oauth failed:', error);
+        return res.status(500).json({ status: 'error', message: '启动 Bluesky 同步授权失败: ' + error.message });
+    }
+});
+
+router.get('/bluesky/sync/oauth/callback', async (req, res) => {
+    const query = new URLSearchParams(req.query || {}).toString();
+    const callbackPath = `/account/oauth/bluesky/callback${query ? `?${query}` : ''}`;
+    return res.redirect(callbackPath);
+});
+
+router.post('/sync/post/:postId', needLogin, async (req, res) => {
+    try {
+        const postId = Number(req.params.postId);
+        if (!Number.isInteger(postId) || postId <= 0) {
+            return res.status(400).json({ status: 'error', message: 'postId 非法' });
+        }
+
+        const result = await queueManager.enqueueSocialPostSync(res.locals.userid, postId, 'manual');
+        if (!result) {
+            return res.status(500).json({ status: 'error', message: '同步任务入队失败' });
+        }
+
+        return res.status(200).json({ status: 'success', data: result });
+    } catch (error) {
+        logger.error('[social] enqueue sync post failed:', error);
+        return res.status(500).json({ status: 'error', message: '同步任务入队失败' });
+    }
+});
+
+export default router;

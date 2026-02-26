@@ -6,6 +6,271 @@ import crypto from 'crypto';
 import base32Encode from 'base32-encode';
 import {fetchWithProxy} from '../services/proxy/proxyManager.js';
 
+const USER_TARGET_TYPE = 'user';
+
+function createPkcePair() {
+    const verifier = crypto.randomBytes(32).toString('base64url');
+    const challenge = crypto
+        .createHash('sha256')
+        .update(verifier)
+        .digest('base64url');
+    return { verifier, challenge };
+}
+
+function base64urlEncode(input) {
+    const buffer = Buffer.isBuffer(input) ? input : Buffer.from(String(input));
+    return buffer
+        .toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/g, '');
+}
+
+function buildSignedJwtES256({ header, payload, privateKeyPem }) {
+    const encodedHeader = base64urlEncode(JSON.stringify(header));
+    const encodedPayload = base64urlEncode(JSON.stringify(payload));
+    const signingInput = `${encodedHeader}.${encodedPayload}`;
+
+    const signature = crypto.sign('sha256', Buffer.from(signingInput), {
+        key: privateKeyPem,
+        dsaEncoding: 'ieee-p1363',
+    });
+
+    return `${signingInput}.${base64urlEncode(signature)}`;
+}
+
+function createDpopKeyPair() {
+    const { publicKey, privateKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
+    const publicJwk = publicKey.export({ format: 'jwk' });
+    const privateKeyPem = privateKey.export({ type: 'pkcs8', format: 'pem' });
+    return { publicJwk, privateKeyPem };
+}
+
+function normalizeUrlForDpop(url) {
+    const parsed = new URL(url);
+    return `${parsed.origin}${parsed.pathname}`;
+}
+
+function buildDpopProof({ method, url, privateKeyPem, publicJwk, nonce }) {
+    const now = Math.floor(Date.now() / 1000);
+    const payload = {
+        jti: crypto.randomUUID(),
+        htm: String(method || 'POST').toUpperCase(),
+        htu: normalizeUrlForDpop(url),
+        iat: now,
+        exp: now + 60,
+        ...(nonce ? { nonce } : {}),
+    };
+
+    const header = {
+        typ: 'dpop+jwt',
+        alg: 'ES256',
+        jwk: {
+            kty: publicJwk.kty,
+            crv: publicJwk.crv,
+            x: publicJwk.x,
+            y: publicJwk.y,
+        },
+    };
+
+    return buildSignedJwtES256({ header, payload, privateKeyPem });
+}
+
+function getHeaderValue(headers, name) {
+    if (!headers) return null;
+    const lower = name.toLowerCase();
+    return headers[name] || headers[lower] || null;
+}
+
+function isBlueskyClientId(value) {
+    const clientId = String(value || '').trim();
+    return clientId.startsWith('https://') || clientId.startsWith('did:');
+}
+
+function normalizeUrlBase(input, fallback = null) {
+    const raw = typeof input === 'string' ? input.trim() : '';
+    const finalInput = raw || fallback;
+    if (!finalInput) {
+        throw new Error('缺少有效URL配置');
+    }
+    const parsed = new URL(finalInput);
+    return `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, '');
+}
+
+function buildDidWebDocumentUrl(did) {
+    const methodSpecific = String(did || '').slice('did:web:'.length);
+    const segments = methodSpecific
+        .split(':')
+        .map((segment) => {
+            try {
+                return decodeURIComponent(segment);
+            } catch {
+                return segment;
+            }
+        })
+        .filter(Boolean);
+
+    const host = segments[0];
+    if (!host) return null;
+
+    if (segments.length === 1) {
+        return `https://${host}/.well-known/did.json`;
+    }
+
+    return `https://${host}/${segments.slice(1).join('/')}/did.json`;
+}
+
+function pickPdsFromDidDocument(document) {
+    const services = Array.isArray(document?.service) ? document.service : [];
+    for (const service of services) {
+        const types = Array.isArray(service?.type) ? service.type : [service?.type];
+        const isAtprotoPds = types.some(
+            (item) => String(item || '').toLowerCase() === 'atprotopersonaldataserver'
+        );
+        const serviceId = String(service?.id || '').toLowerCase();
+        const isLegacyPdsId = serviceId.endsWith('#atproto_pds');
+
+        if (!isAtprotoPds && !isLegacyPdsId) continue;
+
+        const endpoint = typeof service?.serviceEndpoint === 'string'
+            ? service.serviceEndpoint
+            : service?.serviceEndpoint?.uri;
+        if (!endpoint) continue;
+
+        try {
+            return normalizeUrlBase(endpoint);
+        } catch {
+            // ignore invalid endpoint and continue
+        }
+    }
+    return null;
+}
+
+async function resolveBlueskyPdsByDid(did) {
+    const normalizedDid = String(did || '').trim();
+    if (!normalizedDid.startsWith('did:')) return null;
+
+    let didDocumentUrl = null;
+    if (normalizedDid.startsWith('did:plc:')) {
+        didDocumentUrl = `https://plc.directory/${normalizedDid}`;
+    } else if (normalizedDid.startsWith('did:web:')) {
+        didDocumentUrl = buildDidWebDocumentUrl(normalizedDid);
+    }
+
+    if (!didDocumentUrl) return null;
+
+    const response = await fetchWithProxy(didDocumentUrl, {
+        headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) {
+        throw new Error(`resolve did document failed (${response.status})`);
+    }
+
+    const didDocument = await response.json();
+    return pickPdsFromDidDocument(didDocument);
+}
+
+function safeExpiresAt(tokenData) {
+    const expiresIn = Number(tokenData?.expires_in);
+    if (!Number.isFinite(expiresIn) || expiresIn <= 0) {
+        return null;
+    }
+    return new Date(Date.now() + expiresIn * 1000).toISOString();
+}
+
+function formatOAuthError(error) {
+    if (!error) return 'unknown error';
+    const messages = [];
+
+    if (error.message) {
+        messages.push(error.message);
+    }
+
+    if (Array.isArray(error?.errors)) {
+        for (const inner of error.errors) {
+            if (inner?.message) {
+                messages.push(inner.message);
+            }
+        }
+    }
+
+    const code = error?.code ? String(error.code) : '';
+    if (code) {
+        messages.push(`code=${code}`);
+    }
+
+    const deduped = [...new Set(messages.filter(Boolean))];
+    return deduped.join(' | ') || 'unknown error';
+}
+
+async function saveOAuthTokens(userId, provider, tokenData, extra = {}) {
+    if (!userId || !provider || !tokenData?.access_token) return;
+
+    const requestedPurpose = extra?.tokenPurpose === 'sync' ? 'sync' : 'auth';
+    const tokenPurpose = provider === 'bluesky' ? 'sync' : requestedPurpose;
+    const storageKey = `social.${provider}.${tokenPurpose}.tokens`;
+
+    let existingPayload = null;
+    try {
+        const existing = await prisma.ow_target_configs.findUnique({
+            where: {
+                target_type_target_id_key: {
+                    target_type: USER_TARGET_TYPE,
+                    target_id: String(userId),
+                    key: storageKey,
+                },
+            },
+            select: { value: true },
+        });
+        existingPayload = existing?.value ? JSON.parse(existing.value) : null;
+    } catch (error) {
+        logger.warn(`[oauth] 读取旧令牌配置失败，将按新值覆盖: provider=${provider}, purpose=${tokenPurpose}, userId=${userId}, err=${error.message}`);
+    }
+
+    const normalizedExtra = Object.fromEntries(
+        Object.entries(extra || {}).filter(([, value]) => value !== undefined && value !== null && value !== '')
+    );
+
+    const payload = {
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token || existingPayload?.refresh_token || null,
+        token_type: tokenData.token_type || 'Bearer',
+        scope: tokenData.scope || null,
+        expires_in: tokenData.expires_in || null,
+        expires_at: safeExpiresAt(tokenData),
+        updated_at: new Date().toISOString(),
+        ...normalizedExtra,
+    };
+
+    if (provider === 'bluesky') {
+        payload.provider_user_id = payload.provider_user_id || existingPayload?.provider_user_id || existingPayload?.did || null;
+        payload.provider_username = payload.provider_username || existingPayload?.provider_username || null;
+        payload.pds = payload.pds || existingPayload?.pds || null;
+        payload.did = payload.did || payload.provider_user_id || existingPayload?.did || null;
+    }
+
+    delete payload.tokenPurpose;
+
+    await prisma.ow_target_configs.upsert({
+        where: {
+            target_type_target_id_key: {
+                target_type: USER_TARGET_TYPE,
+                target_id: String(userId),
+                key: storageKey,
+            },
+        },
+        update: {
+            value: JSON.stringify(payload),
+        },
+        create: {
+            target_type: USER_TARGET_TYPE,
+            target_id: String(userId),
+            key: storageKey,
+            value: JSON.stringify(payload),
+        },
+    });
+}
+
 // Generate a Base32 hash for TOTP
 const generateContactHash = () => {
     // 生成16字节的随机数据
@@ -85,6 +350,50 @@ export const OAUTH_PROVIDERS = {
         clientSecret: null,
         redirectUri: null,
         mapUserInfo: (data) => ({ id: data.id.toString(), email: data.email, name: data.name || data.username })
+    },
+    twitter: {
+        id: 'twitter',
+        name: 'Twitter',
+        type: 'oauth_twitter',
+        authUrl: 'https://twitter.com/i/oauth2/authorize',
+        tokenUrl: 'https://api.twitter.com/2/oauth2/token',
+        userInfoUrl: 'https://api.twitter.com/2/users/me?user.fields=profile_image_url',
+        scope: 'tweet.read users.read offline.access',
+        enabled: false,
+        clientId: null,
+        clientSecret: null,
+        redirectUri: null,
+        mapUserInfo: (data) => {
+            const user = data?.data || {};
+            return {
+                id: user.id,
+                email: null,
+                name: user.name || user.username,
+                username: user.username,
+                avatar: user.profile_image_url || null,
+            };
+        },
+    },
+    bluesky: {
+        id: 'bluesky',
+        name: 'Bluesky',
+        type: 'oauth_bluesky',
+        authUrl: 'https://bsky.social/oauth/authorize',
+        tokenUrl: 'https://bsky.social/oauth/token',
+        userInfoUrl: 'https://bsky.social/xrpc/com.atproto.server.getSession',
+        scope: 'atproto',
+        enabled: false,
+        clientId: null,
+        clientSecret: null,
+        redirectUri: null,
+        defaultPds: 'https://bsky.social',
+        mapUserInfo: (data) => ({
+            id: data.did || data.handle,
+            email: data.email || null,
+            name: data.handle || data.did,
+            handle: data.handle || null,
+            did: data.did || null,
+        }),
     }
 };
 
@@ -102,6 +411,12 @@ export async function initializeOAuthProviders() {
             provider.clientSecret = clientSecret;
             provider.redirectUri = `${baseUrl}/account/oauth/${provider.id}/callback`;
 
+            if (provider.id === 'bluesky') {
+                const defaultPds = await zcconfig.get('oauth.bluesky.default_pds');
+                provider.defaultPds = defaultPds || provider.defaultPds;
+                provider.clientId = `${baseUrl}/account/oauth/bluesky/client-metadata.json`;
+            }
+
             logger.debug(`OAuth 提供商 ${provider.name} 加载完成, 启用状态: ${provider.enabled}`);
         }
     } catch (error) {
@@ -109,11 +424,47 @@ export async function initializeOAuthProviders() {
     }
 }
 
+function getBlueskyEndpoints(config, options = {}) {
+    const pds = normalizeUrlBase(options.pds, config.defaultPds || 'https://bsky.social');
+    return {
+        pds,
+        authUrl: `${pds}/oauth/authorize`,
+        tokenUrl: `${pds}/oauth/token`,
+        userInfoUrl: `${pds}/xrpc/com.atproto.server.getSession`,
+    };
+}
+
 // 生成 OAuth 授权 URL
-export async function generateAuthUrl(provider, state) {
+export async function generateAuthUrl(provider, state, options = {}) {
     const config = OAUTH_PROVIDERS[provider];
     if (!config) throw new Error('[oauth] 不支持的 OAuth 提供商');
     if (!config.enabled) throw new Error('[oauth] 此 OAuth 提供商未启用');
+
+    const isBluesky = provider === 'bluesky';
+    const blueskyEndpoints = isBluesky ? getBlueskyEndpoints(config, options) : null;
+    const authUrl = isBluesky ? blueskyEndpoints.authUrl : config.authUrl;
+
+    if (isBluesky) {
+        const clientId = String(options?.clientId || config.clientId || '').trim();
+        if (!isBlueskyClientId(clientId)) {
+            throw new Error('[oauth] Bluesky client_id 无效（需为 https://... 或 did:...）');
+        }
+
+        const params = new URLSearchParams({
+            client_id: clientId,
+            redirect_uri: options?.redirectUri || config.redirectUri,
+            response_type: 'code',
+            scope: options?.scope || config.scope || 'atproto',
+            state,
+        });
+
+        if (options?.codeChallenge) {
+            params.set('code_challenge', options.codeChallenge);
+            params.set('code_challenge_method', 'S256');
+        }
+
+        return `${authUrl}?${params.toString()}`;
+    }
 
     if (provider === '40code') {
         const params = new URLSearchParams({
@@ -122,40 +473,86 @@ export async function generateAuthUrl(provider, state) {
             scope: config.scope,
             state: state
         });
-        return `${config.authUrl}&${params.toString()}`;
+        return `${authUrl}&${params.toString()}`;
     }
 
     const params = new URLSearchParams({
         client_id: config.clientId,
         redirect_uri: config.redirectUri,
         response_type: 'code',
-        scope: config.scope,
+        scope: options?.scope || config.scope,
         state: state
     });
 
-    return `${config.authUrl}?${params.toString()}`;
+    return `${authUrl}?${params.toString()}`;
 }
 
 // 获取 OAuth 访问令牌
-async function getAccessToken(provider, code) {
+async function getAccessToken(provider, code, options = {}) {
     const config = OAUTH_PROVIDERS[provider];
-    const params = new URLSearchParams({
-        client_id: config.clientId,
-        client_secret: config.clientSecret,
-        code: code,
-        redirect_uri: config.redirectUri,
-        grant_type: 'authorization_code'
-    });
+    const isBluesky = provider === 'bluesky';
+    const blueskyEndpoints = isBluesky ? getBlueskyEndpoints(config, options) : null;
+    const tokenUrl = isBluesky ? blueskyEndpoints.tokenUrl : config.tokenUrl;
+    const effectiveClientId = isBluesky
+        ? String(options?.clientId || config.clientId || '').trim()
+        : String(config.clientId || '');
+
+    const params = new URLSearchParams();
+    params.set('client_id', effectiveClientId);
+    params.set('code', code);
+    params.set('redirect_uri', options?.redirectUri || config.redirectUri);
+    params.set('grant_type', 'authorization_code');
+
+    if (isBluesky) {
+        if (options?.codeVerifier) {
+            params.set('code_verifier', options.codeVerifier);
+        }
+    } else {
+        params.set('client_secret', config.clientSecret);
+    }
 
     try {
-        const response = await fetchWithProxy(config.tokenUrl, {
+        const requestHeaders = {
+            'Accept': 'application/json',
+            'Content-Type': 'application/x-www-form-urlencoded',
+        };
+
+        if (isBluesky && options?.dpopPrivateKeyPem && options?.dpopPublicJwk) {
+            requestHeaders.DPoP = buildDpopProof({
+                method: 'POST',
+                url: tokenUrl,
+                privateKeyPem: options.dpopPrivateKeyPem,
+                publicJwk: options.dpopPublicJwk,
+            });
+        }
+
+        let response = await fetchWithProxy(tokenUrl, {
             method: 'POST',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
+            headers: requestHeaders,
             body: params.toString()
         });
+
+        if (isBluesky && !response.ok && options?.dpopPrivateKeyPem && options?.dpopPublicJwk) {
+            const nonce = getHeaderValue(response.headers, 'dpop-nonce');
+            if (nonce) {
+                const retryHeaders = {
+                    ...requestHeaders,
+                    DPoP: buildDpopProof({
+                        method: 'POST',
+                        url: tokenUrl,
+                        privateKeyPem: options.dpopPrivateKeyPem,
+                        publicJwk: options.dpopPublicJwk,
+                        nonce,
+                    }),
+                };
+
+                response = await fetchWithProxy(tokenUrl, {
+                    method: 'POST',
+                    headers: retryHeaders,
+                    body: params.toString(),
+                });
+            }
+        }
 
         if (!response.ok) {
             const text = await response.text();
@@ -164,7 +561,7 @@ async function getAccessToken(provider, code) {
 
         return await response.json();
     } catch (error) {
-        logger.error(`[oauth] 获取${provider}访问令牌失败:`, error);
+        logger.error(`[oauth] 获取${provider}访问令牌失败: ${formatOAuthError(error)}`, error);
         throw error;
     }
 }
@@ -201,9 +598,77 @@ async function getGitHubUserInfo(accessToken) {
     };
 }
 
+// 通过 DPoP 调用 Bluesky getSession 端点，尝试获取邮箱等用户信息
+async function getBlueskyUserInfoFromApi(accessToken, userInfoUrl, options = {}) {
+    const makeHeaders = (nonce) => {
+        const h = { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/json' };
+        if (options?.dpopPrivateKeyPem && options?.dpopPublicJwk) {
+            h.DPoP = buildDpopProof({
+                method: 'GET',
+                url: userInfoUrl,
+                privateKeyPem: options.dpopPrivateKeyPem,
+                publicJwk: options.dpopPublicJwk,
+                ...(nonce ? { nonce } : {}),
+            });
+        }
+        return h;
+    };
+
+    let response = await fetchWithProxy(userInfoUrl, { headers: makeHeaders() });
+
+    // DPoP nonce 重试
+    if (!response.ok && options?.dpopPrivateKeyPem) {
+        const nonce = getHeaderValue(response.headers, 'dpop-nonce');
+        if (nonce) {
+            response = await fetchWithProxy(userInfoUrl, { headers: makeHeaders(nonce) });
+        }
+    }
+
+    if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Bluesky getSession HTTP ${response.status}: ${text}`);
+    }
+
+    const data = await response.json();
+    return {
+        id: data.did || data.handle,
+        email: data.email || null,
+        name: data.handle || data.did,
+        handle: data.handle || null,
+        did: data.did || null,
+    };
+}
+
 // 通用获取用户信息函数
-async function getUserInfo(provider, accessToken) {
+async function getUserInfo(provider, accessToken, options = {}, tokenData = null) {
     const config = OAUTH_PROVIDERS[provider];
+    const isBluesky = provider === 'bluesky';
+    const blueskyEndpoints = isBluesky ? getBlueskyEndpoints(config, options) : null;
+    const userInfoUrl = isBluesky ? blueskyEndpoints.userInfoUrl : config.userInfoUrl;
+
+    if (isBluesky) {
+        const didFromToken = String(tokenData?.sub || '').trim();
+        // 尝试调用 getSession 端点获取邮箱等完整信息
+        try {
+            const apiInfo = await getBlueskyUserInfoFromApi(accessToken, userInfoUrl, options);
+            return {
+                ...apiInfo,
+                id: didFromToken || apiInfo.id,
+                did: didFromToken || apiInfo.did,
+            };
+        } catch (e) {
+            logger.warn(`[oauth] Bluesky getSession failed, falling back to token sub: ${e.message}`);
+        }
+        if (didFromToken) {
+            return {
+                id: didFromToken,
+                email: null,
+                name: didFromToken,
+                handle: null,
+                did: didFromToken,
+            };
+        }
+    }
 
     // GitHub 需要特殊处理
     if (!config.mapUserInfo) {
@@ -211,7 +676,7 @@ async function getUserInfo(provider, accessToken) {
     }
 
     try {
-        const response = await fetchWithProxy(config.userInfoUrl, {
+        const response = await fetchWithProxy(userInfoUrl, {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
 
@@ -248,16 +713,19 @@ async function generateUniqueUsername(baseName) {
     return username;
 }
 
-export async function handleOAuthCallback(provider, code, userIdToBind = null) {
+export async function handleOAuthCallback(provider, code, userIdToBind = null, options = {}) {
     logger.info(`[oauth] handleOAuthCallback: ${provider}, code: ${code.substring(0, 10)}..., userIdToBind: ${userIdToBind}`);
     try {
+        const tokenPurpose = options?.tokenPurpose === 'sync' ? 'sync' : 'auth';
+
         // 获取访问令牌
         let tokenData;
         try {
-            tokenData = await getAccessToken(provider, code);
+            tokenData = await getAccessToken(provider, code, options);
         } catch (error) {
-            logger.error(`[oauth] 获取${provider}的访问令牌失败:`, error.message);
-            throw new Error(`获取${provider}访问令牌失败: ${error.message}`);
+            const detail = formatOAuthError(error);
+            logger.error(`[oauth] 获取${provider}的访问令牌失败: ${detail}`);
+            throw new Error(`获取${provider}访问令牌失败: ${detail}`);
         }
 
         if (!tokenData.access_token) {
@@ -270,7 +738,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
         // 获取用户信息
         let userInfo;
         try {
-            userInfo = await getUserInfo(provider, accessToken);
+            userInfo = await getUserInfo(provider, accessToken, options, tokenData);
         } catch (error) {
             logger.error(`[oauth] 获取${provider}用户信息失败:`, error.message);
             throw new Error(`获取${provider}用户信息失败: ${error.message}`);
@@ -308,6 +776,13 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
                 }
             });
 
+            const existingUserProviderContact = await prisma.ow_users_contacts.findFirst({
+                where: {
+                    user_id: user.id,
+                    contact_type: "oauth_" + provider,
+                }
+            });
+
             if (existingOAuthContact && existingOAuthContact.user_id !== userIdToBind) {
                 logger.warn(`[oauth] OAuth账号已被其他用户绑定: provider=${provider}, oauthId=${userInfo.id}, existingUserId=${existingOAuthContact.user_id}`);
                 return {success: false, message: "[oauth] 该OAuth账号已被其他用户绑定"};
@@ -315,7 +790,19 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
 
             // 绑定 OAuth 账号到指定用户
             try {
-                if (!existingOAuthContact) {
+                if (existingUserProviderContact && existingUserProviderContact.contact_value !== userInfo.id) {
+                    await prisma.ow_users_contacts.update({
+                        where: { contact_id: existingUserProviderContact.contact_id },
+                        data: {
+                            contact_value: userInfo.id,
+                            contact_info: generateContactHash(),
+                            verified: true,
+                            metadata: userInfo,
+                            updated_at: new Date(),
+                        },
+                    });
+                    logger.info(`[oauth] 重绑OAuth账号并覆盖联系方式: userId=${user.id}, provider=${provider}, oauthId=${userInfo.id}`);
+                } else if (!existingUserProviderContact && !existingOAuthContact) {
                     await prisma.ow_users_contacts.create({
                         data: {
                             user_id: user.id,
@@ -327,7 +814,24 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
                         }
                     });
                     logger.info(`[oauth] 成功绑定OAuth账号: userId=${user.id}, provider=${provider}`);
+                } else {
+                    await prisma.ow_users_contacts.update({
+                        where: { contact_id: (existingUserProviderContact || existingOAuthContact).contact_id },
+                        data: {
+                            verified: true,
+                            metadata: userInfo,
+                            updated_at: new Date(),
+                        },
+                    });
+                    logger.info(`[oauth] OAuth账号已存在，刷新绑定信息: userId=${user.id}, provider=${provider}`);
                 }
+
+                await saveOAuthTokens(user.id, provider, tokenData, {
+                    tokenPurpose: provider === 'bluesky' ? 'sync' : tokenPurpose,
+                    provider_user_id: userInfo.id,
+                    provider_username: userInfo.username || userInfo.handle || null,
+                    pds: options?.pds || null,
+                });
             } catch (error) {
                 logger.error(`[oauth] 绑定OAuth账号失败:`, error);
                 return {success: false, message: "[oauth] 绑定OAuth账号失败: " + error.message};
@@ -375,69 +879,90 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
             });
 
             if (!contact) {
-                logger.debug(`[oauth] OAuth账号未绑定，检查邮箱是否存在...`);
-
-                // 检查邮箱是否已与其他用户关联
-                const emailContact = await prisma.ow_users_contacts.findFirst({
-                    where: {
-                        contact_value: userInfo.email,
-                        contact_type: 'email'
-                    }
-                });
+                logger.debug(`[oauth] OAuth账号未绑定，开始注册/关联用户: provider=${provider}, email=${userInfo.email}`);
 
                 let userId;
-                if (emailContact) {
-                    // 邮箱已存在，关联该用户
-                    userId = emailContact.user_id;
-                    logger.info(`[oauth] OAuth邮箱已关联现有用户: userId=${userId}, provider=${provider}`);
-                } else {
-                    // 创建新用户
-                    logger.info(`[oauth] 创建新用户: provider=${provider}`);
-                    const username = await generateUniqueUsername(userInfo.name || 'user');
 
+                if (userInfo.email) {
+                    // 有邮箱时：先查是否已有同邮箱用户
+                    const emailContact = await prisma.ow_users_contacts.findFirst({
+                        where: {
+                            contact_value: userInfo.email,
+                            contact_type: 'email'
+                        }
+                    });
+
+                    if (emailContact) {
+                        // 邮箱已存在，关联该用户
+                        userId = emailContact.user_id;
+                        logger.info(`[oauth] OAuth邮箱已关联现有用户: userId=${userId}, provider=${provider}`);
+                    } else {
+                        // 创建新用户（有邮箱）
+                        logger.info(`[oauth] 创建新用户(有邮箱): provider=${provider}`);
+                        const username = await generateUniqueUsername(userInfo.name || 'user');
+                        try {
+                            const newUser = await prisma.ow_users.create({
+                                data: {
+                                    username,
+                                    password: null,
+                                    display_name: userInfo.name || username,
+                                    type: 'user',
+                                    regTime: new Date(),
+                                    createdAt: new Date()
+                                }
+                            });
+                            userId = newUser.id;
+                            logger.info(`[oauth] 成功创建新用户: userId=${userId}, username=${username}, provider=${provider}`);
+                        } catch (error) {
+                            logger.error(`[oauth] 创建新用户失败:`, error);
+                            throw new Error(`创建新用户失败: ${error.message}`);
+                        }
+
+                        // 创建 email 联系方式
+                        try {
+                            await prisma.ow_users_contacts.create({
+                                data: {
+                                    user_id: userId,
+                                    contact_value: userInfo.email,
+                                    contact_info: generateContactHash(),
+                                    contact_type: 'email',
+                                    is_primary: true,
+                                    verified: true
+                                }
+                            });
+                            logger.debug(`[oauth] 为新用户添加邮箱: userId=${userId}, email=${userInfo.email}`);
+                        } catch (error) {
+                            logger.error(`[oauth] 为新用户添加邮箱失败，尝试删除用户:`, error);
+                            try {
+                                await prisma.ow_users.delete({ where: { id: userId } });
+                                logger.info(`[oauth] 已删除创建失败的用户: userId=${userId}`);
+                            } catch (deleteError) {
+                                logger.error(`[oauth] 删除用户失败:`, deleteError);
+                            }
+                            throw new Error(`添加用户邮箱失败: ${error.message}`);
+                        }
+                    }
+                } else {
+                    // 无邮箱（如 Bluesky 未开放邮箱）：直接创建新用户，不添加邮箱联系方式
+                    logger.info(`[oauth] 创建新用户(无邮箱): provider=${provider}, oauthId=${userInfo.id}`);
+                    const baseName = userInfo.handle || userInfo.name || 'user';
+                    const username = await generateUniqueUsername(baseName);
                     try {
                         const newUser = await prisma.ow_users.create({
                             data: {
-                                username: username,
-                                password: null,  // OAuth 用户不需要密码
+                                username,
+                                password: null,
                                 display_name: userInfo.name || username,
-                                type: 'user',  // 设置为普通用户
+                                type: 'user',
                                 regTime: new Date(),
                                 createdAt: new Date()
                             }
                         });
                         userId = newUser.id;
-                        logger.info(`[oauth] 成功创建新用户: userId=${userId}, username=${username}, provider=${provider}`);
+                        logger.info(`[oauth] 成功创建无邮箱新用户: userId=${userId}, username=${username}, provider=${provider}`);
                     } catch (error) {
-                        logger.error(`[oauth] 创建新用户失败:`, error);
+                        logger.error(`[oauth] 创建无邮箱新用户失败:`, error);
                         throw new Error(`创建新用户失败: ${error.message}`);
-                    }
-
-                    // 创建 email 联系方式
-                    try {
-                        await prisma.ow_users_contacts.create({
-                            data: {
-                                user_id: userId,
-                                contact_value: userInfo.email,
-                                contact_info: generateContactHash(),
-                                contact_type: 'email',
-                                is_primary: true,
-                                verified: true
-                            }
-                        });
-                        logger.debug(`[oauth] 为新用户添加邮箱: userId=${userId}, email=${userInfo.email}`);
-                    } catch (error) {
-                        // 尝试删除刚创建的用户
-                        logger.error(`[oauth] 为新用户添加邮箱失败，尝试删除用户:`, error);
-                        try {
-                            await prisma.ow_users.delete({
-                                where: {id: userId}
-                            });
-                            logger.info(`[oauth] 已删除创建失败的用户: userId=${userId}`);
-                        } catch (deleteError) {
-                            logger.error(`[oauth] 删除用户失败:`, deleteError);
-                        }
-                        throw new Error(`添加用户邮箱失败: ${error.message}`);
                     }
                 }
 
@@ -480,6 +1005,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
             });
 
             logger.info(`[oauth] OAuth登录成功: userId=${user.id}, username=${user.username}, provider=${provider}`);
+            logger.debug(`[oauth] OAuth登录流程跳过令牌持久化: userId=${user.id}, provider=${provider}`);
 
             return {
                 user,
@@ -491,3 +1017,67 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null) {
         throw error;
     }
 }
+
+/**
+ * 仅获取访问令牌并以 sync 用途保存，不创建/修改任何 oauth 联系方式记录。
+ * 专用于帖文同步（Bluesky/Twitter sync）的授权绑定流程。
+ */
+export async function handleOAuthSyncBind(provider, code, userId, options = {}) {
+    logger.info(`[oauth] handleOAuthSyncBind: ${provider}, userId: ${userId}`);
+    try {
+        let tokenData;
+        try {
+            tokenData = await getAccessToken(provider, code, options);
+        } catch (error) {
+            const detail = formatOAuthError(error);
+            logger.error(`[oauth] 获取${provider}的访问令牌失败(sync): ${detail}`);
+            throw new Error(`获取${provider}访问令牌失败: ${detail}`);
+        }
+
+        if (!tokenData.access_token) {
+            throw new Error(`${provider}未返回有效的访问令牌`);
+        }
+
+        let userInfo = null;
+        try {
+            userInfo = await getUserInfo(provider, tokenData.access_token, options, tokenData);
+        } catch (error) {
+            logger.warn(`[oauth] 获取${provider}用户信息失败(sync)，令牌仍将保存: ${error.message}`);
+        }
+
+        let resolvedPds = options?.pds || null;
+        if (provider === 'bluesky') {
+            const did = String(userInfo?.did || userInfo?.id || tokenData?.sub || '').trim();
+            if (did) {
+                try {
+                    const didResolvedPds = await resolveBlueskyPdsByDid(did);
+                    if (didResolvedPds) {
+                        resolvedPds = didResolvedPds;
+                        logger.info(`[oauth] Bluesky DID解析PDS成功: did=${did}, pds=${didResolvedPds}`);
+                    } else {
+                        logger.warn(`[oauth] Bluesky DID未解析到PDS，回退配置值: did=${did}`);
+                    }
+                } catch (error) {
+                    logger.warn(`[oauth] Bluesky DID解析PDS失败，回退配置值: did=${did}, err=${error.message}`);
+                }
+            }
+        }
+
+        await saveOAuthTokens(userId, provider, tokenData, {
+            tokenPurpose: 'sync',
+            provider_user_id: userInfo?.id || null,
+            provider_username: userInfo?.username || userInfo?.handle || null,
+            pds: resolvedPds,
+            dpopPrivateKeyPem: options?.dpopPrivateKeyPem || null,
+            dpopPublicJwk: options?.dpopPublicJwk || null,
+        });
+
+        logger.info(`[oauth] Sync令牌保存成功: userId=${userId}, provider=${provider}`);
+        return { success: true };
+    } catch (error) {
+        logger.error('[oauth] handleOAuthSyncBind 发生错误:', error);
+        return { success: false, message: error.message };
+    }
+}
+
+export { createPkcePair, createDpopKeyPair };

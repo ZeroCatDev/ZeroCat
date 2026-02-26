@@ -323,20 +323,7 @@ model ow_projects_branch {
   @@map("ow_projects_branch")
 }
 
-// 用户联系方式枚举
-enum ow_users_contacts_contact_type {
-  email
-  phone
-  qq
-  other
-  oauth_google
-  oauth_github
-  oauth_microsoft
-  oauth_40code
-  oauth_linuxdo
-  totp
-  passkey
-}
+
 
 // 用户联系方式表
 model ow_users_contacts {
@@ -344,7 +331,7 @@ model ow_users_contacts {
   user_id       Int?
   contact_value String                          @unique @db.VarChar(255)
   contact_info  String?                         @db.VarChar(255)
-  contact_type  ow_users_contacts_contact_type
+  contact_type  String                          @db.VarChar(50)
   is_primary    Boolean                         @default(false)
   verified      Boolean                         @default(false)
   metadata      Json?
@@ -679,7 +666,7 @@ model ow_cache_kv {
 }
 
 // 通用目标配置表（无关联，按 target_type + target_id + key 存储）
-model ow_target_configs {
+model c {
   id          Int      @id @default(autoincrement())
   target_type String   @db.VarChar(64)
   target_id   String   @db.VarChar(64)

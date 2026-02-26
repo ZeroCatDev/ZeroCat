@@ -77,6 +77,20 @@ function wrapAxiosResponse(axiosResponse) {
     };
 }
 
+function shouldRetryDirect(error) {
+    const code = String(error?.code || '').toUpperCase();
+    return [
+        'ECONNREFUSED',
+        'ECONNRESET',
+        'ETIMEDOUT',
+        'EHOSTUNREACH',
+        'ENETUNREACH',
+        'EAI_AGAIN',
+        'ENOTFOUND',
+        'EPROTO',
+    ].includes(code);
+}
+
 /**
  * 发送支持代理的fetch请求
  * 内部自动检查 isOAuthProxyEnabled()，调用方无需手动检查
@@ -84,7 +98,7 @@ function wrapAxiosResponse(axiosResponse) {
  */
 export async function fetchWithProxy(url, options = {}) {
     // 剥离自定义属性
-    const { useProxy: _useProxy, body, headers, method, ...rest } = options;
+    const { useProxy, body, headers, method, ...rest } = options;
 
     const axiosConfig = {
         url,
@@ -95,22 +109,41 @@ export async function fetchWithProxy(url, options = {}) {
         validateStatus: () => true,
         // 保持原始响应数据，不自动转换
         transformResponse: [(data) => data],
+        ...rest,
     };
 
     const oauthProxyEnabled = await isOAuthProxyEnabled();
-    if (oauthProxyEnabled) {
+    const shouldUseProxy =
+        typeof useProxy === 'boolean'
+            ? useProxy
+            : oauthProxyEnabled;
+
+    let proxyAttached = false;
+    if (shouldUseProxy) {
         try {
             const proxyUrl = await getProxyUrl();
             if (proxyUrl) {
                 axiosConfig.proxy = getProxyConfig(proxyUrl);
+                proxyAttached = true;
             }
         } catch (error) {
             logger.error('[ProxyManager] 配置代理失败:', error);
         }
     }
 
-    const response = await axios(axiosConfig);
-    return wrapAxiosResponse(response);
+    try {
+        const response = await axios(axiosConfig);
+        return wrapAxiosResponse(response);
+    } catch (error) {
+        if (proxyAttached && shouldRetryDirect(error)) {
+            logger.warn(`[ProxyManager] 代理请求失败，回退直连重试: ${error.code || error.message}`);
+            const directConfig = { ...axiosConfig };
+            delete directConfig.proxy;
+            const retryResponse = await axios(directConfig);
+            return wrapAxiosResponse(retryResponse);
+        }
+        throw error;
+    }
 }
 
 export default {
