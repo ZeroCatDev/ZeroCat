@@ -5,10 +5,7 @@ import zcconfig from '../services/config/zcconfig.js';
 import memoryCache from '../services/memoryCache.js';
 import queueManager from '../services/queue/queueManager.js';
 import {
-    buildTwitterSyncAuthorizeUrl,
     saveBlueskySyncTokensFromDid,
-    createPkcePair,
-    exchangeTwitterSyncCode,
     getSocialIntegrationOverview,
     getTwitterSyncAppConfig,
     removeTwitterSyncAppConfig,
@@ -19,6 +16,10 @@ import {
 } from '../services/social/socialSync.js';
 import { OAUTH_PROVIDERS } from '../controllers/oauth.js';
 import crypto from 'crypto';
+import {
+    consumeTwitterSyncCallback,
+    createTwitterSyncAuthorizeUrl,
+} from '../services/social/twitterSyncOAuth.js';
 import {
     buildAtprotoSyncClientMetadata,
     consumeAtprotoSyncCallback,
@@ -106,21 +107,10 @@ router.get('/twitter/sync/oauth/start', needLogin, async (req, res) => {
         }
 
         const state = crypto.randomBytes(16).toString('hex');
-        const { verifier, challenge } = createPkcePair();
-
-        memoryCache.set(
-            `twitter_sync_state:${state}`,
-            {
-                userId: res.locals.userid,
-                verifier,
-            },
-            600
-        );
-
-        const authUrl = buildTwitterSyncAuthorizeUrl({
+        const { authUrl } = createTwitterSyncAuthorizeUrl({
             appConfig,
+            userId: res.locals.userid,
             state,
-            codeChallenge: challenge,
         });
 
         return res.redirect(authUrl);
@@ -145,25 +135,18 @@ router.get('/twitter/sync/oauth/callback', async (req, res) => {
             return redirect(false, '缺少 code 或 state');
         }
 
-        const cached = memoryCache.get(`twitter_sync_state:${state}`);
-        if (!cached?.userId || !cached?.verifier) {
-            return redirect(false, '授权状态已失效');
-        }
-
-        memoryCache.delete(`twitter_sync_state:${state}`);
-
-        const appConfig = await getTwitterSyncAppConfig(cached.userId, { masked: false });
-        if (!appConfig?.clientId || !appConfig?.clientSecret || !appConfig?.redirectUri) {
-            return redirect(false, '未找到同步应用配置');
-        }
-
-        const tokens = await exchangeTwitterSyncCode({
-            appConfig,
+        const callbackResult = await consumeTwitterSyncCallback({
+            state: String(state),
             code: String(code),
-            codeVerifier: cached.verifier,
         });
 
-        await saveTwitterSyncTokens(cached.userId, tokens);
+        await saveTwitterSyncTokens(callbackResult.userId, {
+            ...callbackResult.tokens,
+            provider_user_id: callbackResult.profile?.id || null,
+            provider_username: callbackResult.profile?.username || null,
+            provider_name: callbackResult.profile?.name || null,
+            provider_avatar: callbackResult.profile?.avatar || null,
+        });
         return redirect(true);
     } catch (error) {
         logger.error('[social] twitter sync oauth callback failed:', error);

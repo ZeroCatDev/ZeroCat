@@ -1,5 +1,5 @@
-import crypto from 'crypto';
 import { RichText } from '@atproto/api';
+import { Client as TwitterClient, auth as twitterAuth } from 'twitter-api-sdk';
 import { prisma } from '../prisma.js';
 import zcconfig from '../config/zcconfig.js';
 import logger from '../logger.js';
@@ -8,6 +8,27 @@ import { getUserAtprotoSyncDid, restoreAtprotoSyncAgent } from './atprotoSyncOAu
 
 const USER_TARGET_TYPE = 'user';
 const POST_TARGET_TYPE = 'post';
+const TWITTER_SYNC_REQUIRED_SCOPES = [
+    'tweet.read',
+    'tweet.write',
+    'tweet.moderate.write',
+    'users.read',
+    'follows.read',
+    'follows.write',
+    'offline.access',
+    'space.read',
+    'mute.read',
+    'mute.write',
+    'like.read',
+    'like.write',
+    'list.read',
+    'list.write',
+    'block.read',
+    'block.write',
+    'bookmark.read',
+    'bookmark.write',
+];
+const TWITTER_SYNC_DEFAULT_SCOPE = TWITTER_SYNC_REQUIRED_SCOPES.join(' ');
 
 function getTargetConfigModel() {
     return prisma.ow_target_configs || prisma.c;
@@ -130,18 +151,19 @@ export async function getTwitterSyncAppConfig(userId, { masked = true } = {}) {
     if (!masked) return parsed;
 
     return {
+        appId: parsed.clientId || '',
         clientId: parsed.clientId || '',
         clientSecret: maskSecret(parsed.clientSecret || ''),
         redirectUri: parsed.redirectUri || '',
-        scope: parsed.scope || 'tweet.read tweet.write users.read offline.access',
+        scope: parsed.scope || TWITTER_SYNC_DEFAULT_SCOPE,
     };
 }
 
 export async function setTwitterSyncAppConfig(userId, data) {
-    const clientId = String(data?.clientId || '').trim();
+    const clientId = String(data?.clientId || data?.appId || '').trim();
     const clientSecret = String(data?.clientSecret || '').trim();
     const redirectUriRaw = String(data?.redirectUri || '').trim();
-    const scope = String(data?.scope || 'tweet.read tweet.write users.read offline.access').trim();
+    const scope = String(data?.scope || TWITTER_SYNC_DEFAULT_SCOPE).trim();
 
     if (!clientId || !clientSecret) {
         throw new Error('clientId 和 clientSecret 不能为空');
@@ -202,72 +224,6 @@ export async function getOAuthBindingStatus(userId) {
     return map;
 }
 
-export function buildTwitterSyncAuthorizeUrl({ appConfig, state, codeChallenge }) {
-    const query = new URLSearchParams({
-        response_type: 'code',
-        client_id: appConfig.clientId,
-        redirect_uri: appConfig.redirectUri,
-        scope: appConfig.scope || 'tweet.read tweet.write users.read offline.access',
-        state,
-        code_challenge: codeChallenge,
-        code_challenge_method: 'S256',
-    });
-
-    return `https://twitter.com/i/oauth2/authorize?${query.toString()}`;
-}
-
-export function createPkcePair() {
-    const verifier = crypto.randomBytes(32).toString('base64url');
-    const challenge = crypto
-        .createHash('sha256')
-        .update(verifier)
-        .digest('base64url');
-    return { verifier, challenge };
-}
-
-async function getSocialProxyFetchOptions() {
-    const proxyEnabled = await zcconfig.get('oauth.proxy.enabled', false);
-    return {
-        useProxy: Boolean(proxyEnabled),
-    };
-}
-
-export async function exchangeTwitterSyncCode({ appConfig, code, codeVerifier }) {
-    const proxyOptions = await getSocialProxyFetchOptions();
-    const params = new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: appConfig.clientId,
-        redirect_uri: appConfig.redirectUri,
-        code,
-        code_verifier: codeVerifier,
-    });
-
-    const basic = Buffer.from(`${appConfig.clientId}:${appConfig.clientSecret}`).toString('base64');
-    const response = await fetchWithProxy('https://api.twitter.com/2/oauth2/token', {
-        method: 'POST',
-        ...proxyOptions,
-        headers: {
-            Authorization: `Basic ${basic}`,
-            'Content-Type': 'application/x-www-form-urlencoded',
-            Accept: 'application/json',
-        },
-        body: params.toString(),
-    });
-
-    const body = await response.json();
-    if (!response.ok || !body?.access_token) {
-        throw new Error(body?.error_description || body?.error || `Twitter token exchange failed (${response.status})`);
-    }
-
-    return {
-        access_token: body.access_token,
-        refresh_token: body.refresh_token || null,
-        token_type: body.token_type || 'Bearer',
-        scope: body.scope || null,
-        expires_in: body.expires_in || null,
-    };
-}
-
 export async function saveTwitterSyncTokens(userId, tokenData) {
     const payload = {
         ...tokenData,
@@ -302,6 +258,153 @@ async function getTwitterSyncTokens(userId) {
 async function getBlueskySyncTokens(userId) {
     const raw = await getTargetConfig(USER_TARGET_TYPE, userId, SOCIAL_KEYS.BLUESKY_SYNC_TOKENS);
     return parseJson(raw, null);
+}
+
+function normalizeTwitterScopes(input) {
+    const value = String(input || TWITTER_SYNC_DEFAULT_SCOPE).trim();
+    const current = value.split(/\s+/).filter(Boolean);
+    const set = new Set(current);
+    for (const requiredScope of TWITTER_SYNC_REQUIRED_SCOPES) {
+        set.add(requiredScope);
+    }
+    return Array.from(set);
+}
+
+function normalizeTokenScopeSet(scopeInput) {
+    return new Set(String(scopeInput || '').split(/\s+/).map((item) => item.trim()).filter(Boolean));
+}
+
+function ensureTwitterTokenScopes(tokens, requiredScopes, actionName) {
+    const scopeSet = normalizeTokenScopeSet(tokens?.scope);
+    const missing = requiredScopes.filter((scope) => !scopeSet.has(scope));
+    if (missing.length === 0) return;
+
+    throw new Error(`Twitter 授权缺少权限(${missing.join(', ')})，请在同步应用配置中包含这些 scope 并重新授权后再执行 ${actionName}`);
+}
+
+function toTwitterSdkToken(tokens) {
+    if (!tokens?.access_token) return undefined;
+    const expiresAtMs = tokens?.expires_at ? new Date(tokens.expires_at).getTime() : null;
+    return {
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token || undefined,
+        token_type: tokens.token_type || undefined,
+        scope: tokens.scope || undefined,
+        ...(Number.isFinite(expiresAtMs) && expiresAtMs > 0 ? { expires_at: expiresAtMs } : {}),
+    };
+}
+
+function normalizeExpiresInFromSdkToken(token) {
+    const expiresAt = Number(token?.expires_at);
+    if (!Number.isFinite(expiresAt) || expiresAt <= 0) return null;
+    return Math.max(Math.floor((expiresAt - Date.now()) / 1000), 0);
+}
+
+function formatTwitterSdkError(error, fallback = 'Twitter API 调用失败') {
+    const status = Number(error?.status || error?.statusCode || 0);
+    const details = [];
+
+    const pushDetail = (value) => {
+        const text = String(value ?? '').trim();
+        if (text) details.push(text);
+    };
+
+    pushDetail(error?.data?.detail);
+    pushDetail(error?.data?.title);
+    pushDetail(error?.error?.detail);
+    pushDetail(error?.error?.title);
+    if (Array.isArray(error?.error?.errors)) {
+        for (const item of error.error.errors) {
+            pushDetail(item?.detail);
+            pushDetail(item?.message);
+            pushDetail(item?.title);
+        }
+    }
+    pushDetail(error?.detail);
+    if (String(error?.message || '').trim().toLowerCase() !== 'error') {
+        pushDetail(error?.message);
+    }
+    pushDetail(error?.error_description);
+    if (typeof error?.error === 'string') {
+        pushDetail(error.error);
+    }
+
+    const message = [...new Set(details)][0] || String(fallback || 'Twitter API 调用失败').trim() || 'Twitter API 调用失败';
+    return status > 0 ? `${message} (${status})` : message;
+}
+
+async function withTwitterSdkClient(actorUserId, action) {
+    const [tokens, appConfig] = await Promise.all([
+        getTwitterSyncTokens(actorUserId),
+        getTwitterSyncAppConfig(actorUserId, { masked: false }),
+    ]);
+
+    if (!tokens?.access_token) {
+        throw new Error('未配置 Twitter 同步令牌');
+    }
+    if (!appConfig?.clientId || !appConfig?.clientSecret || !appConfig?.redirectUri) {
+        throw new Error('未配置 Twitter 同步应用信息');
+    }
+
+    const oauthClient = new twitterAuth.OAuth2User({
+        client_id: String(appConfig.clientId),
+        client_secret: String(appConfig.clientSecret),
+        callback: String(appConfig.redirectUri),
+        scopes: normalizeTwitterScopes(appConfig.scope),
+        token: toTwitterSdkToken(tokens),
+    });
+    const twitterClient = new TwitterClient(oauthClient);
+
+    const result = await action({
+        client: twitterClient,
+        oauthClient,
+        tokens,
+    });
+
+    const latestToken = oauthClient.token;
+    if (latestToken?.access_token) {
+        const changed = latestToken.access_token !== tokens.access_token
+            || (latestToken.refresh_token || null) !== (tokens.refresh_token || null)
+            || (latestToken.token_type || null) !== (tokens.token_type || null)
+            || (latestToken.scope || null) !== (tokens.scope || null)
+            || normalizeExpiresInFromSdkToken(latestToken) !== (Number.isFinite(Number(tokens?.expires_in)) ? Number(tokens.expires_in) : null);
+
+        if (changed) {
+            await saveTwitterSyncTokens(actorUserId, {
+                ...tokens,
+                access_token: latestToken.access_token,
+                refresh_token: latestToken.refresh_token || null,
+                token_type: latestToken.token_type || 'Bearer',
+                scope: latestToken.scope || null,
+                expires_in: normalizeExpiresInFromSdkToken(latestToken),
+            });
+        }
+    }
+
+    return result;
+}
+
+async function resolveTwitterActorId({ client, tokens, actorUserId }) {
+    const current = String(tokens?.provider_user_id || '').trim();
+    if (current) return current;
+
+    const meResp = await client.users.findMyUser({
+        'user.fields': ['profile_image_url'],
+    });
+    const me = meResp?.data || null;
+    if (!me?.id) {
+        throw new Error('Twitter 账号信息缺失，无法执行用户动作');
+    }
+
+    await saveTwitterSyncTokens(actorUserId, {
+        ...tokens,
+        provider_user_id: String(me.id),
+        provider_username: me?.username ? String(me.username) : null,
+        provider_name: me?.name ? String(me.name) : null,
+        provider_avatar: me?.profile_image_url ? String(me.profile_image_url) : null,
+    });
+
+    return String(me.id);
 }
 
 function pickPostText(post) {
@@ -617,153 +720,112 @@ async function buildBlueskyImagesEmbed(agent, post) {
 }
 
 async function createTwitterPost(actorUserId, post) {
-    const proxyOptions = await getSocialProxyFetchOptions();
-    const tokens = await getTwitterSyncTokens(actorUserId);
-    if (!tokens?.access_token) throw new Error('未配置 Twitter 同步令牌');
+    return withTwitterSdkClient(actorUserId, async ({ client, tokens }) => {
+        try {
+            if (post.post_type === 'retweet' && post.retweet_post_id) {
+                const target = await getPostForEvent(post.retweet_post_id);
+                const targetRef = normalizePlatformRefs(target?.platform_refs)?.twitter;
+                if (!targetRef?.id) {
+                    return { skipped: true, reason: 'missing_retweet_target_ref' };
+                }
 
-    const text = await buildPostOutboundText(post);
-    const body = { text };
+                const userId = await resolveTwitterActorId({ client, tokens, actorUserId });
+                const rtResp = await client.tweets.usersIdRetweets(userId, {
+                    tweet_id: String(targetRef.id),
+                });
 
-    if (post.post_type === 'retweet' && post.retweet_post_id) {
-        const target = await getPostForEvent(post.retweet_post_id);
-        const targetRef = normalizePlatformRefs(target?.platform_refs)?.twitter;
-        if (!targetRef?.id) {
-            return { skipped: true, reason: 'missing_retweet_target_ref' };
+                return {
+                    kind: 'retweet',
+                    target_id: targetRef.id,
+                    raw: rtResp,
+                };
+            }
+
+            const text = await buildPostOutboundText(post);
+            const body = { text };
+
+            if (post.post_type === 'reply' && post.in_reply_to_id) {
+                const parent = await getPostForEvent(post.in_reply_to_id);
+                const parentRef = normalizePlatformRefs(parent?.platform_refs)?.twitter;
+                if (parentRef?.id) {
+                    body.reply = { in_reply_to_tweet_id: String(parentRef.id) };
+                }
+            }
+
+            if (post.post_type === 'quote' && post.quoted_post_id) {
+                const quoted = await getPostForEvent(post.quoted_post_id);
+                const quotedRef = normalizePlatformRefs(quoted?.platform_refs)?.twitter;
+                if (quotedRef?.id) {
+                    body.quote_tweet_id = String(quotedRef.id);
+                }
+            }
+
+            const payload = await client.tweets.createTweet(body);
+            return {
+                id: payload?.data?.id || null,
+                raw: payload,
+            };
+        } catch (error) {
+            throw new Error(formatTwitterSdkError(error, 'Twitter 发布失败'));
         }
-
-        const userId = String(tokens?.provider_user_id || '').trim();
-        if (!userId) {
-            return { skipped: true, reason: 'missing_user_binding' };
-        }
-
-        const rtResp = await fetchWithProxy(`https://api.twitter.com/2/users/${userId}/retweets`, {
-            method: 'POST',
-            ...proxyOptions,
-            headers: {
-                Authorization: `Bearer ${tokens.access_token}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ tweet_id: targetRef.id }),
-        });
-        const rtPayload = await rtResp.json();
-        if (!rtResp.ok) {
-            throw new Error(rtPayload?.detail || rtPayload?.title || `Twitter 转推失败 (${rtResp.status})`);
-        }
-        return {
-            kind: 'retweet',
-            target_id: targetRef.id,
-            raw: rtPayload,
-        };
-    }
-
-    if (post.post_type === 'reply' && post.in_reply_to_id) {
-        const parent = await getPostForEvent(post.in_reply_to_id);
-        const parentRef = normalizePlatformRefs(parent?.platform_refs)?.twitter;
-        if (parentRef?.id) {
-            body.reply = { in_reply_to_tweet_id: parentRef.id };
-        }
-    }
-
-    if (post.post_type === 'quote' && post.quoted_post_id) {
-        const quoted = await getPostForEvent(post.quoted_post_id);
-        const quotedRef = normalizePlatformRefs(quoted?.platform_refs)?.twitter;
-        if (quotedRef?.id) {
-            body.quote_tweet_id = quotedRef.id;
-        }
-    }
-
-    const response = await fetchWithProxy('https://api.twitter.com/2/tweets', {
-        method: 'POST',
-        ...proxyOptions,
-        headers: {
-            Authorization: `Bearer ${tokens.access_token}`,
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
     });
-
-    const payload = await response.json();
-    if (!response.ok) {
-        throw new Error(payload?.detail || payload?.title || `Twitter 发布失败 (${response.status})`);
-    }
-
-    return {
-        id: payload?.data?.id || null,
-        raw: payload,
-    };
 }
 
 async function deleteTwitterPost(actorUserId, postRef) {
     if (!postRef?.id && !(postRef?.kind === 'retweet' && postRef?.target_id)) {
         return { skipped: true, reason: 'missing_ref' };
     }
-    const proxyOptions = await getSocialProxyFetchOptions();
-    const tokens = await getTwitterSyncTokens(actorUserId);
-    if (!tokens?.access_token) return { skipped: true, reason: 'missing_token' };
 
-    if (postRef?.kind === 'retweet' && postRef?.target_id) {
-        const userId = String(tokens?.provider_user_id || '').trim();
-        if (!userId) return { skipped: true, reason: 'missing_user_binding' };
-        const unretweetResp = await fetchWithProxy(`https://api.twitter.com/2/users/${userId}/retweets/${postRef.target_id}`, {
-            method: 'DELETE',
-            ...proxyOptions,
-            headers: { Authorization: `Bearer ${tokens.access_token}` },
-        });
-        const unretweetPayload = await unretweetResp.json();
-        if (!unretweetResp.ok) {
-            throw new Error(unretweetPayload?.detail || unretweetPayload?.title || `Twitter 取消转推失败 (${unretweetResp.status})`);
+    return withTwitterSdkClient(actorUserId, async ({ client, tokens }) => {
+        try {
+            if (postRef?.kind === 'retweet' && postRef?.target_id) {
+                const userId = await resolveTwitterActorId({ client, tokens, actorUserId });
+                return client.tweets.usersIdUnretweets(userId, String(postRef.target_id));
+            }
+
+            return client.tweets.deleteTweetById(String(postRef.id));
+        } catch (error) {
+            throw new Error(formatTwitterSdkError(error, 'Twitter 删除失败'));
         }
-        return unretweetPayload;
-    }
-
-    const response = await fetchWithProxy(`https://api.twitter.com/2/tweets/${postRef.id}`, {
-        method: 'DELETE',
-        ...proxyOptions,
-        headers: { Authorization: `Bearer ${tokens.access_token}` },
     });
-
-    const payload = await response.json();
-    if (!response.ok) {
-        throw new Error(payload?.detail || payload?.title || `Twitter 删除失败 (${response.status})`);
-    }
-    return payload;
 }
 
 async function sendTwitterEngagement(actorUserId, action, postRef) {
     if (!postRef?.id) return { skipped: true, reason: 'missing_ref' };
 
-    const proxyOptions = await getSocialProxyFetchOptions();
-    const tokens = await getTwitterSyncTokens(actorUserId);
-    const userId = String(tokens?.provider_user_id || '').trim();
-    if (!tokens?.access_token || !userId) {
-        return { skipped: true, reason: 'missing_user_binding' };
-    }
+    return withTwitterSdkClient(actorUserId, async ({ client, tokens }) => {
+        try {
+            const requiredByAction = {
+                like: ['like.write'],
+                unlike: ['like.write'],
+                bookmark: ['bookmark.write'],
+                unbookmark: ['bookmark.write'],
+            };
 
-    const endpointMap = {
-        like: { method: 'POST', url: `https://api.twitter.com/2/users/${userId}/likes`, body: { tweet_id: postRef.id } },
-        unlike: { method: 'DELETE', url: `https://api.twitter.com/2/users/${userId}/likes/${postRef.id}` },
-        bookmark: { method: 'POST', url: `https://api.twitter.com/2/users/${userId}/bookmarks`, body: { tweet_id: postRef.id } },
-        unbookmark: { method: 'DELETE', url: `https://api.twitter.com/2/users/${userId}/bookmarks/${postRef.id}` },
-    };
+            const requiredScopes = requiredByAction[action] || [];
+            if (requiredScopes.length > 0) {
+                ensureTwitterTokenScopes(tokens, requiredScopes, action);
+            }
 
-    const req = endpointMap[action];
-    if (!req) return { skipped: true, reason: 'unsupported_action' };
+            const userId = await resolveTwitterActorId({ client, tokens, actorUserId });
 
-    const response = await fetchWithProxy(req.url, {
-        method: req.method,
-        ...proxyOptions,
-        headers: {
-            Authorization: `Bearer ${tokens.access_token}`,
-            ...(req.body ? { 'Content-Type': 'application/json' } : {}),
-        },
-        ...(req.body ? { body: JSON.stringify(req.body) } : {}),
+            if (action === 'like') {
+                return client.tweets.usersIdLike(userId, { tweet_id: String(postRef.id) });
+            }
+            if (action === 'unlike') {
+                return client.tweets.usersIdUnlike(userId, String(postRef.id));
+            }
+            if (action === 'bookmark') {
+                return client.bookmarks.postUsersIdBookmarks(userId, { tweet_id: String(postRef.id) });
+            }
+            if (action === 'unbookmark') {
+                return client.bookmarks.usersIdBookmarksDelete(userId, String(postRef.id));
+            }
+            return { skipped: true, reason: 'unsupported_action' };
+        } catch (error) {
+            throw new Error(formatTwitterSdkError(error, `Twitter ${action} 失败`));
+        }
     });
-
-    const payload = await response.json();
-    if (!response.ok) {
-        throw new Error(payload?.detail || payload?.title || `Twitter ${action} 失败 (${response.status})`);
-    }
-    return payload;
 }
 
 async function getBlueskyAgent(actorUserId) {
@@ -864,9 +926,68 @@ async function deleteBlueskyPost(actorUserId, postRef) {
 }
 
 async function likeBlueskyPost(actorUserId, postRef) {
-    if (!postRef?.uri || !postRef?.cid) return { skipped: true, reason: 'missing_ref' };
     const agent = await getBlueskyAgent(actorUserId);
-    return agent.like(postRef.uri, postRef.cid);
+    const uri = String(postRef?.uri || '').trim();
+    if (!uri) return { skipped: true, reason: 'missing_ref' };
+
+    let cid = String(postRef?.cid || '').trim();
+    if (!cid) {
+        try {
+            const getPostsResp = await agent.getPosts({ uris: [uri] });
+            const first = Array.isArray(getPostsResp?.data?.posts) ? getPostsResp.data.posts[0] : null;
+            cid = String(first?.cid || '').trim();
+        } catch {
+            cid = '';
+        }
+    }
+
+    if (!cid) return { skipped: true, reason: 'missing_bluesky_ref' };
+    return agent.like(uri, cid);
+}
+
+async function resolveBlueskyStrongRef(agent, postRef) {
+    const uri = String(postRef?.uri || '').trim();
+    if (!uri) return null;
+
+    let cid = String(postRef?.cid || '').trim();
+    if (!cid) {
+        try {
+            const getPostsResp = await agent.getPosts({ uris: [uri] });
+            const first = Array.isArray(getPostsResp?.data?.posts) ? getPostsResp.data.posts[0] : null;
+            cid = String(first?.cid || '').trim();
+        } catch {
+            cid = '';
+        }
+    }
+
+    if (!cid) return null;
+    return { uri, cid };
+}
+
+async function bookmarkBlueskyPost(actorUserId, postRef) {
+    const agent = await getBlueskyAgent(actorUserId);
+    const strongRef = await resolveBlueskyStrongRef(agent, postRef);
+    if (!strongRef) return { skipped: true, reason: 'missing_bluesky_ref' };
+
+    await agent.app.bsky.bookmark.createBookmark({
+        uri: strongRef.uri,
+        cid: strongRef.cid,
+    });
+
+    return {
+        kind: 'bookmark',
+        uri: strongRef.uri,
+        cid: strongRef.cid,
+    };
+}
+
+async function unbookmarkBlueskyPost(actorUserId, bookmarkRef) {
+    const uri = String(bookmarkRef?.uri || '').trim();
+    if (!uri) return { skipped: true, reason: 'missing_ref' };
+
+    const agent = await getBlueskyAgent(actorUserId);
+    await agent.app.bsky.bookmark.deleteBookmark({ uri });
+    return { ok: true, kind: 'unbookmark', uri };
 }
 
 async function unlikeBlueskyPost(actorUserId, likeRef) {
@@ -922,6 +1043,7 @@ async function handlePlatformLike(platform, actorUserId, post) {
 
     if (platform === 'bluesky') {
         const likeRef = await likeBlueskyPost(actorUserId, postRef);
+        if (likeRef?.skipped) return likeRef;
         await saveActionRef(post.id, 'bluesky', 'like', actorUserId, { uri: likeRef?.uri, cid: likeRef?.cid || null });
         return likeRef;
     }
@@ -958,7 +1080,13 @@ async function handlePlatformBookmark(platform, actorUserId, post) {
     }
 
     if (platform === 'bluesky') {
-        return { skipped: true, reason: 'unsupported_bookmark' };
+        const bookmarkRef = await bookmarkBlueskyPost(actorUserId, postRef);
+        if (bookmarkRef?.skipped) return bookmarkRef;
+        await saveActionRef(post.id, 'bluesky', 'bookmark', actorUserId, {
+            uri: bookmarkRef?.uri,
+            cid: bookmarkRef?.cid || null,
+        });
+        return bookmarkRef;
     }
 
     return { skipped: true, reason: 'unknown_platform' };
@@ -974,7 +1102,10 @@ async function handlePlatformUnbookmark(platform, actorUserId, post) {
     }
 
     if (platform === 'bluesky') {
-        return { skipped: true, reason: 'unsupported_bookmark' };
+        const bookmarkRef = await readActionRef(post.id, 'bluesky', 'bookmark', actorUserId);
+        const result = await unbookmarkBlueskyPost(actorUserId, bookmarkRef || postRef);
+        await removeActionRef(post.id, 'bluesky', 'bookmark', actorUserId);
+        return result;
     }
 
     return { skipped: true, reason: 'unknown_platform' };
@@ -1038,8 +1169,11 @@ export async function syncSocialEvent({ actorUserId, postId, eventType }) {
                 results[platform] = { skipped: true, reason: 'unsupported_event' };
             }
         } catch (error) {
-            results[`${platform}_error`] = error.message;
-            logger.error(`[social-sync] ${platform} failed event=${type} post=${pid} user=${uid}: ${error.message}`);
+            const reason = platform === 'twitter'
+                ? formatTwitterSdkError(error, 'Twitter 同步失败')
+                : (String(error?.message || error || 'unknown_error').trim() || 'unknown_error');
+            results[`${platform}_error`] = reason;
+            logger.error(`[social-sync] ${platform} failed event=${type} post=${pid} user=${uid}: ${reason}`);
         }
     }
 
