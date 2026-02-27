@@ -1,16 +1,16 @@
 import { Worker } from 'bullmq';
 import { createConnection } from '../redisConnectionFactory.js';
 import { QUEUE_NAMES } from '../queues.js';
-import { syncPostToEnabledPlatforms } from '../../social/socialSync.js';
+import { syncSocialEvent } from '../../social/socialSync.js';
 import logger from '../../logger.js';
 
 let worker = null;
 
 async function processSocialSync(job) {
-    const { userId, postId } = job.data;
-    await job.log(`sync start user=${userId} post=${postId}`);
-    const result = await syncPostToEnabledPlatforms({ userId, postId });
-    await job.log(`sync done post=${postId}`);
+    const { actorUserId, postId, eventType } = job.data;
+    await job.log(`sync start user=${actorUserId} post=${postId} event=${eventType}`);
+    const result = await syncSocialEvent(job.data);
+    await job.log(`sync done post=${postId} event=${eventType}`);
     return result;
 }
 

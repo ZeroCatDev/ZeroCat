@@ -182,15 +182,22 @@ const queueManager = {
         }
 
         try {
+            const eventType = typeof trigger === 'string' ? trigger : String(trigger?.eventType || 'auto');
+            const eventPayload = typeof trigger === 'object' && trigger
+                ? trigger
+                : { eventType };
+            const jobId = `ss-${eventType}-${postId}-${userId}-${Date.now()}`;
+
             const job = await queue.add(
                 'sync-post',
                 {
-                    userId: Number(userId),
+                    actorUserId: Number(userId),
                     postId: Number(postId),
-                    trigger,
+                    eventType,
+                    ...eventPayload,
                 },
                 {
-                    jobId: `ss-post-${postId}`,
+                    jobId,
                     attempts: 3,
                     backoff: { type: 'exponential', delay: 10000 },
                     removeOnComplete: { age: 86400 },

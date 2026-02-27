@@ -2,6 +2,12 @@ import {prisma} from "../services/prisma.js";
 import logger from '../services/logger.js';
 import zcconfig from "../services/config/zcconfig.js";
 import crypto from 'crypto';
+import { Agent } from '@atproto/api';
+import {
+    consumeAtprotoAuthCallback,
+    createAtprotoAuthAuthorizeUrl,
+    saveUserAtprotoAuthDid,
+} from '../services/social/atprotoAuthOAuth.js';
 
 import base32Encode from 'base32-encode';
 import {fetchWithProxy} from '../services/proxy/proxyManager.js';
@@ -441,29 +447,15 @@ export async function generateAuthUrl(provider, state, options = {}) {
     if (!config.enabled) throw new Error('[oauth] 此 OAuth 提供商未启用');
 
     const isBluesky = provider === 'bluesky';
-    const blueskyEndpoints = isBluesky ? getBlueskyEndpoints(config, options) : null;
-    const authUrl = isBluesky ? blueskyEndpoints.authUrl : config.authUrl;
+    const authUrl = config.authUrl;
 
     if (isBluesky) {
-        const clientId = String(options?.clientId || config.clientId || '').trim();
-        if (!isBlueskyClientId(clientId)) {
-            throw new Error('[oauth] Bluesky client_id 无效（需为 https://... 或 did:...）');
-        }
-
-        const params = new URLSearchParams({
-            client_id: clientId,
-            redirect_uri: options?.redirectUri || config.redirectUri,
-            response_type: 'code',
-            scope: options?.scope || config.scope || 'atproto',
+        const identifier = options?.identifier || options?.account || options?.domain || options?.pds || '';
+        return createAtprotoAuthAuthorizeUrl({
+            loginHint: identifier,
             state,
+            scope: options?.scope || config.scope || 'atproto',
         });
-
-        if (options?.codeChallenge) {
-            params.set('code_challenge', options.codeChallenge);
-            params.set('code_challenge_method', 'S256');
-        }
-
-        return `${authUrl}?${params.toString()}`;
     }
 
     if (provider === '40code') {
@@ -489,13 +481,13 @@ export async function generateAuthUrl(provider, state, options = {}) {
 
 // 获取 OAuth 访问令牌
 async function getAccessToken(provider, code, options = {}) {
+    if (provider === 'bluesky') {
+        throw new Error('Bluesky OAuth 已切换为官方 @atproto/oauth-client-node，请使用 atproto 回调消费流程');
+    }
+
     const config = OAUTH_PROVIDERS[provider];
-    const isBluesky = provider === 'bluesky';
-    const blueskyEndpoints = isBluesky ? getBlueskyEndpoints(config, options) : null;
-    const tokenUrl = isBluesky ? blueskyEndpoints.tokenUrl : config.tokenUrl;
-    const effectiveClientId = isBluesky
-        ? String(options?.clientId || config.clientId || '').trim()
-        : String(config.clientId || '');
+    const tokenUrl = config.tokenUrl;
+    const effectiveClientId = String(config.clientId || '');
 
     const params = new URLSearchParams();
     params.set('client_id', effectiveClientId);
@@ -503,13 +495,7 @@ async function getAccessToken(provider, code, options = {}) {
     params.set('redirect_uri', options?.redirectUri || config.redirectUri);
     params.set('grant_type', 'authorization_code');
 
-    if (isBluesky) {
-        if (options?.codeVerifier) {
-            params.set('code_verifier', options.codeVerifier);
-        }
-    } else {
-        params.set('client_secret', config.clientSecret);
-    }
+    params.set('client_secret', config.clientSecret);
 
     try {
         const requestHeaders = {
@@ -517,42 +503,11 @@ async function getAccessToken(provider, code, options = {}) {
             'Content-Type': 'application/x-www-form-urlencoded',
         };
 
-        if (isBluesky && options?.dpopPrivateKeyPem && options?.dpopPublicJwk) {
-            requestHeaders.DPoP = buildDpopProof({
-                method: 'POST',
-                url: tokenUrl,
-                privateKeyPem: options.dpopPrivateKeyPem,
-                publicJwk: options.dpopPublicJwk,
-            });
-        }
-
-        let response = await fetchWithProxy(tokenUrl, {
+        const response = await fetchWithProxy(tokenUrl, {
             method: 'POST',
             headers: requestHeaders,
             body: params.toString()
         });
-
-        if (isBluesky && !response.ok && options?.dpopPrivateKeyPem && options?.dpopPublicJwk) {
-            const nonce = getHeaderValue(response.headers, 'dpop-nonce');
-            if (nonce) {
-                const retryHeaders = {
-                    ...requestHeaders,
-                    DPoP: buildDpopProof({
-                        method: 'POST',
-                        url: tokenUrl,
-                        privateKeyPem: options.dpopPrivateKeyPem,
-                        publicJwk: options.dpopPublicJwk,
-                        nonce,
-                    }),
-                };
-
-                response = await fetchWithProxy(tokenUrl, {
-                    method: 'POST',
-                    headers: retryHeaders,
-                    body: params.toString(),
-                });
-            }
-        }
 
         if (!response.ok) {
             const text = await response.text();
@@ -641,34 +596,12 @@ async function getBlueskyUserInfoFromApi(accessToken, userInfoUrl, options = {})
 
 // 通用获取用户信息函数
 async function getUserInfo(provider, accessToken, options = {}, tokenData = null) {
-    const config = OAUTH_PROVIDERS[provider];
-    const isBluesky = provider === 'bluesky';
-    const blueskyEndpoints = isBluesky ? getBlueskyEndpoints(config, options) : null;
-    const userInfoUrl = isBluesky ? blueskyEndpoints.userInfoUrl : config.userInfoUrl;
-
-    if (isBluesky) {
-        const didFromToken = String(tokenData?.sub || '').trim();
-        // 尝试调用 getSession 端点获取邮箱等完整信息
-        try {
-            const apiInfo = await getBlueskyUserInfoFromApi(accessToken, userInfoUrl, options);
-            return {
-                ...apiInfo,
-                id: didFromToken || apiInfo.id,
-                did: didFromToken || apiInfo.did,
-            };
-        } catch (e) {
-            logger.warn(`[oauth] Bluesky getSession failed, falling back to token sub: ${e.message}`);
-        }
-        if (didFromToken) {
-            return {
-                id: didFromToken,
-                email: null,
-                name: didFromToken,
-                handle: null,
-                did: didFromToken,
-            };
-        }
+    if (provider === 'bluesky') {
+        throw new Error('Bluesky 用户信息获取已切换为官方 @atproto/api + @atproto/oauth-client-node');
     }
+
+    const config = OAUTH_PROVIDERS[provider];
+    const userInfoUrl = config.userInfoUrl;
 
     // GitHub 需要特殊处理
     if (!config.mapUserInfo) {
@@ -718,30 +651,70 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null, o
     try {
         const tokenPurpose = options?.tokenPurpose === 'sync' ? 'sync' : 'auth';
 
-        // 获取访问令牌
+        // 获取访问令牌与用户信息
         let tokenData;
-        try {
-            tokenData = await getAccessToken(provider, code, options);
-        } catch (error) {
-            const detail = formatOAuthError(error);
-            logger.error(`[oauth] 获取${provider}的访问令牌失败: ${detail}`);
-            throw new Error(`获取${provider}访问令牌失败: ${detail}`);
-        }
-
-        if (!tokenData.access_token) {
-            logger.error(`[oauth] ${provider}未返回access_token`, tokenData);
-            throw new Error(`${provider}未返回有效的访问令牌`);
-        }
-
-        const accessToken = tokenData.access_token;
-
-        // 获取用户信息
         let userInfo;
-        try {
-            userInfo = await getUserInfo(provider, accessToken, options, tokenData);
-        } catch (error) {
-            logger.error(`[oauth] 获取${provider}用户信息失败:`, error.message);
-            throw new Error(`获取${provider}用户信息失败: ${error.message}`);
+
+        if (provider === 'bluesky') {
+            const callbackQuery = options?.callbackQuery || {
+                code,
+                state: options?.state,
+                ...(options?.iss ? { iss: options.iss } : {}),
+            };
+
+            const { session } = await consumeAtprotoAuthCallback({
+                callbackQuery,
+                scope: options?.scope || OAUTH_PROVIDERS.bluesky.scope,
+            });
+
+            const did = String(session?.did || '').trim();
+            if (!did) {
+                throw new Error('Bluesky OAuth 回调未返回有效 DID');
+            }
+
+            let profile = null;
+            try {
+                const agent = new Agent(session);
+                const profileResp = await agent.getProfile({ actor: did });
+                profile = profileResp?.data || null;
+            } catch (error) {
+                logger.warn(`[oauth] 读取Bluesky资料失败，将使用DID回退: ${error.message}`);
+            }
+
+            tokenData = {
+                access_token: `atproto:${did}`,
+                scope: options?.scope || OAUTH_PROVIDERS.bluesky.scope,
+                sub: did,
+            };
+
+            userInfo = {
+                id: did,
+                email: null,
+                name: profile?.displayName || profile?.handle || did,
+                handle: profile?.handle || null,
+                did,
+            };
+        } else {
+            try {
+                tokenData = await getAccessToken(provider, code, options);
+            } catch (error) {
+                const detail = formatOAuthError(error);
+                logger.error(`[oauth] 获取${provider}的访问令牌失败: ${detail}`);
+                throw new Error(`获取${provider}访问令牌失败: ${detail}`);
+            }
+
+            if (!tokenData.access_token) {
+                logger.error(`[oauth] ${provider}未返回access_token`, tokenData);
+                throw new Error(`${provider}未返回有效的访问令牌`);
+            }
+
+            const accessToken = tokenData.access_token;
+            try {
+                userInfo = await getUserInfo(provider, accessToken, options, tokenData);
+            } catch (error) {
+                logger.error(`[oauth] 获取${provider}用户信息失败:`, error.message);
+                throw new Error(`获取${provider}用户信息失败: ${error.message}`);
+            }
         }
 
         if (!userInfo || !userInfo.id) {
@@ -832,6 +805,10 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null, o
                     provider_username: userInfo.username || userInfo.handle || null,
                     pds: options?.pds || null,
                 });
+
+                if (provider === 'bluesky' && userInfo?.did) {
+                    await saveUserAtprotoAuthDid(user.id, userInfo.did);
+                }
             } catch (error) {
                 logger.error(`[oauth] 绑定OAuth账号失败:`, error);
                 return {success: false, message: "[oauth] 绑定OAuth账号失败: " + error.message};
@@ -1025,6 +1002,13 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null, o
 export async function handleOAuthSyncBind(provider, code, userId, options = {}) {
     logger.info(`[oauth] handleOAuthSyncBind: ${provider}, userId: ${userId}`);
     try {
+        if (provider === 'bluesky') {
+            return {
+                success: false,
+                message: 'Bluesky 同步OAuth已迁移到 /social/bluesky/sync/* 专用流程',
+            };
+        }
+
         let tokenData;
         try {
             tokenData = await getAccessToken(provider, code, options);
@@ -1080,4 +1064,4 @@ export async function handleOAuthSyncBind(provider, code, userId, options = {}) 
     }
 }
 
-export { createPkcePair, createDpopKeyPair };
+export { createPkcePair };

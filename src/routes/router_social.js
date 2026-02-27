@@ -6,6 +6,7 @@ import memoryCache from '../services/memoryCache.js';
 import queueManager from '../services/queue/queueManager.js';
 import {
     buildTwitterSyncAuthorizeUrl,
+    saveBlueskySyncTokensFromDid,
     createPkcePair,
     exchangeTwitterSyncCode,
     getSocialIntegrationOverview,
@@ -16,50 +17,23 @@ import {
     setUserBlueskyPds,
     setUserSocialSyncSettings,
 } from '../services/social/socialSync.js';
-import {
-    createDpopKeyPair,
-    generateAuthUrl,
-    OAUTH_PROVIDERS,
-} from '../controllers/oauth.js';
+import { OAUTH_PROVIDERS } from '../controllers/oauth.js';
 import crypto from 'crypto';
+import {
+    buildAtprotoSyncClientMetadata,
+    consumeAtprotoSyncCallback,
+    createAtprotoSyncAuthorizeUrl,
+    getAtprotoSyncAppStateByCallbackState,
+    saveUserAtprotoSyncDid,
+} from '../services/social/atprotoSyncOAuth.js';
+import { Agent } from '@atproto/api';
 
 const router = Router();
-const BLUESKY_SYNC_SCOPE = 'atproto repo:app.bsky.feed.post?action=create';
+const BLUESKY_SYNC_SCOPE = 'atproto repo:* blob:*/* transition:generic account:* identity:*';
 
 router.get('/bluesky/sync/client-metadata.json', async (req, res) => {
     try {
-        const backendUrl = await zcconfig.get('urls.backend');
-        const frontendUrl = await zcconfig.get('urls.frontend');
-        const siteName = await zcconfig.get('site.name');
-        const siteEmail = await zcconfig.get('site.email');
-        const configuredClientName = await zcconfig.get('oauth.bluesky.client_name');
-
-        const backendBase = String(backendUrl || '').replace(/\/+$/, '');
-        const frontendBase = String(frontendUrl || '').replace(/\/+$/, '');
-        const metadataUrl = `${backendBase}/social/bluesky/sync/client-metadata.json`;
-
-        const metadata = {
-            client_id: metadataUrl,
-            client_name: configuredClientName || siteName || 'ZeroCat',
-            client_uri: backendBase,
-            logo_uri: `${backendBase}/favicon.ico`,
-            redirect_uris: [
-                `${backendBase}/social/bluesky/sync/oauth/callback`,
-            ],
-            grant_types: ['authorization_code', 'refresh_token'],
-            response_types: ['code'],
-            token_endpoint_auth_method: 'none',
-            dpop_bound_access_tokens: true,
-            application_type: 'web',
-            scope: BLUESKY_SYNC_SCOPE,
-        };
-
-        if (siteEmail) {
-            metadata.contacts = [siteEmail];
-        }
-
-        metadata.tos_uri = `${frontendBase}/app/legal/privacy`;
-        metadata.policy_uri = `${frontendBase}/app/legal/terms`;
+        const metadata = await buildAtprotoSyncClientMetadata(BLUESKY_SYNC_SCOPE);
 
         res.setHeader('Cache-Control', 'public, max-age=300');
         res.status(200).json(metadata);
@@ -219,34 +193,21 @@ router.get('/bluesky/sync/oauth/start', needLogin, async (req, res) => {
             return res.status(400).json({ status: 'error', message: 'Bluesky OAuth 未启用' });
         }
 
-        const backendUrl = await zcconfig.get('urls.backend');
-        const backendBase = String(backendUrl || '').replace(/\/+$/, '');
-        const pds = String(req.query?.pds || '').trim();
+        const identifier = String(req.query?.identifier || req.query?.account || req.query?.domain || req.query?.pds || '').trim();
         const scope = BLUESKY_SYNC_SCOPE;
-        const syncClientId = `${backendBase}/social/bluesky/sync/client-metadata.json`;
-        const syncRedirectUri = `${backendBase}/social/bluesky/sync/oauth/callback`;
 
         const state = crypto.randomBytes(16).toString('hex');
-        const pkce = createPkcePair();
-        const dpop = createDpopKeyPair();
 
-        const authUrl = await generateAuthUrl(provider, state, {
-            ...(pds ? { pds } : {}),
-            codeChallenge: pkce.challenge,
+        const authUrl = await createAtprotoSyncAuthorizeUrl({
+            loginHint: identifier,
+            state,
             scope,
-            clientId: syncClientId,
-            redirectUri: syncRedirectUri,
         });
 
         memoryCache.set(`bluesky_sync_state:${state}`, {
             userId: res.locals.userid,
-            pds,
-            codeVerifier: pkce.verifier,
+            identifier,
             scope,
-            clientId: syncClientId,
-            redirectUri: syncRedirectUri,
-            dpopPrivateKeyPem: dpop.privateKeyPem,
-            dpopPublicJwk: dpop.publicJwk,
         }, 600);
 
         return res.redirect(authUrl);
@@ -257,9 +218,69 @@ router.get('/bluesky/sync/oauth/start', needLogin, async (req, res) => {
 });
 
 router.get('/bluesky/sync/oauth/callback', async (req, res) => {
-    const query = new URLSearchParams(req.query || {}).toString();
-    const callbackPath = `/account/oauth/bluesky/callback${query ? `?${query}` : ''}`;
-    return res.redirect(callbackPath);
+    const frontend = await zcconfig.get('urls.frontend');
+    const redirect = (ok, message = '') => {
+        const suffix = ok
+            ? `/app/account/social/sync/bluesky/success${message ? `?message=${encodeURIComponent(message)}` : ''}`
+            : `/app/account/social/sync/bluesky/error${message ? `?message=${encodeURIComponent(message)}` : ''}`;
+        return res.redirect(`${frontend}${suffix}`);
+    };
+
+    try {
+        const { code, state, error, error_description: errorDescription } = req.query || {};
+        if (!state) {
+            return redirect(false, '缺少 state');
+        }
+
+        if (error) {
+            return redirect(false, String(errorDescription || error || 'OAuth授权失败'));
+        }
+
+        if (!code) {
+            return redirect(false, '缺少 code');
+        }
+
+        const appState = await getAtprotoSyncAppStateByCallbackState(state);
+        const syncStateKey = appState || String(state);
+        const syncState = memoryCache.get(`bluesky_sync_state:${syncStateKey}`);
+        if (!syncState?.userId) {
+            logger.warn(`[social] bluesky sync callback state missed: callbackState=${state}, appState=${appState || ''}`);
+            return redirect(false, '授权状态已失效');
+        }
+
+        memoryCache.delete(`bluesky_sync_state:${syncStateKey}`);
+
+        const { session } = await consumeAtprotoSyncCallback({
+            callbackQuery: req.query,
+            scope: syncState.scope || BLUESKY_SYNC_SCOPE,
+        });
+
+        const did = String(session?.did || '').trim();
+        if (!did) {
+            return redirect(false, 'Bluesky同步授权未返回有效DID');
+        }
+
+        let profile = null;
+        try {
+            const agent = new Agent(session);
+            const profileResp = await agent.getProfile({ actor: did });
+            profile = profileResp?.data || null;
+        } catch {
+            profile = null;
+        }
+
+        await saveUserAtprotoSyncDid(syncState.userId, did);
+        await saveBlueskySyncTokensFromDid(syncState.userId, {
+            did,
+            scope: syncState.scope || BLUESKY_SYNC_SCOPE,
+            handle: profile?.handle || null,
+        });
+
+        return redirect(true);
+    } catch (error) {
+        logger.error('[social] bluesky sync oauth callback failed:', error);
+        return redirect(false, error.message || 'Bluesky同步授权失败');
+    }
 });
 
 router.post('/sync/post/:postId', needLogin, async (req, res) => {

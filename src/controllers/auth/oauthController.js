@@ -2,7 +2,7 @@ import logger from "../../services/logger.js";
 import {prisma} from "../../services/prisma.js";
 import crypto from "crypto";
 import memoryCache from "../../services/memoryCache.js";
-import {createDpopKeyPair, createPkcePair, generateAuthUrl, handleOAuthCallback, handleOAuthSyncBind, OAUTH_PROVIDERS,} from "../oauth.js";
+import {generateAuthUrl, handleOAuthCallback, handleOAuthSyncBind, OAUTH_PROVIDERS,} from "../oauth.js";
 import zcconfig from "../../services/config/zcconfig.js";
 import {createTemporaryToken} from "../../services/auth/verification.js";
 
@@ -11,6 +11,15 @@ const BLUESKY_SCOPE_BIND = 'atproto transition:generic transition:email';
 
 function resolveBlueskyScope(flow) {
     return flow === 'bind' ? BLUESKY_SCOPE_BIND : BLUESKY_SCOPE_LOGIN;
+}
+
+function getCallbackStateFromAuthUrl(authUrl, fallbackState) {
+    try {
+        const parsed = new URL(String(authUrl));
+        return String(parsed.searchParams.get('state') || fallbackState || '');
+    } catch {
+        return String(fallbackState || '');
+    }
 }
 
 /**
@@ -38,7 +47,9 @@ export const getOAuthProviders = async (req, res) => {
 export const bindOAuth = async (req, res) => {
     try {
         const {provider} = req.params;
-        const pds = provider === 'bluesky' ? String(req.query?.pds || '').trim() : '';
+        const identifier = provider === 'bluesky'
+            ? String(req.query?.identifier || req.query?.account || req.query?.domain || req.query?.pds || '').trim()
+            : '';
         const blueskyScope = provider === 'bluesky' ? resolveBlueskyScope('bind') : null;
         if (!OAUTH_PROVIDERS[provider]) {
             return res.status(400).json({
@@ -49,30 +60,24 @@ export const bindOAuth = async (req, res) => {
 
         const state =
             crypto.randomBytes(16).toString("hex") + `:bind:${res.locals.userid}`;
-        const pkce = provider === 'bluesky' ? createPkcePair() : null;
-        const dpop = provider === 'bluesky' ? createDpopKeyPair() : null;
         const authUrl = await generateAuthUrl(provider, state, {
-            ...(pds ? { pds } : {}),
-            ...(pkce ? { codeChallenge: pkce.challenge } : {}),
+            ...(identifier ? { identifier } : {}),
             ...(blueskyScope ? { scope: blueskyScope } : {}),
+            ...(provider === 'bluesky' ? { flow: 'auth' } : {}),
         });
+        const callbackState = provider === 'bluesky'
+            ? getCallbackStateFromAuthUrl(authUrl, state)
+            : state;
 
         // 存储 state 与用户 ID 的映射，用于回调时识别绑定操作
         memoryCache.set(
-            `oauth_state:${state}`,
+            `oauth_state:${callbackState}`,
             {
                 type: 'bind',
                 userId: res.locals.userid,
                 context: {
-                    ...(pds ? { pds } : {}),
-                    ...(pkce ? { codeVerifier: pkce.verifier } : {}),
+                    ...(identifier ? { identifier } : {}),
                     ...(blueskyScope ? { scope: blueskyScope } : {}),
-                    ...(dpop
-                        ? {
-                            dpopPrivateKeyPem: dpop.privateKeyPem,
-                            dpopPublicJwk: dpop.publicJwk,
-                        }
-                        : {}),
                 },
             },
             600
@@ -95,7 +100,9 @@ export const authWithOAuth = async (req, res) => {
     try {
         const {provider} = req.params;
         const tokenPurpose = 'auth';
-        const pds = provider === 'bluesky' ? String(req.query?.pds || '').trim() : '';
+        const identifier = provider === 'bluesky'
+            ? String(req.query?.identifier || req.query?.account || req.query?.domain || req.query?.pds || '').trim()
+            : '';
         const blueskyScope = provider === 'bluesky' ? resolveBlueskyScope('login') : null;
         if (!OAUTH_PROVIDERS[provider]) {
             logger.error("不支持的 OAuth 提供商:", provider);
@@ -106,30 +113,24 @@ export const authWithOAuth = async (req, res) => {
         }
 
         const state = crypto.randomBytes(16).toString("hex");
-        const pkce = provider === 'bluesky' ? createPkcePair() : null;
-        const dpop = provider === 'bluesky' ? createDpopKeyPair() : null;
         const authUrl = await generateAuthUrl(provider, state, {
-            ...(pds ? { pds } : {}),
-            ...(pkce ? { codeChallenge: pkce.challenge } : {}),
+            ...(identifier ? { identifier } : {}),
             ...(blueskyScope ? { scope: blueskyScope } : {}),
+            ...(provider === 'bluesky' ? { flow: 'auth' } : {}),
         });
+        const callbackState = provider === 'bluesky'
+            ? getCallbackStateFromAuthUrl(authUrl, state)
+            : state;
 
         // 存储 state 用于验证回调
         memoryCache.set(
-            `oauth_state:${state}`,
+            `oauth_state:${callbackState}`,
             {
                 type: 'login',
                 context: {
                     tokenPurpose,
-                    ...(pds ? { pds } : {}),
-                    ...(pkce ? { codeVerifier: pkce.verifier } : {}),
+                    ...(identifier ? { identifier } : {}),
                     ...(blueskyScope ? { scope: blueskyScope } : {}),
-                    ...(dpop
-                        ? {
-                            dpopPrivateKeyPem: dpop.privateKeyPem,
-                            dpopPublicJwk: dpop.publicJwk,
-                        }
-                        : {}),
                 },
             },
             600
@@ -210,13 +211,11 @@ export const handleOAuthCallbackRequest = async (req, res) => {
 
                 try {
                     const syncResult = await handleOAuthSyncBind(provider, code, userIdToSync, {
-                        pds: syncState.pds || '',
-                        codeVerifier: syncState.codeVerifier,
+                        identifier: syncState.identifier || syncState.pds || '',
+                        state: String(state),
+                        iss: req.query?.iss,
+                        callbackQuery: req.query,
                         scope: syncState.scope,
-                        clientId: syncState.clientId,
-                        redirectUri: syncState.redirectUri,
-                        dpopPrivateKeyPem: syncState.dpopPrivateKeyPem,
-                        dpopPublicJwk: syncState.dpopPublicJwk,
                     });
 
                     if (syncResult.success) {
@@ -250,7 +249,12 @@ export const handleOAuthCallbackRequest = async (req, res) => {
                     provider,
                     code,
                     userIdToBind,
-                    cachedState?.context || {}
+                    {
+                        ...(cachedState?.context || {}),
+                        state: String(state),
+                        iss: req.query?.iss,
+                        callbackQuery: req.query,
+                    }
                 );
 
                 if (bindingResult.success) {
@@ -274,7 +278,12 @@ export const handleOAuthCallbackRequest = async (req, res) => {
                     provider,
                     code,
                     null,
-                    cachedState?.context || {}
+                    {
+                        ...(cachedState?.context || {}),
+                        state: String(state),
+                        iss: req.query?.iss,
+                        callbackQuery: req.query,
+                    }
                 );
 
                 if (callbackResult && callbackResult.user && callbackResult.contact) {

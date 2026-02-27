@@ -12,6 +12,8 @@
     "dev:no": "NODE_ENV=development node server.js"
   },
   "dependencies": {
+    "@atproto/api": "^0.19.0",
+    "@atproto/oauth-client-node": "^0.3.17",
     "@aws-sdk/client-s3": "^3.994.0",
     "@bull-board/api": "^6.19.0",
     "@bull-board/express": "^6.19.0",

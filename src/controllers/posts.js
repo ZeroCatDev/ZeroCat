@@ -624,6 +624,10 @@ export async function retweetPost({ authorId, retweetPostId }) {
     });
   }
 
+  queueManager.enqueueSocialPostSync(authorId, post.id, "create").catch((error) => {
+    logger.warn("推文社交同步入队失败(retweet-create):", error.message);
+  });
+
   const formattedPost = formatPost(post);
   const refIds = collectReferencedIds([formattedPost]);
   const referencedPosts = await fetchReferencedPosts(refIds);
@@ -653,7 +657,7 @@ export async function unretweetPost({ authorId, retweetPostId }) {
     });
 
     if (!retweet) {
-      return { count: 0 };
+      return { count: 0, retweetId: null };
     }
 
     await tx.ow_posts.update({
@@ -666,8 +670,14 @@ export async function unretweetPost({ authorId, retweetPostId }) {
       data: { retweet_count: { decrement: 1 } },
     });
 
-    return { count: 1 };
+    return { count: 1, retweetId: retweet.id };
   });
+
+  if (result.count > 0 && result.retweetId) {
+    queueManager.enqueueSocialPostSync(authorId, result.retweetId, "delete").catch((error) => {
+      logger.warn("推文社交同步入队失败(unretweet-delete):", error.message);
+    });
+  }
 
   return result;
 }
@@ -825,6 +835,10 @@ export async function likePost({ userId, postId }) {
     });
   }
 
+  queueManager.enqueueSocialPostSync(userId, target.id, "like").catch((error) => {
+    logger.warn("推文社交同步入队失败(like):", error.message);
+  });
+
   return like;
 }
 
@@ -849,6 +863,12 @@ export async function unlikePost({ userId, postId }) {
 
     return deleted;
   });
+
+  if (result.count > 0) {
+    queueManager.enqueueSocialPostSync(userId, target.id, "unlike").catch((error) => {
+      logger.warn("推文社交同步入队失败(unlike):", error.message);
+    });
+  }
 
   return result;
 }
@@ -881,6 +901,10 @@ export async function bookmarkPost({ userId, postId }) {
     return created;
   });
 
+  queueManager.enqueueSocialPostSync(userId, target.id, "bookmark").catch((error) => {
+    logger.warn("推文社交同步入队失败(bookmark):", error.message);
+  });
+
   return bookmark;
 }
 
@@ -906,6 +930,12 @@ export async function unbookmarkPost({ userId, postId }) {
     return deleted;
   });
 
+  if (result.count > 0) {
+    queueManager.enqueueSocialPostSync(userId, target.id, "unbookmark").catch((error) => {
+      logger.warn("推文社交同步入队失败(unbookmark):", error.message);
+    });
+  }
+
   return result;
 }
 
@@ -920,6 +950,10 @@ export async function deletePost({ userId, postId }) {
   await prisma.ow_posts.update({
     where: { id: post.id },
     data: { is_deleted: true },
+  });
+
+  queueManager.enqueueSocialPostSync(userId, post.id, "delete").catch((error) => {
+    logger.warn("推文社交同步入队失败(delete):", error.message);
   });
 
   return { id: post.id, deleted: true };

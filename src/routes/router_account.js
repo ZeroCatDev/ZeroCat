@@ -18,6 +18,7 @@ import {prisma} from "../services/prisma.js";
 import logger from "../services/logger.js";
 import tokenUtils from "../services/auth/tokenUtils.js";
 import zcconfig from "../services/config/zcconfig.js";
+import { buildAtprotoAuthClientMetadata } from '../services/social/atprotoAuthOAuth.js';
 
 
 // 初始化 OAuth 配置
@@ -76,38 +77,7 @@ router.post("/passkey/delete", needLogin, requireSudo, passkeyController.deleteC
 router.get("/oauth/providers", oauthController.getOAuthProviders);
 router.get('/oauth/bluesky/client-metadata.json', async (req, res) => {
     try {
-        const backendUrl = await zcconfig.get('urls.backend');
-        const frontendUrl = await zcconfig.get('urls.frontend');
-        const siteName = await zcconfig.get('site.name');
-        const siteEmail = await zcconfig.get('site.email');
-        const configuredClientName = await zcconfig.get('oauth.bluesky.client_name');
-
-        const backendBase = String(backendUrl || '').replace(/\/+$/, '');
-        const frontendBase = String(frontendUrl || '').replace(/\/+$/, '');
-        const metadataUrl = `${backendBase}/account/oauth/bluesky/client-metadata.json`;
-
-        const metadata = {
-            client_id: metadataUrl,
-            client_name: configuredClientName || siteName || 'ZeroCat',
-            client_uri: backendBase,
-            logo_uri: `${backendBase}/favicon.ico`,
-            redirect_uris: [
-                `${backendBase}/account/oauth/bluesky/callback`,
-            ],
-            grant_types: ['authorization_code', 'refresh_token'],
-            response_types: ['code'],
-            token_endpoint_auth_method: 'none',
-            dpop_bound_access_tokens: true,
-            application_type: 'web',
-            scope: 'atproto transition:generic transition:email',
-        };
-
-        if (siteEmail) {
-            metadata.contacts = [siteEmail];
-        }
-
-        metadata.tos_uri = `${frontendBase}/app/legal/privacy`;
-        metadata.policy_uri = `${frontendBase}/app/legal/terms`;
+        const metadata = await buildAtprotoAuthClientMetadata('atproto transition:generic transition:email');
 
         res.setHeader('Cache-Control', 'public, max-age=300');
         res.status(200).json(metadata);

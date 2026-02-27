@@ -666,7 +666,7 @@ model ow_cache_kv {
 }
 
 // 通用目标配置表（无关联，按 target_type + target_id + key 存储）
-model c {
+model ow_target_configs {
   id          Int      @id @default(autoincrement())
   target_type String   @db.VarChar(64)
   target_id   String   @db.VarChar(64)
@@ -873,6 +873,7 @@ model ow_posts {
   bookmark_count    Int       @default(0)
   is_deleted        Boolean   @default(false)
   embed             Json?     // 嵌入资源 { type: 'project'|'list'|'user', id, ...其他参数 }
+  platform_refs     Json?     // 各平台关联ID映射 { bluesky: { uri, cid }, twitter: { id } }
   created_at        DateTime  @default(now()) @db.Timestamp(6)
   updated_at        DateTime  @updatedAt @db.Timestamp(6)
   metadata          Json?     // 存储额外的元数据
