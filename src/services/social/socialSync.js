@@ -333,6 +333,62 @@ function formatTwitterSdkError(error, fallback = 'Twitter API 调用失败') {
     return status > 0 ? `${message} (${status})` : message;
 }
 
+function extractStatusCode(error) {
+    const candidates = [
+        error?.status,
+        error?.statusCode,
+        error?.code,
+    ];
+
+    for (const value of candidates) {
+        const numberValue = Number(value);
+        if (Number.isFinite(numberValue) && numberValue > 0) return numberValue;
+    }
+
+    const message = String(error?.message || '').trim();
+    const match = message.match(/\((\d{3})\)$/) || message.match(/\b(\d{3})\b/);
+    if (match) {
+        const parsed = Number(match[1]);
+        if (Number.isFinite(parsed)) return parsed;
+    }
+
+    return 0;
+}
+
+function isRetryableSocialError(error) {
+    if (!error) return false;
+    if (error?.isRetryable === true) return true;
+
+    const status = extractStatusCode(error);
+    if (status === 429) return true;
+    if (status >= 500 && status <= 599) return true;
+
+    const message = String(error?.message || error || '').toLowerCase();
+    if (!message) return false;
+
+    const retryableHints = [
+        'too many requests',
+        'rate limit',
+        'temporarily unavailable',
+        'timeout',
+        'timed out',
+        'econnreset',
+        'etimedout',
+        'eai_again',
+        'socket hang up',
+    ];
+    return retryableHints.some((hint) => message.includes(hint));
+}
+
+function wrapSocialError(error, fallbackMessage) {
+    const message = String(error?.message || fallbackMessage || 'social sync failed').trim() || 'social sync failed';
+    const wrapped = new Error(message);
+    wrapped.isRetryable = isRetryableSocialError(error);
+    wrapped.statusCode = extractStatusCode(error);
+    wrapped.cause = error;
+    return wrapped;
+}
+
 async function withTwitterSdkClient(actorUserId, action) {
     const [tokens, appConfig] = await Promise.all([
         getTwitterSyncTokens(actorUserId),
@@ -766,7 +822,7 @@ async function createTwitterPost(actorUserId, post) {
                 raw: payload,
             };
         } catch (error) {
-            throw new Error(formatTwitterSdkError(error, 'Twitter 发布失败'));
+            throw wrapSocialError(error, formatTwitterSdkError(error, 'Twitter 发布失败'));
         }
     });
 }
@@ -785,7 +841,7 @@ async function deleteTwitterPost(actorUserId, postRef) {
 
             return client.tweets.deleteTweetById(String(postRef.id));
         } catch (error) {
-            throw new Error(formatTwitterSdkError(error, 'Twitter 删除失败'));
+            throw wrapSocialError(error, formatTwitterSdkError(error, 'Twitter 删除失败'));
         }
     });
 }
@@ -823,7 +879,7 @@ async function sendTwitterEngagement(actorUserId, action, postRef) {
             }
             return { skipped: true, reason: 'unsupported_action' };
         } catch (error) {
-            throw new Error(formatTwitterSdkError(error, `Twitter ${action} 失败`));
+            throw wrapSocialError(error, formatTwitterSdkError(error, `Twitter ${action} 失败`));
         }
     });
 }
@@ -1146,6 +1202,7 @@ export async function syncSocialEvent({ actorUserId, postId, eventType }) {
     }
 
     const results = {};
+    const retryableErrors = [];
 
     for (const platform of platforms) {
         try {
@@ -1174,7 +1231,19 @@ export async function syncSocialEvent({ actorUserId, postId, eventType }) {
                 : (String(error?.message || error || 'unknown_error').trim() || 'unknown_error');
             results[`${platform}_error`] = reason;
             logger.error(`[social-sync] ${platform} failed event=${type} post=${pid} user=${uid}: ${reason}`);
+
+            if (isRetryableSocialError(error)) {
+                retryableErrors.push({ platform, reason });
+            }
         }
+    }
+
+    if (retryableErrors.length > 0) {
+        const summary = retryableErrors.map((item) => `${item.platform}:${item.reason}`).join(' | ');
+        throw wrapSocialError(
+            { message: `retryable social sync error: ${summary}` },
+            `retryable social sync error: ${summary}`
+        );
     }
 
     await upsertTargetConfig(POST_TARGET_TYPE, pid, 'social.sync.last_event', {
