@@ -1,0 +1,406 @@
+/**
+ * ActivityPub 收件箱处理
+ * 处理从远程服务器接收到的各种活动
+ */
+
+import logger from '../logger.js';
+import { prisma } from '../prisma.js';
+import { getInstanceBaseUrl, isAutoAcceptFollows } from './config.js';
+import { fetchRemoteActor, getPublicKeyFromActor } from './federation.js';
+import { verifySignature, verifyDigest, parseSignatureHeader } from './httpSignature.js';
+import { getLocalUserByUsername, buildActorObject, getActorUrl } from './actor.js';
+import {
+    addRemoteFollower, removeRemoteFollower, isRemoteFollower,
+    storeActivity, getActivity,
+} from './store.js';
+import {
+    buildAcceptActivity, buildRejectActivity,
+} from './objects.js';
+import { deliverToActor } from './delivery.js';
+import { getSocialSyncQueue } from '../queue/queues.js';
+
+/**
+ * 验证收件箱请求的 HTTP Signature
+ * @param {import('express').Request} req
+ * @returns {{ valid: boolean, actor: object|null, message: string }}
+ */
+export async function verifyInboxRequest(req) {
+    const signatureHeader = req.headers.signature;
+    if (!signatureHeader) {
+        return { valid: false, actor: null, message: 'Missing Signature header' };
+    }
+
+    // 解析 signature 获取 keyId
+    const parsed = parseSignatureHeader(signatureHeader);
+    if (!parsed) {
+        return { valid: false, actor: null, message: 'Invalid Signature header format' };
+    }
+
+    // 验证 digest（如果存在）
+    if (req.headers.digest) {
+        // 优先使用 rawBody（原始字节），回退到序列化 body
+        const rawBody = req.rawBody || (typeof req.body === 'string' ? req.body : JSON.stringify(req.body || ''));
+        if (!verifyDigest(req.headers.digest, rawBody)) {
+            return { valid: false, actor: null, message: 'Digest verification failed' };
+        }
+    }
+
+    // 通过 keyId 获取远程 Actor 和公钥
+    const actorUrl = parsed.keyId.split('#')[0];
+    const actor = await fetchRemoteActor(actorUrl, true);
+    if (!actor) {
+        return { valid: false, actor: null, message: `Could not fetch actor: ${actorUrl}` };
+    }
+
+    const publicKey = getPublicKeyFromActor(actor);
+    if (!publicKey) {
+        return { valid: false, actor: null, message: 'No public key found in actor' };
+    }
+
+    // 验证签名
+    const isValid = verifySignature({
+        signature: signatureHeader,
+        method: req.method,
+        path: req.originalUrl || req.url,
+        headers: req.headers,
+        publicKey,
+    });
+
+    if (!isValid) {
+        return { valid: false, actor, message: 'Signature verification failed' };
+    }
+
+    return { valid: true, actor, message: 'OK' };
+}
+
+/**
+ * 处理收件箱中的活动
+ * @param {object} activity 活动对象
+ * @param {object} remoteActor 发送者的 Actor 对象
+ * @param {string} [targetUsername] 如果是用户收件箱，传入用户名
+ */
+export async function processInboxActivity(activity, remoteActor, targetUsername = null) {
+    const type = activity.type;
+
+    logger.info(`[ap-inbox] Processing ${type} activity from ${remoteActor?.id || 'unknown'}`);
+
+    switch (type) {
+        case 'Follow':
+            return handleFollow(activity, remoteActor, targetUsername);
+        case 'Undo':
+            return handleUndo(activity, remoteActor, targetUsername);
+        case 'Create':
+            return handleCreate(activity, remoteActor, targetUsername);
+        case 'Delete':
+            return handleDelete(activity, remoteActor);
+        case 'Like':
+            return handleLike(activity, remoteActor);
+        case 'Announce':
+            return handleAnnounce(activity, remoteActor);
+        case 'Update':
+            return handleUpdate(activity, remoteActor);
+        case 'Accept':
+            return handleAccept(activity, remoteActor);
+        case 'Reject':
+            return handleReject(activity, remoteActor);
+        default:
+            logger.info(`[ap-inbox] Unhandled activity type: ${type}`);
+            return { handled: false, type };
+    }
+}
+
+/**
+ * 处理 Follow 活动
+ */
+async function handleFollow(activity, remoteActor, targetUsername) {
+    const targetActorUrl = typeof activity.object === 'string' ? activity.object : activity.object?.id;
+    if (!targetActorUrl) {
+        logger.warn('[ap-inbox] Follow activity missing object');
+        return { handled: false, error: 'Missing object' };
+    }
+
+    // 从目标 URL 中提取用户名
+    const baseUrl = await getInstanceBaseUrl();
+    const usernameMatch = targetActorUrl.match(/\/ap\/users\/([^/]+)$/);
+    const username = usernameMatch ? usernameMatch[1] : targetUsername;
+
+    if (!username) {
+        logger.warn('[ap-inbox] Could not determine target user from Follow');
+        return { handled: false, error: 'Cannot determine target user' };
+    }
+
+    const localUser = await getLocalUserByUsername(username);
+    if (!localUser) {
+        logger.warn(`[ap-inbox] Follow target user not found: ${username}`);
+        return { handled: false, error: 'User not found' };
+    }
+
+    // 获取 follower 的信息
+    const followerInbox = remoteActor.inbox;
+    if (!followerInbox) {
+        logger.warn('[ap-inbox] Follower has no inbox');
+        return { handled: false, error: 'Follower has no inbox' };
+    }
+
+    // 存储活动记录
+    if (activity.id) {
+        await storeActivity(activity.id, JSON.stringify({
+            type: 'Follow',
+            actor: remoteActor.id,
+            target: username,
+            receivedAt: new Date().toISOString(),
+        }));
+    }
+
+    // 添加远程关注者
+    await addRemoteFollower(localUser.id, remoteActor.id, followerInbox);
+    logger.info(`[ap-inbox] Remote follower added: ${remoteActor.id} -> ${username}`);
+
+    // 是否自动接受
+    const autoAccept = await isAutoAcceptFollows();
+    if (autoAccept) {
+        const localActorUrl = await getActorUrl(username);
+        const acceptActivity = await buildAcceptActivity(localActorUrl, activity);
+
+        // 异步投递 Accept
+        deliverToActor(localUser.id, remoteActor.id, acceptActivity).catch(err => {
+            logger.error('[ap-inbox] Failed to deliver Accept:', err.message);
+        });
+
+        // 通过 BullMQ 任务队列异步推送历史帖子给新关注者
+        try {
+            const queue = getSocialSyncQueue();
+            if (queue) {
+                await queue.add('ap_backfill', {
+                    eventType: 'ap_backfill',
+                    userId: localUser.id,
+                    followerActorUrl: remoteActor.id,
+                }, {
+                    attempts: 2,
+                    backoff: { type: 'exponential', delay: 30000 },
+                    removeOnComplete: { count: 50 },
+                    removeOnFail: { count: 100 },
+                });
+                logger.info(`[ap-inbox] Queued backfill job for ${username} -> ${remoteActor.id}`);
+            }
+        } catch (err) {
+            logger.error('[ap-inbox] Failed to queue backfill job:', err.message);
+        }
+    }
+
+    return { handled: true, type: 'Follow', autoAccepted: autoAccept };
+}
+
+/**
+ * 处理 Undo 活动
+ */
+async function handleUndo(activity, remoteActor, targetUsername) {
+    const inner = typeof activity.object === 'string' ? { id: activity.object } : activity.object;
+    if (!inner) return { handled: false, error: 'Missing inner object' };
+
+    const innerType = inner.type;
+
+    if (innerType === 'Follow') {
+        // 撤销关注
+        const targetActorUrl = typeof inner.object === 'string' ? inner.object : inner.object?.id;
+        const baseUrl = await getInstanceBaseUrl();
+        const usernameMatch = targetActorUrl?.match(/\/ap\/users\/([^/]+)$/);
+        const username = usernameMatch ? usernameMatch[1] : targetUsername;
+
+        if (!username) return { handled: false, error: 'Cannot determine target user' };
+
+        const localUser = await getLocalUserByUsername(username);
+        if (!localUser) return { handled: false, error: 'User not found' };
+
+        await removeRemoteFollower(localUser.id, remoteActor.id);
+        logger.info(`[ap-inbox] Remote follower removed: ${remoteActor.id} -> ${username}`);
+
+        return { handled: true, type: 'Undo:Follow' };
+    }
+
+    if (innerType === 'Like') {
+        logger.info(`[ap-inbox] Undo Like from ${remoteActor.id}`);
+        // 可扩展：取消远程点赞的记录
+        return { handled: true, type: 'Undo:Like' };
+    }
+
+    if (innerType === 'Announce') {
+        logger.info(`[ap-inbox] Undo Announce from ${remoteActor.id}`);
+        return { handled: true, type: 'Undo:Announce' };
+    }
+
+    logger.info(`[ap-inbox] Unhandled Undo inner type: ${innerType}`);
+    return { handled: false, type: `Undo:${innerType}` };
+}
+
+/**
+ * 处理 Create 活动（远程帖子到达）
+ */
+async function handleCreate(activity, remoteActor, targetUsername) {
+    const object = activity.object;
+    if (!object) return { handled: false, error: 'Missing object' };
+
+    const objectType = typeof object === 'string' ? 'Reference' : (object.type || 'Unknown');
+
+    if (objectType === 'Note' || objectType === 'Article') {
+        logger.info(`[ap-inbox] Received remote ${objectType} from ${remoteActor.id}: ${object.id || 'no-id'}`);
+
+        // 存储活动的引用（用于处理回复和对话线程）
+        if (activity.id) {
+            await storeActivity(activity.id, JSON.stringify({
+                type: 'Create',
+                objectType,
+                objectId: object.id,
+                actor: remoteActor.id,
+                content: object.content?.substring(0, 500),
+                inReplyTo: object.inReplyTo,
+                receivedAt: new Date().toISOString(),
+            }));
+        }
+
+        // 检查是否是对本地帖子的回复
+        if (object.inReplyTo) {
+            await handleRemoteReply(object, remoteActor);
+        }
+
+        return { handled: true, type: 'Create:Note' };
+    }
+
+    logger.info(`[ap-inbox] Unhandled Create object type: ${objectType}`);
+    return { handled: false, type: `Create:${objectType}` };
+}
+
+/**
+ * 处理远程回复（对本地帖子的回复）
+ */
+async function handleRemoteReply(noteObject, remoteActor) {
+    const inReplyTo = noteObject.inReplyTo;
+    if (!inReplyTo) return;
+
+    const baseUrl = await getInstanceBaseUrl();
+
+    // 检查被回复的是否为本地帖子
+    const noteIdMatch = inReplyTo.match(/\/ap\/notes\/(\d+)$/);
+    if (!noteIdMatch) return;
+
+    const localPostId = parseInt(noteIdMatch[1], 10);
+    if (isNaN(localPostId)) return;
+
+    // 验证本地帖子存在
+    const localPost = await prisma.ow_posts.findUnique({
+        where: { id: localPostId },
+        select: { id: true, author_id: true },
+    });
+
+    if (!localPost) return;
+
+    logger.info(`[ap-inbox] Remote reply to local post #${localPostId} from ${remoteActor.id}`);
+
+    // 存储远程回复记录（可用于显示联邦回复）
+    await storeActivity(`reply:${noteObject.id}`, JSON.stringify({
+        type: 'RemoteReply',
+        localPostId,
+        remoteNoteId: noteObject.id,
+        remoteActorId: remoteActor.id,
+        remoteActorName: remoteActor.preferredUsername || remoteActor.name,
+        content: noteObject.content?.substring(0, 1000),
+        published: noteObject.published,
+        receivedAt: new Date().toISOString(),
+    }));
+}
+
+/**
+ * 处理 Delete 活动
+ */
+async function handleDelete(activity, remoteActor) {
+    const objectId = typeof activity.object === 'string'
+        ? activity.object
+        : activity.object?.id;
+
+    if (objectId) {
+        logger.info(`[ap-inbox] Delete from ${remoteActor.id}: ${objectId}`);
+        // 清理相关的活动记录
+        await storeActivity(`deleted:${objectId}`, JSON.stringify({
+            deletedAt: new Date().toISOString(),
+            actor: remoteActor.id,
+        }));
+    }
+
+    return { handled: true, type: 'Delete' };
+}
+
+/**
+ * 处理 Like 活动
+ */
+async function handleLike(activity, remoteActor) {
+    const objectId = typeof activity.object === 'string' ? activity.object : activity.object?.id;
+
+    if (objectId) {
+        logger.info(`[ap-inbox] Like from ${remoteActor.id} on ${objectId}`);
+
+        // 检查是否为本地帖子
+        const baseUrl = await getInstanceBaseUrl();
+        const noteIdMatch = objectId.match(/\/ap\/notes\/(\d+)$/);
+        if (noteIdMatch) {
+            const localPostId = parseInt(noteIdMatch[1], 10);
+            // 可扩展：记录远程点赞以增加帖子互动计数
+            logger.info(`[ap-inbox] Remote like on local post #${localPostId}`);
+        }
+    }
+
+    return { handled: true, type: 'Like' };
+}
+
+/**
+ * 处理 Announce (boost) 活动
+ */
+async function handleAnnounce(activity, remoteActor) {
+    const objectId = typeof activity.object === 'string' ? activity.object : activity.object?.id;
+
+    if (objectId) {
+        logger.info(`[ap-inbox] Announce from ${remoteActor.id}: ${objectId}`);
+
+        const baseUrl = await getInstanceBaseUrl();
+        const noteIdMatch = objectId.match(/\/ap\/notes\/(\d+)$/);
+        if (noteIdMatch) {
+            const localPostId = parseInt(noteIdMatch[1], 10);
+            logger.info(`[ap-inbox] Remote boost of local post #${localPostId}`);
+        }
+    }
+
+    return { handled: true, type: 'Announce' };
+}
+
+/**
+ * 处理 Update 活动
+ */
+async function handleUpdate(activity, remoteActor) {
+    const object = activity.object;
+    if (!object) return { handled: false, error: 'Missing object' };
+
+    // 如果是 Actor 更新，刷新缓存
+    if (object.type === 'Person' || object.type === 'Service' || object.type === 'Application') {
+        await fetchRemoteActor(object.id || remoteActor.id, true);
+        logger.info(`[ap-inbox] Actor updated: ${object.id || remoteActor.id}`);
+    }
+
+    return { handled: true, type: 'Update' };
+}
+
+/**
+ * 处理 Accept 活动（对我们发出的 Follow 的回应）
+ */
+async function handleAccept(activity, remoteActor) {
+    const inner = typeof activity.object === 'string' ? { id: activity.object } : activity.object;
+    logger.info(`[ap-inbox] Accept from ${remoteActor.id}: ${inner?.type || 'unknown'}`);
+    return { handled: true, type: 'Accept' };
+}
+
+/**
+ * 处理 Reject 活动
+ */
+async function handleReject(activity, remoteActor) {
+    const inner = typeof activity.object === 'string' ? { id: activity.object } : activity.object;
+    logger.info(`[ap-inbox] Reject from ${remoteActor.id}: ${inner?.type || 'unknown'}`);
+    return { handled: true, type: 'Reject' };
+}

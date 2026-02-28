@@ -1190,6 +1190,14 @@ export async function syncSocialEvent({ actorUserId, postId, eventType }) {
         return { skipped: true, reason: 'invalid_event_payload' };
     }
 
+    // ActivityPub 联邦同步（独立于平台同步设置）
+    try {
+        const { syncPostToActivityPub } = await import('../activitypub/outbox.js');
+        await syncPostToActivityPub({ actorUserId: uid, postId: pid, eventType: type });
+    } catch (apErr) {
+        logger.error(`[social-sync] ActivityPub sync error post=${pid}: ${apErr.message}`);
+    }
+
     const settings = await getUserSocialSyncSettings(uid);
     const platforms = ensureEnabledPlatforms(settings);
     if (platforms.length === 0) {

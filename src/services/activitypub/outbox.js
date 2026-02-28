@@ -1,0 +1,389 @@
+/**
+ * ActivityPub 发件箱和帖子同步
+ * 处理本地帖子事件并生成对应的 AP 活动，投递到远程服务器
+ */
+
+import { prisma } from '../prisma.js';
+import logger from '../logger.js';
+import { isFederationEnabled, getApEndpointBaseUrl } from './config.js';
+import { getLocalUserById, getActorUrl } from './actor.js';
+import {
+    postToNote, buildCreateActivity, buildDeleteActivity,
+    buildLikeActivity, buildUndoActivity, buildAnnounceActivity,
+    getNoteId,
+    buildOrderedCollection, buildOrderedCollectionPage,
+} from './objects.js';
+import { setPostApRef, getPostApId } from './store.js';
+import { deliverToFollowers, deliverActivity } from './delivery.js';
+import { fetchRemoteActor, getSharedInboxUrl } from './federation.js';
+
+/**
+ * 确保指定帖子已同步到 ActivityPub（有 AP ref），没有则立即同步
+ * 用于回帖/引用/转推时先确保主贴已发布到联邦网络
+ * @param {number} refPostId - 被引用/回复/转推的帖子 ID
+ * @returns {Promise<string|null>} 帖子的 AP Note ID
+ */
+async function ensurePostSynced(refPostId) {
+    if (!refPostId) return null;
+
+    // 已有 AP ref，直接返回
+    const existingApId = await getPostApId(refPostId);
+    if (existingApId) return existingApId;
+
+    // 查询帖子
+    const refPost = await prisma.ow_posts.findUnique({
+        where: { id: refPostId },
+        include: {
+            author: { select: { id: true, username: true, display_name: true } },
+        },
+    });
+
+    if (!refPost || refPost.is_deleted || !refPost.author) return null;
+
+    // 构建 Note 并投递
+    const note = await postToNote(refPost);
+    if (!note) return null;
+
+    await setPostApRef(refPostId, note.id, note.url);
+
+    const actorUrl = await getActorUrl(refPost.author.username);
+    const activity = await buildCreateActivity(actorUrl, note);
+    await deliverToFollowers(refPost.author_id, activity);
+
+    logger.info(`[ap-outbox] Dependency post #${refPostId} synced as Create(Note)`);
+    return note.id;
+}
+
+/**
+ * 处理帖子社交同步事件（ActivityPub 方向）
+ * 与现有 socialSync 系统集成，作为一个额外的同步目标
+ * @param {object} opts
+ * @param {number} opts.actorUserId - 触发事件的用户 ID
+ * @param {number} opts.postId - 帖子 ID
+ * @param {string} opts.eventType - 事件类型 (create/delete/like/unlike/retweet/unretweet 等)
+ */
+export async function syncPostToActivityPub({ actorUserId, postId, eventType }) {
+    // 检查联邦是否启用
+    const enabled = await isFederationEnabled();
+    if (!enabled) return;
+
+    try {
+        switch (eventType) {
+            case 'create':
+            case 'reply':
+            case 'quote':
+                await handlePostCreate(actorUserId, postId);
+                break;
+            case 'delete':
+                await handlePostDelete(actorUserId, postId);
+                break;
+            case 'like':
+                await handlePostLike(actorUserId, postId);
+                break;
+            case 'unlike':
+                await handlePostUnlike(actorUserId, postId);
+                break;
+            case 'retweet':
+                await handlePostRetweet(actorUserId, postId);
+                break;
+            default:
+                logger.debug(`[ap-outbox] Unhandled event type: ${eventType}`);
+        }
+    } catch (err) {
+        logger.error(`[ap-outbox] Error syncing post ${postId} (${eventType}):`, err.message);
+    }
+}
+
+/**
+ * 处理帖子创建 → 生成 Create(Note) 活动并投递
+ */
+async function handlePostCreate(userId, postId) {
+    const post = await prisma.ow_posts.findUnique({
+        where: { id: postId },
+        include: {
+            author: { select: { id: true, username: true, display_name: true } },
+        },
+    });
+
+    if (!post || post.is_deleted) return;
+
+    // 确保被回复/引用的主贴已同步到联邦网络
+    if (post.in_reply_to_id) {
+        await ensurePostSynced(post.in_reply_to_id);
+    }
+    if (post.quoted_post_id) {
+        await ensurePostSynced(post.quoted_post_id);
+    }
+
+    // 构建 Note 对象
+    const note = await postToNote(post);
+    if (!note) return;
+
+    // 在帖子的 platform_refs 中记录 AP ID
+    await setPostApRef(postId, note.id, note.url);
+
+    // 构建 Create 活动
+    const actorUrl = await getActorUrl(post.author.username);
+    const activity = await buildCreateActivity(actorUrl, note);
+
+    // 投递到回帖作者自己的远程关注者
+    await deliverToFollowers(userId, activity);
+
+    // 如果是回帖或引用帖，还要投递到被回复/引用帖子作者的远程关注者
+    const relatedAuthorIds = new Set();
+    if (post.in_reply_to_id) {
+        const parentPost = await prisma.ow_posts.findUnique({
+            where: { id: post.in_reply_to_id },
+            select: { author_id: true },
+        });
+        if (parentPost && parentPost.author_id !== userId) {
+            relatedAuthorIds.add(parentPost.author_id);
+        }
+    }
+    if (post.quoted_post_id) {
+        const quotedPost = await prisma.ow_posts.findUnique({
+            where: { id: post.quoted_post_id },
+            select: { author_id: true },
+        });
+        if (quotedPost && quotedPost.author_id !== userId) {
+            relatedAuthorIds.add(quotedPost.author_id);
+        }
+    }
+    for (const authorId of relatedAuthorIds) {
+        await deliverToFollowers(authorId, activity);
+    }
+
+    logger.info(`[ap-outbox] Post #${postId} delivered as Create(Note)`);
+}
+
+/**
+ * 处理帖子删除 → 生成 Delete 活动
+ */
+async function handlePostDelete(userId, postId) {
+    const user = await getLocalUserById(userId);
+    if (!user) return;
+
+    const noteId = await getNoteId(postId);
+    const actorUrl = await getActorUrl(user.username);
+    const activity = await buildDeleteActivity(actorUrl, noteId);
+
+    await deliverToFollowers(userId, activity);
+    logger.info(`[ap-outbox] Post #${postId} delivered as Delete`);
+}
+
+/**
+ * 处理帖子点赞 → 生成 Like 活动
+ */
+async function handlePostLike(userId, postId) {
+    const user = await getLocalUserById(userId);
+    if (!user) return;
+
+    // 获取被点赞帖子的 AP ID
+    const noteId = await getPostApId(postId) || await getNoteId(postId);
+    const actorUrl = await getActorUrl(user.username);
+    const activity = await buildLikeActivity(actorUrl, noteId);
+
+    // Like 只需要投递给帖子作者
+    const post = await prisma.ow_posts.findUnique({
+        where: { id: postId },
+        select: { author_id: true },
+    });
+
+    if (post) {
+        // 如果是本地用户的帖子，只需记录；如果有 AP 引用则可投递
+        await deliverToFollowers(userId, activity);
+    }
+
+    logger.debug(`[ap-outbox] Like on post #${postId} delivered`);
+}
+
+/**
+ * 处理取消点赞 → 生成 Undo(Like) 活动
+ */
+async function handlePostUnlike(userId, postId) {
+    const user = await getLocalUserById(userId);
+    if (!user) return;
+
+    const noteId = await getPostApId(postId) || await getNoteId(postId);
+    const actorUrl = await getActorUrl(user.username);
+    const likeActivity = await buildLikeActivity(actorUrl, noteId);
+    const activity = await buildUndoActivity(actorUrl, likeActivity);
+
+    await deliverToFollowers(userId, activity);
+    logger.debug(`[ap-outbox] Undo(Like) on post #${postId} delivered`);
+}
+
+/**
+ * 处理转推 → 生成 Announce 活动
+ */
+async function handlePostRetweet(userId, postId) {
+    // 获取转推指向的原帖
+    const post = await prisma.ow_posts.findUnique({
+        where: { id: postId },
+        select: { retweet_post_id: true },
+    });
+
+    if (!post?.retweet_post_id) return;
+
+    const user = await getLocalUserById(userId);
+    if (!user) return;
+
+    // 确保原帖已同步到联邦网络
+    await ensurePostSynced(post.retweet_post_id);
+
+    const originalNoteId = await getPostApId(post.retweet_post_id)
+        || await getNoteId(post.retweet_post_id);
+    const actorUrl = await getActorUrl(user.username);
+    const activity = await buildAnnounceActivity(actorUrl, originalNoteId);
+
+    await deliverToFollowers(userId, activity);
+    logger.info(`[ap-outbox] Post #${postId} delivered as Announce`);
+}
+
+/**
+ * 构建用户的 Outbox 集合
+ * @param {string} username
+ * @param {number} page - 页码 (0 表示返回集合概览)
+ * @param {number} pageSize
+ */
+export async function buildUserOutbox(username, page = 0, pageSize = 20) {
+    const apBaseUrl = await getApEndpointBaseUrl();
+    const outboxUrl = `${apBaseUrl}/ap/users/${username}/outbox`;
+
+    const user = await prisma.ow_users.findFirst({
+        where: { username, status: 'active' },
+        select: { id: true },
+    });
+
+    if (!user) return null;
+
+    // 获取帖子总数
+    const totalItems = await prisma.ow_posts.count({
+        where: {
+            author_id: user.id,
+            is_deleted: false,
+            post_type: { in: ['normal', 'reply', 'quote'] },
+        },
+    });
+
+    if (page === 0) {
+        return buildOrderedCollection(outboxUrl, totalItems, `${outboxUrl}?page=1`);
+    }
+
+    // 获取帖子列表
+    const posts = await prisma.ow_posts.findMany({
+        where: {
+            author_id: user.id,
+            is_deleted: false,
+            post_type: { in: ['normal', 'reply', 'quote'] },
+        },
+        include: {
+            author: { select: { id: true, username: true, display_name: true } },
+        },
+        orderBy: { created_at: 'desc' },
+        take: pageSize,
+        skip: (page - 1) * pageSize,
+    });
+
+    // 转换为 AP 活动
+    const items = [];
+    for (const post of posts) {
+        const note = await postToNote(post);
+        if (note) {
+            const actorUrl = await getActorUrl(username);
+            const activity = await buildCreateActivity(actorUrl, note);
+            items.push(activity);
+        }
+    }
+
+    const nextPage = posts.length === pageSize ? `${outboxUrl}?page=${page + 1}` : null;
+    const prevPage = page > 1 ? `${outboxUrl}?page=${page - 1}` : null;
+
+    return buildOrderedCollectionPage(
+        `${outboxUrl}?page=${page}`,
+        outboxUrl,
+        items,
+        nextPage,
+        prevPage,
+    );
+}
+
+/**
+ * 向新关注者推送用户的所有历史帖子
+ * 由 BullMQ 任务调用，避免阻塞收件箱请求
+ * @param {object} opts
+ * @param {number} opts.userId - 被关注用户 ID
+ * @param {string} opts.followerActorUrl - 新关注者的 Actor URL
+ */
+export async function backfillPostsToFollower({ userId, followerActorUrl }) {
+    const enabled = await isFederationEnabled();
+    if (!enabled) return;
+
+    const user = await getLocalUserById(userId);
+    if (!user) {
+        logger.warn(`[ap-backfill] User ${userId} not found`);
+        return;
+    }
+
+    // 获取关注者的收件箱
+    const actor = await fetchRemoteActor(followerActorUrl);
+    if (!actor) {
+        logger.warn(`[ap-backfill] Cannot fetch actor: ${followerActorUrl}`);
+        return;
+    }
+    const inbox = getSharedInboxUrl(actor) || actor.inbox;
+    if (!inbox) {
+        logger.warn(`[ap-backfill] No inbox for: ${followerActorUrl}`);
+        return;
+    }
+
+    // 查询用户的所有公开帖子（按时间正序，让对方按发布顺序收到）
+    const posts = await prisma.ow_posts.findMany({
+        where: {
+            author_id: userId,
+            is_deleted: false,
+            post_type: { in: ['normal', 'reply', 'quote'] },
+        },
+        include: {
+            author: { select: { id: true, username: true, display_name: true } },
+        },
+        orderBy: { created_at: 'asc' },
+        take: 200, // 限制最多推送 200 条
+    });
+
+    if (posts.length === 0) {
+        logger.debug(`[ap-backfill] No posts to backfill for user ${userId}`);
+        return;
+    }
+
+    logger.info(`[ap-backfill] Backfilling ${posts.length} posts from ${user.username} to ${followerActorUrl}`);
+
+    const actorUrl = await getActorUrl(user.username);
+    let delivered = 0;
+
+    for (const post of posts) {
+        try {
+            const note = await postToNote(post);
+            if (!note) continue;
+
+            // 确保帖子有 AP 引用
+            await setPostApRef(post.id, note.id, note.url);
+
+            const activity = await buildCreateActivity(actorUrl, note);
+            const ok = await deliverActivity({
+                inbox,
+                activity,
+                userId: user.id,
+                username: user.username,
+            });
+            if (ok) delivered++;
+
+            // 每条之间短暂延迟，避免淹没远程服务器
+            await new Promise(r => setTimeout(r, 500));
+        } catch (err) {
+            logger.warn(`[ap-backfill] Failed to backfill post #${post.id}:`, err.message);
+        }
+    }
+
+    logger.info(`[ap-backfill] Backfill complete: ${delivered}/${posts.length} posts delivered to ${followerActorUrl}`);
+}

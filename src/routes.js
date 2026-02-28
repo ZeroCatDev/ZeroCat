@@ -39,6 +39,10 @@ export async function configureRoutes(app) {
         res.render("scratchtool");
     });
 
+    // ActivityPub well-known 路由 (必须在业务路由之前注册)
+    const apModule = await import('./routes/router_activitypub.js');
+    app.use("/.well-known", apModule.default);
+
     // 注册业务路由
     await registerBusinessRoutes(app);
     // 404路由处理
@@ -155,6 +159,10 @@ async function registerBusinessRoutes(app) {
         // 统一认证路由
         const authModule = await import('./routes/router_auth.js');
         app.use("/auth", authModule.default);
+
+        // ActivityPub 路由
+        const activityPubModule = await import('./routes/router_activitypub.js');
+        app.use("/ap", activityPubModule.default);
 
         logger.info('[routes] 所有业务路由注册成功');
     } catch (error) {

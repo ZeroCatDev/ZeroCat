@@ -8,6 +8,17 @@ let worker = null;
 
 async function processSocialSync(job) {
     const { actorUserId, postId, eventType } = job.data;
+
+    // 处理 ActivityPub 历史帖子回填任务
+    if (eventType === 'ap_backfill') {
+        const { userId, followerActorUrl } = job.data;
+        await job.log(`ap_backfill start user=${userId} follower=${followerActorUrl}`);
+        const { backfillPostsToFollower } = await import('../../activitypub/outbox.js');
+        await backfillPostsToFollower({ userId, followerActorUrl });
+        await job.log(`ap_backfill done user=${userId}`);
+        return { backfilled: true };
+    }
+
     await job.log(`sync start user=${actorUserId} post=${postId} event=${eventType}`);
     const result = await syncSocialEvent(job.data);
     await job.log(`sync done post=${postId} event=${eventType}`);

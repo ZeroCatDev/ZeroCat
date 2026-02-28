@@ -702,6 +702,53 @@ export const CONFIG_TYPES = {
         description: "是否为OAuth请求启用代理",
         transform: typeTransformers.boolean,
     },
+    // ActivityPub 联邦协议配置
+    "ap.federation.enabled": {
+        type: "boolean",
+        required: false,
+        default: false,
+        description: "是否启用ActivityPub联邦协议，启用后本站内容可被其他Fediverse实例发现和订阅",
+        transform: typeTransformers.boolean,
+        public: true,
+    },
+    "ap.auto_accept_follows": {
+        type: "boolean",
+        required: false,
+        default: true,
+        description: "是否自动接受来自远程实例的关注请求",
+        transform: typeTransformers.boolean,
+    },
+    "ap.instance.domain": {
+        type: "string",
+        required: false,
+        description: "ActivityPub实例域名，留空则从urls.api自动推断。一旦启用联邦后不应更改",
+        validate: (value) => !value || /^[a-zA-Z0-9.-]+(:\d+)?$/.test(value),
+        public: true,
+    },
+    "ap.instance.name": {
+        type: "string",
+        required: false,
+        default: "ZeroCat",
+        description: "ActivityPub实例显示名称，在NodeInfo和Actor中展示",
+        public: true,
+    },
+    "ap.instance.description": {
+        type: "string",
+        required: false,
+        default: "",
+        description: "ActivityPub实例描述信息",
+        public: true,
+    },
+    "ap.instance.public_key": {
+        type: "string",
+        required: false,
+        description: "ActivityPub实例RSA公钥(PEM格式)，用于HTTP Signature验证，自动生成",
+    },
+    "ap.instance.private_key": {
+        type: "string",
+        required: false,
+        description: "ActivityPub实例RSA私钥(PEM格式)，用于HTTP Signature签名，自动生成",
+    },
 };
 
 // 从数据库加载的动态配置

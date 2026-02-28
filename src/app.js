@@ -128,6 +128,18 @@ class Application {
             // Initialize CodeRunManager
             await codeRunManager.initialize();
 
+            // 初始化 ActivityPub（联邦启用时自动生成实例密钥）
+            try {
+                const { isFederationEnabled } = await import('./services/activitypub/config.js');
+                const { getInstanceKeyPair } = await import('./services/activitypub/keys.js');
+                if (await isFederationEnabled()) {
+                    await getInstanceKeyPair(); // 不存在则自动生成
+                    logger.info('[app] ActivityPub 实例密钥已就绪');
+                }
+            } catch (error) {
+                logger.error('[app] ActivityPub 初始化失败:', error);
+            }
+
             logger.info('[app] 所有服务初始化完成');
 
             // 标记应用已初始化
