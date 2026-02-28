@@ -721,7 +721,7 @@ export const CONFIG_TYPES = {
     "ap.instance.domain": {
         type: "string",
         required: false,
-        description: "ActivityPub实例域名，留空则从urls.api自动推断。一旦启用联邦后不应更改",
+        description: "ActivityPub实例域名，留空则从urls.backend自动推断。一旦启用联邦后不应更改",
         validate: (value) => !value || /^[a-zA-Z0-9.-]+(:\d+)?$/.test(value),
         public: true,
     },

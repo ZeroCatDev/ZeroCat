@@ -70,13 +70,13 @@ export async function getInstanceDomain() {
         }
     }
 
-    // 最终回退到 urls.api
-    const apiUrl = await zcconfig.get('urls.api');
+    // 最终回退到 urls.backend
+    const apiUrl = await zcconfig.get('urls.backend');
     if (apiUrl) {
         try {
             return new URL(apiUrl).host;
         } catch (e) {
-            logger.warn('[activitypub] 解析 urls.api URL 失败:', apiUrl);
+            logger.warn('[activitypub] 解析 urls.backend URL 失败:', apiUrl);
         }
     }
 
@@ -98,8 +98,8 @@ export async function getInstanceBaseUrl() {
  * 这样前端不需要转发 /ap/* 路径
  */
 export async function getApEndpointBaseUrl() {
-    // 优先使用 urls.api（后端地址）
-    const apiUrl = await zcconfig.get('urls.api');
+    // 优先使用 urls.backend（后端地址）
+    const apiUrl = await zcconfig.get('urls.backend');
     if (apiUrl) {
         return apiUrl.replace(/\/+$/, '');
     }
