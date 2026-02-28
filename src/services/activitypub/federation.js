@@ -33,7 +33,7 @@ export async function fetchRemoteActor(actorUrl, forceRefresh = false) {
     }
 
     try {
-        logger.info(`[ap-federation] Fetching remote actor: ${actorUrl}`);
+        logger.info(`[ap-federation] 获取远程 actor: ${actorUrl}`);
         const response = await axios.get(actorUrl, {
             headers: {
                 'Accept': AP_ACCEPT_TYPES[0],
@@ -45,7 +45,7 @@ export async function fetchRemoteActor(actorUrl, forceRefresh = false) {
 
         const actor = response.data;
         if (!actor || !actor.id) {
-            logger.warn(`[ap-federation] Invalid actor response from ${actorUrl}`);
+            logger.warn(`[ap-federation] 来自 ${actorUrl} 的 actor 响应无效`);
             return null;
         }
 
@@ -55,7 +55,7 @@ export async function fetchRemoteActor(actorUrl, forceRefresh = false) {
 
         return actor;
     } catch (err) {
-        logger.warn(`[ap-federation] Failed to fetch actor ${actorUrl}:`, err.message);
+        logger.warn(`[ap-federation] 失败获取 actor ${actorUrl}:`, err.message);
         return null;
     }
 }
@@ -138,7 +138,7 @@ export async function resolveWebFinger(acct) {
             domain,
         };
     } catch (err) {
-        logger.warn(`[ap-federation] WebFinger lookup failed for ${acct}:`, err.message);
+        logger.warn(`[ap-federation] WebFinger 查询失败 ${acct}:`, err.message);
         return null;
     }
 }

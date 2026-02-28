@@ -79,7 +79,7 @@ export function parseSignatureHeader(header) {
             signature: params.signature,
         };
     } catch (err) {
-        logger.warn('[ap-httpSig] Failed to parse signature header:', err.message);
+        logger.warn('[ap-httpSig] 无法解析签名头:', err.message);
         return null;
     }
 }
@@ -108,7 +108,7 @@ export function verifySignature({ signature, method, path, headers, publicKey })
                 const headerValue = headers[name] || headers[name.toLowerCase()] ||
                     headers[name.charAt(0).toUpperCase() + name.slice(1)];
                 if (headerValue === undefined) {
-                    logger.debug(`[ap-httpSig] Missing header for verification: ${name}`);
+                    logger.debug(`[ap-httpSig] 缺\u5c11\u7b7e\u540d\u9a8c\u8bc1\u6240\u9700\u7684\u8bf7\u6c42\u4e22: ${name}`);
                     return false;
                 }
                 signHeaders[name] = headerValue;
@@ -125,7 +125,7 @@ export function verifySignature({ signature, method, path, headers, publicKey })
 
         return verifier.verify(publicKey, parsed.signature, 'base64');
     } catch (err) {
-        logger.warn('[ap-httpSig] Signature verification error:', err.message);
+        logger.warn('[ap-httpSig] \u7b7e\u540d\u9a8c\u8bc1\u6267\u884c\u9519误:', err.message);
         return false;
     }
 }

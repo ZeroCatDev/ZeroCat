@@ -63,7 +63,7 @@ router.get('/host-meta', async (req, res) => {
             `</XRD>`
         );
     } catch (err) {
-        logger.error('[ap-route] host-meta error:', err);
+        logger.error('[ap-route] host-meta 错误:', err);
         res.status(500).send('Internal server error');
     }
 });
@@ -122,7 +122,7 @@ router.get('/webfinger', async (req, res) => {
             ],
         });
     } catch (err) {
-        logger.error('[ap-route] WebFinger error:', err);
+        logger.error('[ap-route] WebFinger 错误:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -143,7 +143,7 @@ router.get('/nodeinfo', async (req, res) => {
             ],
         });
     } catch (err) {
-        logger.error('[ap-route] NodeInfo links error:', err);
+        logger.error('[ap-route] NodeInfo 链接错误:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -180,7 +180,7 @@ router.get('/nodeinfo/2.0', async (req, res) => {
             metadata: {},
         });
     } catch (err) {
-        logger.error('[ap-route] NodeInfo 2.0 error:', err);
+        logger.error('[ap-route] NodeInfo 2.0 错误:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -193,7 +193,7 @@ router.get('/users/:username', requireFederation, async (req, res) => {
 
         // 检查 Accept 头 - 只在 AP 请求时返回 JSON-LD
         if (!isApRequest(req)) {
-            // 非 AP 请求重定向到用户页面
+            // 非 AP 请求重定向到前端用户页面
             const baseUrl = await getInstanceBaseUrl();
             return res.redirect(`${baseUrl}/${username}`);
         }
@@ -209,7 +209,7 @@ router.get('/users/:username', requireFederation, async (req, res) => {
         res.set('Cache-Control', 'max-age=300');
         return res.json(actor);
     } catch (err) {
-        logger.error('[ap-route] Actor error:', err);
+        logger.error('[ap-route] Actor 错误:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -229,12 +229,12 @@ router.post('/users/:username/inbox', requireFederation, async (req, res) => {
         // 验证 HTTP Signature
         const verification = await verifyInboxRequest(req);
         if (!verification.valid) {
-            logger.warn(`[ap-route] Inbox signature verification failed for ${username}: ${verification.message}`);
+            logger.warn(`[ap-route] 收件箱签名验证失败 ${username}: ${verification.message}`);
             // 在开发环境可以放宽验证
             if (process.env.NODE_ENV === 'production') {
                 return res.status(401).json({ error: verification.message });
             }
-            logger.warn('[ap-route] Proceeding without valid signature (non-production)');
+            logger.warn('[ap-route] 在没有有效签名的情况下继续(非生产环境)');
         }
 
         const activity = req.body;
@@ -259,7 +259,7 @@ router.post('/users/:username/inbox', requireFederation, async (req, res) => {
         // ActivityPub 规范要求收件箱返回 202 Accepted
         return res.status(202).json({ status: 'accepted', ...result });
     } catch (err) {
-        logger.error('[ap-route] Inbox error:', err);
+        logger.error('[ap-route] 收件箱错误:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -294,7 +294,7 @@ router.post('/inbox', requireFederation, async (req, res) => {
 
         return res.status(202).json({ status: 'accepted', ...result });
     } catch (err) {
-        logger.error('[ap-route] Shared inbox error:', err);
+        logger.error('[ap-route] 共享收件箱错误:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -315,7 +315,7 @@ router.get('/users/:username/outbox', requireFederation, async (req, res) => {
         res.set('Cache-Control', 'max-age=60');
         return res.json(outbox);
     } catch (err) {
-        logger.error('[ap-route] Outbox error:', err);
+        logger.error('[ap-route] 发件箱错误:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -399,7 +399,7 @@ router.get('/users/:username/followers', requireFederation, async (req, res) => 
             prevPage,
         ));
     } catch (err) {
-        logger.error('[ap-route] Followers error:', err);
+        logger.error('[ap-route] 关注者錯误:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -464,7 +464,7 @@ router.get('/users/:username/following', requireFederation, async (req, res) => 
             prevPage,
         ));
     } catch (err) {
-        logger.error('[ap-route] Following error:', err);
+        logger.error('[ap-route] 正在关注错误:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -500,7 +500,7 @@ router.get('/notes/:postId', async (req, res) => {
         }
 
         if (!isApRequest(req)) {
-            // 非 AP 请求重定向到帖子页面
+            // 非 AP 请求重定向到前端帖子页面
             const baseUrl = await getInstanceBaseUrl();
             return res.redirect(`${baseUrl}/app/posts/${postId}`);
         }
@@ -514,7 +514,7 @@ router.get('/notes/:postId', async (req, res) => {
         res.set('Cache-Control', 'max-age=300');
         return res.json(note);
     } catch (err) {
-        logger.error('[ap-route] Note error:', err);
+        logger.error('[ap-route] 笔记错误:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -533,7 +533,7 @@ router.get('/activities/:activityId', requireFederation, async (req, res) => {
         res.set('Content-Type', AP_CONTENT_TYPE);
         return res.json(activity);
     } catch (err) {
-        logger.error('[ap-route] Activity error:', err);
+        logger.error('[ap-route] 活动错误:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -546,7 +546,7 @@ router.get('/status', async (req, res) => {
         const status = await getActivityPubStatus();
         return res.json(status);
     } catch (err) {
-        logger.error('[ap-route] Status error:', err);
+        logger.error('[ap-route] 状态错误:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -574,7 +574,7 @@ router.post('/admin/setup', async (req, res) => {
 
         return res.json({ status: 'ok', ...result });
     } catch (err) {
-        logger.error('[ap-route] Setup error:', err);
+        logger.error('[ap-route] 设置错误:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -601,7 +601,7 @@ router.patch('/admin/federation', async (req, res) => {
 
         return res.json({ status: 'ok', enabled: Boolean(req.body.enabled) });
     } catch (err) {
-        logger.error('[ap-route] Federation toggle error:', err);
+        logger.error('[ap-route] 联邐切换错误:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -618,7 +618,7 @@ router.get('/users/:username/remote-followers/count', async (req, res) => {
         const count = await countRemoteFollowers(user.id);
         return res.json({ username: req.params.username, remoteFollowers: count });
     } catch (err) {
-        logger.error('[ap-route] Remote followers count error:', err);
+        logger.error('[ap-route] 远程关注者计数错误:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
@@ -680,7 +680,8 @@ router.get('/card/project/:id', async (req, res) => {
         }
 
         const staticUrl = await getStaticUrl();
-        const frontendUrl = (await zcconfig.get('urls.frontend')) || (await getInstanceBaseUrl());
+        const apBaseUrl = await getApEndpointBaseUrl();
+        const baseUrl = await getInstanceBaseUrl();
         const domain = await getInstanceDomain();
         const title = project.title || project.name;
         const description = project.description
@@ -694,7 +695,8 @@ router.get('/card/project/:id', async (req, res) => {
         }
 
         const authorName = project.author?.username || 'unknown';
-        const projectUrl = `${frontendUrl}/${encodeURIComponent(authorName)}/${encodeURIComponent(project.name)}`;
+        const cardUrl = `${apBaseUrl}/ap/card/project/${project.id}`;
+        const projectUrl = `${baseUrl}/${encodeURIComponent(authorName)}/${encodeURIComponent(project.name)}`;
 
         res.set('Content-Type', 'text/html; charset=utf-8');
         res.set('Cache-Control', 'max-age=3600');
@@ -702,12 +704,12 @@ router.get('/card/project/:id', async (req, res) => {
             title,
             description,
             image,
-            url: projectUrl,
+            url: cardUrl,
             siteName: domain,
             redirectUrl: projectUrl,
         }));
     } catch (err) {
-        logger.error('[ap-card] Project card error:', err);
+        logger.error('[ap-card] 项目卡片错误:', err);
         res.status(500).send('Internal server error');
     }
 });
@@ -729,7 +731,8 @@ router.get('/card/user/:id', async (req, res) => {
         if (!user) return res.status(404).send('Not found');
 
         const staticUrl = await getStaticUrl();
-        const frontendUrl = (await zcconfig.get('urls.frontend')) || (await getInstanceBaseUrl());
+        const apBaseUrl = await getApEndpointBaseUrl();
+        const baseUrl = await getInstanceBaseUrl();
         const domain = await getInstanceDomain();
         const title = `${user.display_name || user.username} (@${user.username}@${domain})`;
         const description = user.bio ? user.bio.substring(0, 200) : `User profile on ${domain}`;
@@ -740,7 +743,8 @@ router.get('/card/user/:id', async (req, res) => {
             image = `${staticUrl}/assets/${p1}/${p2}/${user.avatar}.webp`;
         }
 
-        const userUrl = `${frontendUrl}/${encodeURIComponent(user.username)}`;
+        const cardUrl = `${apBaseUrl}/ap/card/user/${user.id}`;
+        const userUrl = `${baseUrl}/${user.username}`;
 
         res.set('Content-Type', 'text/html; charset=utf-8');
         res.set('Cache-Control', 'max-age=3600');
@@ -748,12 +752,12 @@ router.get('/card/user/:id', async (req, res) => {
             title,
             description,
             image,
-            url: userUrl,
+            url: cardUrl,
             siteName: domain,
             redirectUrl: userUrl,
         }));
     } catch (err) {
-        logger.error('[ap-card] User card error:', err);
+        logger.error('[ap-card] 用户卡片错误:', err);
         res.status(500).send('Internal server error');
     }
 });
@@ -779,14 +783,16 @@ router.get('/card/list/:id', async (req, res) => {
             return res.status(404).send('Not found');
         }
 
-        const frontendUrl = (await zcconfig.get('urls.frontend')) || (await getInstanceBaseUrl());
+        const apBaseUrl = await getApEndpointBaseUrl();
+        const baseUrl = await getInstanceBaseUrl();
         const domain = await getInstanceDomain();
         const title = list.title;
         const description = list.description
             ? list.description.substring(0, 200)
             : `Collection by ${list.author?.display_name || list.author?.username || 'unknown'}`;
 
-        const listUrl = `${frontendUrl}/app/projectlist/${list.id}`;
+        const cardUrl = `${apBaseUrl}/ap/card/list/${list.id}`;
+        const listUrl = `${baseUrl}/app/projectlist/${list.id}`;
 
         res.set('Content-Type', 'text/html; charset=utf-8');
         res.set('Cache-Control', 'max-age=3600');
@@ -794,12 +800,12 @@ router.get('/card/list/:id', async (req, res) => {
             title,
             description,
             image: null,
-            url: listUrl,
+            url: cardUrl,
             siteName: domain,
             redirectUrl: listUrl,
         }));
     } catch (err) {
-        logger.error('[ap-card] List card error:', err);
+        logger.error('[ap-card] 列表卡片错误:', err);
         res.status(500).send('Internal server error');
     }
 });

@@ -38,7 +38,7 @@ export async function initializeActivityPub({
         await getInstanceKeyPair();
 
         const actualDomain = domain || await getInstanceDomain();
-        logger.info(`[ap-setup] ActivityPub initialized for domain: ${actualDomain}`);
+        logger.info(`[ap-setup] ActivityPub 已为域名 ${actualDomain} 初始化`);
 
         return {
             success: true,
@@ -47,7 +47,7 @@ export async function initializeActivityPub({
             autoAcceptFollows,
         };
     } catch (err) {
-        logger.error('[ap-setup] Failed to initialize ActivityPub:', err);
+        logger.error('[ap-setup] ActivityPub 初始化失败:', err);
         throw err;
     }
 }
@@ -85,7 +85,7 @@ export async function getActivityPubStatus() {
  */
 export async function setFederationEnabled(enabled) {
     await zcconfig.set(CONFIG_KEYS.FEDERATION_ENABLED, String(enabled));
-    logger.info(`[ap-setup] Federation ${enabled ? 'enabled' : 'disabled'}`);
+    logger.info(`[ap-setup] 联邦 ${enabled ? '已启用' : '已禁用'}`);
 }
 
 /**
@@ -93,5 +93,5 @@ export async function setFederationEnabled(enabled) {
  */
 export async function setAutoAcceptFollows(autoAccept) {
     await zcconfig.set(CONFIG_KEYS.AUTO_ACCEPT_FOLLOWS, String(autoAccept));
-    logger.info(`[ap-setup] Auto-accept follows: ${autoAccept}`);
+    logger.info(`[ap-setup] 自动接受关注: ${autoAccept}`);
 }

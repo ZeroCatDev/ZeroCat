@@ -56,16 +56,16 @@ export async function deliverActivity({ inbox, activity, userId, username }) {
         });
 
         if (response.status >= 200 && response.status < 300) {
-            logger.info(`[ap-delivery] Delivered to ${inbox}: ${response.status}`);
+            logger.info(`[ap-delivery] 已发送到 ${inbox}: ${response.status}`);
             return true;
         } else {
-            logger.warn(`[ap-delivery] Delivery to ${inbox} returned ${response.status}: ${
+            logger.warn(`[ap-delivery] 发送到 ${inbox} 返回 ${response.status}: ${
                 typeof response.data === 'string' ? response.data.substring(0, 200) : JSON.stringify(response.data).substring(0, 200)
             }`);
             return false;
         }
     } catch (err) {
-        logger.error(`[ap-delivery] Failed to deliver to ${inbox}:`, err.message);
+        logger.error(`[ap-delivery] 无法发送到 ${inbox}:`, err.message);
         return false;
     }
 }
@@ -78,13 +78,13 @@ export async function deliverActivity({ inbox, activity, userId, username }) {
 export async function deliverToFollowers(userId, activity) {
     const user = await getLocalUserById(userId);
     if (!user) {
-        logger.warn(`[ap-delivery] User ${userId} not found, skipping delivery`);
+        logger.warn(`[ap-delivery] 找不到用户 ${userId}, 跳过发送`);
         return;
     }
 
     const followers = await getRemoteFollowers(userId);
     if (followers.length === 0) {
-        logger.debug(`[ap-delivery] No remote followers for user ${userId}`);
+        logger.debug(`[ap-delivery] 用户 ${userId} 没有远程关注者`);
         return;
     }
 
@@ -105,7 +105,7 @@ export async function deliverToFollowers(userId, activity) {
         }
     }
 
-    logger.info(`[ap-delivery] Delivering to ${inboxSet.size} unique inboxes for user ${userId}`);
+    logger.info(`[ap-delivery] 为用户 ${userId} 发送了 ${inboxSet.size} 个不同收件箱的消息`);
 
     // 并发投递（限制并发数）
     const inboxes = [...inboxSet.keys()];
@@ -138,7 +138,7 @@ export async function deliverToActor(userId, targetActorUrl, activity) {
 
     const actor = await fetchRemoteActor(targetActorUrl);
     if (!actor || !actor.inbox) {
-        logger.warn(`[ap-delivery] Could not resolve inbox for ${targetActorUrl}`);
+        logger.warn(`[ap-delivery] 无法为 ${targetActorUrl} 解析收件箱`);
         return false;
     }
 

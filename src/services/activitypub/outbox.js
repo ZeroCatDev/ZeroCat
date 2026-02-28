@@ -50,7 +50,7 @@ async function ensurePostSynced(refPostId) {
     const activity = await buildCreateActivity(actorUrl, note);
     await deliverToFollowers(refPost.author_id, activity);
 
-    logger.info(`[ap-outbox] Dependency post #${refPostId} synced as Create(Note)`);
+    logger.info(`[ap-outbox] 依赖帖子 #${refPostId} 已同步为 Create(Note)`);
     return note.id;
 }
 
@@ -87,10 +87,10 @@ export async function syncPostToActivityPub({ actorUserId, postId, eventType }) 
                 await handlePostRetweet(actorUserId, postId);
                 break;
             default:
-                logger.debug(`[ap-outbox] Unhandled event type: ${eventType}`);
+                logger.debug(`[ap-outbox] 未处理的事件类型: ${eventType}`);
         }
     } catch (err) {
-        logger.error(`[ap-outbox] Error syncing post ${postId} (${eventType}):`, err.message);
+        logger.error(`[ap-outbox] 同步帖子 ${postId} (${eventType}) 错误:`, err.message);
     }
 }
 
@@ -153,7 +153,7 @@ async function handlePostCreate(userId, postId) {
         await deliverToFollowers(authorId, activity);
     }
 
-    logger.info(`[ap-outbox] Post #${postId} delivered as Create(Note)`);
+    logger.info(`[ap-outbox] 帖子 #${postId} 已作为 Create(Note) 发送`);
 }
 
 /**
@@ -168,7 +168,7 @@ async function handlePostDelete(userId, postId) {
     const activity = await buildDeleteActivity(actorUrl, noteId);
 
     await deliverToFollowers(userId, activity);
-    logger.info(`[ap-outbox] Post #${postId} delivered as Delete`);
+    logger.info(`[ap-outbox] 帖子 #${postId} 已作为 Delete 发送`);
 }
 
 /**
@@ -194,7 +194,7 @@ async function handlePostLike(userId, postId) {
         await deliverToFollowers(userId, activity);
     }
 
-    logger.debug(`[ap-outbox] Like on post #${postId} delivered`);
+    logger.debug(`[ap-outbox] 帖子 #${postId} 的点赞已发送`);
 }
 
 /**
@@ -210,7 +210,7 @@ async function handlePostUnlike(userId, postId) {
     const activity = await buildUndoActivity(actorUrl, likeActivity);
 
     await deliverToFollowers(userId, activity);
-    logger.debug(`[ap-outbox] Undo(Like) on post #${postId} delivered`);
+    logger.debug(`[ap-outbox] 帖子 #${postId} 的取消点赞(Undo) 已发送`);
 }
 
 /**
@@ -237,7 +237,7 @@ async function handlePostRetweet(userId, postId) {
     const activity = await buildAnnounceActivity(actorUrl, originalNoteId);
 
     await deliverToFollowers(userId, activity);
-    logger.info(`[ap-outbox] Post #${postId} delivered as Announce`);
+    logger.info(`[ap-outbox] 帖子 #${postId} 已作为 Announce 发送`);
 }
 
 /**
@@ -321,19 +321,19 @@ export async function backfillPostsToFollower({ userId, followerActorUrl }) {
 
     const user = await getLocalUserById(userId);
     if (!user) {
-        logger.warn(`[ap-backfill] User ${userId} not found`);
+        logger.warn(`[ap-backfill] 找不到用户 ${userId}`);
         return;
     }
 
     // 获取关注者的收件箱
     const actor = await fetchRemoteActor(followerActorUrl);
     if (!actor) {
-        logger.warn(`[ap-backfill] Cannot fetch actor: ${followerActorUrl}`);
+        logger.warn(`[ap-backfill] 无法获取 actor: ${followerActorUrl}`);
         return;
     }
     const inbox = getSharedInboxUrl(actor) || actor.inbox;
     if (!inbox) {
-        logger.warn(`[ap-backfill] No inbox for: ${followerActorUrl}`);
+        logger.warn(`[ap-backfill] 找不到收件箱: ${followerActorUrl}`);
         return;
     }
 
@@ -352,11 +352,11 @@ export async function backfillPostsToFollower({ userId, followerActorUrl }) {
     });
 
     if (posts.length === 0) {
-        logger.debug(`[ap-backfill] No posts to backfill for user ${userId}`);
+        logger.debug(`[ap-backfill] 没有为用户 ${userId} 回填的帖子`);
         return;
     }
 
-    logger.info(`[ap-backfill] Backfilling ${posts.length} posts from ${user.username} to ${followerActorUrl}`);
+    logger.info(`[ap-backfill] 正在向 ${followerActorUrl} 回填 ${posts.length} 篇来自 ${user.username} 的帖子`);
 
     const actorUrl = await getActorUrl(user.username);
     let delivered = 0;
@@ -381,9 +381,9 @@ export async function backfillPostsToFollower({ userId, followerActorUrl }) {
             // 每条之间短暂延迟，避免淹没远程服务器
             await new Promise(r => setTimeout(r, 500));
         } catch (err) {
-            logger.warn(`[ap-backfill] Failed to backfill post #${post.id}:`, err.message);
+            logger.warn(`[ap-backfill] 无法回填帖子 #${post.id}:`, err.message);
         }
     }
 
-    logger.info(`[ap-backfill] Backfill complete: ${delivered}/${posts.length} posts delivered to ${followerActorUrl}`);
+    logger.info(`[ap-backfill] 回种完成: ${delivered}/${posts.length} 篇帖子已发送给 ${followerActorUrl}`);
 }

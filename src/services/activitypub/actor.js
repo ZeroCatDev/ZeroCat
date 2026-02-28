@@ -5,9 +5,8 @@
 
 import { prisma } from '../prisma.js';
 import logger from '../logger.js';
-import { AP_CONTEXT, getInstanceBaseUrl, getApEndpointBaseUrl, getStaticUrl } from './config.js';
+import { AP_CONTEXT, getApEndpointBaseUrl, getInstanceBaseUrl, getStaticUrl } from './config.js';
 import { getUserPublicKey } from './keys.js';
-import zcconfig from '../config/zcconfig.js';
 
 /**
  * 根据用户名获取本地用户
@@ -85,7 +84,7 @@ async function buildBannerUrl(user) {
  */
 export async function buildActorObject(user) {
     const apBaseUrl = await getApEndpointBaseUrl();
-    const frontendUrl = (await zcconfig.get('urls.frontend')) || (await getInstanceBaseUrl());
+    const frontendBaseUrl = await getInstanceBaseUrl();
     const actorUrl = `${apBaseUrl}/ap/users/${user.username}`;
     const publicKey = await getUserPublicKey(user.id);
     const avatarUrl = await buildAvatarUrl(user);
@@ -98,7 +97,7 @@ export async function buildActorObject(user) {
         preferredUsername: user.username,
         name: user.display_name || user.username,
         summary: user.bio || user.motto || '',
-        url: user.url || `${frontendUrl}/${user.username}`,
+        url: `${frontendBaseUrl}/${user.username}`,
         inbox: `${actorUrl}/inbox`,
         outbox: `${actorUrl}/outbox`,
         followers: `${actorUrl}/followers`,

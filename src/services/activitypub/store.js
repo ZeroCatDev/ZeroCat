@@ -32,7 +32,7 @@ export async function getTargetConfig(targetType, targetId, key) {
         });
         return record?.value ?? null;
     } catch (err) {
-        logger.error('[ap-store] getTargetConfig error:', err.message);
+        logger.error('[ap-store] getTargetConfig 错误:', err.message);
         return null;
     }
 }
@@ -118,7 +118,7 @@ export async function getUserKv(userId, key) {
         });
         return record?.value ?? null;
     } catch (err) {
-        logger.error('[ap-store] getUserKv error:', err.message);
+        logger.error('[ap-store] getUserKv 错误:', err.message);
         return null;
     }
 }

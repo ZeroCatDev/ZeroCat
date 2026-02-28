@@ -66,7 +66,7 @@ export async function getInstanceDomain() {
         try {
             return new URL(frontendUrl).host;
         } catch (e) {
-            logger.warn('[activitypub] Failed to parse urls.frontend as URL:', frontendUrl);
+            logger.warn('[activitypub] 解析 urls.frontend URL 失败:', frontendUrl);
         }
     }
 
@@ -76,7 +76,7 @@ export async function getInstanceDomain() {
         try {
             return new URL(apiUrl).host;
         } catch (e) {
-            logger.warn('[activitypub] Failed to parse urls.api as URL:', apiUrl);
+            logger.warn('[activitypub] 解析 urls.api URL 失败:', apiUrl);
         }
     }
 

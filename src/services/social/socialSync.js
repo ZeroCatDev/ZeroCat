@@ -1195,7 +1195,7 @@ export async function syncSocialEvent({ actorUserId, postId, eventType }) {
         const { syncPostToActivityPub } = await import('../activitypub/outbox.js');
         await syncPostToActivityPub({ actorUserId: uid, postId: pid, eventType: type });
     } catch (apErr) {
-        logger.error(`[social-sync] ActivityPub sync error post=${pid}: ${apErr.message}`);
+        logger.error(`[social-sync] ActivityPub 同步错误 post=${pid}: ${apErr.message}`);
     }
 
     const settings = await getUserSocialSyncSettings(uid);

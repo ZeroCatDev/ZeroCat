@@ -44,7 +44,7 @@ export async function getUserKeyPair(userId) {
     }
 
     // 生成新密钥对
-    logger.info(`[ap-keys] Generating new RSA key pair for user ${userId}`);
+    logger.info(`[ap-keys] 为用户 ${userId} 生成新的 RSA 密钥对`);
     const { publicKey, privateKey } = generateKeyPair();
 
     await setUserKv(userId, CACHE_KV_KEYS.AP_PUBLIC_KEY, { v: publicKey });
@@ -80,7 +80,7 @@ export async function getInstanceKeyPair() {
         return { publicKey: existingPub, privateKey: existingPriv };
     }
 
-    logger.info('[ap-keys] Generating new instance RSA key pair');
+    logger.info('[ap-keys] 生成新的实例级 RSA 密钥对');
     const { publicKey, privateKey } = generateKeyPair();
 
     await zcconfig.set(CONFIG_KEYS.INSTANCE_PUBLIC_KEY, publicKey);

@@ -5,10 +5,9 @@
 
 import { prisma } from '../prisma.js';
 import logger from '../logger.js';
-import { AP_CONTEXT, getInstanceBaseUrl, getApEndpointBaseUrl, getInstanceDomain, getStaticUrl } from './config.js';
+import { AP_CONTEXT, getApEndpointBaseUrl, getInstanceBaseUrl, getInstanceDomain, getStaticUrl } from './config.js';
 import { getActorUrl } from './actor.js';
 import { resolveWebFinger } from './federation.js';
-import zcconfig from '../config/zcconfig.js';
 import { v4 as uuidv4 } from 'uuid';
 import twitterText from 'twitter-text';
 
@@ -21,11 +20,11 @@ export async function getNoteId(postId) {
 }
 
 /**
- * 生成帖子 URL（用于 Web 页面访问）
+ * 生成帖子 URL（用于 Web 页面访问，指向前端）
  */
 export async function getNoteUrl(postId) {
-    const frontendUrl = (await zcconfig.get('urls.frontend')) || (await getInstanceBaseUrl());
-    return `${frontendUrl}/app/posts/${postId}`;
+    const frontendBaseUrl = await getInstanceBaseUrl();
+    return `${frontendBaseUrl}/app/posts/${postId}`;
 }
 
 /**
@@ -70,9 +69,9 @@ async function getPostMentions(postId) {
  */
 export async function postToNote(post) {
     const apBaseUrl = await getApEndpointBaseUrl();
+    const frontendBaseUrl = await getInstanceBaseUrl();
     const domain = await getInstanceDomain();
     const staticUrl = await getStaticUrl();
-    const frontendUrl = (await zcconfig.get('urls.frontend')) || (await getInstanceBaseUrl());
     const noteId = await getNoteId(post.id);
     const noteUrl = await getNoteUrl(post.id);
 
@@ -101,7 +100,7 @@ export async function postToNote(post) {
         const mentions = await getPostMentions(post.id);
         mentionUsers = mentions.map(m => m.user).filter(Boolean);
     } catch (err) {
-        logger.debug('[ap-objects] Could not load post mentions:', err.message);
+        logger.debug('[ap-objects] 无法加载帖子提及:', err.message);
     }
 
     // 构建用户名→信息映射
@@ -162,7 +161,7 @@ export async function postToNote(post) {
                 });
             }
         } catch (err) {
-            logger.debug(`[ap-objects] Could not resolve federated mention ${key}:`, err.message);
+            logger.debug(`[ap-objects] 无法解析联邦提及 ${key}:`, err.message);
         }
     }));
 
@@ -206,7 +205,7 @@ export async function postToNote(post) {
             const displayUrl = url.length > 40 ? url.substring(0, 37) + '...' : url;
             htmlContent += `<a href="${escapeHtml(url)}" rel="nofollow noopener noreferrer" target="_blank">${escapeHtml(displayUrl)}</a>`;
         } else if (entity.hashtag !== undefined) {
-            const hashtagUrl = `${frontendUrl}/tags/${encodeURIComponent(entity.hashtag)}`;
+            const hashtagUrl = `${frontendBaseUrl}/tags/${encodeURIComponent(entity.hashtag)}`;
             if (!tags.some(t => t.type === 'Hashtag' && t.name === `#${entity.hashtag}`)) {
                 tags.push({
                     type: 'Hashtag',
@@ -227,7 +226,7 @@ export async function postToNote(post) {
 
     // ─── 处理嵌入对象 → 追加到 content 末尾 ───
     if (post.embed && typeof post.embed === 'object') {
-        const embedResult = await buildEmbedHtml(post.embed, frontendUrl, staticUrl, apBaseUrl, domain, tags);
+        const embedResult = await buildEmbedHtml(post.embed, staticUrl, apBaseUrl, domain, tags);
         if (embedResult) {
             htmlContent += embedResult;
         }
@@ -286,7 +285,7 @@ export async function postToNote(post) {
             }
         }
     } catch (err) {
-        logger.debug('[ap-objects] Could not load post media:', err.message);
+        logger.debug('[ap-objects] 无法加载帖子媒体:', err.message);
     }
     if (allAttachments.length > 0) {
         note.attachment = allAttachments;
@@ -339,7 +338,7 @@ export function getCardUrl(baseUrl, type, id) {
  * Mastodon 使用帖子 HTML 中最后一个非 mention/hashtag 的链接生成卡片
  * @returns {string|null} HTML 片段
  */
-async function buildEmbedHtml(embed, frontendUrl, staticUrl, baseUrl, domain, tags) {
+async function buildEmbedHtml(embed, staticUrl, baseUrl, domain, tags) {
     try {
         switch (embed.type) {
             case 'project': {
@@ -393,7 +392,7 @@ async function buildEmbedHtml(embed, frontendUrl, staticUrl, baseUrl, domain, ta
                 return null;
         }
     } catch (err) {
-        logger.debug('[ap-objects] Could not build embed HTML:', err.message);
+        logger.debug('[ap-objects] 无法构建嵌入 HTML:', err.message);
         return null;
     }
 }
