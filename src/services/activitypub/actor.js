@@ -85,14 +85,14 @@ async function buildBannerUrl(user) {
 export async function buildActorObject(user) {
     const apBaseUrl = await getApEndpointBaseUrl();
     const frontendBaseUrl = await getInstanceBaseUrl();
-    const actorUrl = `${frontendBaseUrl}/${user.username}`;
+    const actorUrl = `${apBaseUrl}/ap/users/${user.username}`;
     const publicKey = await getUserPublicKey(user.id);
     const avatarUrl = await buildAvatarUrl(user);
     const bannerUrl = await buildBannerUrl(user);
 
     const actor = {
         '@context': AP_CONTEXT,
-        id: actorUrl,
+        id: `${frontendBaseUrl}/${user.username}`,
         type: 'Person',
         preferredUsername: user.username,
         name: user.display_name || user.username,
