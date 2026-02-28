@@ -92,7 +92,7 @@ export async function buildActorObject(user) {
 
     const actor = {
         '@context': AP_CONTEXT,
-        id: `${frontendBaseUrl}/${user.username}`,
+        id: actorUrl,
         type: 'Person',
         preferredUsername: user.username,
         name: user.display_name || user.username,

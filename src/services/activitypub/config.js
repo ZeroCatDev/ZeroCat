@@ -52,13 +52,9 @@ export const CONFIG_KEYS = {
 /**
  * 获取实例域名（身份标识域名，即前端域名）
  * 其他实例通过此域名识别本实例用户，如 @user@此域名
- * 前端只需转发 /.well-known/webfinger 和 /.well-known/nodeinfo 到后端
- * AP 端点（/ap/*）直接使用后端域名，无需前端转发
+ * 前端需转发 /.well-known/webfinger、/.well-known/nodeinfo 及 /ap/* 路径到后端
  */
 export async function getInstanceDomain() {
-    // 优先从 zcconfig 读取 AP 域名配置
-    const domain = await zcconfig.get(CONFIG_KEYS.INSTANCE_DOMAIN);
-    if (domain) return domain;
 
     // 回退到前端域名（这是用户可见的域名，也是联邦中的标识域名）
     const frontendUrl = await zcconfig.get('urls.frontend');
@@ -70,16 +66,7 @@ export async function getInstanceDomain() {
         }
     }
 
-    // 最终回退到 urls.backend
-    const apiUrl = await zcconfig.get('urls.backend');
-    if (apiUrl) {
-        try {
-            return new URL(apiUrl).host;
-        } catch (e) {
-            logger.warn('[activitypub] 解析 urls.backend URL 失败:', apiUrl);
-        }
-    }
-
+    logger.warn('[activitypub] 未配置 ap.instance.domain 或 urls.frontend，ActivityPub 域名将使用 localhost');
     return 'localhost';
 }
 
@@ -93,17 +80,12 @@ export async function getInstanceBaseUrl() {
 }
 
 /**
- * 获取 AP 端点基础 URL（后端 URL）
- * AP 协议端点（actor、inbox、outbox、notes 等）使用后端域名，
- * 这样前端不需要转发 /ap/* 路径
+ * 获取 AP 端点基础 URL（前端 URL）
+ * 前端将 /ap/* 路径反代到后端，因此 AP 协议端点统一使用前端域名，
+ * 其他实例通过前端域名访问 /ap/* 端点（actor、inbox、outbox、notes 等）
  */
 export async function getApEndpointBaseUrl() {
-    // 优先使用 urls.backend（后端地址）
-    const apiUrl = await zcconfig.get('urls.backend');
-    if (apiUrl) {
-        return apiUrl.replace(/\/+$/, '');
-    }
-    // 回退到实例基础 URL
+    // 使用前端域名，因为前端已将 /ap/* 反代到后端
     return await getInstanceBaseUrl();
 }
 
