@@ -23,7 +23,11 @@ export async function getLocalUserByUsername(username) {
             avatar: true,
             images: true,
             url: true,
+            location: true,
+            sex: true,
+            birthday: true,
             regTime: true,
+            updatedAt: true,
         },
     });
 }
@@ -43,7 +47,11 @@ export async function getLocalUserById(userId) {
             avatar: true,
             images: true,
             url: true,
+            location: true,
+            sex: true,
+            birthday: true,
             regTime: true,
+            updatedAt: true,
         },
     });
 }
@@ -90,19 +98,64 @@ export async function buildActorObject(user) {
     const avatarUrl = await buildAvatarUrl(user);
     const bannerUrl = await buildBannerUrl(user);
 
+    // 构建 attachment（Mastodon 个人资料元数据字段）
+    const attachment = [];
+    attachment.push({
+        type: 'PropertyValue',
+        name: '个人主页',
+        value: `<a href="${frontendBaseUrl}/${user.username}" rel="me nofollow noopener noreferrer" target="_blank">${frontendBaseUrl}/${user.username}</a>`,
+    });
+    if (user.url) {
+        attachment.push({
+            type: 'PropertyValue',
+            name: '网站',
+            value: `<a href="${user.url}" rel="me nofollow noopener noreferrer" target="_blank">${user.url}</a>`,
+        });
+    }
+    if (user.location) {
+        attachment.push({
+            type: 'PropertyValue',
+            name: '位置',
+            value: user.location,
+        });
+    }
+    if (user.bio) {
+        attachment.push({
+            type: 'PropertyValue',
+            name: '简介',
+            value: user.bio,
+        });
+    }
+    if (user.birthday) {
+        const bd = new Date(user.birthday);
+        const bdStr = `${bd.getMonth() + 1}月${bd.getDate()}日`;
+        attachment.push({
+            type: 'PropertyValue',
+            name: '生日',
+            value: bdStr,
+        });
+    }
+
     const actor = {
         '@context': AP_CONTEXT,
         id: actorUrl,
         type: 'Person',
         preferredUsername: user.username,
         name: user.display_name || user.username,
-        summary: user.bio || user.motto || '',
+        summary: user.motto || '',
         url: `${frontendBaseUrl}/${user.username}`,
         inbox: `${actorUrl}/inbox`,
         outbox: `${actorUrl}/outbox`,
         followers: `${actorUrl}/followers`,
         following: `${actorUrl}/following`,
         published: user.regTime ? new Date(user.regTime).toISOString() : undefined,
+        updated: user.updatedAt ? new Date(user.updatedAt).toISOString() : undefined,
+        manuallyApprovesFollowers: false,
+        discoverable: true,
+        indexable: true,
+        memorial: false,
+        attachment,
+        tag: [],
         publicKey: {
             id: `${actorUrl}#main-key`,
             owner: actorUrl,
