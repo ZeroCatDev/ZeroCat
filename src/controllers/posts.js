@@ -304,7 +304,9 @@ async function buildListResponse(rawPosts, limit, viewerId = null) {
 
   const hasMore = rawPosts.length === Number(limit);
   const nextCursor =
-    posts.length > 0 ? String(posts[posts.length - 1].id) : null;
+    rawPosts.length > 0
+      ? rawPosts[rawPosts.length - 1].created_at.toISOString()
+      : null;
 
   return {
     posts,
@@ -1104,7 +1106,7 @@ async function getRepliesWithClassification(postId, authorId, postLikeCount, vie
       in_reply_to_id: Number(postId),
       is_deleted: false,
     },
-    orderBy: [{ like_count: "desc" }, { id: "asc" }],
+    orderBy: [{ like_count: "desc" }, { created_at: "asc" }],
     select: buildLeanSelect(),
   });
 
@@ -1233,10 +1235,10 @@ export async function getRelatedPosts({
       is_deleted: false,
       embed: { not: null },
       ...(includeReplies ? {} : { post_type: { not: "reply" } }),
-      ...(safeCursor ? { id: { lt: safeCursor } } : {}),
+      ...(safeCursor ? { created_at: { lt: new Date(safeCursor) } } : {}),
       AND: clauses,
     },
-    orderBy: { id: "desc" },
+    orderBy: { created_at: "desc" },
     take: safeLimit,
     select: buildLeanSelect(),
   });
@@ -1257,9 +1259,9 @@ export async function getUserPosts({
       author_id: Number(userId),
       is_deleted: false,
       ...(includeReplies ? {} : { post_type: { not: "reply" } }),
-      ...(cursor ? { id: { lt: Number(cursor) } } : {}),
+      ...(cursor ? { created_at: { lt: new Date(cursor) } } : {}),
     },
-    orderBy: { id: "desc" },
+    orderBy: { created_at: "desc" },
     take: Number(limit),
     select: buildLeanSelect(),
   });
@@ -1319,9 +1321,9 @@ export async function getHomeFeed({
       ...(includeReplies ? {} : { post_type: { not: "reply" } }),
       ...authorFilter,
       ...federationFilter,
-      ...(cursor ? { id: { lt: Number(cursor) } } : {}),
+      ...(cursor ? { created_at: { lt: new Date(cursor) } } : {}),
     },
-    orderBy: { id: "desc" },
+    orderBy: { created_at: "desc" },
     take: Number(limit),
     select: buildLeanSelect(),
   });
@@ -1432,9 +1434,9 @@ export async function getThread(postId, { cursor, limit = 50, viewerId = null } 
     where: {
       is_deleted: false,
       thread_root_id: threadRootId,
-      ...(cursor ? { id: { gt: Number(cursor) } } : {}),
+      ...(cursor ? { created_at: { gt: new Date(cursor) } } : {}),
     },
-    orderBy: { id: "asc" },
+    orderBy: { created_at: "asc" },
     take: Number(limit),
     select: buildLeanSelect(),
   });
@@ -1507,7 +1509,9 @@ export async function getThread(postId, { cursor, limit = 50, viewerId = null } 
 
   const hasMore = repliesRaw.length === Number(limit);
   const nextCursor =
-    replies.length > 0 ? String(replies[replies.length - 1].id) : null;
+    repliesRaw.length > 0
+      ? repliesRaw[repliesRaw.length - 1].created_at.toISOString()
+      : null;
 
   return {
     post,                              // 请求的帖子（始终是主体）
@@ -1529,9 +1533,9 @@ export async function getMentions({ userId, cursor, limit = 20 }) {
           user_id: Number(userId),
         },
       },
-      ...(cursor ? { id: { lt: Number(cursor) } } : {}),
+      ...(cursor ? { created_at: { lt: new Date(cursor) } } : {}),
     },
-    orderBy: { id: "desc" },
+    orderBy: { created_at: "desc" },
     take: Number(limit),
     select: buildLeanSelect(),
   });
@@ -1556,9 +1560,9 @@ export async function getPostRetweets({ postId, cursor, limit = 20, viewerId = n
       retweet_post_id: target.id,
       post_type: "retweet",
       is_deleted: false,
-      ...(cursor ? { id: { lt: Number(cursor) } } : {}),
+      ...(cursor ? { created_at: { lt: new Date(cursor) } } : {}),
     },
-    orderBy: { id: "desc" },
+    orderBy: { created_at: "desc" },
     take: Number(limit),
     select: buildLeanSelect(),
   });
@@ -1583,9 +1587,9 @@ export async function getPostQuotes({ postId, cursor, limit = 20, viewerId = nul
       quoted_post_id: target.id,
       post_type: "quote",
       is_deleted: false,
-      ...(cursor ? { id: { lt: Number(cursor) } } : {}),
+      ...(cursor ? { created_at: { lt: new Date(cursor) } } : {}),
     },
-    orderBy: { id: "desc" },
+    orderBy: { created_at: "desc" },
     take: Number(limit),
     select: buildLeanSelect(),
   });
@@ -1735,7 +1739,9 @@ async function buildRepliesListResponse(rawPosts, limit, viewerId = null) {
 
   const hasMore = rawPosts.length === Number(limit);
   const nextCursor =
-    posts.length > 0 ? String(posts[posts.length - 1].id) : null;
+    rawPosts.length > 0
+      ? rawPosts[rawPosts.length - 1].created_at.toISOString()
+      : null;
 
   return {
     items: postsWithAncestors,
@@ -1756,9 +1762,9 @@ export async function getUserReplies({ userId, cursor, limit = 20, viewerId = nu
       author_id: Number(userId),
       post_type: "reply",
       is_deleted: false,
-      ...(cursor ? { id: { lt: Number(cursor) } } : {}),
+      ...(cursor ? { created_at: { lt: new Date(cursor) } } : {}),
     },
-    orderBy: { id: "desc" },
+    orderBy: { created_at: "desc" },
     take: Number(limit),
     select: buildLeanSelect(),
   });
@@ -1777,9 +1783,9 @@ export async function getUserOriginalPosts({ userId, cursor, limit = 20, viewerI
       author_id: Number(userId),
       post_type: "normal",
       is_deleted: false,
-      ...(cursor ? { id: { lt: Number(cursor) } } : {}),
+      ...(cursor ? { created_at: { lt: new Date(cursor) } } : {}),
     },
-    orderBy: { id: "desc" },
+    orderBy: { created_at: "desc" },
     take: Number(limit),
     select: buildLeanSelect(),
   });
@@ -1800,9 +1806,9 @@ export async function getUserMediaPosts({ userId, cursor, limit = 20, viewerId =
       post_media: {
         some: {},
       },
-      ...(cursor ? { id: { lt: Number(cursor) } } : {}),
+      ...(cursor ? { created_at: { lt: new Date(cursor) } } : {}),
     },
-    orderBy: { id: "desc" },
+    orderBy: { created_at: "desc" },
     take: Number(limit),
     select: buildLeanSelect(),
   });
