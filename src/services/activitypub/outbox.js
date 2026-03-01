@@ -95,6 +95,9 @@ export async function syncPostToActivityPub({ actorUserId, postId, eventType }) 
             case 'retweet':
                 await handlePostRetweet(actorUserId, postId);
                 break;
+            case 'unretweet':
+                await handlePostUnretweet(actorUserId, postId);
+                break;
             default:
                 logger.debug(`[ap-outbox] 未处理的事件类型: ${eventType}`);
         }
@@ -116,6 +119,12 @@ async function handlePostCreate(userId, postId) {
     });
 
     if (!post || post.is_deleted) return;
+
+    // 防御性检查：如果是转推帖子，应走 Announce 流程而非 Create(Note)
+    if (post.post_type === 'retweet' && post.retweet_post_id) {
+        logger.debug(`[ap-outbox] 帖子 #${postId} 是转推，转发到 handlePostRetweet`);
+        return await handlePostRetweet(userId, postId);
+    }
 
     // 本轮投递的共享去重集合（跨 deliverToFollowers 调用）
     const deliveredInboxes = new Set();
@@ -255,6 +264,34 @@ async function handlePostRetweet(userId, postId) {
 }
 
 /**
+ * 处理取消转推 → 生成 Undo(Announce) 活动
+ */
+async function handlePostUnretweet(userId, postId) {
+    // 获取转推指向的原帖
+    const post = await prisma.ow_posts.findUnique({
+        where: { id: postId },
+        select: { retweet_post_id: true },
+    });
+
+    if (!post?.retweet_post_id) return;
+
+    const user = await getLocalUserById(userId);
+    if (!user) return;
+
+    const originalNoteId = await getPostApId(post.retweet_post_id)
+        || await getNoteId(post.retweet_post_id);
+    const actorUrl = await getActorUrl(user.username);
+
+    // 构建 Announce 活动（作为 Undo 的 object）
+    const announceActivity = await buildAnnounceActivity(actorUrl, originalNoteId);
+    // 构建 Undo(Announce)
+    const activity = await buildUndoActivity(actorUrl, announceActivity);
+
+    await deliverToFollowers(userId, activity);
+    logger.info(`[ap-outbox] 帖子 #${postId} 的转推已撤销 (Undo Announce)`);
+}
+
+/**
  * 构建用户的 Outbox 集合
  * @param {string} username
  * @param {number} page - 页码 (0 表示返回集合概览)
@@ -271,12 +308,12 @@ export async function buildUserOutbox(username, page = 0, pageSize = 20) {
 
     if (!user) return null;
 
-    // 获取帖子总数
+    // 获取帖子总数（含转推）
     const totalItems = await prisma.ow_posts.count({
         where: {
             author_id: user.id,
             is_deleted: false,
-            post_type: { in: ['normal', 'reply', 'quote'] },
+            post_type: { in: ['normal', 'reply', 'quote', 'retweet'] },
         },
     });
 
@@ -284,12 +321,12 @@ export async function buildUserOutbox(username, page = 0, pageSize = 20) {
         return buildOrderedCollection(outboxUrl, totalItems, `${outboxUrl}?page=1`);
     }
 
-    // 获取帖子列表
+    // 获取帖子列表（含转推）
     const posts = await prisma.ow_posts.findMany({
         where: {
             author_id: user.id,
             is_deleted: false,
-            post_type: { in: ['normal', 'reply', 'quote'] },
+            post_type: { in: ['normal', 'reply', 'quote', 'retweet'] },
         },
         include: {
             author: { select: { id: true, username: true, display_name: true } },
@@ -300,13 +337,22 @@ export async function buildUserOutbox(username, page = 0, pageSize = 20) {
     });
 
     // 转换为 AP 活动
+    const actorUrl = await getActorUrl(username);
     const items = [];
     for (const post of posts) {
-        const note = await postToNote(post);
-        if (note) {
-            const actorUrl = await getActorUrl(username);
-            const activity = await buildCreateActivity(actorUrl, note);
+        if (post.post_type === 'retweet' && post.retweet_post_id) {
+            // 转推 → Announce 活动
+            const originalNoteId = await getPostApId(post.retweet_post_id)
+                || await getNoteId(post.retweet_post_id);
+            const activity = await buildAnnounceActivity(actorUrl, originalNoteId);
             items.push(activity);
+        } else {
+            // 普通帖子/回帖/引用 → Create(Note)
+            const note = await postToNote(post);
+            if (note) {
+                const activity = await buildCreateActivity(actorUrl, note);
+                items.push(activity);
+            }
         }
     }
 

@@ -585,10 +585,39 @@ export async function replyToPost({
 export async function retweetPost({ authorId, retweetPostId }) {
   const target = await prisma.ow_posts.findFirst({
     where: { id: Number(retweetPostId), is_deleted: false },
-    select: { id: true, author_id: true },
+    select: { id: true, author_id: true, post_type: true, retweet_post_id: true },
   });
   if (!target) {
     throw new Error("目标推文不存在");
+  }
+
+  // 如果目标本身就是转推，自动追溯到原始推文
+  let originalId = target.id;
+  let originalAuthorId = target.author_id;
+  if (target.post_type === "retweet" && target.retweet_post_id) {
+    const original = await prisma.ow_posts.findFirst({
+      where: { id: target.retweet_post_id, is_deleted: false },
+      select: { id: true, author_id: true },
+    });
+    if (!original) {
+      throw new Error("原始推文不存在");
+    }
+    originalId = original.id;
+    originalAuthorId = original.author_id;
+  }
+
+  // 检查是否已经转推过该原始推文
+  const existing = await prisma.ow_posts.findFirst({
+    where: {
+      author_id: authorId,
+      retweet_post_id: originalId,
+      post_type: "retweet",
+      is_deleted: false,
+    },
+    select: { id: true },
+  });
+  if (existing) {
+    throw new Error("你已经转推过该推文");
   }
 
   const post = await prisma.$transaction(async (tx) => {
@@ -596,7 +625,7 @@ export async function retweetPost({ authorId, retweetPostId }) {
       data: {
         author_id: authorId,
         post_type: "retweet",
-        retweet_post_id: target.id,
+        retweet_post_id: originalId,
         content: null,
         character_count: 0,
       },
@@ -604,28 +633,28 @@ export async function retweetPost({ authorId, retweetPostId }) {
     });
 
     await tx.ow_posts.update({
-      where: { id: target.id },
+      where: { id: originalId },
       data: { retweet_count: { increment: 1 } },
     });
 
     return created;
   });
 
-  if (target.author_id && target.author_id !== authorId) {
+  if (originalAuthorId && originalAuthorId !== authorId) {
     await createNotification({
       notificationType: "post_retweet",
       title: "推文转推",
       content: "有人转推了你的推文",
-      userId: target.author_id,
+      userId: originalAuthorId,
       actorId: authorId,
       targetType: "post",
-      targetId: target.id,
+      targetId: originalId,
       data: { post_id: post.id },
     });
   }
 
-  queueManager.enqueueSocialPostSync(authorId, post.id, "create").catch((error) => {
-    logger.warn("推文社交同步入队失败(retweet-create):", error.message);
+  queueManager.enqueueSocialPostSync(authorId, post.id, "retweet").catch((error) => {
+    logger.warn("推文社交同步入队失败(retweet):", error.message);
   });
 
   const formattedPost = formatPost(post);
@@ -674,8 +703,8 @@ export async function unretweetPost({ authorId, retweetPostId }) {
   });
 
   if (result.count > 0 && result.retweetId) {
-    queueManager.enqueueSocialPostSync(authorId, result.retweetId, "delete").catch((error) => {
-      logger.warn("推文社交同步入队失败(unretweet-delete):", error.message);
+    queueManager.enqueueSocialPostSync(authorId, result.retweetId, "unretweet").catch((error) => {
+      logger.warn("推文社交同步入队失败(unretweet):", error.message);
     });
   }
 
