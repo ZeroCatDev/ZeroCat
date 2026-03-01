@@ -86,6 +86,12 @@ export const bindOAuth = async (req, res) => {
         res.redirect(authUrl);
     } catch (error) {
         logger.error("OAuth 绑定请求错误:", error);
+        if (error?.code === 'ATPROTO_SERVICE_UNAVAILABLE') {
+            return res.status(503).json({
+                status: "error",
+                message: "Bluesky 服务暂时不可达，请稍后重试",
+            });
+        }
         res.status(500).json({
             status: "error",
             message: "绑定请求失败",
@@ -139,6 +145,12 @@ export const authWithOAuth = async (req, res) => {
         res.redirect(authUrl);
     } catch (error) {
         logger.error("OAuth authorization error:", error);
+        if (error?.code === 'ATPROTO_SERVICE_UNAVAILABLE') {
+            return res.status(503).json({
+                status: "error",
+                message: "Bluesky 服务暂时不可达，请稍后重试",
+            });
+        }
         res.status(500).json({
             status: "error",
             message: "授权请求失败",

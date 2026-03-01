@@ -56,8 +56,19 @@ function normalizeIdentifier(input, fallback = 'https://bsky.social') {
 
 // ─── fetch ───────────────────────────────────────────────────────────────────────────────
 
+const ATPROTO_FETCH_TIMEOUT_MS = 10_000;
+
 async function atprotoFetch(input, init = {}) {
-    return fetch(input instanceof Request ? input : String(input), init);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(new Error('atprotoFetch timeout')), ATPROTO_FETCH_TIMEOUT_MS);
+    try {
+        return await fetch(input instanceof Request ? input : String(input), {
+            ...init,
+            signal: init.signal ?? controller.signal,
+        });
+    } finally {
+        clearTimeout(timer);
+    }
 }
 
 // ─── requestLock ─────────────────────────────────────────────────────────────────────────────
@@ -256,6 +267,10 @@ export async function createAtprotoAuthAuthorizeUrl({ loginHint, state, scope })
             scope: authorizeScope,
         });
     } catch (error) {
+        const isMetadataError = error?.message?.includes('Failed to resolve OAuth server metadata')
+            || error?.message?.includes('resolve OAuth server metadata')
+            || error?.name === 'OAuthResolverError';
+
         // 指定的 PDS/handle 解析失败时，回退到公共入口 bsky.social
         if (identifier !== 'https://bsky.social') {
             logger.warn(`[atproto] authorize 失败 (identifier=${identifier})，回退到 bsky.social: ${error.message}`);
@@ -264,6 +279,16 @@ export async function createAtprotoAuthAuthorizeUrl({ loginHint, state, scope })
                 scope: authorizeScope,
             });
         }
+
+        // identifier 本身就是 bsky.social 时，元数据请求仍失败 → 标记为服务不可达
+        if (isMetadataError) {
+            logger.error(`[atproto] 无法解析 Bluesky OAuth 元数据（可能是网络/DNS 问题）: ${error.message}`);
+            const serviceError = new Error('Bluesky 服务暂时不可达，请稍后重试');
+            serviceError.code = 'ATPROTO_SERVICE_UNAVAILABLE';
+            serviceError.cause = error;
+            throw serviceError;
+        }
+
         throw error;
     }
 }
