@@ -5,7 +5,7 @@
 
 import logger from '../logger.js';
 import { prisma } from '../prisma.js';
-import { getInstanceBaseUrl, isAutoAcceptFollows } from './config.js';
+import { getInstanceBaseUrl, getInstanceDomain, isAutoAcceptFollows } from './config.js';
 import { fetchRemoteActor, getPublicKeyFromActor } from './federation.js';
 import { verifySignature, verifyDigest, parseSignatureHeader } from './httpSignature.js';
 import { getLocalUserByUsername, buildActorObject, getActorUrl } from './actor.js';
@@ -58,11 +58,19 @@ export async function verifyInboxRequest(req) {
     }
 
     // 验证签名
+    // 反代场景下，host 头会被改为后端地址，直接使用配置的前端域名还原
+    const headersForVerify = { ...req.headers };
+    const frontendDomain = await getInstanceDomain();
+    if (frontendDomain && headersForVerify.host !== frontendDomain) {
+        logger.debug(`[ap-inbox] 还原 host 为前端域名: ${frontendDomain} (当前 host: ${headersForVerify.host})`);
+        headersForVerify.host = frontendDomain;
+    }
+
     const isValid = verifySignature({
         signature: signatureHeader,
         method: req.method,
         path: req.originalUrl || req.url,
-        headers: req.headers,
+        headers: headersForVerify,
         publicKey,
     });
 
