@@ -4,6 +4,7 @@ const AppState = {
   bootstrapped: false,
   uiMounted: false,
   appInitialized: false,
+  embedStartClicked: false,
   listeners: {
     commitBranchChangeBound: false,
     cloudDialogLifecycleBound: false,
@@ -1547,19 +1548,24 @@ function mountScratchToolShell() {
         `<mdui-dialog headline="保存素材" description="正在准备上传..." close-on-overlay-click id="asset-upload-dialog"></mdui-dialog>`
       );
     }
-  } else if (!document.querySelector(".loading-dialog")) {
-    document.body.insertAdjacentHTML(
-      "beforeend",
-      `
-<mdui-dialog
-        headline="加载中"
-        description="正在加载作品，请稍候..."
-        close-on-overlay-click
-        class="loading-dialog"
-        open
-></mdui-dialog>
-`
-    );
+  } else {
+    // embed 模式：注入开始屏 + loading 对话框（不自动打开）
+    if (!document.getElementById("embed-start-screen")) {
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<mdui-card id="embed-start-screen" clickable onclick="startEmbedLoad()" style="position:fixed;inset:0;z-index:9999;border-radius:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+  <div id="embed-start-title" class="mdui-typescale-headline-medium" style="margin-bottom:28px;text-align:center;padding:0 24px;max-width:480px;word-break:break-word;">加载中...</div>
+  <mdui-fab><mdui-icon slot="icon" name="play_arrow"></mdui-icon></mdui-fab>
+  <div class="mdui-typescale-label-large" style="margin-top:18px;opacity:0.6;">点击开始游玩</div>
+</mdui-card>`
+      );
+    }
+    if (!document.querySelector(".loading-dialog")) {
+      document.body.insertAdjacentHTML(
+        "beforeend",
+        `<mdui-dialog headline="加载中" description="正在加载作品，请稍候..." close-on-overlay-click class="loading-dialog"></mdui-dialog>`
+      );
+    }
   }
 
   AppState.uiMounted = true;
@@ -1633,11 +1639,54 @@ function initialize() {
   loadUserInfo();
   installCloudGlobalListeners();
   cloudAutoConnectIfNeeded({ force: tokenFromUrl });
+
+  if (isEmbed) {
+    // embed 模式：先获取标题显示在开始屏，等待用户点击再加载
+    fetchEmbedProjectTitle();
+    return;
+  }
+
   loadProject();
 }
 
 function zctabopen() {
   updateZerocatTab();
+}
+
+// --- Embed 开始屏控制 ---
+async function fetchEmbedProjectTitle() {
+  const queryId = getQueryStringParameter("id");
+  if (!queryId) return;
+  try {
+    const result = await apiRequest({
+      url: `${ZCConfig.api.getPath("/scratch/projectinfo2")}?id=${queryId}`,
+      type: "GET",
+    });
+    const title = result?.title || result?.name;
+    if (title) {
+      const titleEl = document.getElementById("embed-start-title");
+      if (titleEl) titleEl.textContent = title;
+    }
+  } catch (e) {
+    // 静默失败，保留默认文字
+  }
+}
+
+function startEmbedLoad() {
+  if (AppState.embedStartClicked) return;
+  AppState.embedStartClicked = true;
+
+  const screen = document.getElementById("embed-start-screen");
+  if (screen) {
+    screen.style.opacity = "0";
+    screen.style.transition = "opacity 0.25s";
+    setTimeout(() => screen.remove(), 280);
+  }
+
+  const loadingDialog = document.querySelector(".loading-dialog");
+  if (loadingDialog) loadingDialog.open = true;
+
+  loadProject();
 }
 
 let isLoading = false;
