@@ -1329,6 +1329,69 @@ export async function getHomeFeed({
   return buildListResponse(rawPosts, limit, userId);
 }
 
+/**
+ * 全局时间线 — 展示所有帖子（含联邦社交帖），按帖子原始发布时间排序
+ * 仅限已登录用户访问
+ */
+export async function getGlobalFeed({
+  userId,
+  cursor,
+  limit = 20,
+  includeReplies = false,
+}) {
+  await initStaticUrl();
+
+  const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
+
+  // cursor 为 ISO 8601 时间戳字符串，用于基于 created_at 的分页
+  let cursorFilter = {};
+  if (cursor) {
+    const cursorDate = new Date(cursor);
+    if (!isNaN(cursorDate.getTime())) {
+      cursorFilter = { created_at: { lt: cursorDate } };
+    }
+  }
+
+  const rawPosts = await prisma.ow_posts.findMany({
+    where: {
+      is_deleted: false,
+      ...(includeReplies ? {} : { post_type: { not: "reply" } }),
+      ...cursorFilter,
+    },
+    orderBy: { created_at: "desc" },
+    take: safeLimit,
+    select: buildLeanSelect(),
+  });
+
+  // 构建响应（使用 created_at 作为游标而非 id）
+  let posts = rawPosts.map(formatPost);
+  posts = await addViewerContext(posts, userId);
+
+  const refIds = collectReferencedIds(posts);
+  let referencedPosts = await fetchReferencedPosts(refIds);
+  if (userId && Object.keys(referencedPosts).length > 0) {
+    const refPostsArray = Object.values(referencedPosts);
+    const enriched = await addViewerContext(refPostsArray, userId);
+    referencedPosts = {};
+    for (const p of enriched) {
+      referencedPosts[p.id] = p;
+    }
+  }
+
+  const hasMore = rawPosts.length === safeLimit;
+  const nextCursor =
+    rawPosts.length > 0
+      ? rawPosts[rawPosts.length - 1].created_at.toISOString()
+      : null;
+
+  return {
+    posts,
+    includes: { posts: referencedPosts },
+    next_cursor: hasMore ? nextCursor : null,
+    has_more: hasMore,
+  };
+}
+
 export async function getThread(postId, { cursor, limit = 50, viewerId = null } = {}) {
   await initStaticUrl();
 

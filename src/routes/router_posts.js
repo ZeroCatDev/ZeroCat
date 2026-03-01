@@ -16,6 +16,7 @@ import {
   getPostById,
   getUserPosts,
   getHomeFeed,
+  getGlobalFeed,
   getThread,
   getMentions,
   getRelatedPosts,
@@ -263,6 +264,22 @@ router.get("/feed", async (req, res) => {
   } catch (error) {
     logger.error("获取首页刷帖失败:", error);
     res.status(500).json({ status: "error", message: "获取刷帖失败" });
+  }
+});
+
+router.get("/global", needLogin, async (req, res) => {
+  try {
+    const { cursor, limit = 20, include_replies = "false" } = req.query;
+    const data = await getGlobalFeed({
+      userId: res.locals.userid,
+      cursor,
+      limit,
+      includeReplies: include_replies === "true",
+    });
+    res.status(200).json({ status: "success", data });
+  } catch (error) {
+    logger.error("获取全局时间线失败:", error);
+    res.status(500).json({ status: "error", message: "获取全局时间线失败" });
   }
 });
 
