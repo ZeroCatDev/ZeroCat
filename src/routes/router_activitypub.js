@@ -783,6 +783,542 @@ router.delete('/admin/federation/blocklist/:domain', requireAdmin, async (req, r
 });
 
 // ═══════════════════════════════════════════════════════════════
+// 联邦管理 — 统计、用户、帖子、队列、手动同步
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * 联邦综合统计概览
+ * GET /ap/admin/federation/stats
+ */
+router.get('/admin/federation/stats', requireAdmin, async (req, res) => {
+    try {
+        // 基础统计
+        const [
+            totalRemoteFollowers,
+            totalProxyUsers,
+            totalFederatedPosts,
+            totalLocalPosts,
+            totalDeliveryRecords,
+        ] = await Promise.all([
+            prisma.ow_target_configs.count({ where: { target_type: 'ap_follow' } }),
+            prisma.ow_target_configs.count({ where: { target_type: 'ap_actor' } }),
+            prisma.ow_posts.count({ where: { is_deleted: false, platform_refs: { not: null } } }),
+            prisma.ow_posts.count({ where: { is_deleted: false } }),
+            prisma.ow_target_configs.count({ where: { target_type: 'ap_delivery' } }),
+        ]);
+
+        // 外部平台同步统计
+        const platformStats = await prisma.$queryRaw`
+            SELECT
+                COUNT(*) FILTER (WHERE platform_refs::jsonb ? 'twitter') AS twitter_synced,
+                COUNT(*) FILTER (WHERE platform_refs::jsonb ? 'bluesky') AS bluesky_synced,
+                COUNT(*) FILTER (WHERE platform_refs::jsonb ? 'activitypub') AS activitypub_synced
+            FROM ow_posts
+            WHERE is_deleted = false AND platform_refs IS NOT NULL
+        `;
+
+        // 队列状态
+        let queueStats = null;
+        try {
+            const { getApFederationQueue } = await import('../services/queue/queues.js');
+            const queue = getApFederationQueue();
+            if (queue) {
+                const [waiting, active, completed, failed, delayed] = await Promise.all([
+                    queue.getWaitingCount(),
+                    queue.getActiveCount(),
+                    queue.getCompletedCount(),
+                    queue.getFailedCount(),
+                    queue.getDelayedCount(),
+                ]);
+                queueStats = { waiting, active, completed, failed, delayed };
+            }
+        } catch { /* queue not available */ }
+
+        const { getActivityPubStatus } = await import('../services/activitypub/setup.js');
+        const apStatus = await getActivityPubStatus();
+
+        return res.json({
+            status: 'ok',
+            data: {
+                federation: apStatus,
+                counts: {
+                    remoteFollowers: totalRemoteFollowers,
+                    proxyUsers: totalProxyUsers,
+                    federatedPosts: totalFederatedPosts,
+                    localPosts: totalLocalPosts,
+                    deliveryRecords: totalDeliveryRecords,
+                },
+                platformSync: platformStats?.[0] ? {
+                    twitter: Number(platformStats[0].twitter_synced || 0),
+                    bluesky: Number(platformStats[0].bluesky_synced || 0),
+                    activitypub: Number(platformStats[0].activitypub_synced || 0),
+                } : null,
+                queue: queueStats,
+            },
+        });
+    } catch (err) {
+        logger.error('[ap-route] 联邦统计错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * 列出所有有远程关注者的本地用户
+ * GET /ap/admin/federation/users?page=1&limit=20
+ */
+router.get('/admin/federation/users', requireAdmin, async (req, res) => {
+    try {
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+        const skip = (page - 1) * limit;
+
+        // 查找有远程关注者的本地用户
+        const followRecords = await prisma.ow_target_configs.groupBy({
+            by: ['target_id'],
+            where: { target_type: 'ap_follow' },
+            _count: { id: true },
+            orderBy: { _count: { id: 'desc' } },
+            skip,
+            take: limit,
+        });
+
+        const userIds = followRecords.map(r => Number(r.target_id)).filter(id => !isNaN(id));
+        const users = userIds.length > 0 ? await prisma.ow_users.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, username: true, display_name: true, avatar: true, status: true },
+        }) : [];
+
+        const userMap = Object.fromEntries(users.map(u => [u.id, u]));
+        const result = followRecords.map(r => ({
+            user: userMap[Number(r.target_id)] || { id: Number(r.target_id) },
+            remoteFollowersCount: r._count.id,
+        }));
+
+        const total = await prisma.ow_target_configs.groupBy({
+            by: ['target_id'],
+            where: { target_type: 'ap_follow' },
+        }).then(g => g.length);
+
+        return res.json({ status: 'ok', data: { users: result, total, page, limit } });
+    } catch (err) {
+        logger.error('[ap-route] 联邦用户列表错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * 查看某用户的远程关注者详情
+ * GET /ap/admin/federation/users/:userId/followers?page=1&limit=50
+ */
+router.get('/admin/federation/users/:userId/followers', requireAdmin, async (req, res) => {
+    try {
+        const userId = parseInt(req.params.userId);
+        if (isNaN(userId)) return res.status(400).json({ error: 'Invalid user ID' });
+
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+        const offset = (page - 1) * limit;
+
+        const followers = await getRemoteFollowers(userId, limit, offset);
+        const count = await countRemoteFollowers(userId);
+
+        return res.json({
+            status: 'ok',
+            data: {
+                userId,
+                followers: followers.map(f => {
+                    try { return { actorUrl: f.actorUrl, inbox: f.inbox, ...JSON.parse(f.value || '{}') }; }
+                    catch { return { actorUrl: f.actorUrl, inbox: f.inbox }; }
+                }),
+                total: count,
+                page,
+                limit,
+            },
+        });
+    } catch (err) {
+        logger.error('[ap-route] 用户远程关注者错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * 查看远程代理用户列表（管理员版）
+ * GET /ap/admin/federation/proxy-users?page=1&limit=20&q=keyword
+ */
+router.get('/admin/federation/proxy-users', requireAdmin, async (req, res) => {
+    try {
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+        const skip = (page - 1) * limit;
+        const keyword = req.query.q || '';
+
+        let result;
+        if (keyword) {
+            result = await searchProxyUsers(keyword, limit);
+        } else {
+            result = await listProxyUsers(limit, skip);
+        }
+
+        return res.json({
+            status: 'ok',
+            data: {
+                users: result.users,
+                total: result.total,
+                page,
+                limit,
+            },
+        });
+    } catch (err) {
+        logger.error('[ap-route] 管理员代理用户列表错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * 查看帖子的完整同步状态
+ * GET /ap/admin/federation/posts/:postId/sync-status
+ */
+router.get('/admin/federation/posts/:postId/sync-status', requireAdmin, async (req, res) => {
+    try {
+        const postId = parseInt(req.params.postId);
+        if (isNaN(postId)) return res.status(400).json({ error: 'Invalid post ID' });
+
+        const post = await prisma.ow_posts.findUnique({
+            where: { id: postId },
+            select: {
+                id: true, author_id: true, post_type: true, content: true,
+                platform_refs: true, created_at: true, is_deleted: true,
+                author: { select: { id: true, username: true, display_name: true } },
+            },
+        });
+
+        if (!post) return res.status(404).json({ error: 'Post not found' });
+
+        const refs = post.platform_refs || {};
+
+        // 获取 AP 投递记录
+        let deliveryRecords = [];
+        if (refs.activitypub?.id) {
+            const { getDeliveryRecords } = await import('../services/activitypub/store.js');
+            deliveryRecords = await getDeliveryRecords(refs.activitypub.id);
+        }
+
+        return res.json({
+            status: 'ok',
+            data: {
+                post: {
+                    id: post.id,
+                    authorId: post.author_id,
+                    author: post.author,
+                    postType: post.post_type,
+                    content: post.content?.substring(0, 300),
+                    createdAt: post.created_at,
+                    isDeleted: post.is_deleted,
+                },
+                sync: {
+                    twitter: refs.twitter || null,
+                    bluesky: refs.bluesky || null,
+                    activitypub: refs.activitypub || null,
+                },
+                delivery: {
+                    total: deliveryRecords.length,
+                    records: deliveryRecords.slice(0, 50),
+                },
+            },
+        });
+    } catch (err) {
+        logger.error('[ap-route] 帖子同步状态错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * 列出已同步的帖子
+ * GET /ap/admin/federation/posts?page=1&limit=20&platform=activitypub|twitter|bluesky
+ */
+router.get('/admin/federation/posts', requireAdmin, async (req, res) => {
+    try {
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+        const skip = (page - 1) * limit;
+        const platform = req.query.platform;
+
+        let platformFilter = { platform_refs: { not: null } };
+        // Prisma JSON 路径过滤
+        if (platform === 'twitter') {
+            platformFilter = { platform_refs: { path: ['twitter'], not: null } };
+        } else if (platform === 'bluesky') {
+            platformFilter = { platform_refs: { path: ['bluesky'], not: null } };
+        } else if (platform === 'activitypub') {
+            platformFilter = { platform_refs: { path: ['activitypub'], not: null } };
+        }
+
+        const [posts, total] = await Promise.all([
+            prisma.ow_posts.findMany({
+                where: { is_deleted: false, ...platformFilter },
+                select: {
+                    id: true, author_id: true, post_type: true, content: true,
+                    platform_refs: true, created_at: true,
+                    author: { select: { id: true, username: true, display_name: true } },
+                },
+                orderBy: { created_at: 'desc' },
+                skip,
+                take: limit,
+            }),
+            prisma.ow_posts.count({ where: { is_deleted: false, ...platformFilter } }),
+        ]);
+
+        return res.json({
+            status: 'ok',
+            data: {
+                posts: posts.map(p => ({
+                    id: p.id,
+                    authorId: p.author_id,
+                    author: p.author,
+                    postType: p.post_type,
+                    content: p.content?.substring(0, 200),
+                    createdAt: p.created_at,
+                    sync: {
+                        twitter: p.platform_refs?.twitter || null,
+                        bluesky: p.platform_refs?.bluesky || null,
+                        activitypub: p.platform_refs?.activitypub || null,
+                    },
+                })),
+                total,
+                page,
+                limit,
+            },
+        });
+    } catch (err) {
+        logger.error('[ap-route] 联邦帖子列表错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * 管理员手动触发帖子重新推送到所有平台
+ * POST /ap/admin/federation/posts/:postId/resync
+ * Body: { platforms?: ['activitypub','twitter','bluesky'] }
+ */
+router.post('/admin/federation/posts/:postId/resync', requireAdmin, async (req, res) => {
+    try {
+        const postId = parseInt(req.params.postId);
+        if (isNaN(postId)) return res.status(400).json({ error: 'Invalid post ID' });
+
+        const post = await prisma.ow_posts.findUnique({
+            where: { id: postId },
+            select: { id: true, author_id: true, is_deleted: true },
+        });
+        if (!post || post.is_deleted) return res.status(404).json({ error: 'Post not found' });
+
+        const results = {};
+
+        // 社交平台同步（包含 Twitter/Bluesky/AP）
+        const { default: queueManager } = await import('../services/queue/queueManager.js');
+        const syncResult = await queueManager.enqueueSocialPostSync(
+            post.author_id, postId, 'create'
+        );
+        results.socialSync = syncResult;
+
+        return res.json({ status: 'ok', data: { postId, results } });
+    } catch (err) {
+        logger.error('[ap-route] 帖子重新推送错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * 管理员手动触发帖子推送到 AP 关注者
+ * POST /ap/admin/federation/posts/:postId/push-ap
+ */
+router.post('/admin/federation/posts/:postId/push-ap', requireAdmin, async (req, res) => {
+    try {
+        const postId = parseInt(req.params.postId);
+        if (isNaN(postId)) return res.status(400).json({ error: 'Invalid post ID' });
+
+        const post = await prisma.ow_posts.findUnique({
+            where: { id: postId },
+            include: { author: { select: { id: true, username: true, display_name: true } } },
+        });
+        if (!post || post.is_deleted) return res.status(404).json({ error: 'Post not found' });
+
+        const { postToNote, buildCreateActivity, getActorUrl, setPostApRef } = await import('../services/activitypub/index.js');
+        const note = await postToNote(post);
+        if (!note) return res.status(400).json({ error: 'Cannot build AP Note for this post' });
+
+        await setPostApRef(postId, note.id, note.url);
+        const actorUrl = await getActorUrl(post.author.username);
+        const activity = await buildCreateActivity(actorUrl, note);
+
+        const { default: queueManager } = await import('../services/queue/queueManager.js');
+        const result = await queueManager.enqueueApDeliverFollowers(post.author_id, activity);
+
+        return res.json({ status: 'ok', data: { postId, noteId: note.id, delivery: result } });
+    } catch (err) {
+        logger.error('[ap-route] AP 推送错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * 管理员手动触发远程用户帖子拉取
+ * POST /ap/admin/federation/proxy-users/:userId/fetch-posts
+ * Body: { maxPosts?: number }
+ */
+router.post('/admin/federation/proxy-users/:userId/fetch-posts', requireAdmin, async (req, res) => {
+    try {
+        const userId = parseInt(req.params.userId);
+        if (isNaN(userId)) return res.status(400).json({ error: 'Invalid user ID' });
+
+        const isRemote = await isRemoteProxyUser(userId);
+        if (!isRemote) return res.status(404).json({ error: 'Not a remote proxy user' });
+
+        const actorUrl = await getProxyUserActorUrl(userId);
+        if (!actorUrl) return res.status(404).json({ error: 'Actor URL not found' });
+
+        const maxPosts = Math.min(parseInt(req.body.maxPosts) || 50, 200);
+
+        const { default: queueManager } = await import('../services/queue/queueManager.js');
+        const result = await queueManager.enqueueApFetchPosts(actorUrl, maxPosts);
+
+        return res.json({ status: 'ok', data: { userId, actorUrl, maxPosts, queued: result } });
+    } catch (err) {
+        logger.error('[ap-route] 管理员拉取远程帖子错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * 管理员手动触发远程用户资料刷新
+ * POST /ap/admin/federation/proxy-users/:userId/refresh
+ */
+router.post('/admin/federation/proxy-users/:userId/refresh', requireAdmin, async (req, res) => {
+    try {
+        const userId = parseInt(req.params.userId);
+        if (isNaN(userId)) return res.status(400).json({ error: 'Invalid user ID' });
+
+        const isRemote = await isRemoteProxyUser(userId);
+        if (!isRemote) return res.status(404).json({ error: 'Not a remote proxy user' });
+
+        const actorUrl = await getProxyUserActorUrl(userId);
+        if (!actorUrl) return res.status(404).json({ error: 'Actor URL not found' });
+
+        // 强制刷新远程 Actor（跳过缓存）
+        const { fetchRemoteActor } = await import('../services/activitypub/federation.js');
+        const actor = await fetchRemoteActor(actorUrl, true);
+        if (!actor) return res.status(502).json({ error: 'Could not fetch remote actor' });
+
+        // 更新代理用户信息
+        const { ensureProxyUser: refreshProxy } = await import('../services/activitypub/remoteUser.js');
+        const proxyUser = await refreshProxy(actorUrl, actor);
+
+        return res.json({ status: 'ok', data: { userId, actorUrl, refreshed: !!proxyUser } });
+    } catch (err) {
+        logger.error('[ap-route] 管理员刷新远程用户错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * 管理员向指定用户的所有远程关注者触发历史帖子回填
+ * POST /ap/admin/federation/users/:userId/backfill
+ */
+router.post('/admin/federation/users/:userId/backfill', requireAdmin, async (req, res) => {
+    try {
+        const userId = parseInt(req.params.userId);
+        if (isNaN(userId)) return res.status(400).json({ error: 'Invalid user ID' });
+
+        const user = await prisma.ow_users.findUnique({
+            where: { id: userId },
+            select: { id: true, username: true },
+        });
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        const followers = await getRemoteFollowers(userId, 500, 0);
+        if (followers.length === 0) {
+            return res.json({ status: 'ok', data: { userId, jobs: 0, message: 'No remote followers' } });
+        }
+
+        const { default: queueManager } = await import('../services/queue/queueManager.js');
+        let queued = 0;
+        for (const follower of followers) {
+            const result = await queueManager.enqueueApBackfill(userId, follower.actorUrl);
+            if (result) queued++;
+        }
+
+        return res.json({ status: 'ok', data: { userId, username: user.username, jobs: queued, followers: followers.length } });
+    } catch (err) {
+        logger.error('[ap-route] 管理员回填错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * AP 联邦队列状态和管理
+ * GET /ap/admin/federation/queue
+ */
+router.get('/admin/federation/queue', requireAdmin, async (req, res) => {
+    try {
+        const { getApFederationQueue } = await import('../services/queue/queues.js');
+        const { getSocialSyncQueue } = await import('../services/queue/queues.js');
+        const apQueue = getApFederationQueue();
+        const socialQueue = getSocialSyncQueue();
+
+        const getQueueInfo = async (queue, name) => {
+            if (!queue) return { name, available: false };
+            const [waiting, active, completed, failed, delayed, paused] = await Promise.all([
+                queue.getWaitingCount(),
+                queue.getActiveCount(),
+                queue.getCompletedCount(),
+                queue.getFailedCount(),
+                queue.getDelayedCount(),
+                queue.isPaused(),
+            ]);
+            return { name, available: true, paused, waiting, active, completed, failed, delayed };
+        };
+
+        const [apInfo, socialInfo] = await Promise.all([
+            getQueueInfo(apQueue, 'ap-federation'),
+            getQueueInfo(socialQueue, 'social-sync'),
+        ]);
+
+        return res.json({ status: 'ok', data: { queues: [apInfo, socialInfo] } });
+    } catch (err) {
+        logger.error('[ap-route] 队列状态错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * 暂停/恢复 AP 联邦队列
+ * POST /ap/admin/federation/queue/pause
+ * POST /ap/admin/federation/queue/resume
+ */
+router.post('/admin/federation/queue/:action', requireAdmin, async (req, res) => {
+    try {
+        const { action } = req.params;
+        if (!['pause', 'resume'].includes(action)) {
+            return res.status(400).json({ error: 'Action must be pause or resume' });
+        }
+
+        const { getApFederationQueue } = await import('../services/queue/queues.js');
+        const queue = getApFederationQueue();
+        if (!queue) return res.status(503).json({ error: 'AP federation queue not available' });
+
+        if (action === 'pause') {
+            await queue.pause();
+        } else {
+            await queue.resume();
+        }
+
+        return res.json({ status: 'ok', data: { action, paused: await queue.isPaused() } });
+    } catch (err) {
+        logger.error('[ap-route] 队列操作错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
 // 远程用户代理端点
 // ═══════════════════════════════════════════════════════════════
 

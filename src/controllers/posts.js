@@ -117,6 +117,7 @@ function buildLeanSelect() {
     bookmark_count: true,
     is_deleted: true,
     embed: true,
+    platform_refs: true,
     created_at: true,
     author: {
       select: { id: true, username: true, display_name: true, avatar: true },
@@ -134,6 +135,45 @@ function buildLeanSelect() {
       },
     },
   };
+}
+
+/**
+ * 格式化平台同步引用信息
+ * 返回帖子在各平台的同步状态（Twitter、Bluesky、ActivityPub）
+ */
+function formatPlatformRefs(refs) {
+  if (!refs || typeof refs !== 'object') return null;
+
+  const result = {};
+  let hasAny = false;
+
+  if (refs.twitter) {
+    result.twitter = {
+      id: refs.twitter.id || null,
+      url: refs.twitter.id ? `https://x.com/i/status/${refs.twitter.id}` : null,
+      kind: refs.twitter.kind || null,
+    };
+    hasAny = true;
+  }
+
+  if (refs.bluesky) {
+    result.bluesky = {
+      uri: refs.bluesky.uri || null,
+      cid: refs.bluesky.cid || null,
+      kind: refs.bluesky.kind || null,
+    };
+    hasAny = true;
+  }
+
+  if (refs.activitypub) {
+    result.activitypub = {
+      id: refs.activitypub.id || null,
+      url: refs.activitypub.url || null,
+    };
+    hasAny = true;
+  }
+
+  return hasAny ? result : null;
 }
 
 function formatPost(raw) {
@@ -174,6 +214,7 @@ function formatPost(raw) {
       }))
       .filter((m) => m.id),
     embed: raw.is_deleted ? null : raw.embed || null,
+    platform_refs: raw.is_deleted ? null : formatPlatformRefs(raw.platform_refs),
   };
 }
 

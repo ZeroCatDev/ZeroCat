@@ -512,5 +512,157 @@ router.get("/:id", async (req, res) => {
   }
 });
 
+// ─── 用户主动触发同步 ─────────────────────────────────────────
+
+/**
+ * 用户主动触发自己帖子的重新推送（社交平台 + AP）
+ * POST /posts/:id/resync
+ * 只有帖子作者可以触发
+ */
+router.post("/:id/resync", needLogin, async (req, res) => {
+  try {
+    const postId = parseInt(req.params.id);
+    if (isNaN(postId)) {
+      return res.status(400).json({ status: "error", message: "无效的帖子 ID" });
+    }
+
+    const { prisma } = await import("../services/prisma.js");
+    const post = await prisma.ow_posts.findUnique({
+      where: { id: postId },
+      select: { id: true, author_id: true, is_deleted: true },
+    });
+
+    if (!post || post.is_deleted) {
+      return res.status(404).json({ status: "error", message: "帖子不存在" });
+    }
+
+    if (post.author_id !== res.locals.userid) {
+      return res.status(403).json({ status: "error", message: "只能重新同步自己的帖子" });
+    }
+
+    const { default: queueManager } = await import("../services/queue/queueManager.js");
+    const result = await queueManager.enqueueSocialPostSync(
+      post.author_id, postId, "create"
+    );
+
+    res.status(200).json({
+      status: "success",
+      data: { postId, queued: !!result, jobId: result?.jobId || null },
+    });
+  } catch (error) {
+    logger.error("重新同步帖子失败:", error);
+    res.status(500).json({ status: "error", message: "重新同步失败" });
+  }
+});
+
+/**
+ * 用户主动触发帖子推送到 AP 联邦网络
+ * POST /posts/:id/push-federation
+ * 只有帖子作者可以触发
+ */
+router.post("/:id/push-federation", needLogin, async (req, res) => {
+  try {
+    const postId = parseInt(req.params.id);
+    if (isNaN(postId)) {
+      return res.status(400).json({ status: "error", message: "无效的帖子 ID" });
+    }
+
+    const { prisma } = await import("../services/prisma.js");
+    const post = await prisma.ow_posts.findUnique({
+      where: { id: postId },
+      include: { author: { select: { id: true, username: true, display_name: true } } },
+    });
+
+    if (!post || post.is_deleted) {
+      return res.status(404).json({ status: "error", message: "帖子不存在" });
+    }
+
+    if (post.author_id !== res.locals.userid) {
+      return res.status(403).json({ status: "error", message: "只能推送自己的帖子" });
+    }
+
+    // 检查联邦是否启用
+    const { isFederationEnabled } = await import("../services/activitypub/config.js");
+    const enabled = await isFederationEnabled();
+    if (!enabled) {
+      return res.status(400).json({ status: "error", message: "联邦功能未启用" });
+    }
+
+    const { postToNote, buildCreateActivity, getActorUrl, setPostApRef } =
+      await import("../services/activitypub/index.js");
+    const note = await postToNote(post);
+    if (!note) {
+      return res.status(400).json({ status: "error", message: "无法构建 AP Note" });
+    }
+
+    await setPostApRef(postId, note.id, note.url);
+    const actorUrl = await getActorUrl(post.author.username);
+    const activity = await buildCreateActivity(actorUrl, note);
+
+    const { default: queueManager } = await import("../services/queue/queueManager.js");
+    const result = await queueManager.enqueueApDeliverFollowers(post.author_id, activity);
+
+    res.status(200).json({
+      status: "success",
+      data: {
+        postId,
+        noteId: note.id,
+        noteUrl: note.url,
+        queued: !!result,
+        jobId: result?.jobId || null,
+      },
+    });
+  } catch (error) {
+    logger.error("推送到联邦网络失败:", error);
+    res.status(500).json({ status: "error", message: "推送到联邦网络失败" });
+  }
+});
+
+/**
+ * 用户主动触发拉取远程用户的最新帖子
+ * POST /posts/remote-user/:userId/fetch
+ * 需要登录
+ */
+router.post("/remote-user/:userId/fetch", needLogin, async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    if (isNaN(userId)) {
+      return res.status(400).json({ status: "error", message: "无效的用户 ID" });
+    }
+
+    const { isRemoteProxyUser, getProxyUserActorUrl } =
+      await import("../services/activitypub/index.js");
+
+    const isRemote = await isRemoteProxyUser(userId);
+    if (!isRemote) {
+      return res.status(404).json({ status: "error", message: "不是远程用户" });
+    }
+
+    const actorUrl = await getProxyUserActorUrl(userId);
+    if (!actorUrl) {
+      return res.status(404).json({ status: "error", message: "未找到远程用户 Actor URL" });
+    }
+
+    const maxPosts = Math.min(parseInt(req.body.maxPosts) || 20, 50);
+
+    const { default: queueManager } = await import("../services/queue/queueManager.js");
+    const result = await queueManager.enqueueApFetchPosts(actorUrl, maxPosts);
+
+    res.status(200).json({
+      status: "success",
+      data: {
+        userId,
+        actorUrl,
+        maxPosts,
+        queued: !!result,
+        jobId: result?.jobId || null,
+      },
+    });
+  } catch (error) {
+    logger.error("拉取远程用户帖子失败:", error);
+    res.status(500).json({ status: "error", message: "拉取远程用户帖子失败" });
+  }
+});
+
 export default router;
 
