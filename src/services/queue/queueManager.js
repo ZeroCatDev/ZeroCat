@@ -1,10 +1,11 @@
 import { createTransport } from 'nodemailer';
-import { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue, getDataTaskQueue, getSocialSyncQueue } from './queues.js';
+import { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue, getDataTaskQueue, getSocialSyncQueue, getApFederationQueue } from './queues.js';
 import { createEmailWorker, getEmailWorker } from './workers/emailWorker.js';
 import { createScheduledTasksWorker, getScheduledTasksWorker } from './workers/scheduledTasksWorker.js';
 import { createCommentNotificationWorker, getCommentNotificationWorker } from './workers/commentNotificationWorker.js';
 import { createDataTaskWorker, getDataTaskWorker } from './workers/dataTaskWorker.js';
 import { createSocialSyncWorker, getSocialSyncWorker } from './workers/socialSyncWorker.js';
+import { createApFederationWorker, getApFederationWorker } from './workers/apFederationWorker.js';
 import { closeAll as closeAllConnections } from './redisConnectionFactory.js';
 import zcconfig from '../config/zcconfig.js';
 import logger from '../logger.js';
@@ -29,6 +30,7 @@ const queueManager = {
             await createCommentNotificationWorker();
             await createDataTaskWorker();
             await createSocialSyncWorker();
+            await createApFederationWorker();
 
             // Register repeatable jobs
             await this.registerRepeatableJobs();
@@ -213,6 +215,251 @@ const queueManager = {
         }
     },
 
+    // ─── ActivityPub 联邦任务入队方法 ──────────────────────────
+
+    /**
+     * 将收件箱活动处理加入队列
+     * @param {object} activity - AP 活动对象
+     * @param {object} remoteActor - 远程 Actor 对象
+     * @param {string|null} targetUsername - 目标用户名（用户收件箱）或 null（共享收件箱）
+     */
+    async enqueueApInbox(activity, remoteActor, targetUsername = null) {
+        const queue = getApFederationQueue();
+        if (!queue || !initialized) {
+            logger.warn('[queue-manager] AP federation queue not available, processing inline');
+            // 降级：直接处理
+            const { processInboxActivity } = await import('../activitypub/inbox.js');
+            return processInboxActivity(activity, remoteActor, targetUsername);
+        }
+
+        try {
+            const activityId = activity?.id || `${activity?.type}-${Date.now()}`;
+            const jobId = `ap-inbox-${activityId}-${Date.now()}`;
+
+            const job = await queue.add('ap_inbox', {
+                eventType: 'ap_inbox',
+                activity,
+                remoteActor,
+                targetUsername,
+            }, {
+                jobId,
+                attempts: 3,
+                backoff: { type: 'exponential', delay: 5000 },
+                removeOnComplete: { age: 86400 },
+                removeOnFail: { age: 604800 },
+            });
+
+            logger.info(`[queue-manager] AP inbox job ${job.id} enqueued (${activity?.type} from ${remoteActor?.id})`);
+            return { jobId: job.id, queued: true };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue AP inbox job:', error.message);
+            // 降级：直接处理
+            const { processInboxActivity } = await import('../activitypub/inbox.js');
+            return processInboxActivity(activity, remoteActor, targetUsername);
+        }
+    },
+
+    /**
+     * 将活动投递加入队列（单个 inbox）
+     */
+    async enqueueApDeliver(inbox, activity, userId, username) {
+        const queue = getApFederationQueue();
+        if (!queue || !initialized) {
+            logger.warn('[queue-manager] AP federation queue not available for deliver');
+            return null;
+        }
+
+        try {
+            const jobId = `ap-deliver-${userId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+            const job = await queue.add('ap_deliver', {
+                eventType: 'ap_deliver',
+                inbox,
+                activity,
+                userId,
+                username,
+            }, {
+                jobId,
+                attempts: 5,
+                backoff: { type: 'exponential', delay: 10000 },
+                removeOnComplete: { age: 43200 },
+                removeOnFail: { age: 604800 },
+            });
+
+            logger.debug(`[queue-manager] AP deliver job ${job.id} enqueued -> ${inbox}`);
+            return { jobId: job.id, queued: true };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue AP deliver job:', error.message);
+            return null;
+        }
+    },
+
+    /**
+     * 将向所有远程关注者投递活动加入队列
+     */
+    async enqueueApDeliverFollowers(userId, activity, skipDedup = false) {
+        const queue = getApFederationQueue();
+        if (!queue || !initialized) {
+            logger.warn('[queue-manager] AP federation queue not available for deliver_followers');
+            return null;
+        }
+
+        try {
+            const jobId = `ap-deliver-followers-${userId}-${Date.now()}`;
+
+            const job = await queue.add('ap_deliver_followers', {
+                eventType: 'ap_deliver_followers',
+                userId,
+                activity,
+                skipDedup,
+            }, {
+                jobId,
+                attempts: 3,
+                backoff: { type: 'exponential', delay: 15000 },
+                removeOnComplete: { age: 86400 },
+                removeOnFail: { age: 604800 },
+            });
+
+            logger.info(`[queue-manager] AP deliver_followers job ${job.id} enqueued for user=${userId}`);
+            return { jobId: job.id, queued: true };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue AP deliver_followers job:', error.message);
+            return null;
+        }
+    },
+
+    /**
+     * 将关注同步加入队列
+     */
+    async enqueueApFollowSync(followerId, followedId) {
+        const queue = getApFederationQueue();
+        if (!queue || !initialized) {
+            logger.warn('[queue-manager] AP federation queue not available for follow_sync');
+            return null;
+        }
+
+        try {
+            const jobId = `ap-follow-${followerId}-${followedId}-${Date.now()}`;
+
+            const job = await queue.add('ap_follow_sync', {
+                eventType: 'ap_follow_sync',
+                followerId,
+                followedId,
+            }, {
+                jobId,
+                attempts: 3,
+                backoff: { type: 'exponential', delay: 10000 },
+                removeOnComplete: { age: 86400 },
+                removeOnFail: { age: 604800 },
+            });
+
+            logger.info(`[queue-manager] AP follow_sync job ${job.id} enqueued (${followerId} -> ${followedId})`);
+            return { jobId: job.id, queued: true };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue AP follow_sync job:', error.message);
+            return null;
+        }
+    },
+
+    /**
+     * 将取消关注同步加入队列
+     */
+    async enqueueApUnfollowSync(followerId, unfollowedId) {
+        const queue = getApFederationQueue();
+        if (!queue || !initialized) {
+            logger.warn('[queue-manager] AP federation queue not available for unfollow_sync');
+            return null;
+        }
+
+        try {
+            const jobId = `ap-unfollow-${followerId}-${unfollowedId}-${Date.now()}`;
+
+            const job = await queue.add('ap_unfollow_sync', {
+                eventType: 'ap_unfollow_sync',
+                followerId,
+                unfollowedId,
+            }, {
+                jobId,
+                attempts: 3,
+                backoff: { type: 'exponential', delay: 10000 },
+                removeOnComplete: { age: 86400 },
+                removeOnFail: { age: 604800 },
+            });
+
+            logger.info(`[queue-manager] AP unfollow_sync job ${job.id} enqueued (${followerId} -> ${unfollowedId})`);
+            return { jobId: job.id, queued: true };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue AP unfollow_sync job:', error.message);
+            return null;
+        }
+    },
+
+    /**
+     * 将远程帖子拉取加入队列
+     */
+    async enqueueApFetchPosts(remoteActorUrl, maxPosts = 50) {
+        const queue = getApFederationQueue();
+        if (!queue || !initialized) {
+            logger.warn('[queue-manager] AP federation queue not available for fetch_posts');
+            return null;
+        }
+
+        try {
+            const jobId = `ap-fetch-posts-${encodeURIComponent(remoteActorUrl)}-${Date.now()}`;
+
+            const job = await queue.add('ap_fetch_posts', {
+                eventType: 'ap_fetch_posts',
+                remoteActorUrl,
+                maxPosts,
+            }, {
+                jobId,
+                attempts: 2,
+                backoff: { type: 'exponential', delay: 30000 },
+                removeOnComplete: { age: 86400 },
+                removeOnFail: { age: 604800 },
+            });
+
+            logger.info(`[queue-manager] AP fetch_posts job ${job.id} enqueued for ${remoteActorUrl}`);
+            return { jobId: job.id, queued: true };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue AP fetch_posts job:', error.message);
+            return null;
+        }
+    },
+
+    /**
+     * 将历史帖子回填加入队列
+     */
+    async enqueueApBackfill(userId, followerActorUrl) {
+        const queue = getApFederationQueue();
+        if (!queue || !initialized) {
+            logger.warn('[queue-manager] AP federation queue not available for backfill');
+            return null;
+        }
+
+        try {
+            const jobId = `ap-backfill-${userId}-${Date.now()}`;
+
+            const job = await queue.add('ap_backfill', {
+                eventType: 'ap_backfill',
+                userId,
+                followerActorUrl,
+            }, {
+                jobId,
+                attempts: 2,
+                backoff: { type: 'exponential', delay: 30000 },
+                removeOnComplete: { count: 50 },
+                removeOnFail: { count: 100 },
+            });
+
+            logger.info(`[queue-manager] AP backfill job ${job.id} enqueued for user=${userId} -> ${followerActorUrl}`);
+            return { jobId: job.id, queued: true };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue AP backfill job:', error.message);
+            return null;
+        }
+    },
+
     async enqueueEmail(to, subject, html, options = {}) {
         const emailQueue = getEmailQueue();
         if (!emailQueue || !initialized) {
@@ -273,12 +520,14 @@ const queueManager = {
             const commentNotificationWorker = getCommentNotificationWorker();
             const dataTaskWorker = getDataTaskWorker();
             const socialSyncWorker = getSocialSyncWorker();
+            const apFederationWorker = getApFederationWorker();
 
             if (emailWorker) await emailWorker.close();
             if (scheduledWorker) await scheduledWorker.close();
             if (commentNotificationWorker) await commentNotificationWorker.close();
             if (dataTaskWorker) await dataTaskWorker.close();
             if (socialSyncWorker) await socialSyncWorker.close();
+            if (apFederationWorker) await apFederationWorker.close();
 
             // Close queues
             const emailQueue = getEmailQueue();
@@ -286,12 +535,14 @@ const queueManager = {
             const commentNotificationQueue = getCommentNotificationQueue();
             const dataTaskQueue = getDataTaskQueue();
             const socialSyncQueue = getSocialSyncQueue();
+            const apFederationQueue = getApFederationQueue();
 
             if (emailQueue) await emailQueue.close();
             if (scheduledQueue) await scheduledQueue.close();
             if (commentNotificationQueue) await commentNotificationQueue.close();
             if (dataTaskQueue) await dataTaskQueue.close();
             if (socialSyncQueue) await socialSyncQueue.close();
+            if (apFederationQueue) await apFederationQueue.close();
 
             // Close redis connections
             await closeAllConnections();

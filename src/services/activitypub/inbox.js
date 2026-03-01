@@ -17,7 +17,6 @@ import {
     buildAcceptActivity, buildRejectActivity,
 } from './objects.js';
 import { deliverToActor } from './delivery.js';
-import { getSocialSyncQueue } from '../queue/queues.js';
 import { isActorAllowed } from './federationConfig.js';
 import { handleIncomingNote, handleIncomingAnnounce, handleIncomingLike, handleIncomingUndoLike, handleIncomingDelete } from './remotePosts.js';
 import { handleFollowAccepted, handleFollowRejected } from './followSync.js';
@@ -181,27 +180,28 @@ async function handleFollow(activity, remoteActor, targetUsername) {
         const localActorUrl = await getActorUrl(username);
         const acceptActivity = await buildAcceptActivity(localActorUrl, activity);
 
-        // 异步投递 Accept
-        deliverToActor(localUser.id, remoteActor.id, acceptActivity).catch(err => {
-            logger.error('[ap-inbox] 发送 Accept 失败:', err.message);
-        });
+        // 通过 BullMQ 队列异步投递 Accept
+        try {
+            const { default: queueManager } = await import('../queue/queueManager.js');
+            await queueManager.enqueueApDeliver(
+                remoteActor.inbox,
+                acceptActivity,
+                localUser.id,
+                username
+            );
+        } catch (err) {
+            // 降级：直接投递
+            logger.warn('[ap-inbox] 无法入队 Accept 投递，降级为直接投递:', err.message);
+            deliverToActor(localUser.id, remoteActor.id, acceptActivity).catch(e => {
+                logger.error('[ap-inbox] 发送 Accept 失败:', e.message);
+            });
+        }
 
         // 通过 BullMQ 任务队列异步推送历史帖子给新关注者
         try {
-            const queue = getSocialSyncQueue();
-            if (queue) {
-                await queue.add('ap_backfill', {
-                    eventType: 'ap_backfill',
-                    userId: localUser.id,
-                    followerActorUrl: remoteActor.id,
-                }, {
-                    attempts: 2,
-                    backoff: { type: 'exponential', delay: 30000 },
-                    removeOnComplete: { count: 50 },
-                    removeOnFail: { count: 100 },
-                });
-                logger.info(`[ap-inbox] 已为 ${username} -> ${remoteActor.id} 排队回填作业`);
-            }
+            const { default: queueManager } = await import('../queue/queueManager.js');
+            await queueManager.enqueueApBackfill(localUser.id, remoteActor.id);
+            logger.info(`[ap-inbox] 已为 ${username} -> ${remoteActor.id} 排队回填作业`);
         } catch (err) {
             logger.error('[ap-inbox] 无法排队回填作业:', err.message);
         }

@@ -9,14 +9,21 @@ let worker = null;
 async function processSocialSync(job) {
     const { actorUserId, postId, eventType } = job.data;
 
-    // 处理 ActivityPub 历史帖子回填任务
+    // ap_backfill 已迁移到 apFederationWorker，保留兼容处理
     if (eventType === 'ap_backfill') {
         const { userId, followerActorUrl } = job.data;
-        await job.log(`ap_backfill start user=${userId} follower=${followerActorUrl}`);
-        const { backfillPostsToFollower } = await import('../../activitypub/outbox.js');
-        await backfillPostsToFollower({ userId, followerActorUrl });
-        await job.log(`ap_backfill done user=${userId}`);
-        return { backfilled: true };
+        await job.log(`ap_backfill (legacy) redirecting to ap-federation queue`);
+        try {
+            const { default: queueManager } = await import('../queueManager.js');
+            await queueManager.enqueueApBackfill(userId, followerActorUrl);
+            return { redirected: true };
+        } catch {
+            // 降级：直接执行
+            await job.log(`ap_backfill fallback: direct execution`);
+            const { backfillPostsToFollower } = await import('../../activitypub/outbox.js');
+            await backfillPostsToFollower({ userId, followerActorUrl });
+            return { backfilled: true };
+        }
     }
 
     await job.log(`sync start user=${actorUserId} post=${postId} event=${eventType}`);

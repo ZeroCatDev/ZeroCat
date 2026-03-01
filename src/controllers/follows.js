@@ -16,6 +16,20 @@ async function getApFollowSync() {
     return _apFollowSync;
 }
 
+let _queueManager = null;
+async function getQueueManager() {
+    if (!_queueManager) {
+        try {
+            const mod = await import('../services/queue/queueManager.js');
+            _queueManager = mod.default;
+        } catch (err) {
+            logger.debug('[follows] queueManager 模块不可用:', err.message);
+            _queueManager = {};
+        }
+    }
+    return _queueManager;
+}
+
 let _apRemoteUser = null;
 async function getApRemoteUser() {
     if (!_apRemoteUser) {
@@ -96,14 +110,20 @@ export async function followUser(followerId, followedId, note = "") {
 
         logger.debug(`Created follow notification for user ${followedId}`);
 
-        // 如果被关注的用户是远程代理用户，同步关注到远端 ActivityPub 实例
+        // 如果被关注的用户是远程代理用户，异步同步关注到远端 ActivityPub 实例
         try {
-            const apSync = await getApFollowSync();
-            if (apSync.syncFollowToRemote) {
-                await apSync.syncFollowToRemote(followerId, followedId);
+            const qm = await getQueueManager();
+            if (qm.enqueueApFollowSync) {
+                await qm.enqueueApFollowSync(followerId, followedId);
+            } else {
+                // 队列不可用时降级为同步调用
+                const apSync = await getApFollowSync();
+                if (apSync.syncFollowToRemote) {
+                    await apSync.syncFollowToRemote(followerId, followedId);
+                }
             }
         } catch (apErr) {
-            logger.warn(`[follows] AP 关注同步失败 (非致命):`, apErr.message);
+            logger.warn(`[follows] AP 关注同步入队失败 (非致命):`, apErr.message);
         }
 
         return relationship;
@@ -122,14 +142,20 @@ export async function followUser(followerId, followedId, note = "") {
  */
 export async function unfollowUser(followerId, followedId) {
     try {
-        // 如果取消关注的用户是远程代理用户，先同步取消关注到远端
+        // 如果取消关注的用户是远程代理用户，异步同步取消关注到远端
         try {
-            const apSync = await getApFollowSync();
-            if (apSync.syncUnfollowToRemote) {
-                await apSync.syncUnfollowToRemote(followerId, followedId);
+            const qm = await getQueueManager();
+            if (qm.enqueueApUnfollowSync) {
+                await qm.enqueueApUnfollowSync(followerId, followedId);
+            } else {
+                // 队列不可用时降级为同步调用
+                const apSync = await getApFollowSync();
+                if (apSync.syncUnfollowToRemote) {
+                    await apSync.syncUnfollowToRemote(followerId, followedId);
+                }
             }
         } catch (apErr) {
-            logger.warn(`[follows] AP 取消关注同步失败 (非致命):`, apErr.message);
+            logger.warn(`[follows] AP 取消关注同步入队失败 (非致命):`, apErr.message);
         }
 
         // Delete relationship if it exists

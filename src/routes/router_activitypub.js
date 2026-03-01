@@ -13,7 +13,7 @@ import {
     getInstanceDomain, getInstanceBaseUrl, getApEndpointBaseUrl, getStaticUrl,
     isFederationEnabled, isApRequest,
     buildActorObject, getLocalUserByUsername,
-    verifyInboxRequest, processInboxActivity,
+    verifyInboxRequest,
     buildUserOutbox,
     countRemoteFollowers, getRemoteFollowers,
     buildOrderedCollection, buildOrderedCollectionPage,
@@ -270,8 +270,9 @@ router.post('/users/:username/inbox', requireFederation, async (req, res) => {
             return res.status(400).json({ error: 'Could not resolve actor' });
         }
 
-        // 处理活动
-        const result = await processInboxActivity(activity, remoteActor, username);
+        // 处理活动 — 加入队列异步处理
+        const { default: queueManager } = await import('../services/queue/queueManager.js');
+        const result = await queueManager.enqueueApInbox(activity, remoteActor, username);
 
         // ActivityPub 规范要求收件箱返回 202 Accepted
         return res.status(202).json({ status: 'accepted', ...result });
@@ -306,8 +307,9 @@ router.post('/inbox', requireFederation, async (req, res) => {
             return res.status(400).json({ error: 'Could not resolve actor' });
         }
 
-        // 共享收件箱不指定特定用户
-        const result = await processInboxActivity(activity, remoteActor, null);
+        // 共享收件箱 — 加入队列异步处理
+        const { default: queueManager } = await import('../services/queue/queueManager.js');
+        const result = await queueManager.enqueueApInbox(activity, remoteActor, null);
 
         return res.status(202).json({ status: 'accepted', ...result });
     } catch (err) {

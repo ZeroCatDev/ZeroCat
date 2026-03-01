@@ -77,13 +77,18 @@ export async function syncFollowToRemote(followerId, followedId) {
 
             logger.info(`[ap-follow-sync] 已发送 Follow 到远端: ${follower.username} -> ${remoteActorUrl}`);
 
-            // 自动拉取该用户的帖子
+            // 自动拉取该用户的帖子（通过队列异步执行）
             const autoFetch = await isAutoFetchPostsEnabled();
             if (autoFetch) {
-                // 异步拉取，不阻塞
-                fetchRemoteUserPosts(remoteActorUrl, 50).catch(err => {
-                    logger.error(`[ap-follow-sync] 自动拉取帖子失败:`, err.message);
-                });
+                try {
+                    const { default: queueManager } = await import('../queue/queueManager.js');
+                    await queueManager.enqueueApFetchPosts(remoteActorUrl, 50);
+                } catch (fetchErr) {
+                    // 降级：直接异步拉取
+                    fetchRemoteUserPosts(remoteActorUrl, 50).catch(err => {
+                        logger.error(`[ap-follow-sync] 自动拉取帖子失败:`, err.message);
+                    });
+                }
             }
         } else {
             logger.warn(`[ap-follow-sync] 发送 Follow 失败: ${follower.username} -> ${remoteActorUrl}`);

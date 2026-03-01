@@ -8,6 +8,7 @@ export const QUEUE_NAMES = {
     COMMENT_NOTIFICATION: 'comment-notification',
     DATA_TASK: 'comment-data-task',
     SOCIAL_SYNC: 'social-sync',
+    AP_FEDERATION: 'ap-federation',
 };
 
 const QUEUE_OPTIONS = {
@@ -41,6 +42,14 @@ const QUEUE_OPTIONS = {
             removeOnFail: { count: 500 },
         },
     },
+    [QUEUE_NAMES.AP_FEDERATION]: {
+        defaultJobOptions: {
+            removeOnComplete: { count: 500 },
+            removeOnFail: { count: 1000 },
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 10000 },
+        },
+    },
 };
 
 let emailQueue = null;
@@ -48,6 +57,7 @@ let scheduledTasksQueue = null;
 let commentNotificationQueue = null;
 let dataTaskQueue = null;
 let socialSyncQueue = null;
+let apFederationQueue = null;
 
 async function createQueues() {
     const sharedConnection = await createConnection('queue-shared');
@@ -78,8 +88,14 @@ async function createQueues() {
         ...QUEUE_OPTIONS[QUEUE_NAMES.SOCIAL_SYNC],
     });
 
+    const apFederationConnection = await createConnection('queue-ap-federation');
+    apFederationQueue = new Queue(QUEUE_NAMES.AP_FEDERATION, {
+        connection: apFederationConnection,
+        ...QUEUE_OPTIONS[QUEUE_NAMES.AP_FEDERATION],
+    });
+
     logger.info('[queues] All queues created');
-    return { emailQueue, scheduledTasksQueue, commentNotificationQueue, dataTaskQueue, socialSyncQueue };
+    return { emailQueue, scheduledTasksQueue, commentNotificationQueue, dataTaskQueue, socialSyncQueue, apFederationQueue };
 }
 
 function getEmailQueue() {
@@ -102,4 +118,8 @@ function getSocialSyncQueue() {
     return socialSyncQueue;
 }
 
-export { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue, getDataTaskQueue, getSocialSyncQueue };
+function getApFederationQueue() {
+    return apFederationQueue;
+}
+
+export { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue, getDataTaskQueue, getSocialSyncQueue, getApFederationQueue };
