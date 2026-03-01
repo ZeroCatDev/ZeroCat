@@ -12,6 +12,9 @@ import logger from '../logger.js';
 
 let initialized = false;
 
+/** Sanitize a value for use in BullMQ jobId (no colons or special chars) */
+const sanitize = (v) => String(v).replace(/[^a-zA-Z0-9_-]/g, '_');
+
 const queueManager = {
     async initialize() {
         const enabled = await zcconfig.get('bullmq.enabled');
@@ -188,7 +191,7 @@ const queueManager = {
             const eventPayload = typeof trigger === 'object' && trigger
                 ? trigger
                 : { eventType };
-            const jobId = `ss-${eventType}-${postId}-${userId}-${Date.now()}`;
+            const jobId = `ss-${sanitize(eventType)}-${postId}-${userId}-${Date.now()}`;
 
             const job = await queue.add(
                 'sync-post',
@@ -233,7 +236,7 @@ const queueManager = {
         }
 
         try {
-            const activityId = activity?.id || `${activity?.type}-${Date.now()}`;
+            const activityId = sanitize(activity?.id || `${activity?.type}-${Date.now()}`);
             const jobId = `ap-inbox-${activityId}-${Date.now()}`;
 
             const job = await queue.add('ap_inbox', {
@@ -252,7 +255,7 @@ const queueManager = {
             logger.info(`[queue-manager] AP inbox job ${job.id} enqueued (${activity?.type} from ${remoteActor?.id})`);
             return { jobId: job.id, queued: true };
         } catch (error) {
-            logger.error('[queue-manager] Failed to enqueue AP inbox job:', error.message);
+            logger.error('[queue-manager] Failed to enqueue AP inbox job:'+ error);
             // 降级：直接处理
             const { processInboxActivity } = await import('../activitypub/inbox.js');
             return processInboxActivity(activity, remoteActor, targetUsername);
@@ -339,7 +342,7 @@ const queueManager = {
         }
 
         try {
-            const jobId = `ap-follow-${followerId}-${followedId}-${Date.now()}`;
+            const jobId = `ap-follow-${sanitize(followerId)}-${sanitize(followedId)}-${Date.now()}`;
 
             const job = await queue.add('ap_follow_sync', {
                 eventType: 'ap_follow_sync',
@@ -372,7 +375,7 @@ const queueManager = {
         }
 
         try {
-            const jobId = `ap-unfollow-${followerId}-${unfollowedId}-${Date.now()}`;
+            const jobId = `ap-unfollow-${sanitize(followerId)}-${sanitize(unfollowedId)}-${Date.now()}`;
 
             const job = await queue.add('ap_unfollow_sync', {
                 eventType: 'ap_unfollow_sync',
@@ -405,7 +408,7 @@ const queueManager = {
         }
 
         try {
-            const jobId = `ap-fetch-posts-${encodeURIComponent(remoteActorUrl)}-${Date.now()}`;
+            const jobId = `ap-fetch-posts-${sanitize(remoteActorUrl)}-${Date.now()}`;
 
             const job = await queue.add('ap_fetch_posts', {
                 eventType: 'ap_fetch_posts',
