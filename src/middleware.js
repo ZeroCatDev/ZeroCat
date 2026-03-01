@@ -139,7 +139,13 @@ export async function configureMiddleware(app) {
 
     // 请求体解析
     app.use(bodyParser.urlencoded({limit: "100mb", extended: false}));
-    app.use(bodyParser.json({limit: "100mb"}));
+    app.use(bodyParser.json({
+        limit: "100mb",
+        verify: (req, _res, buf) => {
+            // 保留原始请求体字节，供 ActivityPub HTTP Signature / Digest 验证使用
+            req.rawBody = buf;
+        },
+    }));
     app.use(bodyParser.text({limit: "100mb"}));
     app.use(bodyParser.raw({limit: "100mb"}));
 

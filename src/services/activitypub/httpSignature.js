@@ -136,8 +136,11 @@ export function verifySignature({ signature, method, path, headers, publicKey })
  * @returns {string}
  */
 export function digestBody(body) {
+    const data = Buffer.isBuffer(body) ? body
+        : typeof body === 'string' ? body
+        : JSON.stringify(body);
     const hash = crypto.createHash('sha256')
-        .update(typeof body === 'string' ? body : JSON.stringify(body))
+        .update(data)
         .digest('base64');
     return `SHA-256=${hash}`;
 }
