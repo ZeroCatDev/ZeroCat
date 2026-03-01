@@ -129,7 +129,8 @@ router.post("/set/userinfo", async (req, res) => {
             region: req.body.region,
             sex: req.body.sex,
             url: req.body.url,
-            birthday: req.body.birthday ? new Date(req.body.birthday) : undefined
+            birthday: req.body.birthday ? new Date(req.body.birthday) : undefined,
+            motto: req.body.motto || null
         };
 
         // 处理custom_status (表情和状态文本)
