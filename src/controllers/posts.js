@@ -1276,8 +1276,9 @@ export async function getHomeFeed({
 }) {
   await initStaticUrl();
 
-  let authorFilter = {};
-  if (followingOnly && userId) {
+  // 获取当前用户关注列表（用于 followingOnly 以及联邦帖子过滤）
+  let followedIds = [];
+  if (userId) {
     const follows = await prisma.ow_user_relationships.findMany({
       where: {
         source_user_id: Number(userId),
@@ -1285,11 +1286,31 @@ export async function getHomeFeed({
       },
       select: { target_user_id: true },
     });
-    const authorIds = [
-      Number(userId),
-      ...follows.map((rel) => rel.target_user_id).filter(Boolean),
-    ];
+    followedIds = follows.map((rel) => rel.target_user_id).filter(Boolean);
+  }
+
+  let authorFilter = {};
+  if (followingOnly && userId) {
+    const authorIds = [Number(userId), ...followedIds];
     authorFilter = { author_id: { in: authorIds } };
+  }
+
+  // 联邦社交（ActivityPub）帖子过滤规则：
+  // - 未登录用户：不展示任何联邦帖子
+  // - 已登录 + followingOnly：已通过 authorFilter 限定为关注列表，无需额外过滤
+  // - 已登录 + 全局时间线：排除未被当前用户关注的联邦用户帖子
+  let federationFilter = {};
+  if (!userId) {
+    // 未登录：排除所有远程用户的帖子
+    federationFilter = { author: { type: { not: "remote_activitypub" } } };
+  } else if (!followingOnly) {
+    // 已登录 + 全局时间线：仅展示已关注的联邦用户帖子
+    federationFilter = {
+      NOT: {
+        author: { type: "remote_activitypub" },
+        author_id: { notIn: followedIds },
+      },
+    };
   }
 
   const rawPosts = await prisma.ow_posts.findMany({
@@ -1297,6 +1318,7 @@ export async function getHomeFeed({
       is_deleted: false,
       ...(includeReplies ? {} : { post_type: { not: "reply" } }),
       ...authorFilter,
+      ...federationFilter,
       ...(cursor ? { id: { lt: Number(cursor) } } : {}),
     },
     orderBy: { id: "desc" },
