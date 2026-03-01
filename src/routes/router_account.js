@@ -77,7 +77,7 @@ router.post("/passkey/delete", needLogin, requireSudo, passkeyController.deleteC
 router.get("/oauth/providers", oauthController.getOAuthProviders);
 router.get('/oauth/bluesky/client-metadata.json', async (req, res) => {
     try {
-        const metadata = await buildAtprotoAuthClientMetadata('atproto transition:generic transition:email');
+        const metadata = await buildAtprotoAuthClientMetadata();
 
         res.setHeader('Cache-Control', 'public, max-age=300');
         res.status(200).json(metadata);

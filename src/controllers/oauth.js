@@ -662,10 +662,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null, o
                 ...(options?.iss ? { iss: options.iss } : {}),
             };
 
-            const { session } = await consumeAtprotoAuthCallback({
-                callbackQuery,
-                scope: options?.scope || OAUTH_PROVIDERS.bluesky.scope,
-            });
+            const { session } = await consumeAtprotoAuthCallback(callbackQuery);
 
             const did = String(session?.did || '').trim();
             if (!did) {
