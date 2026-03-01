@@ -18,6 +18,10 @@ import {
 } from './objects.js';
 import { deliverToActor } from './delivery.js';
 import { getSocialSyncQueue } from '../queue/queues.js';
+import { isActorAllowed } from './federationConfig.js';
+import { handleIncomingNote, handleIncomingAnnounce, handleIncomingLike, handleIncomingUndoLike, handleIncomingDelete } from './remotePosts.js';
+import { handleFollowAccepted, handleFollowRejected } from './followSync.js';
+import { ensureProxyUser } from './remoteUser.js';
 
 /**
  * 验证收件箱请求的 HTTP Signature
@@ -91,6 +95,13 @@ export async function processInboxActivity(activity, remoteActor, targetUsername
     const type = activity.type;
 
     logger.info(`[ap-inbox] 正在处理来自 ${remoteActor?.id || 'unknown'} 的 ${type} 活动`);
+
+    // 检查远程实例是否被允许
+    const allowed = await isActorAllowed(remoteActor?.id);
+    if (!allowed) {
+        logger.warn(`[ap-inbox] 拒绝来自非允许实例的活动: ${remoteActor?.id}`);
+        return { handled: false, error: 'Instance not allowed', type };
+    }
 
     switch (type) {
         case 'Follow':
@@ -228,7 +239,11 @@ async function handleUndo(activity, remoteActor, targetUsername) {
 
     if (innerType === 'Like') {
         logger.info(`[ap-inbox] 来自 ${remoteActor.id} 的取消点赞 (Undo Like)`);
-        // 可扩展：取消远程点赞的记录
+        // 取消远程点赞记录
+        const likeObjectId = typeof inner.object === 'string' ? inner.object : inner.object?.id;
+        if (likeObjectId) {
+            await handleIncomingUndoLike(likeObjectId, remoteActor);
+        }
         return { handled: true, type: 'Undo:Like' };
     }
 
@@ -243,6 +258,7 @@ async function handleUndo(activity, remoteActor, targetUsername) {
 
 /**
  * 处理 Create 活动（远程帖子到达）
+ * 增强版：创建本地代理帖子记录
  */
 async function handleCreate(activity, remoteActor, targetUsername) {
     const object = activity.object;
@@ -253,7 +269,7 @@ async function handleCreate(activity, remoteActor, targetUsername) {
     if (objectType === 'Note' || objectType === 'Article') {
         logger.info(`[ap-inbox] 接收到远程 ${objectType} 来自 ${remoteActor.id}: ${object.id || 'no-id'}`);
 
-        // 存储活动的引用（用于处理回复和对话线程）
+        // 存储活动引用
         if (activity.id) {
             await storeActivity(activity.id, JSON.stringify({
                 type: 'Create',
@@ -266,12 +282,15 @@ async function handleCreate(activity, remoteActor, targetUsername) {
             }));
         }
 
+        // 导入为本地帖子（通过代理用户）
+        const importedPost = await handleIncomingNote(object, remoteActor);
+
         // 检查是否是对本地帖子的回复
         if (object.inReplyTo) {
             await handleRemoteReply(object, remoteActor);
         }
 
-        return { handled: true, type: 'Create:Note' };
+        return { handled: true, type: 'Create:Note', postId: importedPost?.id };
     }
 
     logger.info(`[ap-inbox] 未处理的 Create 对象类型: ${objectType}`);
@@ -332,6 +351,9 @@ async function handleDelete(activity, remoteActor) {
             deletedAt: new Date().toISOString(),
             actor: remoteActor.id,
         }));
+
+        // 标记对应的本地代理帖子为已删除
+        await handleIncomingDelete(objectId, remoteActor);
     }
 
     return { handled: true, type: 'Delete' };
@@ -346,14 +368,8 @@ async function handleLike(activity, remoteActor) {
     if (objectId) {
         logger.info(`[ap-inbox] 来自 ${remoteActor.id} 的点赞活动: ${objectId}`);
 
-        // 检查是否为本地帖子
-        const baseUrl = await getInstanceBaseUrl();
-        const noteIdMatch = objectId.match(/\/ap\/notes\/(\d+)$/);
-        if (noteIdMatch) {
-            const localPostId = parseInt(noteIdMatch[1], 10);
-            // 可扩展：记录远程点赞以增加帖子互动计数
-            logger.info(`[ap-inbox] 本地帖子 #${localPostId} 接收到远程点赞`);
-        }
+        // 创建远程点赞记录（代理用户点赞本地帖子）
+        await handleIncomingLike(objectId, remoteActor);
     }
 
     return { handled: true, type: 'Like' };
@@ -368,12 +384,8 @@ async function handleAnnounce(activity, remoteActor) {
     if (objectId) {
         logger.info(`[ap-inbox] 来自 ${remoteActor.id} 的转发 (Announce) 活动: ${objectId}`);
 
-        const baseUrl = await getInstanceBaseUrl();
-        const noteIdMatch = objectId.match(/\/ap\/notes\/(\d+)$/);
-        if (noteIdMatch) {
-            const localPostId = parseInt(noteIdMatch[1], 10);
-            logger.info(`[ap-inbox] 本地帖子 #${localPostId} 接收到远程转发`);
-        }
+        // 创建远程转推记录
+        await handleIncomingAnnounce(objectId, remoteActor, activity);
     }
 
     return { handled: true, type: 'Announce' };
@@ -386,9 +398,17 @@ async function handleUpdate(activity, remoteActor) {
     const object = activity.object;
     if (!object) return { handled: false, error: 'Missing object' };
 
-    // 如果是 Actor 更新，刷新缓存
+    // 如果是 Actor 更新，刷新缓存并更新代理用户
     if (object.type === 'Person' || object.type === 'Service' || object.type === 'Application') {
-        await fetchRemoteActor(object.id || remoteActor.id, true);
+        const updatedActor = await fetchRemoteActor(object.id || remoteActor.id, true);
+        // 同步更新代理用户信息
+        if (updatedActor) {
+            try {
+                await ensureProxyUser(object.id || remoteActor.id, updatedActor);
+            } catch (err) {
+                logger.debug(`[ap-inbox] 更新代理用户失败:`, err.message);
+            }
+        }
         logger.info(`[ap-inbox] Actor 已更新: ${object.id || remoteActor.id}`);
     }
 
@@ -401,6 +421,10 @@ async function handleUpdate(activity, remoteActor) {
 async function handleAccept(activity, remoteActor) {
     const inner = typeof activity.object === 'string' ? { id: activity.object } : activity.object;
     logger.info(`[ap-inbox] 接受来自 ${remoteActor.id} 的活动: ${inner?.type || '未知'}`);
+
+    // 处理远端接受关注请求
+    await handleFollowAccepted(activity, remoteActor);
+
     return { handled: true, type: 'Accept' };
 }
 
@@ -410,5 +434,9 @@ async function handleAccept(activity, remoteActor) {
 async function handleReject(activity, remoteActor) {
     const inner = typeof activity.object === 'string' ? { id: activity.object } : activity.object;
     logger.info(`[ap-inbox] 拒绝来自 ${remoteActor.id} 的活动: ${inner?.type || '未知'}`);
+
+    // 处理远端拒绝关注请求
+    await handleFollowRejected(activity, remoteActor);
+
     return { handled: true, type: 'Reject' };
 }

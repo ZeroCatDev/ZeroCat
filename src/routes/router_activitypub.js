@@ -19,6 +19,23 @@ import {
     buildOrderedCollection, buildOrderedCollectionPage,
     getNoteId, getNoteUrl, postToNote, getCardUrl,
     buildCreateActivity, getActorUrl,
+    // 远程用户代理
+    ensureProxyUser, resolveAndEnsureProxyUser, findProxyUserByActorUrl,
+    listProxyUsers, searchProxyUsers, isRemoteProxyUser,
+    getRemoteUserInfo, getProxyUserActorUrl,
+    REMOTE_USER_TYPE,
+    // 联邦实例配置
+    getFederationConfig, setInstancePolicy,
+    setAllowedInstances, setBlockedInstances,
+    addAllowedInstance, removeAllowedInstance,
+    addBlockedInstance, removeBlockedInstance,
+    isInstanceAllowed, isRemoteSearchAllowed,
+    // 远程帖子
+    fetchRemoteUserPosts, getRemoteUserLocalPosts,
+    // 远程搜索
+    federatedUserSearch, parseFediAddress,
+    // 关注同步
+    getOutboundFollows,
 } from '../services/activitypub/index.js';
 
 const router = Router();
@@ -619,6 +636,399 @@ router.get('/users/:username/remote-followers/count', async (req, res) => {
         return res.json({ username: req.params.username, remoteFollowers: count });
     } catch (err) {
         logger.error('[ap-route] 远程关注者计数错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// ─── 管理员验证中间件 ─────────────────────────────────────────
+
+async function requireAdmin(req, res, next) {
+    if (!res.locals.userid) {
+        return res.status(401).json({ error: 'Authentication required' });
+    }
+    const adminUsers = await zcconfig.get('security.adminusers');
+    if (!adminUsers?.includes(String(res.locals.userid))) {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+    next();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 联邦实例配置管理 (白名单/黑名单)
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * 获取联邦实例配置
+ * GET /ap/admin/federation/config
+ */
+router.get('/admin/federation/config', requireAdmin, async (req, res) => {
+    try {
+        const config = await getFederationConfig();
+        return res.json({ status: 'ok', data: config });
+    } catch (err) {
+        logger.error('[ap-route] 获取联邦配置错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * 更新联邦实例策略
+ * PATCH /ap/admin/federation/config
+ * Body: { policy?, allowedInstances?, blockedInstances?, autoFetchPosts?, maxFetchPosts?, allowRemoteSearch? }
+ */
+router.patch('/admin/federation/config', requireAdmin, async (req, res) => {
+    try {
+        const { policy, allowedInstances, blockedInstances, autoFetchPosts, maxFetchPosts, allowRemoteSearch } = req.body;
+
+        if (policy) {
+            if (!['open', 'allowlist', 'blocklist'].includes(policy)) {
+                return res.status(400).json({ error: 'Invalid policy. Must be: open, allowlist, or blocklist' });
+            }
+            await setInstancePolicy(policy);
+        }
+        if (allowedInstances !== undefined) {
+            await setAllowedInstances(Array.isArray(allowedInstances) ? allowedInstances : []);
+        }
+        if (blockedInstances !== undefined) {
+            await setBlockedInstances(Array.isArray(blockedInstances) ? blockedInstances : []);
+        }
+        if (autoFetchPosts !== undefined) {
+            await zcconfig.set('ap.federation.auto_fetch_posts', Boolean(autoFetchPosts));
+        }
+        if (maxFetchPosts !== undefined) {
+            await zcconfig.set('ap.federation.max_fetch_posts', Number(maxFetchPosts) || 50);
+        }
+        if (allowRemoteSearch !== undefined) {
+            await zcconfig.set('ap.federation.allow_remote_search', Boolean(allowRemoteSearch));
+        }
+
+        const config = await getFederationConfig();
+        return res.json({ status: 'ok', data: config });
+    } catch (err) {
+        logger.error('[ap-route] 更新联邦配置错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * 添加允许的实例
+ * POST /ap/admin/federation/allowlist
+ * Body: { domain: string }
+ */
+router.post('/admin/federation/allowlist', requireAdmin, async (req, res) => {
+    try {
+        const { domain } = req.body;
+        if (!domain || typeof domain !== 'string') {
+            return res.status(400).json({ error: 'domain is required' });
+        }
+        await addAllowedInstance(domain.trim().toLowerCase());
+        const config = await getFederationConfig();
+        return res.json({ status: 'ok', data: config });
+    } catch (err) {
+        logger.error('[ap-route] 添加允许实例错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * 移除允许的实例
+ * DELETE /ap/admin/federation/allowlist/:domain
+ */
+router.delete('/admin/federation/allowlist/:domain', requireAdmin, async (req, res) => {
+    try {
+        await removeAllowedInstance(req.params.domain);
+        const config = await getFederationConfig();
+        return res.json({ status: 'ok', data: config });
+    } catch (err) {
+        logger.error('[ap-route] 移除允许实例错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * 添加封禁的实例
+ * POST /ap/admin/federation/blocklist
+ * Body: { domain: string }
+ */
+router.post('/admin/federation/blocklist', requireAdmin, async (req, res) => {
+    try {
+        const { domain } = req.body;
+        if (!domain || typeof domain !== 'string') {
+            return res.status(400).json({ error: 'domain is required' });
+        }
+        await addBlockedInstance(domain.trim().toLowerCase());
+        const config = await getFederationConfig();
+        return res.json({ status: 'ok', data: config });
+    } catch (err) {
+        logger.error('[ap-route] 添加封禁实例错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * 移除封禁的实例
+ * DELETE /ap/admin/federation/blocklist/:domain
+ */
+router.delete('/admin/federation/blocklist/:domain', requireAdmin, async (req, res) => {
+    try {
+        await removeBlockedInstance(req.params.domain);
+        const config = await getFederationConfig();
+        return res.json({ status: 'ok', data: config });
+    } catch (err) {
+        logger.error('[ap-route] 移除封禁实例错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// 远程用户代理端点
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * 搜索/解析远程用户（支持 @user@domain 格式）
+ * GET /ap/remote/users/search?q=@user@domain
+ */
+router.get('/remote/users/search', requireFederation, async (req, res) => {
+    try {
+        const keyword = req.query.q || req.query.keyword || '';
+        if (!keyword) {
+            return res.status(400).json({ error: 'Search query (q) is required' });
+        }
+
+        // 检查是否允许远程搜索
+        const allowed = await isRemoteSearchAllowed();
+        if (!allowed) {
+            return res.status(403).json({ error: 'Remote user search is disabled on this instance' });
+        }
+
+        const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+        const result = await federatedUserSearch(keyword, {
+            limit,
+            currentUserId: res.locals.userid || null,
+        });
+
+        return res.json({
+            status: 'ok',
+            data: {
+                users: result.users,
+                remoteUser: result.remoteUser,
+                isFediSearch: result.isFediSearch,
+                keyword,
+            },
+        });
+    } catch (err) {
+        logger.error('[ap-route] 远程用户搜索错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * 通过 actor URL 解析远程用户
+ * POST /ap/remote/users/resolve
+ * Body: { acct: "@user@domain" } 或 { actorUrl: "https://..." }
+ */
+router.post('/remote/users/resolve', requireFederation, async (req, res) => {
+    try {
+        const { acct, actorUrl } = req.body;
+        if (!acct && !actorUrl) {
+            return res.status(400).json({ error: 'acct or actorUrl is required' });
+        }
+
+        let proxyUser;
+        if (acct) {
+            proxyUser = await resolveAndEnsureProxyUser(acct);
+        } else {
+            proxyUser = await ensureProxyUser(actorUrl);
+        }
+
+        if (!proxyUser) {
+            return res.status(404).json({ error: 'Could not resolve remote user' });
+        }
+
+        const remoteInfo = await getRemoteUserInfo(proxyUser.id);
+        return res.json({
+            status: 'ok',
+            data: {
+                user: proxyUser,
+                remote: remoteInfo,
+            },
+        });
+    } catch (err) {
+        logger.error('[ap-route] 远程用户解析错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * 列出所有远程代理用户
+ * GET /ap/remote/users?page=1&limit=20
+ */
+router.get('/remote/users', requireFederation, async (req, res) => {
+    try {
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+        const skip = (page - 1) * limit;
+        const keyword = req.query.q || '';
+
+        let result;
+        if (keyword) {
+            result = await searchProxyUsers(keyword, limit);
+        } else {
+            result = await listProxyUsers(limit, skip);
+        }
+
+        return res.json({
+            status: 'ok',
+            data: {
+                users: result.users,
+                total: result.total,
+                page,
+                limit,
+            },
+        });
+    } catch (err) {
+        logger.error('[ap-route] 列出远程用户错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * 获取远程用户详细信息
+ * GET /ap/remote/users/:userId/info
+ */
+router.get('/remote/users/:userId/info', requireFederation, async (req, res) => {
+    try {
+        const userId = parseInt(req.params.userId);
+        if (isNaN(userId)) return res.status(400).json({ error: 'Invalid user ID' });
+
+        const isRemote = await isRemoteProxyUser(userId);
+        if (!isRemote) {
+            return res.status(404).json({ error: 'Not a remote proxy user' });
+        }
+
+        const remoteInfo = await getRemoteUserInfo(userId);
+        const actorUrl = await getProxyUserActorUrl(userId);
+
+        return res.json({
+            status: 'ok',
+            data: {
+                userId,
+                actorUrl,
+                remote: remoteInfo,
+            },
+        });
+    } catch (err) {
+        logger.error('[ap-route] 获取远程用户信息错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * 拉取远程用户的帖子
+ * POST /ap/remote/users/:userId/fetch-posts
+ */
+router.post('/remote/users/:userId/fetch-posts', requireFederation, async (req, res) => {
+    try {
+        if (!res.locals.userid) {
+            return res.status(401).json({ error: 'Authentication required' });
+        }
+
+        const userId = parseInt(req.params.userId);
+        if (isNaN(userId)) return res.status(400).json({ error: 'Invalid user ID' });
+
+        const isRemote = await isRemoteProxyUser(userId);
+        if (!isRemote) {
+            return res.status(404).json({ error: 'Not a remote proxy user' });
+        }
+
+        const actorUrl = await getProxyUserActorUrl(userId);
+        if (!actorUrl) {
+            return res.status(404).json({ error: 'Actor URL not found' });
+        }
+
+        const maxPosts = Math.min(parseInt(req.body.maxPosts) || 20, 100);
+        const imported = await fetchRemoteUserPosts(actorUrl, maxPosts);
+
+        return res.json({
+            status: 'ok',
+            data: {
+                userId,
+                imported: imported.length,
+                posts: imported.map(p => ({ id: p.id, title: p.title, createdAt: p.time })),
+            },
+        });
+    } catch (err) {
+        logger.error('[ap-route] 拉取远程用户帖子错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * 获取远程用户在本地的帖子
+ * GET /ap/remote/users/:userId/posts?page=1&limit=20
+ */
+router.get('/remote/users/:userId/posts', requireFederation, async (req, res) => {
+    try {
+        const userId = parseInt(req.params.userId);
+        if (isNaN(userId)) return res.status(400).json({ error: 'Invalid user ID' });
+
+        const isRemote = await isRemoteProxyUser(userId);
+        if (!isRemote) {
+            return res.status(404).json({ error: 'Not a remote proxy user' });
+        }
+
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+        const skip = (page - 1) * limit;
+
+        const result = await getRemoteUserLocalPosts(userId, limit, skip);
+        return res.json({
+            status: 'ok',
+            data: {
+                posts: result.posts,
+                total: result.total,
+                page,
+                limit,
+            },
+        });
+    } catch (err) {
+        logger.error('[ap-route] 获取远程用户帖子错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * 获取当前用户的出站关注状态（关注的远程用户）
+ * GET /ap/remote/follows
+ */
+router.get('/remote/follows', requireFederation, async (req, res) => {
+    try {
+        if (!res.locals.userid) {
+            return res.status(401).json({ error: 'Authentication required' });
+        }
+
+        const follows = await getOutboundFollows(res.locals.userid);
+        return res.json({ status: 'ok', data: follows });
+    } catch (err) {
+        logger.error('[ap-route] 获取出站关注错误:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
+ * 检查域名是否在白名单/黑名单中
+ * GET /ap/remote/check-instance?domain=mastodon.social
+ */
+router.get('/remote/check-instance', requireFederation, async (req, res) => {
+    try {
+        const { domain } = req.query;
+        if (!domain) {
+            return res.status(400).json({ error: 'domain query parameter is required' });
+        }
+        const allowed = await isInstanceAllowed(domain);
+        return res.json({ status: 'ok', data: { domain, allowed } });
+    } catch (err) {
+        logger.error('[ap-route] 检查实例错误:', err);
         res.status(500).json({ error: 'Internal server error' });
     }
 });

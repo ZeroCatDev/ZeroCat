@@ -749,6 +749,56 @@ export const CONFIG_TYPES = {
         required: false,
         description: "ActivityPub实例RSA私钥(PEM格式)，用于HTTP Signature签名，自动生成",
     },
+    // 联邦实例策略配置
+    "ap.federation.instance_policy": {
+        type: "string",
+        required: false,
+        default: "open",
+        description: "联邦实例策略: open(不限制), allowlist(仅白名单), blocklist(排除黑名单)",
+        validate: (value) => ["open", "allowlist", "blocklist"].includes(value),
+        public: true,
+    },
+    "ap.federation.instance_allowlist": {
+        type: "string",
+        required: false,
+        default: "",
+        description: "允许的联邦实例域名列表，逗号分隔。仅在instance_policy=allowlist时生效",
+    },
+    "ap.federation.instance_blocklist": {
+        type: "string",
+        required: false,
+        default: "",
+        description: "阻止的联邦实例域名列表，逗号分隔。仅在instance_policy=blocklist时生效",
+    },
+    "ap.federation.auto_fetch_posts": {
+        type: "boolean",
+        required: false,
+        default: true,
+        description: "是否在关注远程用户时自动拉取其帖子",
+        transform: typeTransformers.boolean,
+    },
+    "ap.federation.max_fetch_posts": {
+        type: "number",
+        required: false,
+        default: 50,
+        description: "每次拉取远程用户帖子的最大数量",
+        transform: typeTransformers.number,
+    },
+    "ap.federation.fetch_interval_minutes": {
+        type: "number",
+        required: false,
+        default: 30,
+        description: "远程帖子定期拉取间隔（分钟）",
+        transform: typeTransformers.number,
+    },
+    "ap.federation.allow_remote_search": {
+        type: "boolean",
+        required: false,
+        default: true,
+        description: "是否允许搜索远程联邦用户（@user@domain格式）",
+        transform: typeTransformers.boolean,
+        public: true,
+    },
 };
 
 // 从数据库加载的动态配置

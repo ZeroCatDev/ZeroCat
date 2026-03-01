@@ -21,9 +21,10 @@ import { fetchRemoteActor, getSharedInboxUrl } from './federation.js';
  * 确保指定帖子已同步到 ActivityPub（有 AP ref），没有则立即同步
  * 用于回帖/引用/转推时先确保主贴已发布到联邦网络
  * @param {number} refPostId - 被引用/回复/转推的帖子 ID
+ * @param {Set} [deliveredInboxes] - 共享去重集合
  * @returns {Promise<string|null>} 帖子的 AP Note ID
  */
-async function ensurePostSynced(refPostId) {
+async function ensurePostSynced(refPostId, deliveredInboxes = null) {
     if (!refPostId) return null;
 
     // 已有 AP ref，直接返回
@@ -44,11 +45,19 @@ async function ensurePostSynced(refPostId) {
     const note = await postToNote(refPost);
     if (!note) return null;
 
+    // 先写入 AP ref，防止并发重复投递（乐观锁）
     await setPostApRef(refPostId, note.id, note.url);
+
+    // 再次确认没有被并发抢先（double-check）
+    const recheck = await getPostApId(refPostId);
+    if (recheck && recheck !== note.id) {
+        // 被另一个并发请求先写入了，直接返回
+        return recheck;
+    }
 
     const actorUrl = await getActorUrl(refPost.author.username);
     const activity = await buildCreateActivity(actorUrl, note);
-    await deliverToFollowers(refPost.author_id, activity);
+    await deliverToFollowers(refPost.author_id, activity, { deliveredInboxes });
 
     logger.info(`[ap-outbox] 依赖帖子 #${refPostId} 已同步为 Create(Note)`);
     return note.id;
@@ -96,6 +105,7 @@ export async function syncPostToActivityPub({ actorUserId, postId, eventType }) 
 
 /**
  * 处理帖子创建 → 生成 Create(Note) 活动并投递
+ * 使用共享 deliveredInboxes 防止同一活动重复投递到同一服务器
  */
 async function handlePostCreate(userId, postId) {
     const post = await prisma.ow_posts.findUnique({
@@ -107,12 +117,15 @@ async function handlePostCreate(userId, postId) {
 
     if (!post || post.is_deleted) return;
 
+    // 本轮投递的共享去重集合（跨 deliverToFollowers 调用）
+    const deliveredInboxes = new Set();
+
     // 确保被回复/引用的主贴已同步到联邦网络
     if (post.in_reply_to_id) {
-        await ensurePostSynced(post.in_reply_to_id);
+        await ensurePostSynced(post.in_reply_to_id, deliveredInboxes);
     }
     if (post.quoted_post_id) {
-        await ensurePostSynced(post.quoted_post_id);
+        await ensurePostSynced(post.quoted_post_id, deliveredInboxes);
     }
 
     // 构建 Note 对象
@@ -127,9 +140,10 @@ async function handlePostCreate(userId, postId) {
     const activity = await buildCreateActivity(actorUrl, note);
 
     // 投递到回帖作者自己的远程关注者
-    await deliverToFollowers(userId, activity);
+    await deliverToFollowers(userId, activity, { deliveredInboxes });
 
     // 如果是回帖或引用帖，还要投递到被回复/引用帖子作者的远程关注者
+    // 使用同一个 deliveredInboxes 集合，避免向已投递的服务器重复发送
     const relatedAuthorIds = new Set();
     if (post.in_reply_to_id) {
         const parentPost = await prisma.ow_posts.findUnique({
@@ -150,10 +164,10 @@ async function handlePostCreate(userId, postId) {
         }
     }
     for (const authorId of relatedAuthorIds) {
-        await deliverToFollowers(authorId, activity);
+        await deliverToFollowers(authorId, activity, { deliveredInboxes });
     }
 
-    logger.info(`[ap-outbox] 帖子 #${postId} 已作为 Create(Note) 发送`);
+    logger.info(`[ap-outbox] 帖子 #${postId} 已作为 Create(Note) 发送到 ${deliveredInboxes.size} 个服务器`);
 }
 
 /**
@@ -311,6 +325,7 @@ export async function buildUserOutbox(username, page = 0, pageSize = 20) {
 /**
  * 向新关注者推送用户的所有历史帖子
  * 由 BullMQ 任务调用，避免阻塞收件箱请求
+ * 使用持久化去重：如果 activity 已投递给该服务器则跳过
  * @param {object} opts
  * @param {number} opts.userId - 被关注用户 ID
  * @param {string} opts.followerActorUrl - 新关注者的 Actor URL
@@ -360,6 +375,7 @@ export async function backfillPostsToFollower({ userId, followerActorUrl }) {
 
     const actorUrl = await getActorUrl(user.username);
     let delivered = 0;
+    let skipped = 0;
 
     for (const post of posts) {
         try {
@@ -370,11 +386,14 @@ export async function backfillPostsToFollower({ userId, followerActorUrl }) {
             await setPostApRef(post.id, note.id, note.url);
 
             const activity = await buildCreateActivity(actorUrl, note);
+
+            // 持久化去重：已发送过的帖子不再投递
             const ok = await deliverActivity({
                 inbox,
                 activity,
                 userId: user.id,
                 username: user.username,
+                // 不跳过去重 — 如果该帖子已通过实时投递发送过，回填时自动跳过
             });
             if (ok) delivered++;
 
@@ -385,5 +404,5 @@ export async function backfillPostsToFollower({ userId, followerActorUrl }) {
         }
     }
 
-    logger.info(`[ap-backfill] 回种完成: ${delivered}/${posts.length} 篇帖子已发送给 ${followerActorUrl}`);
+    logger.info(`[ap-backfill] 回填完成: ${delivered}/${posts.length} 篇帖子已发送给 ${followerActorUrl}`);
 }

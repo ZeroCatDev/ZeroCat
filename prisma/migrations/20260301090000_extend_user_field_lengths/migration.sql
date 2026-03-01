@@ -1,0 +1,6 @@
+-- AlterTable: 扩展 ow_users 字段长度以支持远程 ActivityPub 用户
+ALTER TABLE "ow_users" ALTER COLUMN "username" SET DATA TYPE VARCHAR(64);
+ALTER TABLE "ow_users" ALTER COLUMN "display_name" SET DATA TYPE VARCHAR(64);
+ALTER TABLE "ow_users" ALTER COLUMN "avatar" SET DATA TYPE VARCHAR(512);
+ALTER TABLE "ow_users" ALTER COLUMN "images" SET DATA TYPE VARCHAR(512);
+ALTER TABLE "ow_users" ALTER COLUMN "url" SET DATA TYPE VARCHAR(512);

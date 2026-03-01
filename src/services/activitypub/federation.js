@@ -55,7 +55,7 @@ export async function fetchRemoteActor(actorUrl, forceRefresh = false) {
 
         return actor;
     } catch (err) {
-        logger.warn(`[ap-federation] 失败获取 actor ${actorUrl}:`, err.message);
+        logger.warn(`[ap-federation] 失败获取 actor ${actorUrl}:`+ err.message);
         return null;
     }
 }

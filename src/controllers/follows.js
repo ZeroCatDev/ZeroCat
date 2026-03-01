@@ -2,6 +2,33 @@ import {prisma} from "../services/prisma.js";
 import logger from "../services/logger.js";
 import {createEvent} from "./events.js";
 
+// 延迟导入 AP 关注同步模块，避免循环依赖
+let _apFollowSync = null;
+async function getApFollowSync() {
+    if (!_apFollowSync) {
+        try {
+            _apFollowSync = await import('../services/activitypub/followSync.js');
+        } catch (err) {
+            logger.debug('[follows] ActivityPub followSync 模块不可用:', err.message);
+            _apFollowSync = {};
+        }
+    }
+    return _apFollowSync;
+}
+
+let _apRemoteUser = null;
+async function getApRemoteUser() {
+    if (!_apRemoteUser) {
+        try {
+            _apRemoteUser = await import('../services/activitypub/remoteUser.js');
+        } catch (err) {
+            logger.debug('[follows] ActivityPub remoteUser 模块不可用:', err.message);
+            _apRemoteUser = {};
+        }
+    }
+    return _apRemoteUser;
+}
+
 /**
  * Follow a user
  *
@@ -69,6 +96,16 @@ export async function followUser(followerId, followedId, note = "") {
 
         logger.debug(`Created follow notification for user ${followedId}`);
 
+        // 如果被关注的用户是远程代理用户，同步关注到远端 ActivityPub 实例
+        try {
+            const apSync = await getApFollowSync();
+            if (apSync.syncFollowToRemote) {
+                await apSync.syncFollowToRemote(followerId, followedId);
+            }
+        } catch (apErr) {
+            logger.warn(`[follows] AP 关注同步失败 (非致命):`, apErr.message);
+        }
+
         return relationship;
     } catch (error) {
         logger.error("Error in followUser:", error);
@@ -85,6 +122,16 @@ export async function followUser(followerId, followedId, note = "") {
  */
 export async function unfollowUser(followerId, followedId) {
     try {
+        // 如果取消关注的用户是远程代理用户，先同步取消关注到远端
+        try {
+            const apSync = await getApFollowSync();
+            if (apSync.syncUnfollowToRemote) {
+                await apSync.syncUnfollowToRemote(followerId, followedId);
+            }
+        } catch (apErr) {
+            logger.warn(`[follows] AP 取消关注同步失败 (非致命):`, apErr.message);
+        }
+
         // Delete relationship if it exists
         const result = await prisma.ow_user_relationships.deleteMany({
             where: {
@@ -258,9 +305,23 @@ export async function getUserFollowers(userId, limit = 20, offset = 0) {
             },
         });
 
+        // 检查是否为远程代理用户，附加远端粉丝数量
+        let remoteFollowersCount = null;
+        try {
+            const apRemoteUser = await getApRemoteUser();
+            if (apRemoteUser.isRemoteProxyUser && apRemoteUser.getRemoteFollowCounts) {
+                const isRemote = await apRemoteUser.isRemoteProxyUser(userId);
+                if (isRemote) {
+                    const remoteCounts = await apRemoteUser.getRemoteFollowCounts(userId);
+                    remoteFollowersCount = remoteCounts.followersCount;
+                }
+            }
+        } catch { /* AP 模块不可用，忽略 */ }
+
         return {
             followers,
             total: totalCount,
+            remote_total: remoteFollowersCount,
             limit,
             offset,
         };
@@ -327,9 +388,23 @@ export async function getUserFollowing(userId, limit = 20, offset = 0) {
             },
         });
 
+        // 检查是否为远程代理用户，附加远端关注数量
+        let remoteFollowingCount = null;
+        try {
+            const apRemoteUser = await getApRemoteUser();
+            if (apRemoteUser.isRemoteProxyUser && apRemoteUser.getRemoteFollowCounts) {
+                const isRemote = await apRemoteUser.isRemoteProxyUser(userId);
+                if (isRemote) {
+                    const remoteCounts = await apRemoteUser.getRemoteFollowCounts(userId);
+                    remoteFollowingCount = remoteCounts.followingCount;
+                }
+            }
+        } catch { /* AP 模块不可用，忽略 */ }
+
         return {
             following,
             total: totalCount,
+            remote_total: remoteFollowingCount,
             limit,
             offset,
         };

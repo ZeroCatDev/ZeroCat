@@ -19,6 +19,7 @@ export {
     storeActivity, getActivity, deleteActivity,
     setPostApRef, getPostApId,
     cacheRemoteActor, getCachedRemoteActor,
+    recordDelivery, isDelivered, getDeliveryRecords,
 } from './store.js';
 
 // 密钥管理
@@ -71,3 +72,48 @@ export {
 export {
     syncPostToActivityPub, buildUserOutbox, backfillPostsToFollower,
 } from './outbox.js';
+
+// 远程用户代理
+export {
+    ensureProxyUser, findProxyUserByActorUrl, findProxyUserByRemoteUsername,
+    resolveAndEnsureProxyUser, isRemoteProxyUser,
+    getProxyUserActorUrl, getProxyUserInbox, getProxyUserSharedInbox,
+    getRemoteUserInfo, getRemoteFollowCounts, listProxyUsers, searchProxyUsers,
+    REMOTE_USER_TYPE,
+} from './remoteUser.js';
+
+// 远程媒体缓存（头像/横幅同步到本地 S3）
+export {
+    cacheRemoteImage, cacheActorMedia,
+} from './remoteMedia.js';
+
+// 联邦实例配置（白名单/黑名单）
+export {
+    getInstancePolicy, getAllowedInstances, getBlockedInstances,
+    isInstanceAllowed, isActorAllowed,
+    setInstancePolicy, setAllowedInstances, setBlockedInstances,
+    addAllowedInstance, removeAllowedInstance,
+    addBlockedInstance, removeBlockedInstance,
+    isRemoteSearchAllowed, isAutoFetchPostsEnabled, getMaxFetchPosts,
+    getFederationConfig, FEDERATION_CONFIG_KEYS,
+} from './federationConfig.js';
+
+// 关注同步
+export {
+    syncFollowToRemote, syncUnfollowToRemote,
+    handleFollowAccepted, handleFollowRejected,
+    getOutboundFollows,
+} from './followSync.js';
+
+// 远程帖子管理
+export {
+    fetchRemoteUserPosts, findPostByApId,
+    handleIncomingNote, handleIncomingAnnounce,
+    handleIncomingLike, handleIncomingUndoLike, handleIncomingDelete,
+    getRemoteUserLocalPosts,
+} from './remotePosts.js';
+
+// 远程搜索
+export {
+    federatedUserSearch, searchByActorUrl, parseFediAddress,
+} from './remoteSearch.js';

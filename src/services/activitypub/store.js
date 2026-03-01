@@ -267,6 +267,69 @@ export async function deleteActivity(activityId) {
     await deleteTargetConfig(TARGET_TYPES.AP_ACTIVITY, '0', key);
 }
 
+// ─── 投递去重记录 (target_type = ap_delivery) ─────────────────
+
+/**
+ * 从 activity 中提取稳定的唯一标识
+ * 使用 activity.id 字段（AP 规范要求全局唯一）
+ */
+function extractActivityKey(activity) {
+    return activity?.id || null;
+}
+
+/**
+ * 从 inbox URL 提取服务器域名（用于按服务器粒度去重）
+ */
+function extractInboxDomain(inbox) {
+    try {
+        return new URL(inbox).host;
+    } catch {
+        return inbox;
+    }
+}
+
+/**
+ * 记录一次成功投递
+ * key 格式: {activityId}@{domain}
+ * value: JSON { inbox, deliveredAt, activityType }
+ */
+export async function recordDelivery(activity, inbox) {
+    const activityId = extractActivityKey(activity);
+    if (!activityId) return;
+    const domain = extractInboxDomain(inbox);
+    const key = `${activityId}@${domain}`;
+    await upsertTargetConfig(TARGET_TYPES.AP_DELIVERY, '0', key, JSON.stringify({
+        inbox,
+        domain,
+        activityType: activity.type,
+        deliveredAt: new Date().toISOString(),
+    }));
+}
+
+/**
+ * 检查某 activity 是否已投递给某服务器
+ * @returns {boolean}
+ */
+export async function isDelivered(activity, inbox) {
+    const activityId = extractActivityKey(activity);
+    if (!activityId) return false;
+    const domain = extractInboxDomain(inbox);
+    const key = `${activityId}@${domain}`;
+    const val = await getTargetConfig(TARGET_TYPES.AP_DELIVERY, '0', key);
+    return val !== null && val !== '';
+}
+
+/**
+ * 查询某 activity 的所有投递记录
+ * @returns {Array<{inbox, domain, deliveredAt}>}
+ */
+export async function getDeliveryRecords(activityId) {
+    const records = await queryTargetConfigs(TARGET_TYPES.AP_DELIVERY, '0', `${activityId}@`, 500);
+    return records.map(r => {
+        try { return JSON.parse(r.value); } catch { return null; }
+    }).filter(Boolean);
+}
+
 // ─── 帖子 AP 引用管理 ────────────────────────────────────────
 
 /**

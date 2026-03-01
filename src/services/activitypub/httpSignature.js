@@ -19,11 +19,13 @@ import logger from '../logger.js';
 export function signRequest({ keyId, privateKey, method, path, headers }) {
     const now = new Date();
 
+    // 按照 Mastodon 验证所期望的顺序构建签名头
     const signHeaders = {
         '(request-target)': `${method.toLowerCase()} ${path}`,
         host: headers.host || headers.Host,
         date: headers.date || headers.Date || now.toUTCString(),
         digest: headers.digest || headers.Digest || undefined,
+        'content-type': headers['content-type'] || headers['Content-Type'] || undefined,
     };
 
     // 只签名存在的头
@@ -31,6 +33,9 @@ export function signRequest({ keyId, privateKey, method, path, headers }) {
     const signingString = headerNames
         .map(name => `${name}: ${signHeaders[name]}`)
         .join('\n');
+
+    logger.debug(`[ap-httpSig] 签名字符串: ${JSON.stringify(signingString)}`);
+    logger.debug(`[ap-httpSig] 签名头列表: ${headerNames.join(' ')}`);
 
     const signer = crypto.createSign('RSA-SHA256');
     signer.update(signingString);
@@ -136,11 +141,17 @@ export function verifySignature({ signature, method, path, headers, publicKey })
  * @returns {string}
  */
 export function digestBody(body) {
-    const data = Buffer.isBuffer(body) ? body
-        : typeof body === 'string' ? body
-        : JSON.stringify(body);
+    // 始终转为 Buffer 再计算 hash，确保与 HTTP 发送的字节完全一致
+    let buf;
+    if (Buffer.isBuffer(body)) {
+        buf = body;
+    } else if (typeof body === 'string') {
+        buf = Buffer.from(body, 'utf-8');
+    } else {
+        buf = Buffer.from(JSON.stringify(body), 'utf-8');
+    }
     const hash = crypto.createHash('sha256')
-        .update(data)
+        .update(buf)
         .digest('base64');
     return `SHA-256=${hash}`;
 }

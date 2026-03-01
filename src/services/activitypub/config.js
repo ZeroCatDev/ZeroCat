@@ -27,6 +27,7 @@ export const TARGET_TYPES = {
     AP_REMOTE_ACTOR: 'ap_actor',  // 远程 Actor 缓存
     AP_ACTIVITY: 'ap_activity',   // 活动记录
     AP_FOLLOW: 'ap_follow',       // 关注请求记录
+    AP_DELIVERY: 'ap_delivery',   // 投递记录(去重)
 };
 
 // ow_cache_kv 中的 key 前缀

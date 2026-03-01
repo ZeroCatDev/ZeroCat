@@ -80,10 +80,10 @@ model ow_projects {
 // 用户表
 model ow_users {
   id               Int       @id @default(autoincrement())
-  username         String    @unique @db.VarChar(20)
+  username         String    @unique @db.VarChar(64)
   email            String?   @db.VarChar(100)
   password         String?   @db.VarChar(255)
-  display_name     String    @default("ZeroCat创作者") @db.VarChar(20)
+  display_name     String    @default("ZeroCat创作者") @db.VarChar(64)
   status           String    @default("active") @db.VarChar(20)
 
   // 个人资料信息
@@ -93,13 +93,13 @@ model ow_users {
   region           String?   @db.VarChar(100)
   birthday         DateTime? @default("2000-03-31T00:00:00.000Z") @db.Timestamp(6)
   sex              String    @default("0") @db.VarChar(16)
-  url              String?   @db.VarChar(255)
+  url              String?   @db.VarChar(512)
   custom_status    Json?
   featured_projects Int?
 
   // 视觉元素
-  images  String @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
-  avatar  String @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(255)
+  images  String @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(512)
+  avatar  String @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(512)
 
   // 系统字段
   type      String    @default("guest") @db.VarChar(50)

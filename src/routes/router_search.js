@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../services/prisma.js"; // 功能函数集
 import logger from "../services/logger.js";
+import { federatedUserSearch, parseFediAddress } from "../services/activitypub/index.js";
 
 const router = Router();
 const DEFAULT_LIMIT = 10;
@@ -600,7 +601,61 @@ router.get("/", async (req, res, next) => {
     }
 
     if (normalizedScope === "users") {
-      if (keyword && useTrgm) {
+      // 检查是否为联邦地址格式 (@user@domain 或 user@domain)
+      const fediAddr = keyword ? parseFediAddress(keyword) : null;
+
+      if (fediAddr) {
+        // 联邦用户搜索：同时搜索本地和远端
+        try {
+          const fediResult = await federatedUserSearch(keyword, {
+            limit: take,
+            currentUserId: res.locals.userid || null,
+          });
+          users = fediResult.users || [];
+          // 如果通过 WebFinger 解析到了远程用户，追加到结果中（如果不在本地结果里）
+          if (fediResult.remoteUser) {
+            const existingIds = new Set(users.map(u => u.id));
+            if (!existingIds.has(fediResult.remoteUser.id)) {
+              users.unshift({
+                ...fediResult.remoteUser,
+                is_remote: true,
+              });
+            }
+          }
+          userTotal = users.length;
+        } catch (fediErr) {
+          logger.warn('[search] 联邦用户搜索失败，回退到本地搜索:', fediErr.message);
+          // 回退到普通搜索
+          if (keyword && useTrgm) {
+            const userResult = await searchUsersByTrgm({ keyword, userStatus, skip, take });
+            userTotal = userResult.total;
+            const userIds = userResult.items.map((item) => item.id);
+            if (userIds.length > 0) {
+              const userRows = await prisma.ow_users.findMany({
+                where: { id: { in: userIds } },
+                select: {
+                  id: true, username: true, display_name: true, avatar: true,
+                  status: true, bio: true, motto: true, location: true, region: true, regTime: true,
+                },
+              });
+              const userMap = new Map(userRows.map((row) => [row.id, row]));
+              users = userIds.map((id) => userMap.get(id)).filter(Boolean);
+            }
+          } else {
+            [userTotal, users] = await Promise.all([
+              prisma.ow_users.count({ where: userWhere }),
+              prisma.ow_users.findMany({
+                where: userWhere, orderBy: { regTime: "desc" },
+                select: {
+                  id: true, username: true, display_name: true, avatar: true,
+                  status: true, bio: true, motto: true, location: true, region: true, regTime: true,
+                },
+                skip, take,
+              }),
+            ]);
+          }
+        }
+      } else if (keyword && useTrgm) {
         const userResult = await searchUsersByTrgm({
           keyword,
           userStatus,
