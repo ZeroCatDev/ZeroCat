@@ -150,8 +150,24 @@ async function importRemoteNote(note, proxyUser) {
 
     // 提取纯文本内容
     let content = note.content || '';
-    // 去除 HTML 标签，保留文本
-    content = content.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, '');
+    // 将块级标签转换为换行（Mastodon 使用 <p> 包裹段落）
+    content = content
+        .replace(/<\/p>/gi, '\n\n')
+        .replace(/<\/div>/gi, '\n')
+        .replace(/<\/li>/gi, '\n')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]*>/g, '')
+        // 解码常见 HTML 实体
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&apos;/g, "'")
+        .replace(/&nbsp;/g, ' ')
+        // 合并超过两个连续换行为两个
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
     // 截断到合理长度
     content = content.substring(0, 5000);
 

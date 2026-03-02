@@ -167,10 +167,31 @@ router.get('/nodeinfo', async (req, res) => {
 
 router.get('/nodeinfo/2.0', async (req, res) => {
     try {
-        const [userCount, postCount] = await Promise.all([
+        const [userCount, postCount, adminUser] = await Promise.all([
             prisma.ow_users.count({ where: { status: 'active' } }),
             prisma.ow_posts.count({ where: { is_deleted: false } }),
+            prisma.ow_users.findUnique({
+                where: { id: 1 },
+                select: { id: true, username: true, display_name: true, email: true },
+            }),
         ]);
+
+        const apBaseUrl = await getApEndpointBaseUrl();
+
+        const metadata = {};
+        if (adminUser) {
+            metadata.admin = adminUser.username;
+            metadata.adminContact = adminUser.email || null;
+            metadata.contact = {
+                account: {
+                    id: String(adminUser.id),
+                    username: adminUser.username,
+                    display_name: adminUser.display_name || adminUser.username,
+                    url: `${apBaseUrl}/ap/users/${adminUser.username}`,
+                },
+                email: adminUser.email || null,
+            };
+        }
 
         res.set('Content-Type', 'application/json; charset=utf-8');
         res.set('Access-Control-Allow-Origin', '*');
@@ -194,7 +215,7 @@ router.get('/nodeinfo/2.0', async (req, res) => {
                 inbound: [],
                 outbound: [],
             },
-            metadata: {},
+            metadata,
         });
     } catch (err) {
         logger.error('[ap-route] NodeInfo 2.0 错误:', err);
