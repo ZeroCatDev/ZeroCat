@@ -799,6 +799,7 @@ export async function refreshAccessToken(refreshToken, ipAddress, userAgent) {
         return {
             success: true,
             accessToken: jwt,
+            refreshToken: tokenData.refresh_token,
             expiresAt: accessTokenExpiresAt,
             refreshExpiresAt: new Date(tokenData.refresh_expires_at)
         };

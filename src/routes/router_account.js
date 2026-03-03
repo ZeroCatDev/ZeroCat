@@ -210,6 +210,7 @@ router.get("/oauth/validate-token/:token", async (req, res) => {
 
         // 生成登录响应
         const response = tokenUtils.generateLoginResponse(user, loginTokenResult, userData.email);
+        tokenUtils.setRefreshTokenCookie(res, loginTokenResult.refreshToken, loginTokenResult.refreshExpiresAt);
         return res.json(response);
     } catch (error) {
         logger.error(`处理令牌验证请求时出错: ${error.message}`, error);

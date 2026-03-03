@@ -101,6 +101,7 @@ export const refreshToken = async (req, res) => {
                 message: "令牌已刷新",
                 token: result.accessToken,
                 expires_at: result.expiresAt,
+                refresh_expires_at: result.refreshExpiresAt,
             });
         } else {
             return res.status(401).json({
