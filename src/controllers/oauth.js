@@ -11,6 +11,7 @@ import {
 
 import base32Encode from 'base32-encode';
 import {fetchWithProxy} from '../services/proxy/proxyManager.js';
+import memoryCache from '../services/memoryCache.js';
 
 const USER_TARGET_TYPE = 'user';
 
@@ -476,6 +477,14 @@ export async function generateAuthUrl(provider, state, options = {}) {
         state: state
     });
 
+    // Twitter OAuth 2.0 requires PKCE
+    if (provider === 'twitter') {
+        const pkce = createPkcePair();
+        params.set('code_challenge', pkce.challenge);
+        params.set('code_challenge_method', 'S256');
+        memoryCache.set(`pkce_verifier:${state}`, pkce.verifier, 600);
+    }
+
     return `${authUrl}?${params.toString()}`;
 }
 
@@ -495,13 +504,34 @@ async function getAccessToken(provider, code, options = {}) {
     params.set('redirect_uri', options?.redirectUri || config.redirectUri);
     params.set('grant_type', 'authorization_code');
 
-    params.set('client_secret', config.clientSecret);
+    // Twitter OAuth 2.0: attach PKCE code_verifier and use Basic Auth
+    const isTwitter = provider === 'twitter';
+    if (isTwitter) {
+        const stateKey = options?.state || '';
+        const codeVerifier = memoryCache.get(`pkce_verifier:${stateKey}`);
+        if (codeVerifier) {
+            params.set('code_verifier', codeVerifier);
+            memoryCache.delete(`pkce_verifier:${stateKey}`);
+        } else {
+            logger.warn('[oauth] Twitter PKCE code_verifier not found in cache for state:', stateKey);
+        }
+    }
+
+    if (!isTwitter) {
+        params.set('client_secret', config.clientSecret);
+    }
 
     try {
         const requestHeaders = {
             'Accept': 'application/json',
             'Content-Type': 'application/x-www-form-urlencoded',
         };
+
+        // Twitter uses Basic Auth (client_id:client_secret) instead of body params
+        if (isTwitter) {
+            const credentials = Buffer.from(`${effectiveClientId}:${config.clientSecret}`).toString('base64');
+            requestHeaders['Authorization'] = `Basic ${credentials}`;
+        }
 
         const response = await fetchWithProxy(tokenUrl, {
             method: 'POST',
