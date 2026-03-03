@@ -1057,7 +1057,24 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null, o
             });
 
             logger.info(`[oauth] OAuth登录成功: userId=${user.id}, username=${user.username}, provider=${provider}`);
-            logger.debug(`[oauth] OAuth登录流程跳过令牌持久化: userId=${user.id}, provider=${provider}`);
+
+            // 持久化 OAuth 令牌（包括 refresh_token），以便后续刷新和 API 调用
+            try {
+                await saveOAuthTokens(user.id, provider, tokenData, {
+                    tokenPurpose: provider === 'bluesky' ? 'sync' : tokenPurpose,
+                    provider_user_id: userInfo.id,
+                    provider_username: userInfo.username || userInfo.handle || null,
+                    pds: options?.pds || null,
+                });
+                logger.debug(`[oauth] OAuth登录令牌已持久化: userId=${user.id}, provider=${provider}`);
+
+                if (provider === 'bluesky' && userInfo?.did) {
+                    await saveUserAtprotoAuthDid(user.id, userInfo.did);
+                }
+            } catch (tokenSaveError) {
+                // 令牌保存失败不应阻止登录流程
+                logger.warn(`[oauth] OAuth登录令牌持久化失败（不阻断登录）: userId=${user.id}, provider=${provider}, err=${tokenSaveError.message}`);
+            }
 
             return {
                 user,
