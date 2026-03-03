@@ -3,7 +3,6 @@ import { Client as TwitterClient, auth as twitterAuth } from 'twitter-api-sdk';
 import { prisma } from '../prisma.js';
 import zcconfig from '../config/zcconfig.js';
 import logger from '../logger.js';
-import { fetchWithProxy } from '../proxy/proxyManager.js';
 import { getUserAtprotoSyncDid, restoreAtprotoSyncAgent } from './atprotoSyncOAuth.js';
 
 const USER_TARGET_TYPE = 'user';

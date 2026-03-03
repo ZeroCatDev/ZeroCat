@@ -10,7 +10,6 @@ import {
 } from '../services/social/atprotoAuthOAuth.js';
 
 import base32Encode from 'base32-encode';
-import {fetchWithProxy} from '../services/proxy/proxyManager.js';
 import memoryCache from '../services/memoryCache.js';
 
 const USER_TARGET_TYPE = 'user';
@@ -166,10 +165,13 @@ async function resolveBlueskyPdsByDid(did) {
 
     if (!didDocumentUrl) return null;
 
-    const response = await fetchWithProxy(didDocumentUrl, {
+    logger.debug(`[oauth] resolveBlueskyPdsByDid: fetching ${didDocumentUrl}`);
+    const response = await fetch(didDocumentUrl, {
         headers: { Accept: 'application/json' },
     });
     if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        logger.warn(`[oauth] resolveBlueskyPdsByDid failed: HTTP ${response.status} ${text}`);
         throw new Error(`resolve did document failed (${response.status})`);
     }
 
@@ -363,8 +365,8 @@ export const OAUTH_PROVIDERS = {
         name: 'Twitter',
         type: 'oauth_twitter',
         authUrl: 'https://twitter.com/i/oauth2/authorize',
-        tokenUrl: 'https://api.twitter.com/2/oauth2/token',
-        userInfoUrl: 'https://api.twitter.com/2/users/me?user.fields=profile_image_url',
+        tokenUrl: 'https://api.x.com/2/oauth2/token',
+        userInfoUrl: 'https://api.x.com/2/users/me?user.fields=profile_image_url',
         scope: 'tweet.read users.read offline.access',
         enabled: false,
         clientId: null,
@@ -483,9 +485,12 @@ export async function generateAuthUrl(provider, state, options = {}) {
         params.set('code_challenge', pkce.challenge);
         params.set('code_challenge_method', 'S256');
         memoryCache.set(`pkce_verifier:${state}`, pkce.verifier, 600);
+        logger.info(`[oauth] Twitter PKCE generated: challenge=${pkce.challenge.substring(0, 8)}..., state=${state}`);
     }
 
-    return `${authUrl}?${params.toString()}`;
+    const finalUrl = `${authUrl}?${params.toString()}`;
+    logger.info(`[oauth] generateAuthUrl: provider=${provider}, redirectUri=${config.redirectUri}, authUrl=${authUrl}`);
+    return finalUrl;
 }
 
 // 获取 OAuth 访问令牌
@@ -512,8 +517,9 @@ async function getAccessToken(provider, code, options = {}) {
         if (codeVerifier) {
             params.set('code_verifier', codeVerifier);
             memoryCache.delete(`pkce_verifier:${stateKey}`);
+            logger.info(`[oauth] Twitter PKCE code_verifier attached for state=${stateKey}`);
         } else {
-            logger.warn('[oauth] Twitter PKCE code_verifier not found in cache for state:', stateKey);
+            logger.warn(`[oauth] Twitter PKCE code_verifier NOT found in cache for state=${stateKey}`);
         }
     }
 
@@ -533,18 +539,22 @@ async function getAccessToken(provider, code, options = {}) {
             requestHeaders['Authorization'] = `Basic ${credentials}`;
         }
 
-        const response = await fetchWithProxy(tokenUrl, {
+        logger.info(`[oauth] getAccessToken: provider=${provider}, tokenUrl=${tokenUrl}, params=${[...params.keys()].join(',')}`);
+
+        const response = await fetch(tokenUrl, {
             method: 'POST',
             headers: requestHeaders,
             body: params.toString()
         });
 
+        const responseText = await response.text();
+        logger.debug(`[oauth] getAccessToken response: provider=${provider}, status=${response.status}, body=${responseText.substring(0, 500)}`);
+
         if (!response.ok) {
-            const text = await response.text();
-            throw new Error(`HTTP ${response.status}: ${text}`);
+            throw new Error(`HTTP ${response.status}: ${responseText}`);
         }
 
-        return await response.json();
+        return JSON.parse(responseText);
     } catch (error) {
         logger.error(`[oauth] 获取${provider}访问令牌失败: ${formatOAuthError(error)}`, error);
         throw error;
@@ -558,9 +568,10 @@ async function getGitHubUserInfo(accessToken) {
         'Accept': 'application/json'
     };
 
+    logger.debug(`[oauth] getGitHubUserInfo: fetching user + emails`);
     const [userResponse, emailsResponse] = await Promise.all([
-        fetchWithProxy(OAUTH_PROVIDERS.github.userInfoUrl, { headers }),
-        fetchWithProxy('https://api.github.com/user/emails', { headers })
+        fetch(OAUTH_PROVIDERS.github.userInfoUrl, { headers }),
+        fetch('https://api.github.com/user/emails', { headers })
     ]);
 
     if (!userResponse.ok) {
@@ -599,13 +610,15 @@ async function getBlueskyUserInfoFromApi(accessToken, userInfoUrl, options = {})
         return h;
     };
 
-    let response = await fetchWithProxy(userInfoUrl, { headers: makeHeaders() });
+    logger.debug(`[oauth] getBlueskyUserInfoFromApi: fetching ${userInfoUrl}`);
+    let response = await fetch(userInfoUrl, { headers: makeHeaders() });
 
     // DPoP nonce 重试
     if (!response.ok && options?.dpopPrivateKeyPem) {
         const nonce = getHeaderValue(response.headers, 'dpop-nonce');
         if (nonce) {
-            response = await fetchWithProxy(userInfoUrl, { headers: makeHeaders(nonce) });
+            logger.debug(`[oauth] getBlueskyUserInfoFromApi: retrying with DPoP nonce`);
+            response = await fetch(userInfoUrl, { headers: makeHeaders(nonce) });
         }
     }
 
@@ -638,21 +651,43 @@ async function getUserInfo(provider, accessToken, options = {}, tokenData = null
         return getGitHubUserInfo(accessToken);
     }
 
-    try {
-        const response = await fetchWithProxy(userInfoUrl, {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
+    const MAX_RETRIES = 3;
+    const RETRY_DELAYS = [500, 1500, 3000]; // ms
+    const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
 
-        if (!response.ok) {
-            const text = await response.text();
-            throw new Error(`HTTP ${response.status}: ${text}`);
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            logger.info(`[oauth] getUserInfo: provider=${provider}, url=${userInfoUrl}, attempt=${attempt + 1}/${MAX_RETRIES + 1}`);
+
+            const response = await fetch(userInfoUrl, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+
+            const responseText = await response.text();
+            logger.debug(`[oauth] getUserInfo response: provider=${provider}, status=${response.status}, body=${responseText.substring(0, 500)}`);
+
+            if (!response.ok) {
+                if (attempt < MAX_RETRIES && RETRYABLE_STATUS.has(response.status)) {
+                    logger.warn(`[oauth] getUserInfo ${provider} HTTP ${response.status}, retrying in ${RETRY_DELAYS[attempt]}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+                    await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]));
+                    continue;
+                }
+                throw new Error(`HTTP ${response.status}: ${responseText}`);
+            }
+
+            const data = JSON.parse(responseText);
+            const mapped = config.mapUserInfo(data);
+            logger.info(`[oauth] getUserInfo success: provider=${provider}, userId=${mapped?.id}`);
+            return mapped;
+        } catch (error) {
+            if (attempt < MAX_RETRIES && !(error.message && error.message.startsWith('HTTP '))) {
+                logger.warn(`[oauth] getUserInfo ${provider} network error, retrying in ${RETRY_DELAYS[attempt]}ms: ${error.message}`);
+                await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]));
+                continue;
+            }
+            logger.error(`[oauth] 获取${provider}用户信息失败 (final):`, error);
+            throw error;
         }
-
-        const data = await response.json();
-        return config.mapUserInfo(data);
-    } catch (error) {
-        logger.error(`[oauth] 获取${provider}用户信息失败:`, error);
-        throw error;
     }
 }
 

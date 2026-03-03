@@ -3,6 +3,7 @@ import {prisma} from "../../services/prisma.js";
 import crypto from "crypto";
 import memoryCache from "../../services/memoryCache.js";
 import {generateAuthUrl, handleOAuthCallback, handleOAuthSyncBind, OAUTH_PROVIDERS,} from "../oauth.js";
+import {getAtprotoAuthAppStateByCallbackState} from "../../services/social/atprotoAuthOAuth.js";
 import zcconfig from "../../services/config/zcconfig.js";
 import {createTemporaryToken} from "../../services/auth/verification.js";
 
@@ -182,19 +183,29 @@ export const handleOAuthCallbackRequest = async (req, res) => {
             return redirectTo('/app/account/oauth/login/error', '无效的请求参数');
         }
 
+        // 对 Bluesky：回调中的 state 是库内部生成的随机值，需先解析出业务 appState
+        let resolvedState = state;
+        if (provider === 'bluesky') {
+            const appState = await getAtprotoAuthAppStateByCallbackState(state);
+            if (appState) {
+                resolvedState = appState;
+                logger.debug(`[oauthController] Bluesky state resolved: callbackState=${state} -> appState=${appState}`);
+            }
+        }
+
         if (error) {
             const reason = String(errorDescription || error || 'OAuth授权失败');
-            const syncState = provider === 'bluesky' ? memoryCache.get(`bluesky_sync_state:${state}`) : null;
-            const cachedStateForError = memoryCache.get(`oauth_state:${state}`);
+            const syncState = provider === 'bluesky' ? memoryCache.get(`bluesky_sync_state:${resolvedState}`) : null;
+            const cachedStateForError = memoryCache.get(`oauth_state:${resolvedState}`);
 
             if (syncState) {
-                memoryCache.delete(`bluesky_sync_state:${state}`);
+                memoryCache.delete(`bluesky_sync_state:${resolvedState}`);
                 logger.warn(`[oauthController] Bluesky同步授权被拒绝: ${reason}`);
                 return redirectTo('/app/account/social/sync/bluesky/error', reason);
             }
 
             if (cachedStateForError) {
-                memoryCache.delete(`oauth_state:${state}`);
+                memoryCache.delete(`oauth_state:${resolvedState}`);
                 const path = cachedStateForError.type === 'bind'
                     ? '/app/account/oauth/bind/error'
                     : '/app/account/oauth/login/error';
@@ -211,15 +222,15 @@ export const handleOAuthCallbackRequest = async (req, res) => {
             return redirectTo('/app/account/oauth/login/error', '无效的请求参数');
         }
 
-        const cachedState = memoryCache.get(`oauth_state:${state}`);
+        const cachedState = memoryCache.get(`oauth_state:${resolvedState}`);
 
         // 检查是否为 Bluesky 同步授权回调（独立 state key，与登录/绑定隔离）
         if (!cachedState && provider === 'bluesky') {
-            const syncState = memoryCache.get(`bluesky_sync_state:${state}`);
+            const syncState = memoryCache.get(`bluesky_sync_state:${resolvedState}`);
             if (syncState) {
                 const userIdToSync = syncState.userId;
                 logger.info(`[oauthController] 处理Bluesky同步令牌回调: userId=${userIdToSync}`);
-                memoryCache.delete(`bluesky_sync_state:${state}`);
+                memoryCache.delete(`bluesky_sync_state:${resolvedState}`);
 
                 try {
                     const syncResult = await handleOAuthSyncBind(provider, code, userIdToSync, {
@@ -245,7 +256,7 @@ export const handleOAuthCallbackRequest = async (req, res) => {
         }
 
         if (!cachedState) {
-            logger.warn(`[oauthController] state验证失败: state=${state}`);
+            logger.warn(`[oauthController] state验证失败: state=${state}, resolvedState=${resolvedState}`);
             return redirectTo('/app/account/oauth/login/error', '无效的state');
         }
 
@@ -254,7 +265,7 @@ export const handleOAuthCallbackRequest = async (req, res) => {
             // ---- 身份绑定（创建/更新 oauth 联系方式，保存 auth 令牌）----
             const userIdToBind = cachedState.userId;
             logger.info(`[oauthController] 处理OAuth身份绑定回调: provider=${provider}, userId=${userIdToBind}`);
-            memoryCache.delete(`oauth_state:${state}`);
+            memoryCache.delete(`oauth_state:${resolvedState}`);
 
             try {
                 const bindingResult = await handleOAuthCallback(
@@ -283,7 +294,7 @@ export const handleOAuthCallbackRequest = async (req, res) => {
         } else {
             // 登录/注册操作
             logger.info(`[oauthController] 处理OAuth登录/注册回调: provider=${provider}`);
-            memoryCache.delete(`oauth_state:${state}`);
+            memoryCache.delete(`oauth_state:${resolvedState}`);
 
             try {
                 const callbackResult = await handleOAuthCallback(

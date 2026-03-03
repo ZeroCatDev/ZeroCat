@@ -233,6 +233,20 @@ async function getOAuthClient() {
 }
 
 /**
+ * 根据回调中的 library state，从 stateStore 中取出当初 authorize() 时传入的 appState。
+ * 用于在回调处理器中将库内部 state 映射回业务 state。
+ *
+ * @param {string} callbackState  回调 URL 中的 state 参数（库生成的随机值）
+ * @returns {Promise<string|null>}  当初传入的 appState，或 null
+ */
+export async function getAtprotoAuthAppStateByCallbackState(callbackState) {
+    const key = `atproto_oauth_state:${String(callbackState || '')}`;
+    const value = memoryCache.get(key);
+    if (!value || typeof value !== 'object') return null;
+    return String(value.appState || '') || null;
+}
+
+/**
  * 在配置变更后（如修改 urls.backend）调用此函数以重建客户端。
  */
 export function resetAtprotoOAuthClient() {
