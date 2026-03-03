@@ -14,15 +14,6 @@ function resolveBlueskyScope(flow) {
     return flow === 'bind' ? BLUESKY_SCOPE_BIND : BLUESKY_SCOPE_LOGIN;
 }
 
-function getCallbackStateFromAuthUrl(authUrl, fallbackState) {
-    try {
-        const parsed = new URL(String(authUrl));
-        return String(parsed.searchParams.get('state') || fallbackState || '');
-    } catch {
-        return String(fallbackState || '');
-    }
-}
-
 /**
  * 获取支持的OAuth提供商列表
  */
@@ -66,13 +57,11 @@ export const bindOAuth = async (req, res) => {
             ...(blueskyScope ? { scope: blueskyScope } : {}),
             ...(provider === 'bluesky' ? { flow: 'auth' } : {}),
         });
-        const callbackState = provider === 'bluesky'
-            ? getCallbackStateFromAuthUrl(authUrl, state)
-            : state;
 
         // 存储 state 与用户 ID 的映射，用于回调时识别绑定操作
+        // 对 Bluesky：库会生成自己的内部 state，回调处理器通过 stateStore 解析出 appState 来查找此条目
         memoryCache.set(
-            `oauth_state:${callbackState}`,
+            `oauth_state:${state}`,
             {
                 type: 'bind',
                 userId: res.locals.userid,
@@ -125,13 +114,11 @@ export const authWithOAuth = async (req, res) => {
             ...(blueskyScope ? { scope: blueskyScope } : {}),
             ...(provider === 'bluesky' ? { flow: 'auth' } : {}),
         });
-        const callbackState = provider === 'bluesky'
-            ? getCallbackStateFromAuthUrl(authUrl, state)
-            : state;
 
         // 存储 state 用于验证回调
+        // 对 Bluesky：库会生成自己的内部 state，回调处理器通过 stateStore 解析出 appState 来查找此条目
         memoryCache.set(
-            `oauth_state:${callbackState}`,
+            `oauth_state:${state}`,
             {
                 type: 'login',
                 context: {
