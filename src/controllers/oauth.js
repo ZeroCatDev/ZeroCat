@@ -734,13 +734,26 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null, o
                 throw new Error('Bluesky OAuth 回调未返回有效 DID');
             }
 
+            const agent = new Agent(session);
+
             let profile = null;
             try {
-                const agent = new Agent(session);
                 const profileResp = await agent.getProfile({ actor: did });
                 profile = profileResp?.data || null;
             } catch (error) {
                 logger.warn(`[oauth] 读取Bluesky资料失败，将使用DID回退: ${error.message}`);
+            }
+
+            // 通过 getSession 获取邮箱（需要 transition:email scope）
+            let email = null;
+            try {
+                const sessionResp = await agent.com.atproto.server.getSession();
+                email = sessionResp?.data?.email || null;
+                if (email) {
+                    logger.debug(`[oauth] Bluesky getSession 获取到邮箱: ${email}`);
+                }
+            } catch (error) {
+                logger.warn(`[oauth] 读取Bluesky邮箱失败（可能未授予 transition:email scope）: ${error.message}`);
             }
 
             tokenData = {
@@ -751,7 +764,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null, o
 
             userInfo = {
                 id: did,
-                email: null,
+                email,
                 name: profile?.displayName || profile?.handle || did,
                 handle: profile?.handle || null,
                 did,
