@@ -2,15 +2,15 @@ version: '3.9'
 
 services:
   redis:
-    image: redis:7.4.3
+    image: redis/redis-stack:latest
     container_name: zerocat_redis
     restart: always
     ports:
       - "6379:6379"
-    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+      - "8001:8001"
     volumes:
       # Windows 相对路径兼容写法（推荐）
-      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - ./redis.conf:/usr/local/etc/redis/redis-stack.conf:ro
       - ./data:/data
     networks:
       - internal

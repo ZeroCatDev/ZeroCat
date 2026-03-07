@@ -226,17 +226,19 @@ function buildPostLabels(post) {
 // ======================== 反馈操作 ========================
 
 /**
- * 插入单个反馈
+ * 插入单条反馈（幂等，重复写入不报错）
+ * Gorse Feedback 接口要求 Value 字段，正向反馈传 1
  */
-export async function insertFeedback(feedbackType, userId, itemId, { timestamp } = {}) {
+export async function insertFeedback(feedbackType, userId, itemId, { timestamp, value = 1 } = {}) {
     try {
         const client = await getClient();
         if (!client) return;
 
-        await client.insertFeedbacks([{
+        await client.upsertFeedbacks([{
             FeedbackType: feedbackType,
             UserId: String(userId),
             ItemId: String(itemId),
+            Value: value,
             Timestamp: timestamp || new Date().toISOString(),
         }]);
         logger.debug(`[gorse] 反馈已记录: ${feedbackType} user=${userId} item=${itemId}`);
@@ -246,7 +248,7 @@ export async function insertFeedback(feedbackType, userId, itemId, { timestamp }
 }
 
 /**
- * 批量插入反馈
+ * 批量插入反馈（幂等）
  */
 export async function insertFeedbacks(feedbacks) {
     try {
@@ -257,10 +259,11 @@ export async function insertFeedbacks(feedbacks) {
             FeedbackType: fb.feedbackType,
             UserId: String(fb.userId),
             ItemId: String(fb.itemId),
+            Value: typeof fb.value === 'number' ? fb.value : 1,
             Timestamp: fb.timestamp || new Date().toISOString(),
         }));
 
-        await client.insertFeedbacks(gorseFeedbacks);
+        await client.upsertFeedbacks(gorseFeedbacks);
         logger.debug(`[gorse] 批量记录 ${gorseFeedbacks.length} 条反馈`);
     } catch (error) {
         logger.warn(`[gorse] 批量记录反馈失败:`, error.message);
@@ -305,6 +308,9 @@ export async function getRecommendedPostIds(userId, { limit = 20, offset = 0, ca
         const ids = await client.getRecommend({
             userId: String(userId),
             category: category || 'post',
+            // 将推荐曝光自动回写为 'read' 反馈，用于去重
+            writeBackType: 'read',
+            writeBackDelay: '0s',
             cursorOptions: { n: limit, offset },
         });
 
@@ -530,6 +536,7 @@ export async function syncAllFeedbacks() {
             FeedbackType: FEEDBACK_TYPES.LIKE,
             UserId: String(l.user_id),
             ItemId: `${ITEM_PREFIX.POST}${l.post_id}`,
+            Value: 1,
             Timestamp: l.created_at ? new Date(l.created_at).toISOString() : new Date().toISOString(),
         }));
 
@@ -554,6 +561,7 @@ export async function syncAllFeedbacks() {
             FeedbackType: FEEDBACK_TYPES.BOOKMARK,
             UserId: String(b.user_id),
             ItemId: `${ITEM_PREFIX.POST}${b.post_id}`,
+            Value: 1,
             Timestamp: b.created_at ? new Date(b.created_at).toISOString() : new Date().toISOString(),
         }));
 
@@ -578,6 +586,7 @@ export async function syncAllFeedbacks() {
             FeedbackType: FEEDBACK_TYPES.STAR,
             UserId: String(s.userid),
             ItemId: `${ITEM_PREFIX.PROJECT}${s.projectid}`,
+            Value: 1,
             Timestamp: s.createTime ? new Date(s.createTime).toISOString() : new Date().toISOString(),
         }));
 
@@ -603,6 +612,7 @@ export async function syncAllFeedbacks() {
             FeedbackType: FEEDBACK_TYPES.FOLLOW,
             UserId: String(f.source_user_id),
             ItemId: `user_${f.target_user_id}`,
+            Value: 1,
             Timestamp: f.created_at ? new Date(f.created_at).toISOString() : new Date().toISOString(),
         }));
 
