@@ -1,0 +1,441 @@
+[database]
+
+# 用于缓存的数据库，支持 Redis、MySQL、Postgres 和 MongoDB：
+#   redis://<user>:<password>@<host>:<port>/<db_number>
+#   rediss://<user>:<password>@<host>:<port>/<db_number>
+#   redis+cluster://<user>:<password>@<host>:<port>[?addr=<host2>:<port2>&addr=<host3>:<port3>]
+#   rediss+cluster://<user>:<password>@<host>:<port>[?addr=<host2>:<port2>&addr=<host3>:<port3>]
+#   mysql://[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]
+#   postgres://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
+#   postgresql://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
+#   mongodb://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
+#   mongodb+srv://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
+#   sqlite://<path>
+cache_store = "redis://172.17.0.1:6379/0"
+
+# 用于持久化数据的数据库，支持 MySQL、Postgres、ClickHouse 和 MongoDB：
+#   mysql://[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]
+#   postgres://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
+#   postgresql://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
+#   clickhouse://user:password@host[:port]/database?param1=value1&...&paramN=valueN
+#   chhttp://user:password@host[:port]/database?param1=value1&...&paramN=valueN
+#   chhttps://user:password@host[:port]/database?param1=value1&...&paramN=valueN
+#   mongodb://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
+#   mongodb+srv://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
+#   sqlite://<path>
+data_store = "postgres://gorse:a6hb6YH68xnKnmhk@172.17.0.1:5432/gorse"
+
+# 数据库中表（集合、键）的命名前缀。默认值为空。
+table_prefix = ""
+
+# 缓存存储数据库中表（集合、键）的命名前缀。默认值为 `table_prefix`。
+cache_table_prefix = "cache"
+
+# 数据存储数据库中表（集合、键）的命名前缀。默认值为 `table_prefix`。
+data_table_prefix = "data"
+
+[database.postgres]
+
+# 数据库允许的最大打开连接数。默认值为 64。
+max_open_conns = 64
+
+# 数据库允许的最大空闲连接数。默认值为 64。
+max_idle_conns = 64
+
+# 连接可被复用的最长时间。默认值为 "1m"。
+conn_max_lifetime = "1m"
+
+[database.redis]
+
+# 在使用 LIMIT 时，FT.SEARCH 命令允许返回的最大结果数量
+max_search_results = 10000
+
+[master]
+
+# Master 节点的 GRPC 端口。默认值为 8086。
+port = 8086
+
+# Master 节点的 gRPC 主机地址。默认值为 "0.0.0.0"。
+host = "0.0.0.0"
+
+# 是否为 gRPC 通信启用 SSL。默认值为 false。
+ssl_mode = false
+
+# gRPC 通信使用的 SSL 证书颁发机构（CA）。
+ssl_ca = ""
+
+# gRPC 通信使用的 SSL 证书。
+ssl_cert = ""
+
+# gRPC 通信使用的 SSL 证书密钥。
+ssl_key = ""
+
+# Master 节点的 HTTP 端口。默认值为 8088。
+http_port = 8088
+
+# Master 节点的 HTTP 主机地址。默认值为 "0.0.0.0"。
+http_host = "0.0.0.0"
+
+# 允许的 HTTP Origin 域名列表。
+# 列表中可以包含特殊通配符字符串 ".*"，表示允许所有来源。
+# 如果为空，则默认允许所有来源。
+http_cors_domains = []
+
+# 允许的 HTTP 方法列表，可以为空。方法名大小写不敏感。
+http_cors_methods = []
+
+# Master 节点的工作任务数量。默认值为 1。
+n_jobs = 1
+
+# 元信息超时时间。默认值为 10s。
+meta_timeout = "10s"
+
+# Master 节点 Dashboard 用户名。
+dashboard_user_name = "wuyuan"
+
+# Master 节点 Dashboard 密码。
+dashboard_password = "@2019shwC"
+
+# Admin API 的密钥（需要 SSL）。
+admin_api_key = ""
+
+[server]
+
+# 默认返回的项目数量。默认值为 10。
+default_n = 10
+
+# RESTful API 的密钥（需要 SSL）。
+api_key = ""
+
+# 集群中的时钟误差。默认值为 5s。
+clock_error = "5s"
+
+# 在插入反馈时自动插入新用户。默认值为 true。
+auto_insert_user = true
+
+# 在插入反馈时自动插入新项目。默认值为 true。
+auto_insert_item = true
+
+# 服务端缓存过期时间。默认值为 10s。
+cache_expire = "10s"
+
+[recommend]
+
+# 推荐/热门/最新项目的缓存大小。默认值为 10。
+cache_size = 100
+
+# 推荐缓存过期时间。默认值为 72h。
+cache_expire = "72h"
+
+# 在线推荐的上下文大小。出于效率考虑，在线推荐不会使用用户所有反馈，
+# 而是只使用最近的 `context_size` 条反馈。
+# 默认值为 100。
+context_size = 100
+
+# 活跃用户的生存时间（天），0 表示禁用。非活跃用户不会缓存推荐结果。默认值为 0。
+active_user_ttl = 0
+
+[recommend.data_source]
+
+# 作为正向事件的反馈类型。
+# 对应 gorse.js 中的 FEEDBACK_TYPES: like, bookmark, retweet, quote, star
+positive_feedback_types = ["like", "bookmark", "retweet", "quote", "star", "reply"]
+
+# 作为阅读事件的反馈类型。
+# 对应 gorse.js 中的 FEEDBACK_TYPES.READ
+read_feedback_types = ["read"]
+
+# 正向反馈的生存时间（天），0 表示禁用。默认值为 0。
+positive_feedback_ttl = 0
+
+# 项目的生存时间（天），0 表示禁用。默认值为 0。
+item_ttl = 0
+
+# ---- 非个性化排行榜（可定义多个） ----
+
+[[recommend.non-personalized]]
+
+# 周热门：7 天内获得最多点赞的帖子
+name = "most_liked_weekly"
+score = "count(feedback, .FeedbackType == 'like')"
+filter = "(now() - item.Timestamp).Hours() < 168"
+
+[[recommend.non-personalized]]
+
+# 周热收藏：7 天内获得最多收藏的帖子
+name = "most_bookmarked_weekly"
+score = "count(feedback, .FeedbackType == 'bookmark')"
+filter = "(now() - item.Timestamp).Hours() < 168"
+
+[[recommend.non-personalized]]
+
+# 周热评：7 天内获得最多评论的帖子
+name = "most_commented_weekly"
+score = "count(feedback, .FeedbackType == 'reply')"
+filter = "(now() - item.Timestamp).Hours() < 168"
+
+[[recommend.non-personalized]]
+
+# 日热门：24 小时内综合互动最多（点赞 + 收藏 + 转推）的帖子
+name = "hot_posts_daily"
+score = "count(feedback, .FeedbackType == 'like') + count(feedback, .FeedbackType == 'bookmark') + count(feedback, .FeedbackType == 'retweet')"
+filter = "(now() - item.Timestamp).Hours() < 24"
+
+[[recommend.item-to-item]]
+
+# Item-to-Item 推荐器名称。
+name = "neighbors"
+
+# Item-to-Item 推荐器类型：
+#   users：根据共同互动用户数量推荐（适合 ZeroCat 帖子场景）
+#   tags：根据共同标签数量推荐
+#   embedding：根据 embedding 向量距离推荐
+type = "users"
+
+[[recommend.item-to-item]]
+name = "embedding"
+type = "embedding"
+
+[[recommend.user-to-user]]
+
+# User-to-User 推荐器名称。
+name = "neighbors"
+
+# User-to-User 推荐器类型，共三种：
+#   embedding：根据 embedding 的欧几里得距离推荐。
+#   tags：根据共同标签数量推荐。
+#   items：根据共同项目数量推荐。
+type = "items"
+
+[[recommend.user-to-user]]
+name = "embedding"
+type = "embedding"
+
+# 外部推荐器已移除（GitHub trending 不适用于 ZeroCat）
+# 如需添加外部推荐源，取消注释并修改 script：
+# [[recommend.external]]
+# name = "trending"
+# script = """
+# // 自定义脚本，返回物品 ID 列表
+# """
+
+[recommend.collaborative]
+
+# 协同过滤类型。支持以下值：
+#   none：禁用协同过滤。
+#   mf：矩阵分解。
+type = "mf"
+
+# 模型训练周期。默认值为 "60m"。
+fit_period = "60m"
+
+# 模型训练的 epoch 数。默认值为 100。
+fit_epoch = 100
+
+# 超参数优化周期，设为 0 表示禁用。默认值为 "0"。
+optimize_period = "360m"
+
+# 超参数优化试验次数。默认值为 10。
+optimize_trials = 10
+
+[recommend.collaborative.early_stopping]
+
+# 若若干个 epoch 没有改进，则提前停止训练。默认值为 10。
+patience = 10
+
+[recommend.replacement]
+
+# 是否将历史项目重新加入推荐结果。默认值为 false。
+enable_replacement = true
+
+# 来自正向反馈的被替换项目权重衰减系数。默认值为 0.8。
+positive_replacement_decay = 0.8
+
+# 来自阅读反馈的被替换项目权重衰减系数。默认值为 0.6。
+read_replacement_decay = 0.6
+
+[recommend.ranker]
+
+# 排序器类型，共三种：
+#   none：不进行排序（默认）。
+#   fm：因子分解机。
+#   llm：基于 LLM 的重排序器。
+type = "fm"
+
+# 非活跃用户的推荐刷新周期。默认值为 120h。
+cache_expire = "120h"
+
+# 排序前用于获取候选项目的推荐器。
+recommenders = [
+    "latest",
+    "collaborative",
+    "non-personalized/most_liked_weekly",
+    "non-personalized/most_bookmarked_weekly",
+    "non-personalized/most_commented_weekly",
+    "non-personalized/hot_posts_daily",
+    "item-to-item/neighbors",
+    "item-to-item/embedding",
+    "user-to-user/neighbors",
+    "user-to-user/embedding"
+]
+
+# 模型训练周期。默认值为 "60m"。
+fit_period = "60m"
+
+# 模型训练 epoch 数。默认值为 100。
+fit_epoch = 100
+
+# 超参数优化周期，设为 0 表示禁用。默认值为 "0"。
+optimize_period = "360m"
+
+# 超参数优化试验次数。默认值为 10。
+optimize_trials = 10
+
+# 查询 Prompt 模板（用于 LLM 重排序）。
+query_template = """
+You are a social post recommender for the ZeroCat community. Given a user who has interacted with the following posts:
+{% for post in feedback -%}
+- {{ post.Comment }}
+{% endfor -%}
+Please sort the candidate posts by how likely the user would be interested in them.
+"""
+
+# 文档 Prompt 模板。
+document_template = '{{ item.Comment | replace(",", " ") | replace("\n", " ") }}'
+
+[recommend.ranker.early_stopping]
+
+# 若若干个 epoch 没有改进，则提前停止训练。默认值为 10。
+patience = 10
+
+[recommend.ranker.reranker_api]
+
+# 重排序 API 的认证 Token。
+auth_token = "sk-52bb4fa5ec0d4c3e9df77a58e3dd4738"
+
+# 重排序模型。
+model = "qwen3-rerank"
+
+# 重排序 API 的 URL，支持 Jina 风格接口。
+url = "https://dashscope.aliyuncs.com/compatible-api/v1/reranks"
+
+[recommend.fallback]
+
+# 当缓存推荐耗尽时使用的备用推荐器。默认值为 ["latest"]。
+recommenders = [
+    "non-personalized/hot_posts_daily",
+    "item-to-item/neighbors",
+    "item-to-item/embedding",
+    "latest"
+]
+
+[tracing]
+
+# 是否为 REST API 启用链路追踪。默认值为 false。
+enable_tracing = false
+
+# 追踪导出器类型，可选 "zipkin"、"otlp"、"otlphttp"。默认值为 "otlp"。
+exporter = "otlp"
+
+# 追踪收集器的 endpoint。
+collector_endpoint = "http://localhost:4317"
+
+# 采样器类型，可选 "always"、"never"、"ratio"。默认值为 "always"。
+sampler = "always"
+
+# 比例采样器的比例值。默认值为 1。
+ratio = 1
+
+[oidc]
+
+# 是否启用 OpenID Connect (OIDC) 认证。默认值为 false。
+enable = false
+
+# OAuth 提供者的 issuer。
+issuer = ""
+
+# OAuth 应用的公开标识符。
+client_id = ""
+
+# OAuth 应用的访问令牌。
+client_secret = ""
+
+# OAuth 提供者在用户成功认证后重定向的 URL
+# （也称为回调 URL）。你应该将其设置为
+# Gorse Dashboard URL 与 "/callback/oauth2" 的拼接。
+# 例如，如果 Dashboard URL 为
+# http://localhost:8088
+# 则重定向 URL 应为：
+# http://localhost:8088/callback/oauth2
+redirect_url = ""
+
+[blob]
+
+# Blob 存储 URI。
+#   - S3：s3://bucket/path
+#   - GCS：gs://my-bucket/my-database
+#   - Azure Blob：az://container/path
+#   - 本地：/path/without/prefix
+uri = "/var/lib/gorse/blob"
+
+[blob.s3]
+
+# S3 endpoint。
+endpoint = ""
+
+# S3 Access Key ID。
+access_key_id = ""
+
+# S3 Secret Access Key。
+secret_access_key = ""
+
+[blob.gcs]
+
+# GCS 凭证文件。
+credentials_file = ""
+
+[blob.azure]
+
+# Azure Blob endpoint。留空则使用 https://<account_name>.blob.core.windows.net/
+endpoint = ""
+
+# Azure 存储账户名称。
+account_name = ""
+
+# Azure 存储账户密钥。
+account_key = ""
+
+# Azure 存储连接字符串（优先于 account_name/account_key）。
+connection_string = ""
+
+[openai]
+
+# OpenAI API 的 Base URL。
+base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+
+# OpenAI API 的 API Key。
+auth_token = "sk-52bb4fa5ec0d4c3e9df77a58e3dd4738"
+
+# 聊天补全模型名称。
+chat_completion_model = "qwen2.5"
+
+# 聊天补全每分钟最大请求数。
+chat_completion_rpm = 15000
+
+# 聊天补全每分钟最大 Token 数。
+chat_completion_tpm = 1200000
+
+# embedding 模型名称。
+embedding_model = "text-embedding-v4"
+
+# embedding 向量维度。
+embedding_dimensions = 1024
+
+# embedding 每分钟最大请求数。
+embedding_rpm = 1800
+
+# embedding 每分钟最大 Token 数。
+embedding_tpm = 1200000
+
+# OpenAI API 日志文件。
+log_file = "openai.log"

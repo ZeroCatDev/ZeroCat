@@ -49,6 +49,7 @@
     "express-winston": "^4.2.0",
     "file-type": "^21.0.0",
     "fluent-ffmpeg": "^2.1.2",
+    "gorsejs": "^0.5.0",
     "handlebars": "^4.7.8",
     "html-entities": "^2.6.0",
     "ioredis": "^5.6.1",

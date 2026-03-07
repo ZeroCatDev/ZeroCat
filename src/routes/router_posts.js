@@ -4,6 +4,7 @@ import logger from "../services/logger.js";
 import { needLogin } from "../middleware/auth.js";
 import {
   createPost,
+  markPostRead,
   replyToPost,
   retweetPost,
   unretweetPost,
@@ -29,6 +30,7 @@ import {
   getUserMediaPosts,
   getUserLikedPosts,
   getUserBookmarks,
+  getRecommendedFeed,
   MAX_MEDIA_COUNT,
 } from "../controllers/posts.js";
 import { handleAssetUpload, validateFileTypeFromContent } from "../services/assets.js";
@@ -199,6 +201,16 @@ router.post("/:id/quote", needLogin, async (req, res) => {
   }
 });
 
+router.post("/:id/read", async (req, res) => {
+  try {
+    const result = await markPostRead({ userId: res.locals.userid, postId: req.params.id });
+    res.status(200).json({ status: "success", data: result });
+  } catch (error) {
+    logger.error("标记已读失败:", error);
+    res.status(400).json({ status: "error", message: error.message });
+  }
+});
+
 router.post("/:id/like", needLogin, async (req, res) => {
   try {
     const like = await likePost({ userId: res.locals.userid, postId: req.params.id });
@@ -280,6 +292,26 @@ router.get("/global", needLogin, async (req, res) => {
   } catch (error) {
     logger.error("获取全局时间线失败:", error);
     res.status(500).json({ status: "error", message: "获取全局时间线失败" });
+  }
+});
+
+/**
+ * 获取 Gorse 个性化推荐帖子
+ * 已登录用户获取个性化推荐，未登录用户获取热门帖子
+ */
+router.get("/recommend", async (req, res) => {
+  try {
+    const { limit = 20, offset = 0 } = req.query;
+    const viewerId = res.locals.userid || null;
+    const data = await getRecommendedFeed({
+      userId: viewerId,
+      limit: Math.min(Math.max(Number(limit) || 20, 1), 50),
+      offset: Math.max(Number(offset) || 0, 0),
+    });
+    res.status(200).json({ status: "success", data });
+  } catch (error) {
+    logger.error("获取推荐帖子失败:", error);
+    res.status(500).json({ status: "error", message: "获取推荐帖子失败" });
   }
 });
 

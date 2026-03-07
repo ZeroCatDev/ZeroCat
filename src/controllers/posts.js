@@ -4,6 +4,7 @@ import { createNotification } from "./notifications.js";
 import zcconfig from "../services/config/zcconfig.js";
 import logger from "../services/logger.js";
 import queueManager from "../services/queue/queueManager.js";
+import gorseService from "../services/gorse.js";
 
 const POST_CHAR_LIMIT = 280;
 const MAX_MEDIA_COUNT = 4;
@@ -504,6 +505,9 @@ export async function createPost({ authorId, content, mediaIds = [], embed }) {
     logger.warn("推文社交同步入队失败(create):", error.message);
   });
 
+  // 同步帖子到 Gorse 推荐系统
+  gorseService.upsertPost(post).catch(e => logger.debug('[gorse] createPost upsert failed:', e.message));
+
   const formattedPost = formatPost(post);
   return {
     post: formattedPost,
@@ -615,6 +619,10 @@ export async function replyToPost({
     logger.warn("推文社交同步入队失败(reply):", error.message);
   });
 
+  // Gorse 反馈：回复 + 同步新帖子
+  gorseService.feedbackPostReply(authorId, target.id).catch(e => logger.debug('[gorse] reply feedback failed:', e.message));
+  gorseService.upsertPost(post).catch(e => logger.debug('[gorse] reply upsert failed:', e.message));
+
   const formattedPost = formatPost(post);
   const refIds = collectReferencedIds([formattedPost]);
   const referencedPosts = await fetchReferencedPosts(refIds);
@@ -699,6 +707,9 @@ export async function retweetPost({ authorId, retweetPostId }) {
   queueManager.enqueueSocialPostSync(authorId, post.id, "retweet").catch((error) => {
     logger.warn("推文社交同步入队失败(retweet):", error.message);
   });
+
+  // Gorse 反馈：转推
+  gorseService.feedbackPostRetweet(authorId, originalId).catch(e => logger.debug('[gorse] retweet feedback failed:', e.message));
 
   const formattedPost = formatPost(post);
   const refIds = collectReferencedIds([formattedPost]);
@@ -856,6 +867,10 @@ export async function quotePost({
     logger.warn("推文社交同步入队失败(quote):", error.message);
   });
 
+  // Gorse 反馈：引用 + 同步新帖子
+  gorseService.feedbackPostQuote(authorId, target.id).catch(e => logger.debug('[gorse] quote feedback failed:', e.message));
+  gorseService.upsertPost(post).catch(e => logger.debug('[gorse] quote upsert failed:', e.message));
+
   const formattedPost = formatPost(post);
   const refIds = collectReferencedIds([formattedPost]);
   const referencedPosts = await fetchReferencedPosts(refIds);
@@ -911,6 +926,9 @@ export async function likePost({ userId, postId }) {
     logger.warn("推文社交同步入队失败(like):", error.message);
   });
 
+  // Gorse 反馈：点赞
+  gorseService.feedbackPostLike(userId, target.id).catch(e => logger.debug('[gorse] like feedback failed:', e.message));
+
   return like;
 }
 
@@ -940,6 +958,8 @@ export async function unlikePost({ userId, postId }) {
     queueManager.enqueueSocialPostSync(userId, target.id, "unlike").catch((error) => {
       logger.warn("推文社交同步入队失败(unlike):", error.message);
     });
+    // Gorse 反馈：取消点赞
+    gorseService.feedbackPostUnlike(userId, target.id).catch(e => logger.debug('[gorse] unlike feedback failed:', e.message));
   }
 
   return result;
@@ -977,6 +997,9 @@ export async function bookmarkPost({ userId, postId }) {
     logger.warn("推文社交同步入队失败(bookmark):", error.message);
   });
 
+  // Gorse 反馈：收藏
+  gorseService.feedbackPostBookmark(userId, target.id).catch(e => logger.debug('[gorse] bookmark feedback failed:', e.message));
+
   return bookmark;
 }
 
@@ -1006,9 +1029,27 @@ export async function unbookmarkPost({ userId, postId }) {
     queueManager.enqueueSocialPostSync(userId, target.id, "unbookmark").catch((error) => {
       logger.warn("推文社交同步入队失败(unbookmark):", error.message);
     });
+    // Gorse 反馈：取消收藏
+    gorseService.feedbackPostUnbookmark(userId, target.id).catch(e => logger.debug('[gorse] unbookmark feedback failed:', e.message));
   }
 
   return result;
+}
+
+/**
+ * 标记帖子为已读（上报 Gorse read 反馈）
+ * 登录用户：记录个人阅读反馈，用于个性化推荐去重
+ * 未登录用户：直接忽略，不做任何操作
+ */
+export async function markPostRead({ userId, postId }) {
+  if (!userId) return { acknowledged: false, reason: 'not_logged_in' };
+
+  // 异步上报 Gorse，不阻塞响应
+  gorseService.feedbackPostRead(userId, postId).catch(e =>
+    logger.debug('[gorse] markPostRead feedback failed:', e.message)
+  );
+
+  return { acknowledged: true };
 }
 
 export async function deletePost({ userId, postId }) {
@@ -1027,6 +1068,9 @@ export async function deletePost({ userId, postId }) {
   queueManager.enqueueSocialPostSync(userId, post.id, "delete").catch((error) => {
     logger.warn("推文社交同步入队失败(delete):", error.message);
   });
+
+  // Gorse：隐藏已删除的帖子
+  gorseService.hidePost(post.id).catch(e => logger.debug('[gorse] hidePost failed:', e.message));
 
   return { id: post.id, deleted: true };
 }
@@ -1929,4 +1973,65 @@ export async function getUserBookmarks({ userId, cursor, limit = 20, viewerId })
 }
 
 export { countPostCharacters, POST_CHAR_LIMIT, MAX_MEDIA_COUNT };
+
+/**
+ * 获取 Gorse 个性化推荐帖子列表
+ * 已登录用户使用个性化推荐，未登录用户使用热门/最新帖子
+ */
+export async function getRecommendedFeed({
+  userId = null,
+  limit = 20,
+  offset = 0,
+}) {
+  await initStaticUrl();
+
+  let postIds;
+  if (userId) {
+    postIds = await gorseService.getRecommendedPostIds(userId, { limit, offset });
+  } else {
+    postIds = await gorseService.getLatestPostIds({ limit, offset });
+  }
+
+  // 如果 Gorse 无结果，降级到按时间排序
+  if (!postIds || postIds.length === 0) {
+    return getHomeFeed({ userId, limit, includeReplies: false, followingOnly: false });
+  }
+
+  const rawPosts = await prisma.ow_posts.findMany({
+    where: {
+      id: { in: postIds },
+      is_deleted: false,
+    },
+    select: buildLeanSelect(),
+  });
+
+  // 按 Gorse 推荐顺序排序
+  const postMap = new Map(rawPosts.map(p => [p.id, p]));
+  const orderedRaw = postIds
+    .map(id => postMap.get(id))
+    .filter(Boolean);
+
+  let posts = orderedRaw.map(formatPost);
+  posts = await addViewerContext(posts, userId);
+
+  const refIds = collectReferencedIds(posts);
+  let referencedPosts = await fetchReferencedPosts(refIds);
+  if (userId && Object.keys(referencedPosts).length > 0) {
+    const refPostsArray = Object.values(referencedPosts);
+    const enriched = await addViewerContext(refPostsArray, userId);
+    referencedPosts = {};
+    for (const p of enriched) {
+      referencedPosts[p.id] = p;
+    }
+  }
+
+  const hasMore = postIds.length === limit;
+
+  return {
+    posts,
+    includes: { posts: referencedPosts },
+    next_offset: hasMore ? offset + limit : null,
+    has_more: hasMore,
+  };
+}
 

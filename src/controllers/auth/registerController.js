@@ -13,6 +13,7 @@ import {
 import {generateMagicLinkForLogin, sendMagicLinkEmail} from "../../services/auth/magiclink.js";
 import {sendVerificationCode, verifyEmailCode} from "../../services/auth/unifiedAuth.js";
 import {createEvent} from "../events.js";
+import gorseService from "../../services/gorse.js";
 
 /**
  * 初始用户注册 - 只需要邮箱或用户名
@@ -99,6 +100,11 @@ export const registerUser = async (req, res) => {
                 password: password && !skipPassword ? hash(password) : null,
                 status: email ? "pending" : "active", // 如果有邮箱，状态为pending，否则为active
             },
+        });
+
+        // 同步新用户到 Gorse 推荐系统
+        gorseService.upsertUser(newUser.id, { username: finalUsername }).catch(e => {
+            logger.debug('[gorse] register user sync failed:', e.message);
         });
 
         try {

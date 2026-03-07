@@ -799,6 +799,20 @@ export const CONFIG_TYPES = {
         transform: typeTransformers.boolean,
         public: true,
     },
+    "gorse.secret"  : {
+        type: "string",
+        required: false,
+        description: "Gorse推荐系统访问密钥，用于保护推荐接口安全，启用后需要在推荐请求中提供此密钥",
+        default: ""
+    },
+    "gorse.endpoint": {
+        type: "string",
+        required: false,
+        description: "Gorse推荐系统服务地址，启用推荐功能时必填，格式应为http://host:port",
+        validate: (value) =>
+            !value || (value.startsWith("http://") || value.startsWith("https://")),
+        public: false,
+    }
 };
 
 // 从数据库加载的动态配置

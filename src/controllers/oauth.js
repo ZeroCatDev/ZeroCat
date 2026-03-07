@@ -11,6 +11,7 @@ import {
 
 import base32Encode from 'base32-encode';
 import memoryCache from '../services/memoryCache.js';
+import gorseService from '../services/gorse.js';
 
 const USER_TARGET_TYPE = 'user';
 
@@ -965,6 +966,11 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null, o
                             });
                             userId = newUser.id;
                             logger.info(`[oauth] 成功创建新用户: userId=${userId}, username=${username}, provider=${provider}`);
+
+                            // 同步新用户到 Gorse
+                            gorseService.upsertUser(newUser.id, { username }).catch(e => {
+                                logger.debug('[gorse] oauth user sync failed:', e.message);
+                            });
                         } catch (error) {
                             logger.error(`[oauth] 创建新用户失败:`, error);
                             throw new Error(`创建新用户失败: ${error.message}`);
@@ -1012,6 +1018,11 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null, o
                         });
                         userId = newUser.id;
                         logger.info(`[oauth] 成功创建无邮箱新用户: userId=${userId}, username=${username}, provider=${provider}`);
+
+                        // 同步新用户到 Gorse
+                        gorseService.upsertUser(newUser.id, { username }).catch(e => {
+                            logger.debug('[gorse] oauth user (no email) sync failed:', e.message);
+                        });
                     } catch (error) {
                         logger.error(`[oauth] 创建无邮箱新用户失败:`, error);
                         throw new Error(`创建新用户失败: ${error.message}`);

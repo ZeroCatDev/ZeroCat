@@ -1,6 +1,7 @@
 import {prisma} from "../services/prisma.js";
 import logger from "../services/logger.js";
 import {createEvent} from "./events.js";
+import gorseService from "../services/gorse.js";
 
 // 延迟导入 AP 关注同步模块，避免循环依赖
 let _apFollowSync = null;
@@ -126,6 +127,11 @@ export async function followUser(followerId, followedId, note = "") {
             logger.warn(`[follows] AP 关注同步入队失败 (非致命):`, apErr.message);
         }
 
+        // Gorse 反馈：关注用户
+        gorseService.feedbackUserFollow(followerId, followedId).catch(e => {
+            logger.debug('[gorse] follow feedback failed:', e.message);
+        });
+
         return relationship;
     } catch (error) {
         logger.error("Error in followUser:", error);
@@ -166,6 +172,13 @@ export async function unfollowUser(followerId, followedId) {
                 relationship_type: "follow",
             },
         });
+
+        // Gorse 反馈：取消关注
+        if (result.count > 0) {
+            gorseService.feedbackUserUnfollow(followerId, followedId).catch(e => {
+                logger.debug('[gorse] unfollow feedback failed:', e.message);
+            });
+        }
 
         return {count: result.count};
     } catch (error) {

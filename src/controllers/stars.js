@@ -1,6 +1,7 @@
 import { prisma } from '../services/prisma.js';
 
 import logger from "../services/logger.js";
+import gorseService from "../services/gorse.js";
 
 
 /**
@@ -52,6 +53,11 @@ export async function starProject(userId, projectId) {
                     increment: 1
                 }
             }
+        });
+
+        // Gorse 反馈：项目收藏
+        gorseService.feedbackProjectStar(parsedUserId, parsedProjectId).catch(e => {
+            logger.debug('[gorse] star feedback failed:', e.message);
         });
 
 
@@ -111,6 +117,11 @@ export async function unstarProject(userId, projectId) {
                     decrement: 1
                 }
             }
+        });
+
+        // Gorse 反馈：取消项目收藏
+        gorseService.feedbackProjectUnstar(parsedUserId, parsedProjectId).catch(e => {
+            logger.debug('[gorse] unstar feedback failed:', e.message);
         });
 
         return star;
