@@ -484,20 +484,47 @@ export async function syncAllPosts() {
                 is_deleted: true,
                 embed: true,
                 created_at: true,
+                retweet_post_id: true,
             },
             orderBy: { id: 'asc' },
         });
 
         if (posts.length === 0) break;
 
-        const items = posts.map(post => ({
-            ItemId: `${ITEM_PREFIX.POST}${post.id}`,
-            Comment: (post.content || '').substring(0, 200),
-            IsHidden: post.is_deleted || false,
-            Timestamp: post.created_at ? new Date(post.created_at).toISOString() : new Date().toISOString(),
-            Categories: buildPostCategories(post),
-            Labels: buildPostLabels(post),
-        }));
+        // 批量获取转推帖子对应的原帖内容（避免 N+1 查询）
+        const retweetIds = posts
+            .filter(p => p.post_type === 'retweet' && p.retweet_post_id)
+            .map(p => p.retweet_post_id);
+
+        let originalContentMap = {};
+        if (retweetIds.length > 0) {
+            const originals = await prisma.ow_posts.findMany({
+                where: { id: { in: retweetIds } },
+                select: { id: true, content: true, embed: true },
+            });
+            for (const orig of originals) {
+                originalContentMap[orig.id] = orig;
+            }
+        }
+
+        const items = posts.map(post => {
+            // 转推帖子使用原帖文字填充 Comment
+            const effectiveContent = (post.post_type === 'retweet' && post.retweet_post_id)
+                ? (originalContentMap[post.retweet_post_id]?.content || '')
+                : (post.content || '');
+            const effectiveEmbed = (post.post_type === 'retweet' && post.retweet_post_id)
+                ? (originalContentMap[post.retweet_post_id]?.embed || post.embed)
+                : post.embed;
+
+            return {
+                ItemId: `${ITEM_PREFIX.POST}${post.id}`,
+                Comment: effectiveContent.substring(0, 200),
+                IsHidden: post.is_deleted || false,
+                Timestamp: post.created_at ? new Date(post.created_at).toISOString() : new Date().toISOString(),
+                Categories: buildPostCategories({ ...post, embed: effectiveEmbed }),
+                Labels: buildPostLabels({ ...post, embed: effectiveEmbed }),
+            };
+        });
 
         await client.upsertItems(items);
         totalSynced += items.length;

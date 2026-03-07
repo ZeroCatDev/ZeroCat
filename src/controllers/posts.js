@@ -636,7 +636,7 @@ export async function replyToPost({
 export async function retweetPost({ authorId, retweetPostId }) {
   const target = await prisma.ow_posts.findFirst({
     where: { id: Number(retweetPostId), is_deleted: false },
-    select: { id: true, author_id: true, post_type: true, retweet_post_id: true },
+    select: { id: true, author_id: true, post_type: true, retweet_post_id: true, content: true, embed: true },
   });
   if (!target) {
     throw new Error("目标推文不存在");
@@ -645,16 +645,21 @@ export async function retweetPost({ authorId, retweetPostId }) {
   // 如果目标本身就是转推，自动追溯到原始推文
   let originalId = target.id;
   let originalAuthorId = target.author_id;
+  // 默认使用目标帖子自身内容（目标是原始帖的情况）
+  let originalContent = target.content;
+  let originalEmbed = target.embed;
   if (target.post_type === "retweet" && target.retweet_post_id) {
     const original = await prisma.ow_posts.findFirst({
       where: { id: target.retweet_post_id, is_deleted: false },
-      select: { id: true, author_id: true },
+      select: { id: true, author_id: true, content: true, embed: true },
     });
     if (!original) {
       throw new Error("原始推文不存在");
     }
     originalId = original.id;
     originalAuthorId = original.author_id;
+    originalContent = original.content;
+    originalEmbed = original.embed;
   }
 
   // 检查是否已经转推过该原始推文
@@ -708,8 +713,13 @@ export async function retweetPost({ authorId, retweetPostId }) {
     logger.warn("推文社交同步入队失败(retweet):", error.message);
   });
 
-  // Gorse 反馈：转推
+  // Gorse 反馈：转推 + 推送转推帖子（使用原帖内容作为 Comment，以便语义检索）
   gorseService.feedbackPostRetweet(authorId, originalId).catch(e => logger.debug('[gorse] retweet feedback failed:', e.message));
+  gorseService.upsertPost({
+    ...post,
+    content: originalContent,   // 填充原帖文字，转推本身 content 为 null
+    embed: originalEmbed,
+  }).catch(e => logger.debug('[gorse] retweet upsert failed:', e.message));
 
   const formattedPost = formatPost(post);
   const refIds = collectReferencedIds([formattedPost]);
