@@ -5,6 +5,7 @@ import zcconfig from "../services/config/zcconfig.js";
 import logger from "../services/logger.js";
 import queueManager from "../services/queue/queueManager.js";
 import gorseService from "../services/gorse.js";
+import * as embeddingService from "../services/embedding.js";
 
 const POST_CHAR_LIMIT = 280;
 const MAX_MEDIA_COUNT = 4;
@@ -120,6 +121,7 @@ function buildLeanSelect() {
     embed: true,
     platform_refs: true,
     created_at: true,
+    embedding_at: true,
     author: {
       select: { id: true, username: true, display_name: true, avatar: true },
     },
@@ -215,6 +217,7 @@ function formatPost(raw) {
       }))
       .filter((m) => m.id),
     embed: raw.is_deleted ? null : raw.embed || null,
+    embedding_at: raw.embedding_at || null,
     platform_refs: raw.is_deleted ? null : formatPlatformRefs(raw.platform_refs),
   };
 }
@@ -508,6 +511,12 @@ export async function createPost({ authorId, content, mediaIds = [], embed }) {
   // 同步帖子到 Gorse 推荐系统
   gorseService.upsertPost(post).catch(e => logger.debug('[gorse] createPost upsert failed:', e.message));
 
+  // 异步生成帖子向量
+  queueManager.enqueuePostEmbedding(post.id).catch(e => logger.debug('[embedding] createPost enqueue failed:', e.message));
+
+  // 异步刷新作者用户向量（帖子变化影响用户画像）
+  queueManager.enqueueUserEmbedding(authorId).catch(e => logger.debug('[embedding] createPost user enqueue failed:', e.message));
+
   const formattedPost = formatPost(post);
   return {
     post: formattedPost,
@@ -623,6 +632,10 @@ export async function replyToPost({
   gorseService.feedbackPostReply(authorId, target.id).catch(e => logger.debug('[gorse] reply feedback failed:', e.message));
   gorseService.upsertPost(post).catch(e => logger.debug('[gorse] reply upsert failed:', e.message));
 
+  // 异步生成回复帖子向量
+  queueManager.enqueuePostEmbedding(post.id).catch(e => logger.debug('[embedding] reply enqueue failed:', e.message));
+  queueManager.enqueueUserEmbedding(authorId).catch(e => logger.debug('[embedding] reply user enqueue failed:', e.message));
+
   const formattedPost = formatPost(post);
   const refIds = collectReferencedIds([formattedPost]);
   const referencedPosts = await fetchReferencedPosts(refIds);
@@ -720,6 +733,9 @@ export async function retweetPost({ authorId, retweetPostId }) {
     content: originalContent,   // 填充原帖文字，转推本身 content 为 null
     embed: originalEmbed,
   }).catch(e => logger.debug('[gorse] retweet upsert failed:', e.message));
+
+  // 纯转推不生成向量，但刷新作者用户向量
+  queueManager.enqueueUserEmbedding(authorId).catch(e => logger.debug('[embedding] retweet user enqueue failed:', e.message));
 
   const formattedPost = formatPost(post);
   const refIds = collectReferencedIds([formattedPost]);
@@ -881,6 +897,10 @@ export async function quotePost({
   gorseService.feedbackPostQuote(authorId, target.id).catch(e => logger.debug('[gorse] quote feedback failed:', e.message));
   gorseService.upsertPost(post).catch(e => logger.debug('[gorse] quote upsert failed:', e.message));
 
+  // 异步生成引用帖子向量
+  queueManager.enqueuePostEmbedding(post.id).catch(e => logger.debug('[embedding] quote enqueue failed:', e.message));
+  queueManager.enqueueUserEmbedding(authorId).catch(e => logger.debug('[embedding] quote user enqueue failed:', e.message));
+
   const formattedPost = formatPost(post);
   const refIds = collectReferencedIds([formattedPost]);
   const referencedPosts = await fetchReferencedPosts(refIds);
@@ -938,6 +958,9 @@ export async function likePost({ userId, postId }) {
 
   // Gorse 反馈：点赞
   gorseService.feedbackPostLike(userId, target.id).catch(e => logger.debug('[gorse] like feedback failed:', e.message));
+
+  // 点赞影响用户画像，刷新用户向量
+  queueManager.enqueueUserEmbedding(userId).catch(e => logger.debug('[embedding] like user enqueue failed:', e.message));
 
   return like;
 }
@@ -1009,6 +1032,9 @@ export async function bookmarkPost({ userId, postId }) {
 
   // Gorse 反馈：收藏
   gorseService.feedbackPostBookmark(userId, target.id).catch(e => logger.debug('[gorse] bookmark feedback failed:', e.message));
+
+  // 收藏影响用户画像，刷新用户向量
+  queueManager.enqueueUserEmbedding(userId).catch(e => logger.debug('[embedding] bookmark user enqueue failed:', e.message));
 
   return bookmark;
 }
@@ -2042,6 +2068,125 @@ export async function getRecommendedFeed({
     includes: { posts: referencedPosts },
     next_offset: hasMore ? offset + limit : null,
     has_more: hasMore,
+  };
+}
+
+// ======================== 向量相似帖子 ========================
+
+/**
+ * 获取与指定帖子相似的帖子（基于向量相似度搜索）
+ * @param {Object} params
+ * @param {number} params.postId - 帖子 ID
+ * @param {number} [params.limit=10] - 返回数量
+ * @param {number|null} [params.viewerId] - 当前查看者 ID
+ * @returns {Promise<Object>}
+ */
+export async function getSimilarPosts({ postId, limit = 10, viewerId = null }) {
+  await initStaticUrl();
+
+  const enabled = await zcconfig.get('embedding.enabled');
+  if (!enabled) {
+    return { posts: [], includes: { posts: {} }, message: 'Embedding 服务未启用' };
+  }
+
+  const nPostId = Number(postId);
+  if (isNaN(nPostId)) throw new Error('无效的帖子 ID');
+
+  // 获取该帖子的向量
+  const vector = await embeddingService.getEmbedding('post', nPostId);
+  if (!vector) {
+    return { posts: [], includes: { posts: {} }, message: '该帖子尚未生成向量' };
+  }
+
+  const safeLimit = Math.min(Math.max(Number(limit) || 10, 1), 50);
+
+  // 搜索相似帖子（排除自身）
+  const similarResults = await embeddingService.searchSimilar('post', vector, safeLimit + 5, [nPostId]);
+  if (!similarResults || similarResults.length === 0) {
+    return { posts: [], includes: { posts: {} } };
+  }
+
+  // 查询帖子详情（过滤已删除）
+  const candidateIds = similarResults.map(r => r.entityId);
+  const rawPosts = await prisma.ow_posts.findMany({
+    where: {
+      id: { in: candidateIds },
+      is_deleted: false,
+    },
+    select: buildLeanSelect(),
+  });
+
+  // 按相似度排序
+  const similarityMap = new Map(similarResults.map(r => [r.entityId, r.similarity]));
+  rawPosts.sort((a, b) => (similarityMap.get(b.id) || 0) - (similarityMap.get(a.id) || 0));
+
+  // 截取到 safeLimit
+  const trimmed = rawPosts.slice(0, safeLimit);
+
+  let posts = trimmed.map(formatPost);
+  posts = await addViewerContext(posts, viewerId);
+
+  // 附加相似度分数
+  posts = posts.map(p => ({
+    ...p,
+    similarity: similarityMap.get(p.id) || 0,
+  }));
+
+  const refIds = collectReferencedIds(posts);
+  let referencedPosts = await fetchReferencedPosts(refIds);
+  if (viewerId && Object.keys(referencedPosts).length > 0) {
+    const refPostsArray = Object.values(referencedPosts);
+    const enriched = await addViewerContext(refPostsArray, viewerId);
+    referencedPosts = {};
+    for (const p of enriched) {
+      referencedPosts[p.id] = p;
+    }
+  }
+
+  return {
+    posts,
+    includes: { posts: referencedPosts },
+  };
+}
+
+/**
+ * 获取 Embedding 服务基本信息（面向前端的公开接口）
+ * 不暴露 API Key 等敏感信息
+ */
+export async function getEmbeddingInfo() {
+  const enabled = await zcconfig.get('embedding.enabled');
+  if (!enabled) {
+    return { enabled: false };
+  }
+
+  const [provider, model, dimensions] = await Promise.all([
+    zcconfig.get('embedding.provider'),
+    zcconfig.get('embedding.model'),
+    zcconfig.get('embedding.dimensions'),
+  ]);
+
+  let stats = null;
+  try {
+    const countResult = await prisma.$queryRawUnsafe(`
+      SELECT entity_type, COUNT(*)::int as cnt
+      FROM ow_embeddings
+      GROUP BY entity_type
+    `);
+    stats = {};
+    for (const row of countResult) {
+      stats[row.entity_type] = row.cnt;
+    }
+  } catch {
+    // pgvector 尚未初始化
+    stats = null;
+  }
+
+  return {
+    enabled: true,
+    provider: provider || 'openai',
+    model: model || 'text-embedding-3-small',
+    dimensions: Number(dimensions) || 1536,
+    stats,
   };
 }
 

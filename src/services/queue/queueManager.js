@@ -1,11 +1,12 @@
 import { createTransport } from 'nodemailer';
-import { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue, getDataTaskQueue, getSocialSyncQueue, getApFederationQueue } from './queues.js';
+import { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue, getDataTaskQueue, getSocialSyncQueue, getApFederationQueue, getEmbeddingQueue } from './queues.js';
 import { createEmailWorker, getEmailWorker } from './workers/emailWorker.js';
 import { createScheduledTasksWorker, getScheduledTasksWorker } from './workers/scheduledTasksWorker.js';
 import { createCommentNotificationWorker, getCommentNotificationWorker } from './workers/commentNotificationWorker.js';
 import { createDataTaskWorker, getDataTaskWorker } from './workers/dataTaskWorker.js';
 import { createSocialSyncWorker, getSocialSyncWorker } from './workers/socialSyncWorker.js';
 import { createApFederationWorker, getApFederationWorker } from './workers/apFederationWorker.js';
+import { createEmbeddingWorker, getEmbeddingWorker } from './workers/embeddingWorker.js';
 import { closeAll as closeAllConnections } from './redisConnectionFactory.js';
 import zcconfig from '../config/zcconfig.js';
 import logger from '../logger.js';
@@ -34,6 +35,13 @@ const queueManager = {
             await createDataTaskWorker();
             await createSocialSyncWorker();
             await createApFederationWorker();
+
+            // Embedding worker（仅在 embedding.enabled 开启时创建）
+            const embeddingEnabled = await zcconfig.get('embedding.enabled');
+            if (embeddingEnabled) {
+                await createEmbeddingWorker();
+                logger.info('[queue-manager] Embedding worker created');
+            }
 
             // Register repeatable jobs
             await this.registerRepeatableJobs();
@@ -532,6 +540,9 @@ const queueManager = {
             if (socialSyncWorker) await socialSyncWorker.close();
             if (apFederationWorker) await apFederationWorker.close();
 
+            const embeddingWorker = getEmbeddingWorker();
+            if (embeddingWorker) await embeddingWorker.close();
+
             // Close queues
             const emailQueue = getEmailQueue();
             const scheduledQueue = getScheduledTasksQueue();
@@ -547,6 +558,9 @@ const queueManager = {
             if (socialSyncQueue) await socialSyncQueue.close();
             if (apFederationQueue) await apFederationQueue.close();
 
+            const embeddingQueue = getEmbeddingQueue();
+            if (embeddingQueue) await embeddingQueue.close();
+
             // Close redis connections
             await closeAllConnections();
 
@@ -559,6 +573,150 @@ const queueManager = {
 
     isInitialized() {
         return initialized;
+    },
+
+    // ─── Embedding 向量生成入队方法 ──────────────────────────
+
+    /**
+     * 为单个帖子入队向量生成任务
+     * @param {number} postId
+     * @param {boolean} force - 强制重新生成（忽略 change detection）
+     */
+    async enqueuePostEmbedding(postId, force = false) {
+        const queue = getEmbeddingQueue();
+        if (!queue || !initialized) {
+            logger.debug('[queue-manager] Embedding queue not available, skipping post embedding');
+            return null;
+        }
+
+        try {
+            const jobId = `emb-post-${postId}`;
+            const job = await queue.add('embedding', {
+                type: 'post_embedding',
+                postId: Number(postId),
+                force,
+            }, {
+                jobId,
+                attempts: 3,
+                backoff: { type: 'exponential', delay: 10000 },
+                removeOnComplete: { age: 86400 },
+                removeOnFail: { age: 604800 },
+                // 去重: 相同 postId 的最新任务覆盖旧任务
+                deduplication: { id: jobId },
+            });
+
+            logger.debug(`[queue-manager] Post embedding job ${job.id} enqueued for post=${postId}`);
+            return { jobId: job.id, queued: true };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue post embedding:', error.message);
+            return null;
+        }
+    },
+
+    /**
+     * 为单个用户入队向量生成任务
+     * @param {number} userId
+     * @param {boolean} force
+     */
+    async enqueueUserEmbedding(userId, force = false) {
+        const queue = getEmbeddingQueue();
+        if (!queue || !initialized) {
+            logger.debug('[queue-manager] Embedding queue not available, skipping user embedding');
+            return null;
+        }
+
+        try {
+            const jobId = `emb-user-${userId}`;
+            const job = await queue.add('embedding', {
+                type: 'user_embedding',
+                userId: Number(userId),
+                force,
+            }, {
+                jobId,
+                attempts: 3,
+                backoff: { type: 'exponential', delay: 15000 },
+                removeOnComplete: { age: 86400 },
+                removeOnFail: { age: 604800 },
+                deduplication: { id: jobId },
+            });
+
+            logger.debug(`[queue-manager] User embedding job ${job.id} enqueued for user=${userId}`);
+            return { jobId: job.id, queued: true };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue user embedding:', error.message);
+            return null;
+        }
+    },
+
+    /**
+     * 批量入队帖子向量生成
+     * @param {number[]} postIds
+     * @param {boolean} force
+     */
+    async enqueueBatchPostEmbedding(postIds, force = false) {
+        const queue = getEmbeddingQueue();
+        if (!queue || !initialized) return null;
+
+        try {
+            // 分批入队，每批 100
+            const batchSize = 100;
+            const jobs = [];
+            for (let i = 0; i < postIds.length; i += batchSize) {
+                const batch = postIds.slice(i, i + batchSize);
+                const job = await queue.add('embedding', {
+                    type: 'batch_post_embedding',
+                    postIds: batch,
+                    force,
+                }, {
+                    attempts: 2,
+                    backoff: { type: 'exponential', delay: 20000 },
+                    removeOnComplete: { age: 86400 },
+                    removeOnFail: { age: 604800 },
+                });
+                jobs.push(job.id);
+            }
+
+            logger.info(`[queue-manager] Batch post embedding: ${jobs.length} jobs enqueued for ${postIds.length} posts`);
+            return { jobIds: jobs, queued: true };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue batch post embedding:', error.message);
+            return null;
+        }
+    },
+
+    /**
+     * 批量入队用户向量生成
+     * @param {number[]} userIds
+     * @param {boolean} force
+     */
+    async enqueueBatchUserEmbedding(userIds, force = false) {
+        const queue = getEmbeddingQueue();
+        if (!queue || !initialized) return null;
+
+        try {
+            const batchSize = 50;
+            const jobs = [];
+            for (let i = 0; i < userIds.length; i += batchSize) {
+                const batch = userIds.slice(i, i + batchSize);
+                const job = await queue.add('embedding', {
+                    type: 'batch_user_embedding',
+                    userIds: batch,
+                    force,
+                }, {
+                    attempts: 2,
+                    backoff: { type: 'exponential', delay: 20000 },
+                    removeOnComplete: { age: 86400 },
+                    removeOnFail: { age: 604800 },
+                });
+                jobs.push(job.id);
+            }
+
+            logger.info(`[queue-manager] Batch user embedding: ${jobs.length} jobs enqueued for ${userIds.length} users`);
+            return { jobIds: jobs, queued: true };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue batch user embedding:', error.message);
+            return null;
+        }
     },
 };
 

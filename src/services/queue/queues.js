@@ -9,6 +9,7 @@ export const QUEUE_NAMES = {
     DATA_TASK: 'comment-data-task',
     SOCIAL_SYNC: 'social-sync',
     AP_FEDERATION: 'ap-federation',
+    EMBEDDING: 'embedding',
 };
 
 const QUEUE_OPTIONS = {
@@ -50,6 +51,14 @@ const QUEUE_OPTIONS = {
             backoff: { type: 'exponential', delay: 10000 },
         },
     },
+    [QUEUE_NAMES.EMBEDDING]: {
+        defaultJobOptions: {
+            removeOnComplete: { count: 500 },
+            removeOnFail: { count: 1000 },
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 15000 },
+        },
+    },
 };
 
 let emailQueue = null;
@@ -58,6 +67,7 @@ let commentNotificationQueue = null;
 let dataTaskQueue = null;
 let socialSyncQueue = null;
 let apFederationQueue = null;
+let embeddingQueue = null;
 
 async function createQueues() {
     const sharedConnection = await createConnection('queue-shared');
@@ -94,8 +104,14 @@ async function createQueues() {
         ...QUEUE_OPTIONS[QUEUE_NAMES.AP_FEDERATION],
     });
 
+    const embeddingConnection = await createConnection('queue-embedding');
+    embeddingQueue = new Queue(QUEUE_NAMES.EMBEDDING, {
+        connection: embeddingConnection,
+        ...QUEUE_OPTIONS[QUEUE_NAMES.EMBEDDING],
+    });
+
     logger.info('[queues] All queues created');
-    return { emailQueue, scheduledTasksQueue, commentNotificationQueue, dataTaskQueue, socialSyncQueue, apFederationQueue };
+    return { emailQueue, scheduledTasksQueue, commentNotificationQueue, dataTaskQueue, socialSyncQueue, apFederationQueue, embeddingQueue };
 }
 
 function getEmailQueue() {
@@ -122,4 +138,8 @@ function getApFederationQueue() {
     return apFederationQueue;
 }
 
-export { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue, getDataTaskQueue, getSocialSyncQueue, getApFederationQueue };
+function getEmbeddingQueue() {
+    return embeddingQueue;
+}
+
+export { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue, getDataTaskQueue, getSocialSyncQueue, getApFederationQueue, getEmbeddingQueue };

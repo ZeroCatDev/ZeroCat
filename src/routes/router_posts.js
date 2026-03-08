@@ -31,6 +31,8 @@ import {
   getUserLikedPosts,
   getUserBookmarks,
   getRecommendedFeed,
+  getSimilarPosts,
+  getEmbeddingInfo,
   MAX_MEDIA_COUNT,
 } from "../controllers/posts.js";
 import { handleAssetUpload, validateFileTypeFromContent } from "../services/assets.js";
@@ -296,6 +298,21 @@ router.get("/global", needLogin, async (req, res) => {
 });
 
 /**
+ * 获取 Embedding 服务状态信息
+ * GET /posts/embedding/status
+ * 公开接口，不暴露敏感信息
+ */
+router.get("/embedding/status", async (req, res) => {
+  try {
+    const data = await getEmbeddingInfo();
+    res.status(200).json({ status: "success", data });
+  } catch (error) {
+    logger.error("获取 Embedding 状态失败:", error);
+    res.status(500).json({ status: "error", message: "获取 Embedding 状态失败" });
+  }
+});
+
+/**
  * 获取 Gorse 个性化推荐帖子
  * 已登录用户获取个性化推荐，未登录用户获取热门帖子
  */
@@ -543,6 +560,27 @@ router.get("/:id/analytics", async (req, res) => {
     res.status(200).json({ status: "success", data });
   } catch (error) {
     logger.error("获取帖子分析失败:", error);
+    res.status(400).json({ status: "error", message: error.message });
+  }
+});
+
+/**
+ * 获取与指定帖子相似的帖子（基于向量相似度搜索）
+ * GET /posts/:id/similar?limit=10
+ * 公开接口，无需登录
+ */
+router.get("/:id/similar", async (req, res) => {
+  try {
+    const viewerId = res.locals.userid || null;
+    const { limit = 10 } = req.query;
+    const data = await getSimilarPosts({
+      postId: req.params.id,
+      limit: Math.min(Math.max(Number(limit) || 10, 1), 50),
+      viewerId,
+    });
+    res.status(200).json({ status: "success", data });
+  } catch (error) {
+    logger.error("获取相似帖子失败:", error);
     res.status(400).json({ status: "error", message: error.message });
   }
 });

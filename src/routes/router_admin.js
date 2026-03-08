@@ -7,6 +7,7 @@ import coderunRouter from "./admin/coderun.js";
 import extensionsRouter from "./admin/extensions.js";
 import notificationsRouter from "./admin/notifications.js";
 import gorseRouter from "./admin/gorse.js";
+import embeddingRouter from "./admin/embedding.js";
 import {needAdmin} from '../middleware/auth.js';
 
 import sitemapService from '../services/sitemap.js';
@@ -48,6 +49,7 @@ router.use("/coderun", coderunRouter);
 router.use("/extensions", extensionsRouter);
 router.use("/notifications", notificationsRouter);
 router.use("/gorse", gorseRouter);
+router.use("/embedding", embeddingRouter);
 
 // BullMQ Dashboard
 router.use("/queues", async (req, res, next) => {

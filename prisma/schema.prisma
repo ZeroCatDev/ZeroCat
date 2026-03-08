@@ -108,6 +108,7 @@ model ow_users {
   regTime   DateTime? @default(now()) @db.Timestamp(6)
   createdAt DateTime  @default(now()) @db.Timestamp(6)
   updatedAt DateTime  @updatedAt @db.Timestamp(6)
+  embedding_at DateTime? @db.Timestamp(6) // 最近一次向量生成时间
 
   // 关联
   auth_tokens             ow_auth_tokens[]
@@ -138,6 +139,7 @@ model ow_users {
 
   @@index([email])
   @@index([status])
+  @@index([embedding_at])
   @@index([username(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_ow_users_username_trgm")
   @@index([display_name(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_ow_users_display_name_trgm")
   @@index([bio(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_ow_users_bio_trgm")
@@ -877,6 +879,7 @@ model ow_posts {
   created_at        DateTime  @default(now()) @db.Timestamp(6)
   updated_at        DateTime  @updatedAt @db.Timestamp(6)
   metadata          Json?     // 存储额外的元数据
+  embedding_at      DateTime? @db.Timestamp(6) // 最近一次向量生成时间
 
   // 关联
   author        ow_users? @relation("PostAuthor", fields: [author_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
@@ -903,6 +906,7 @@ model ow_posts {
   @@index([is_deleted])
   @@index([is_deleted, created_at(sort: Desc)])
   @@index([thread_root_id, created_at(sort: Asc)])
+  @@index([embedding_at])
   @@index([content(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_ow_posts_content_trgm")
   @@map("ow_posts")
 }
@@ -1078,4 +1082,20 @@ model ow_comment_service_counter {
   @@unique([space_id, url])
   @@index([space_id])
   @@map("ow_comment_service_counter")
+}
+
+// 向量嵌入存储表（pgvector）
+model ow_embeddings {
+  id          Int                          @id @default(autoincrement())
+  entity_type String                       @db.VarChar(32)
+  entity_id   Int
+  embedding   Unsupported("vector(1536)")?
+  text_hash   String?                      @db.VarChar(64)
+  model       String?                      @db.VarChar(128)
+  created_at  DateTime                     @default(now()) @db.Timestamp(6)
+  updated_at  DateTime                     @default(now()) @db.Timestamp(6)
+
+  @@unique([entity_type, entity_id])
+  @@index([entity_type, entity_id])
+  @@map("ow_embeddings")
 }

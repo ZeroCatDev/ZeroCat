@@ -11,6 +11,7 @@ import { Gorse } from 'gorsejs';
 import zcconfig from './config/zcconfig.js';
 import logger from './logger.js';
 import { prisma } from './prisma.js';
+import * as embeddingService from './embedding.js';
 
 // Gorse 反馈类型常量
 export const FEEDBACK_TYPES = {
@@ -24,10 +25,9 @@ export const FEEDBACK_TYPES = {
     READ: 'read',           // 阅读/浏览
 };
 
-// 物品前缀（区分帖子和项目）
+// 物品前缀（仅帖子，项目不同步到 Gorse）
 const ITEM_PREFIX = {
     POST: 'post_',
-    PROJECT: 'project_',
 };
 
 let gorseClient = null;
@@ -81,19 +81,90 @@ function isEnabled() {
 
 // ======================== 用户操作 ========================
 
+/** 携带 embedding 向量时单批最大条目数（避免 Gorse HTTP 请求体过大） */
+const GORSE_UPSERT_BATCH_SIZE = 20;
+
+/**
+ * 将 items 分批调用 client.upsertItems，避免单次请求体因 embedding 向量过大而超时
+ * @param {object} client - Gorse 客户端
+ * @param {Array} items - 待上传的 item 列表
+ * @param {number} [batchSize=GORSE_UPSERT_BATCH_SIZE] - 每批大小
+ */
+async function upsertItemsInBatches(client, items, batchSize = GORSE_UPSERT_BATCH_SIZE) {
+    for (let i = 0; i < items.length; i += batchSize) {
+        const batch = items.slice(i, i + batchSize);
+        logger.debug(`[gorse] upsertItemsInBatches: 正在上传第 ${Math.floor(i / batchSize) + 1} 批，共 ${Math.ceil(items.length / batchSize)} 批，当前批次大小: ${batch.length}`);
+        //logger.debug(batch[0])
+        await client.upsertItems(batch);
+    }
+}
+
+/**
+ * 为缺失 embedding 的用户内联生成向量并存储
+ * 仅在 embedding 服务已启用时生效，服务未启用则静默跳过
+ * @param {Array} usersWithoutEmbedding - 需要生成的用户列表，每项包含 { id, username, display_name, bio, motto }
+ * @returns {Promise<Map<number, number[]>>} 新生成的 embedding map
+ */
+async function generateMissingUserEmbeddings(usersWithoutEmbedding) {
+    const result = new Map();
+    if (!usersWithoutEmbedding.length) return result;
+
+    const CHUNK_SIZE = 20;
+    for (let i = 0; i < usersWithoutEmbedding.length; i += CHUNK_SIZE) {
+        const chunk = usersWithoutEmbedding.slice(i, i + CHUNK_SIZE);
+        const validItems = chunk
+            .map(u => ({ user: u, text: embeddingService.buildUserProfileText(u) }))
+            .filter(item => item.text && item.text.trim().length > 0);
+
+        if (!validItems.length) continue;
+
+        try {
+            const vectors = await embeddingService.generateEmbeddings(validItems.map(item => item.text));
+            for (let j = 0; j < validItems.length; j++) {
+                const { user, text } = validItems[j];
+                const vector = vectors[j];
+                if (vector) {
+                    const textHash = embeddingService.hashText(text);
+                    await embeddingService.saveEmbedding('user', user.id, vector, textHash, null);
+                    result.set(user.id, vector);
+                }
+            }
+            logger.debug(`[gorse] 内联生成用户 embedding: ${result.size} 条`);
+        } catch (e) {
+            // embedding 服务未启用或 API 失败，跳过后续批次
+            logger.debug(`[gorse] 内联生成用户 embedding 失败（跳过）: ${e.message}`);
+            break;
+        }
+    }
+    return result;
+}
+
 /**
  * 将用户插入/更新到 Gorse
  */
-export async function upsertUser(userId, { username, labels } = {}) {
+export async function upsertUser(userId, { username, labels, display_name } = {}) {
     try {
         const client = await getClient();
         if (!client) return;
 
+        // 获取用户 embedding 向量
+        let userLabels = { embedding: [] };
+        try {
+            const embedding = await embeddingService.getEmbedding('user', userId);
+            if (embedding) userLabels.embedding = embedding;
+        } catch (e) {
+            // 获取失败不影响主流程
+        }
+
         await client.insertUser({
             UserId: String(userId),
             Comment: username || '',
-            Labels: labels || [],
+            Labels: userLabels,
         });
+
+        // 同时将用户作为 item 写入（含 embedding 向量，确保 Labels.embedding 不为 nil）
+        await upsertUserItem(userId, { username, display_name });
+
         logger.debug(`[gorse] 用户已同步: ${userId}`);
     } catch (error) {
         logger.warn(`[gorse] 同步用户 ${userId} 失败:`, error.message);
@@ -108,13 +179,44 @@ export async function insertUsers(users) {
         const client = await getClient();
         if (!client) return;
 
+        // 同时将用户批量写为 items，携带已存储的 embedding 向量
+        const userIds = users.map(u => u.id);
+        let userEmbeddingMap = new Map();
+        try {
+            userEmbeddingMap = await embeddingService.getEmbeddings('user', userIds);
+        } catch (e) {
+            logger.warn('[gorse] 批量读取用户 embedding 失败:', e.message);
+        }
+
+        // 对未找到 embedding 的用户尝试内联生成
+        const usersWithoutEmbedding = users.filter(u => !userEmbeddingMap.has(u.id));
+        if (usersWithoutEmbedding.length > 0) {
+            logger.debug(`[gorse] ${usersWithoutEmbedding.length} 个用户缺少 embedding，尝试内联生成`);
+            const newEmbeddings = await generateMissingUserEmbeddings(usersWithoutEmbedding);
+            for (const [id, vec] of newEmbeddings) {
+                userEmbeddingMap.set(id, vec);
+            }
+        }
+
+        // insertUsers 携带 embedding 向量
         const gorseUsers = users.map(u => ({
             UserId: String(u.id),
             Comment: u.username || u.display_name || '',
-            Labels: u.labels || [],
+            Labels: { embedding: userEmbeddingMap.get(u.id) || [] },
         }));
-
         await client.insertUsers(gorseUsers);
+
+        const userItems = users.map(u => {
+            const item = buildUserItem(u);
+            const embedding = userEmbeddingMap.get(u.id);
+            if (embedding) item.Labels.embedding = embedding;
+            return item;
+        });
+        logger.debug('[gorse] insertUsers userItems: ' + JSON.stringify(
+            userItems.map(it => ({ ...it, Labels: { ...it.Labels, embedding: it.Labels.embedding?.length ?? 0 } }))
+        ));
+        await upsertItemsInBatches(client, userItems);
+
         logger.debug(`[gorse] 批量同步 ${gorseUsers.length} 个用户`);
     } catch (error) {
         logger.warn(`[gorse] 批量同步用户失败:`, error.message);
@@ -125,19 +227,45 @@ export async function insertUsers(users) {
 
 /**
  * 将帖子作为物品插入/更新到 Gorse
+ * 纯转推不作为独立 item 推送给 Gorse
  */
 export async function upsertPost(post) {
     try {
+        // 纯转推不单独推送到 Gorse
+        if (post.post_type === 'retweet') {
+            logger.debug(`[gorse] 帖子 ${post.id} 是纯转推，跳过 Gorse 同步`);
+            return;
+        }
+
+        // 已删除的帖子跳过同步（删除时由 hidePost 单独处理）
+        if (post.is_deleted) {
+            logger.debug(`[gorse] 帖子 ${post.id} 已删除，跳过 Gorse 同步`);
+            return;
+        }
+
         const client = await getClient();
         if (!client) return;
 
+        // 获取 embedding，无向量则跳过（embedding 生成后由 Worker 自动同步）
+        let embedding = null;
+        try {
+            embedding = await embeddingService.getEmbedding('post', post.id);
+        } catch (e) {
+            // 获取失败视为无向量
+        }
+        if (!embedding) {
+            logger.debug(`[gorse] 帖子 ${post.id} 暂无 embedding，跳过 Gorse 同步（将在向量生成后自动同步）`);
+            return;
+        }
+
         const categories = buildPostCategories(post);
         const labels = buildPostLabels(post);
+        labels.embedding = embedding;
 
         await client.upsertItem({
             ItemId: `${ITEM_PREFIX.POST}${post.id}`,
             Comment: (post.content || '').substring(0, 200),
-            IsHidden: post.is_deleted || false,
+            IsHidden: false,
             Timestamp: post.created_at ? new Date(post.created_at).toISOString() : new Date().toISOString(),
             Categories: categories,
             Labels: labels,
@@ -150,23 +278,49 @@ export async function upsertPost(post) {
 
 /**
  * 批量插入帖子到 Gorse
+ * 纯转推不推送
  */
 export async function insertPosts(posts) {
     try {
         const client = await getClient();
         if (!client) return;
 
-        const items = posts.map(post => ({
-            ItemId: `${ITEM_PREFIX.POST}${post.id}`,
-            Comment: (post.content || '').substring(0, 200),
-            IsHidden: post.is_deleted || false,
-            Timestamp: post.created_at ? new Date(post.created_at).toISOString() : new Date().toISOString(),
-            Categories: buildPostCategories(post),
-            Labels: buildPostLabels(post),
-        }));
+        // 过滤掉纯转推和已删除帖子
+        const filteredPosts = posts.filter(p => p.post_type !== 'retweet' && !p.is_deleted);
+        if (filteredPosts.length === 0) return;
 
-        await client.upsertItems(items);
-        logger.debug(`[gorse] 批量同步 ${items.length} 个帖子`);
+        // 批量获取 embedding
+        const postIds = filteredPosts.map(p => p.id);
+        let embeddingMap = new Map();
+        try {
+            embeddingMap = await embeddingService.getEmbeddings('post', postIds);
+        } catch (e) {
+            // 向量获取失败不影响主流程
+        }
+
+        // 只同步有 embedding 的帖子，无 embedding 的等 Worker 生成后自动同步
+        const items = filteredPosts
+            .filter(post => embeddingMap.has(post.id))
+            .map(post => {
+                const labels = buildPostLabels(post);
+                labels.embedding = embeddingMap.get(post.id);
+                return {
+                    ItemId: `${ITEM_PREFIX.POST}${post.id}`,
+                    Comment: (post.content || '').substring(0, 200),
+                    IsHidden: false,
+                    Timestamp: post.created_at ? new Date(post.created_at).toISOString() : new Date().toISOString(),
+                    Categories: buildPostCategories(post),
+                    Labels: labels,
+                };
+            });
+
+        if (items.length === 0) {
+            logger.debug(`[gorse] insertPosts: 全部 ${filteredPosts.length} 个帖子暂无 embedding，跳过同步`);
+            return;
+        }
+
+        await upsertItemsInBatches(client, items);
+        logger.debug(`[gorse] 批量同步 ${items.length} 个帖子（跳过无 embedding: ${filteredPosts.length - items.length}）`);
     } catch (error) {
         logger.warn(`[gorse] 批量同步帖子失败:`, error.message);
     }
@@ -190,6 +344,44 @@ export async function hidePost(postId) {
 }
 
 /**
+ * 构建用户作为 Gorse item 时的结构
+ * Labels 使用 map 格式，包含 embedding 占位字段，避免列表达式 item.Labels.embedding 报 nil
+ */
+function buildUserItem(user) {
+    return {
+        ItemId: `user_${user.id || user.UserId}`,
+        Comment: (user.username || user.display_name || '').substring(0, 200),
+        IsHidden: false,
+        Categories: ['user'],
+        Labels: { embedding: [] },
+    };
+}
+
+/**
+ * 将用户同步为 Gorse item（ItemId: user_${id}）
+ * 确保 Labels 不为 null，避免列表达式 item.Labels.embedding 出错
+ */
+export async function upsertUserItem(userId, { username, display_name } = {}) {
+    try {
+        const client = await getClient();
+        if (!client) return;
+        const item = buildUserItem({ id: userId, username, display_name });
+        try {
+            const embedding = await embeddingService.getEmbedding('user', userId);
+            logger.debug(`[gorse] upsertUserItem userId=${userId} embedding=${embedding ? `dim:${embedding.length}` : 'null'}`);
+            if (embedding) item.Labels.embedding = embedding;
+        } catch (e) {
+            logger.warn(`[gorse] 获取用户 ${userId} embedding 失败:`, e.message);
+        }
+        logger.debug(`[gorse] upsertUserItem 写入 Gorse: user_${userId} embedding_len=${item.Labels.embedding?.length ?? 0}`);
+        await client.upsertItem(item);
+        logger.debug(`[gorse] 用户 item 已同步: user_${userId}`);
+    } catch (error) {
+        logger.warn(`[gorse] 同步用户 item ${userId} 失败:`, error.message);
+    }
+}
+
+/**
  * 构建帖子类别标签
  */
 function buildPostCategories(post) {
@@ -204,20 +396,20 @@ function buildPostCategories(post) {
 }
 
 /**
- * 构建帖子标签（用于推荐算法特征）
+ * 构建帖子标签（对象格式，支持 embedding 字段）
  */
 function buildPostLabels(post) {
-    const labels = [];
+    const labels = { embedding: [] };
     if (post.author_id) {
-        labels.push(`author:${post.author_id}`);
+        labels.author = String(post.author_id);
     }
     if (post.post_type) {
-        labels.push(`type:${post.post_type}`);
+        labels.type = post.post_type;
     }
     if (post.embed && typeof post.embed === 'object') {
-        if (post.embed.type) labels.push(`embed:${post.embed.type}`);
+        if (post.embed.type) labels.embed_type = post.embed.type;
         if (post.embed.type === 'project' && post.embed.id) {
-            labels.push(`project:${post.embed.id}`);
+            labels.project = String(post.embed.id);
         }
     }
     return labels;
@@ -399,18 +591,22 @@ export function feedbackPostRead(userId, postId) {
     return insertFeedback(FEEDBACK_TYPES.READ, userId, `${ITEM_PREFIX.POST}${postId}`);
 }
 
-/** 项目收藏反馈 */
-export function feedbackProjectStar(userId, projectId) {
-    return insertFeedback(FEEDBACK_TYPES.STAR, userId, `${ITEM_PREFIX.PROJECT}${projectId}`);
+/** 项目收藏反馈（项目不同步到 Gorse，此函数为空操作） */
+export function feedbackProjectStar(_userId, _projectId) {
+    // 项目不写入 Gorse，避免产生无 embedding 的 project_* item
 }
 
-/** 取消项目收藏反馈 */
-export function feedbackProjectUnstar(userId, projectId) {
-    return deleteFeedback(FEEDBACK_TYPES.STAR, userId, `${ITEM_PREFIX.PROJECT}${projectId}`);
+/** 取消项目收藏反馈（项目不同步到 Gorse，此函数为空操作） */
+export function feedbackProjectUnstar(_userId, _projectId) {
+    // 项目不写入 Gorse
 }
 
 /** 用户关注反馈 */
-export function feedbackUserFollow(userId, followedUserId) {
+export async function feedbackUserFollow(userId, followedUserId) {
+    // 先确保被关注用户已以 item 形式存在于 Gorse，避免 Labels.embedding 为 nil
+    await upsertUserItem(followedUserId).catch(e =>
+        logger.debug(`[gorse] feedbackUserFollow: upsertUserItem failed for ${followedUserId}:`, e.message)
+    );
     return insertFeedback(FEEDBACK_TYPES.FOLLOW, userId, `user_${followedUserId}`);
 }
 
@@ -437,19 +633,51 @@ export async function syncAllUsers() {
         const users = await prisma.ow_users.findMany({
             skip: cursor,
             take: batchSize,
-            select: { id: true, username: true, display_name: true, bio: true },
+            select: { id: true, username: true, display_name: true, bio: true, motto: true },
             orderBy: { id: 'asc' },
         });
 
         if (users.length === 0) break;
 
+        // 批量获取 embedding（先于 insertUsers，使两处调用共用同一份数据）
+        const userIds = users.map(u => u.id);
+        logger.debug(`[gorse] syncAllUsers 批量获取用户 embedding，count=${userIds.length}`);
+        let userEmbeddingMap = new Map();
+        try {
+            userEmbeddingMap = await embeddingService.getEmbeddings('user', userIds);
+        } catch (e) {
+            logger.warn('[gorse] syncAllUsers 批量读取 embedding 失败:', e.message);
+        }
+
+        // 对未找到 embedding 的用户尝试内联生成
+        const usersWithoutEmbedding = users.filter(u => !userEmbeddingMap.has(u.id));
+        if (usersWithoutEmbedding.length > 0) {
+            logger.debug(`[gorse] syncAllUsers: ${usersWithoutEmbedding.length} 个用户缺少 embedding，尝试内联生成`);
+            const newEmbeddings = await generateMissingUserEmbeddings(usersWithoutEmbedding);
+            for (const [id, vec] of newEmbeddings) {
+                userEmbeddingMap.set(id, vec);
+            }
+        }
+
+        // insertUsers 携带 embedding 向量
         const gorseUsers = users.map(u => ({
             UserId: String(u.id),
             Comment: u.username || u.display_name || '',
-            Labels: u.bio ? [u.bio.substring(0, 100)] : [],
+            Labels: { embedding: userEmbeddingMap.get(u.id) || [] },
         }));
-
         await client.insertUsers(gorseUsers);
+
+        // 同时将用户批量写入为 items（ItemId: user_X），共用同一份 embeddingMap
+        const userItems = users.map(u => {
+            const item = buildUserItem(u);
+            const embedding = userEmbeddingMap.get(u.id);
+            if (embedding) {
+                item.Labels.embedding = embedding;
+            }
+            return item;
+        });
+        await upsertItemsInBatches(client, userItems);
+
         totalSynced += gorseUsers.length;
         cursor += batchSize;
 
@@ -462,7 +690,8 @@ export async function syncAllUsers() {
 
 /**
  * 全量同步所有帖子到 Gorse
- * @returns {Promise<{total: number, synced: number}>}
+ * 纯转推不推送给 Gorse；已有 embedding 的帖子会携带向量
+ * @returns {Promise<{total: number, synced: number, skippedRetweets: number}>}
  */
 export async function syncAllPosts() {
     const client = await getClient();
@@ -486,51 +715,45 @@ export async function syncAllPosts() {
                 created_at: true,
                 retweet_post_id: true,
             },
+            where: { is_deleted: false, post_type: { not: 'retweet' } },
             orderBy: { id: 'asc' },
         });
 
         if (posts.length === 0) break;
 
-        // 批量获取转推帖子对应的原帖内容（避免 N+1 查询）
-        const retweetIds = posts
-            .filter(p => p.post_type === 'retweet' && p.retweet_post_id)
-            .map(p => p.retweet_post_id);
-
-        let originalContentMap = {};
-        if (retweetIds.length > 0) {
-            const originals = await prisma.ow_posts.findMany({
-                where: { id: { in: retweetIds } },
-                select: { id: true, content: true, embed: true },
-            });
-            for (const orig of originals) {
-                originalContentMap[orig.id] = orig;
-            }
+        // 批量获取已存储的 embedding 向量
+        const postIds = posts.map(p => p.id);
+        let embeddingMap = new Map();
+        try {
+            embeddingMap = await embeddingService.getEmbeddings('post', postIds);
+        } catch (e) {
+            // 向量获取失败不影响主流程
         }
 
-        const items = posts.map(post => {
-            // 转推帖子使用原帖文字填充 Comment
-            const effectiveContent = (post.post_type === 'retweet' && post.retweet_post_id)
-                ? (originalContentMap[post.retweet_post_id]?.content || '')
-                : (post.content || '');
-            const effectiveEmbed = (post.post_type === 'retweet' && post.retweet_post_id)
-                ? (originalContentMap[post.retweet_post_id]?.embed || post.embed)
-                : post.embed;
+        // 只同步有 embedding 的帖子
+        const itemsToSync = posts
+            .filter(post => embeddingMap.has(post.id))
+            .map(post => {
+                const labels = buildPostLabels(post);
+                labels.embedding = embeddingMap.get(post.id);
+                return {
+                    ItemId: `${ITEM_PREFIX.POST}${post.id}`,
+                    Comment: (post.content || '').substring(0, 200),
+                    IsHidden: false,
+                    Timestamp: post.created_at ? new Date(post.created_at).toISOString() : new Date().toISOString(),
+                    Categories: buildPostCategories(post),
+                    Labels: labels,
+                };
+            });
 
-            return {
-                ItemId: `${ITEM_PREFIX.POST}${post.id}`,
-                Comment: effectiveContent.substring(0, 200),
-                IsHidden: post.is_deleted || false,
-                Timestamp: post.created_at ? new Date(post.created_at).toISOString() : new Date().toISOString(),
-                Categories: buildPostCategories({ ...post, embed: effectiveEmbed }),
-                Labels: buildPostLabels({ ...post, embed: effectiveEmbed }),
-            };
-        });
+        if (itemsToSync.length > 0) {
+            await upsertItemsInBatches(client, itemsToSync);
+            totalSynced += itemsToSync.length;
+        }
+        const skippedNoEmbed = posts.length - itemsToSync.length;
 
-        await client.upsertItems(items);
-        totalSynced += items.length;
         cursor += batchSize;
-
-        logger.info(`[gorse] 全量同步帖子进度: ${totalSynced}`);
+        logger.info(`[gorse] 全量同步帖子进度: ${totalSynced}（本批跳过无 embedding: ${skippedNoEmbed}）`);
     }
 
     logger.info(`[gorse] 全量同步帖子完成: ${totalSynced}`);
@@ -538,14 +761,15 @@ export async function syncAllPosts() {
 }
 
 /**
- * 全量同步所有反馈到 Gorse
- * @returns {Promise<{likes: number, bookmarks: number, stars: number, follows: number}>}
+ * 全量同步所有反馈到 Gorse（帖子点赞、帖子收藏、用户关注）
+ * 注意：项目收藏不同步到 Gorse，避免产生无 embedding 的 project_* item
+ * @returns {Promise<{likes: number, bookmarks: number, follows: number}>}
  */
 export async function syncAllFeedbacks() {
     const client = await getClient();
     if (!client) throw new Error('Gorse 服务未启用');
 
-    const result = { likes: 0, bookmarks: 0, stars: 0, follows: 0 };
+    const result = { likes: 0, bookmarks: 0, follows: 0 };
     const batchSize = 500;
 
     // 同步帖子点赞
@@ -597,31 +821,6 @@ export async function syncAllFeedbacks() {
         cursor += batchSize;
     }
     logger.info(`[gorse] 全量同步收藏反馈完成: ${result.bookmarks}`);
-
-    // 同步项目收藏
-    cursor = 0;
-    while (true) {
-        const stars = await prisma.ow_projects_stars.findMany({
-            skip: cursor,
-            take: batchSize,
-            select: { userid: true, projectid: true, createTime: true },
-            orderBy: { id: 'asc' },
-        });
-        if (stars.length === 0) break;
-
-        const feedbacks = stars.map(s => ({
-            FeedbackType: FEEDBACK_TYPES.STAR,
-            UserId: String(s.userid),
-            ItemId: `${ITEM_PREFIX.PROJECT}${s.projectid}`,
-            Value: 1,
-            Timestamp: s.createTime ? new Date(s.createTime).toISOString() : new Date().toISOString(),
-        }));
-
-        await client.upsertFeedbacks(feedbacks);
-        result.stars += feedbacks.length;
-        cursor += batchSize;
-    }
-    logger.info(`[gorse] 全量同步项目收藏反馈完成: ${result.stars}`);
 
     // 同步用户关注
     cursor = 0;
@@ -704,6 +903,7 @@ export async function getGorseStatus() {
 export default {
     FEEDBACK_TYPES,
     upsertUser,
+    upsertUserItem,
     insertUsers,
     upsertPost,
     insertPosts,

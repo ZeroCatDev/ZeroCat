@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:15
+    image: pgvector/pgvector:pg15
     container_name: zerocat-postgres
     restart: unless-stopped
     environment:
@@ -24,24 +24,5 @@ services:
       - "max_connections=200"
       - "-c"
       - "shared_buffers=256MB"
-
-  # 可选：图形化管理界面
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: zerocat-pgadmin
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@local.dev
-      PGADMIN_DEFAULT_PASSWORD: admin_change_me
-      TZ: Asia/Shanghai
-    ports:
-      - "5050:80"
-    volumes:
-      - pgadmin:/var/lib/pgadmin
-
 volumes:
   pgdata:
-  pgadmin:

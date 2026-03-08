@@ -1,7 +1,7 @@
 import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ExpressAdapter } from '@bull-board/express';
-import { getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue, getDataTaskQueue, getSocialSyncQueue, getApFederationQueue } from './queues.js';
+import { getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue, getDataTaskQueue, getSocialSyncQueue, getApFederationQueue, getEmbeddingQueue } from './queues.js';
 import logger from '../logger.js';
 
 let serverAdapter = null;
@@ -13,6 +13,7 @@ function createDashboard() {
     const dataTaskQueue = getDataTaskQueue();
     const socialSyncQueue = getSocialSyncQueue();
     const apFederationQueue = getApFederationQueue();
+    const embeddingQueue = getEmbeddingQueue();
 
     if (!emailQueue || !scheduledTasksQueue) {
         logger.warn('[bull-board] Queues not available, dashboard not created');
@@ -30,6 +31,7 @@ function createDashboard() {
     if (dataTaskQueue) queues.push(new BullMQAdapter(dataTaskQueue));
     if (socialSyncQueue) queues.push(new BullMQAdapter(socialSyncQueue));
     if (apFederationQueue) queues.push(new BullMQAdapter(apFederationQueue));
+    if (embeddingQueue) queues.push(new BullMQAdapter(embeddingQueue));
 
     createBullBoard({
         queues,

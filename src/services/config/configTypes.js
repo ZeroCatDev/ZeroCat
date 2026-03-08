@@ -812,6 +812,88 @@ export const CONFIG_TYPES = {
         validate: (value) =>
             !value || (value.startsWith("http://") || value.startsWith("https://")),
         public: false,
+    },
+    // Embedding 向量生成配置
+    "embedding.enabled": {
+        type: "boolean",
+        required: false,
+        default: false,
+        description: "是否启用 Embedding 向量生成功能",
+        transform: typeTransformers.boolean,
+    },
+    "embedding.provider": {
+        type: "string",
+        required: false,
+        default: "openai",
+        description: "Embedding 提供商类型: openai（兼容 OpenAI API 的所有服务，包括 Ollama/vLLM/LiteLLM 等）",
+    },
+    "embedding.api_base": {
+        type: "string",
+        required: false,
+        default: "https://api.openai.com/v1",
+        description: "Embedding API 基础地址（OpenAI 兼容格式），例如 Ollama: http://localhost:11434/v1",
+        validate: (value) =>
+            !value || (value.startsWith("http://") || value.startsWith("https://")),
+    },
+    "embedding.api_key": {
+        type: "string",
+        required: false,
+        default: "",
+        description: "Embedding API 密钥，Ollama 等本地服务可留空",
+    },
+    "embedding.model": {
+        type: "string",
+        required: false,
+        default: "text-embedding-3-small",
+        description: "Embedding 模型名称，如 text-embedding-3-small / bge-m3 / nomic-embed-text 等",
+    },
+    "embedding.dimensions": {
+        type: "number",
+        required: false,
+        default: 1536,
+        description: "Embedding 向量维度，需与模型输出一致。OpenAI small=1536, ada-002=1536, Ollama 模型各异",
+        transform: typeTransformers.number,
+        validate: (value) => value > 0 && value <= 8192,
+    },
+    "embedding.batch_size": {
+        type: "number",
+        required: false,
+        default: 20,
+        description: "批量生成 Embedding 时每批数量",
+        transform: typeTransformers.number,
+        validate: (value) => value > 0 && value <= 200,
+    },
+    "embedding.max_tokens": {
+        type: "number",
+        required: false,
+        default: 8000,
+        description: "单次 Embedding 请求最大 token 数",
+        transform: typeTransformers.number,
+        validate: (value) => value > 0,
+    },
+    "embedding.request_timeout": {
+        type: "number",
+        required: false,
+        default: 30000,
+        description: "Embedding API 请求超时时间(ms)",
+        transform: typeTransformers.number,
+        validate: (value) => value >= 1000,
+    },
+    "embedding.concurrency": {
+        type: "number",
+        required: false,
+        default: 2,
+        description: "Embedding Worker 并发数",
+        transform: typeTransformers.number,
+        validate: (value) => value > 0 && value <= 10,
+    },
+    "embedding.user_refresh_interval_hours": {
+        type: "number",
+        required: false,
+        default: 24,
+        description: "用户向量自动刷新间隔(小时)",
+        transform: typeTransformers.number,
+        validate: (value) => value >= 1,
     }
 };
 
