@@ -566,17 +566,27 @@ router.get("/:id/analytics", async (req, res) => {
 
 /**
  * 获取与指定帖子相似的帖子（基于向量相似度搜索）
- * GET /posts/:id/similar?limit=10
+ * GET /posts/:id/similar?limit=10&min_similarity=0.75
  * 公开接口，无需登录
  */
 router.get("/:id/similar", async (req, res) => {
   try {
     const viewerId = res.locals.userid || null;
-    const { limit = 10 } = req.query;
+    const { limit = 10, min_similarity: minSimilarity } = req.query;
+    const parsedMinSimilarity =
+      minSimilarity === undefined || minSimilarity === null || String(minSimilarity).trim() === ""
+        ? null
+        : Math.min(Math.max(Number(minSimilarity), 0), 1);
+
+    if (parsedMinSimilarity !== null && Number.isNaN(parsedMinSimilarity)) {
+      return res.status(400).json({ status: "error", message: "min_similarity 必须是 0 到 1 之间的数字" });
+    }
+
     const data = await getSimilarPosts({
       postId: req.params.id,
       limit: Math.min(Math.max(Number(limit) || 10, 1), 50),
       viewerId,
+      minSimilarity: parsedMinSimilarity,
     });
     res.status(200).json({ status: "success", data });
   } catch (error) {

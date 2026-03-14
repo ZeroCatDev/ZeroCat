@@ -2079,9 +2079,10 @@ export async function getRecommendedFeed({
  * @param {number} params.postId - 帖子 ID
  * @param {number} [params.limit=10] - 返回数量
  * @param {number|null} [params.viewerId] - 当前查看者 ID
+ * @param {number|null} [params.minSimilarity] - 相似度下限（0~1）
  * @returns {Promise<Object>}
  */
-export async function getSimilarPosts({ postId, limit = 10, viewerId = null }) {
+export async function getSimilarPosts({ postId, limit = 10, viewerId = null, minSimilarity = null }) {
   await initStaticUrl();
 
   const enabled = await zcconfig.get('embedding.enabled');
@@ -2092,22 +2093,72 @@ export async function getSimilarPosts({ postId, limit = 10, viewerId = null }) {
   const nPostId = Number(postId);
   if (isNaN(nPostId)) throw new Error('无效的帖子 ID');
 
-  // 获取该帖子的向量
-  const vector = await embeddingService.getEmbedding('post', nPostId);
+  const sourcePost = await prisma.ow_posts.findFirst({
+    where: { id: nPostId, is_deleted: false },
+    select: {
+      id: true,
+      post_type: true,
+      content: true,
+      embed: true,
+    },
+  });
+  if (!sourcePost) {
+    throw new Error('帖子不存在');
+  }
+
+  let vector = await embeddingService.getEmbedding('post', nPostId);
   if (!vector) {
-    return { posts: [], includes: { posts: {} }, message: '该帖子尚未生成向量' };
+    const sourceText = embeddingService.buildPostText(sourcePost);
+    if (!sourceText) {
+      return { posts: [], includes: { posts: {} }, message: '该帖子无可用于向量的内容' };
+    }
+
+    vector = await embeddingService.generateEmbedding(sourceText);
+    if (!vector) {
+      return { posts: [], includes: { posts: {} }, message: '该帖子向量生成失败' };
+    }
+
+    try {
+      await embeddingService.saveEmbedding('post', nPostId, vector, embeddingService.hashText(sourceText));
+      await prisma.ow_posts.update({ where: { id: nPostId }, data: { embedding_at: new Date() } });
+    } catch (e) {
+      logger.debug(`[embedding] on-demand save post embedding failed: ${e.message}`);
+    }
   }
 
   const safeLimit = Math.min(Math.max(Number(limit) || 10, 1), 50);
+  const similarityThreshold =
+    minSimilarity === null || minSimilarity === undefined
+      ? null
+      : Math.min(Math.max(Number(minSimilarity), 0), 1);
 
   // 搜索相似帖子（排除自身）
-  const similarResults = await embeddingService.searchSimilar('post', vector, safeLimit + 5, [nPostId]);
+  const similarResults = await embeddingService.searchSimilar('post', vector, safeLimit + 20, [nPostId]);
   if (!similarResults || similarResults.length === 0) {
-    return { posts: [], includes: { posts: {} } };
+    return {
+      posts: [],
+      includes: { posts: {} },
+      source_post_id: nPostId,
+      min_similarity: similarityThreshold,
+    };
+  }
+
+  const filteredResults =
+    similarityThreshold === null
+      ? similarResults
+      : similarResults.filter((r) => Number(r.similarity) >= similarityThreshold);
+
+  if (filteredResults.length === 0) {
+    return {
+      posts: [],
+      includes: { posts: {} },
+      source_post_id: nPostId,
+      min_similarity: similarityThreshold,
+    };
   }
 
   // 查询帖子详情（过滤已删除）
-  const candidateIds = similarResults.map(r => r.entityId);
+  const candidateIds = filteredResults.map(r => r.entityId);
   const rawPosts = await prisma.ow_posts.findMany({
     where: {
       id: { in: candidateIds },
@@ -2117,7 +2168,7 @@ export async function getSimilarPosts({ postId, limit = 10, viewerId = null }) {
   });
 
   // 按相似度排序
-  const similarityMap = new Map(similarResults.map(r => [r.entityId, r.similarity]));
+  const similarityMap = new Map(filteredResults.map(r => [r.entityId, r.similarity]));
   rawPosts.sort((a, b) => (similarityMap.get(b.id) || 0) - (similarityMap.get(a.id) || 0));
 
   // 截取到 safeLimit
@@ -2146,6 +2197,8 @@ export async function getSimilarPosts({ postId, limit = 10, viewerId = null }) {
   return {
     posts,
     includes: { posts: referencedPosts },
+    source_post_id: nPostId,
+    min_similarity: similarityThreshold,
   };
 }
 
