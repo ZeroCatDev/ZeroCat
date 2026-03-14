@@ -661,6 +661,18 @@ router.put("/commit/id/:id", needLogin, async (req, res, next) => {
       });
     }
 
+    // 检查项目是否已初始化（至少存在一次提交）
+    const commitCount = await prisma.ow_projects_commits.count({
+      where: { project_id: Number(projectid) },
+    });
+    if (commitCount === 0) {
+      return res.status(400).send({
+        status: "error",
+        message: "项目尚未初始化，请先初始化项目",
+        code: "PROJECT_NOT_INITIALIZED",
+      });
+    }
+
     const decodedFileToken = jwt.verify(
       accessFileToken,
       await zcconfig.get("security.jwttoken")
@@ -980,9 +992,16 @@ router.post("/branches", async (req, res, next) => {
   try {
     const { name, branch, projectid } = req.body;
     await checkProjectPermission(projectid, res.locals.userid, "write");
-    const { latest_commit_hash } = await prisma.ow_projects_branch.findFirst({
+    const sourceBranch = await prisma.ow_projects_branch.findFirst({
       where: { projectid: Number(projectid), name: branch },
     });
+    if (!sourceBranch) {
+      return res.status(200).send({
+        status: "error",
+        message: "源分支不存在",
+      });
+    }
+    const { latest_commit_hash } = sourceBranch;
     if (!latest_commit_hash) {
       return res.status(200).send({
         status: "error",
@@ -1714,10 +1733,12 @@ router.post("/fork", needLogin, async (req, res, next) => {
         }),
       ];
     }
+    // 过滤掉 null（未初始化或不存在的分支）
+    branches = branches.filter((b) => b !== null);
     if (branches.length == 0) {
       return res.status(404).send({
         status: "error",
-        message: "分支不存在",
+        message: "分支不存在或项目尚未初始化",
       });
     }
     const forkedProject = await prisma.ow_projects.create({

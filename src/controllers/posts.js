@@ -36,7 +36,7 @@ function dedupeMediaIds(mediaIds) {
   return [...new Set(mediaIds.map((id) => Number(id)))];
 }
 
-const EMBED_TYPES = ["project", "list", "user", "url"];
+const EMBED_TYPES = ["project", "list", "user", "url","article"];
 
 function validateEmbed(embed) {
   if (!embed) return null;
