@@ -95,22 +95,42 @@ router.post('/send', async (req, res) => {
 
         // 事务处理确保数据一致性
         const result = await prisma.$transaction(async (tx) => {
-            // 查找策略：
-            // 1. 如果用户已登录，先查找该用户的设备记录
-            // 2. 如果未找到或用户未登录，查找无用户ID的设备记录
-            let device = currentUserId
-                ? await tx.ow_analytics_device.findUnique({
+            const deviceData = {
+                hostname,
+                screen,
+                language,
+                browser: uaInfo.browser,
+                browser_version: uaInfo.browser_version,
+                os: uaInfo.os,
+                os_version: uaInfo.os_version,
+                device_type: uaInfo.device_type,
+                device_vendor: uaInfo.device_vendor,
+                user_agent: userAgent,
+            };
+
+            let device;
+
+            if (currentUserId) {
+                // 已登录用户使用原子 upsert，避免并发请求导致唯一键冲突
+                device = await tx.ow_analytics_device.upsert({
                     where: {
                         fingerprint_user_id: {
                             fingerprint,
                             user_id: currentUserId
                         }
+                    },
+                    update: {
+                        ...deviceData,
+                        last_seen: new Date(),
+                    },
+                    create: {
+                        fingerprint,
+                        user_id: currentUserId,
+                        ...deviceData,
                     }
-                })
-                : null;
-
-            if (!device) {
-                // 查找无用户ID的设备记录
+                });
+            } else {
+                // 未登录用户沿用匿名设备记录
                 device = await tx.ow_analytics_device.findFirst({
                     where: {
                         fingerprint,
@@ -118,83 +138,23 @@ router.post('/send', async (req, res) => {
                     }
                 });
 
-                if (device && currentUserId) {
-                    // 如果找到无用户ID的设备且用户已登录，创建新的设备记录
-                    device = await tx.ow_analytics_device.create({
-                        data: {
-                            fingerprint,
-                            user_id: currentUserId,
-                            hostname,
-                            screen,
-                            language,
-                            browser: uaInfo.browser,
-                            browser_version: uaInfo.browser_version,
-                            os: uaInfo.os,
-                            os_version: uaInfo.os_version,
-                            device_type: uaInfo.device_type,
-                            device_vendor: uaInfo.device_vendor,
-                            user_agent: userAgent,
-                        }
-                    });
-                } else if (device) {
-                    // 更新无用户ID的设备记录
+                if (device) {
                     device = await tx.ow_analytics_device.update({
                         where: {id: device.id},
                         data: {
+                            ...deviceData,
                             last_seen: new Date(),
-                            hostname,
-                            screen,
-                            language,
-                            ...(device.user_agent !== userAgent ? {
-                                browser: uaInfo.browser,
-                                browser_version: uaInfo.browser_version,
-                                os: uaInfo.os,
-                                os_version: uaInfo.os_version,
-                                device_type: uaInfo.device_type,
-                                device_vendor: uaInfo.device_vendor,
-                                user_agent: userAgent,
-                            } : {})
                         }
                     });
                 } else {
-                    // 创建新的设备记录（无用户ID或带用户ID）
                     device = await tx.ow_analytics_device.create({
                         data: {
                             fingerprint,
-                            user_id: currentUserId,
-                            hostname,
-                            screen,
-                            language,
-                            browser: uaInfo.browser,
-                            browser_version: uaInfo.browser_version,
-                            os: uaInfo.os,
-                            os_version: uaInfo.os_version,
-                            device_type: uaInfo.device_type,
-                            device_vendor: uaInfo.device_vendor,
-                            user_agent: userAgent,
+                            user_id: null,
+                            ...deviceData,
                         }
                     });
                 }
-            } else {
-                // 更新已有的用户设备记录
-                device = await tx.ow_analytics_device.update({
-                    where: {id: device.id},
-                    data: {
-                        last_seen: new Date(),
-                        hostname,
-                        screen,
-                        language,
-                        ...(device.user_agent !== userAgent ? {
-                            browser: uaInfo.browser,
-                            browser_version: uaInfo.browser_version,
-                            os: uaInfo.os,
-                            os_version: uaInfo.os_version,
-                            device_type: uaInfo.device_type,
-                            device_vendor: uaInfo.device_vendor,
-                            user_agent: userAgent,
-                        } : {})
-                    }
-                });
             }
 
             // 创建事件记录
