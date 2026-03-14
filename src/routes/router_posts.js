@@ -25,6 +25,7 @@ import {
   getPostQuotes,
   getPostLikes,
   getPostAnalytics,
+  getPostViewAnalytics,
   getUserReplies,
   getUserOriginalPosts,
   getUserMediaPosts,
@@ -560,6 +561,27 @@ router.get("/:id/analytics", async (req, res) => {
     res.status(200).json({ status: "success", data });
   } catch (error) {
     logger.error("获取帖子分析失败:", error);
+    res.status(400).json({ status: "error", message: error.message });
+  }
+});
+
+// 获取帖子的浏览分析明细（仅作者可见）
+router.get("/:id/analytics/views", async (req, res) => {
+  try {
+    const viewerId = res.locals.userid || null;
+    const { start_date: startDate, end_date: endDate } = req.query;
+    const data = await getPostViewAnalytics({
+      postId: req.params.id,
+      viewerId,
+      startDate,
+      endDate,
+    });
+    res.status(200).json({ status: "success", data });
+  } catch (error) {
+    logger.error("获取帖子浏览分析失败:", error);
+    if (error.message === "无权查看帖子浏览分析") {
+      return res.status(403).json({ status: "error", message: error.message });
+    }
     res.status(400).json({ status: "error", message: error.message });
   }
 });

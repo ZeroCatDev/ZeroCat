@@ -6,6 +6,7 @@ import logger from "../services/logger.js";
 import queueManager from "../services/queue/queueManager.js";
 import gorseService from "../services/gorse.js";
 import * as embeddingService from "../services/embedding.js";
+import { getAnalytics } from "../services/analytics.js";
 
 const POST_CHAR_LIMIT = 280;
 const MAX_MEDIA_COUNT = 4;
@@ -193,6 +194,7 @@ function formatPost(raw) {
       retweets: raw.retweet_count,
       likes: raw.like_count,
       bookmarks: raw.bookmark_count,
+      views: 0,
     },
     reply_to_id: raw.in_reply_to_id,
     quote_of_id: raw.quoted_post_id,
@@ -222,6 +224,42 @@ function formatPost(raw) {
   };
 }
 
+async function getPostViewCountMap(postIds) {
+  const normalizedIds = [...new Set((postIds || []).map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))];
+  if (normalizedIds.length === 0) return new Map();
+
+  const rows = await prisma.ow_analytics_event.groupBy({
+    by: ["target_id"],
+    where: {
+      target_type: "post",
+      target_id: { in: normalizedIds },
+    },
+    _count: { _all: true },
+  });
+
+  const map = new Map();
+  for (const row of rows) {
+    map.set(Number(row.target_id), Number(row._count?._all || 0));
+  }
+  return map;
+}
+
+async function attachPostViewCounts(posts) {
+  if (!posts || posts.length === 0) return posts || [];
+
+  const viewMap = await getPostViewCountMap(posts.map((p) => p.id));
+  return posts.map((post) => {
+    const viewCount = viewMap.get(Number(post.id)) || 0;
+    return {
+      ...post,
+      stats: {
+        ...(post.stats || {}),
+        views: viewCount,
+      },
+    };
+  });
+}
+
 function collectReferencedIds(posts) {
   const ids = new Set();
   for (const p of posts) {
@@ -242,9 +280,13 @@ async function fetchReferencedPosts(ids) {
     where: { id: { in: ids } },
     select: buildLeanSelect(),
   });
+
+  const formatted = raws.map(formatPost);
+  const enriched = await attachPostViewCounts(formatted);
+
   const map = {};
-  for (const raw of raws) {
-    map[raw.id] = formatPost(raw);
+  for (const post of enriched) {
+    map[post.id] = post;
   }
   return map;
 }
@@ -293,6 +335,7 @@ async function addViewerContext(posts, viewerId) {
 async function buildListResponse(rawPosts, limit, viewerId = null) {
   let posts = rawPosts.map(formatPost);
   posts = await addViewerContext(posts, viewerId);
+  posts = await attachPostViewCounts(posts);
 
   const refIds = collectReferencedIds(posts);
   let referencedPosts = await fetchReferencedPosts(refIds);
@@ -518,8 +561,9 @@ export async function createPost({ authorId, content, mediaIds = [], embed }) {
   queueManager.enqueueUserEmbedding(authorId).catch(e => logger.debug('[embedding] createPost user enqueue failed:', e.message));
 
   const formattedPost = formatPost(post);
+  const [postWithViews] = await attachPostViewCounts([formattedPost]);
   return {
-    post: formattedPost,
+    post: postWithViews,
     includes: { posts: {} },
   };
 }
@@ -637,11 +681,12 @@ export async function replyToPost({
   queueManager.enqueueUserEmbedding(authorId).catch(e => logger.debug('[embedding] reply user enqueue failed:', e.message));
 
   const formattedPost = formatPost(post);
-  const refIds = collectReferencedIds([formattedPost]);
+  const [postWithViews] = await attachPostViewCounts([formattedPost]);
+  const refIds = collectReferencedIds([postWithViews]);
   const referencedPosts = await fetchReferencedPosts(refIds);
 
   return {
-    post: formattedPost,
+    post: postWithViews,
     includes: { posts: referencedPosts },
   };
 }
@@ -738,11 +783,12 @@ export async function retweetPost({ authorId, retweetPostId }) {
   queueManager.enqueueUserEmbedding(authorId).catch(e => logger.debug('[embedding] retweet user enqueue failed:', e.message));
 
   const formattedPost = formatPost(post);
-  const refIds = collectReferencedIds([formattedPost]);
+  const [postWithViews] = await attachPostViewCounts([formattedPost]);
+  const refIds = collectReferencedIds([postWithViews]);
   const referencedPosts = await fetchReferencedPosts(refIds);
 
   return {
-    post: formattedPost,
+    post: postWithViews,
     includes: { posts: referencedPosts },
   };
 }
@@ -902,11 +948,12 @@ export async function quotePost({
   queueManager.enqueueUserEmbedding(authorId).catch(e => logger.debug('[embedding] quote user enqueue failed:', e.message));
 
   const formattedPost = formatPost(post);
-  const refIds = collectReferencedIds([formattedPost]);
+  const [postWithViews] = await attachPostViewCounts([formattedPost]);
+  const refIds = collectReferencedIds([postWithViews]);
   const referencedPosts = await fetchReferencedPosts(refIds);
 
   return {
-    post: formattedPost,
+    post: postWithViews,
     includes: { posts: referencedPosts },
   };
 }
@@ -1240,6 +1287,7 @@ export async function getPostById(postId, viewerId = null) {
   let post = formatPost(raw);
   const [enriched] = await addViewerContext([post], viewerId);
   post = enriched;
+  [post] = await attachPostViewCounts([post]);
 
   // 获取祖先链（如果是回复帖子）
   let ancestors = [];
@@ -1249,11 +1297,14 @@ export async function getPostById(postId, viewerId = null) {
     const filteredAncestors = ancestorRaws.filter((a) => a.id !== raw.id);
     ancestors = filteredAncestors.map(formatPost);
     ancestors = await addViewerContext(ancestors, viewerId);
+    ancestors = await attachPostViewCounts(ancestors);
   }
 
   // 获取分类后的回复
-  const { featured: featuredReplies, regular: regularReplies } =
+  let { featured: featuredReplies, regular: regularReplies } =
     await getRepliesWithClassification(raw.id, raw.author_id, raw.like_count, viewerId);
+  featuredReplies = await attachPostViewCounts(featuredReplies);
+  regularReplies = await attachPostViewCounts(regularReplies);
 
   // 收集所有需要引用的帖子ID
   const allPosts = [post, ...ancestors, ...featuredReplies, ...regularReplies];
@@ -1448,6 +1499,7 @@ export async function getGlobalFeed({
   // 构建响应（使用 created_at 作为游标而非 id）
   let posts = rawPosts.map(formatPost);
   posts = await addViewerContext(posts, userId);
+  posts = await attachPostViewCounts(posts);
 
   const refIds = collectReferencedIds(posts);
   let referencedPosts = await fetchReferencedPosts(refIds);
@@ -1487,6 +1539,7 @@ export async function getThread(postId, { cursor, limit = 50, viewerId = null } 
   let post = formatPost(raw);
   const [enrichedPost] = await addViewerContext([post], viewerId);
   post = enrichedPost;
+  [post] = await attachPostViewCounts([post]);
 
   // 获取祖先链（如果是回复帖子）
   let ancestors = [];
@@ -1495,6 +1548,7 @@ export async function getThread(postId, { cursor, limit = 50, viewerId = null } 
     const filteredAncestors = ancestorRaws.filter((a) => a.id !== raw.id);
     ancestors = filteredAncestors.map(formatPost);
     ancestors = await addViewerContext(ancestors, viewerId);
+    ancestors = await attachPostViewCounts(ancestors);
   }
 
   // 确定线程根ID
@@ -1523,6 +1577,7 @@ export async function getThread(postId, { cursor, limit = 50, viewerId = null } 
 
   let replies = repliesRaw.map(formatPost);
   replies = await addViewerContext(replies, viewerId);
+  replies = await attachPostViewCounts(replies);
 
   // 获取根帖作者点赞的所有回复ID
   const allReplyIds = repliesRaw.map((r) => r.id);
@@ -1769,6 +1824,31 @@ export async function getPostAnalytics({ postId, viewerId }) {
     like_count: target.like_count,
   };
 
+  // 浏览分析（基于 ow_analytics_event）
+  const [viewCount, uniqueVisitors] = await Promise.all([
+    prisma.ow_analytics_event.count({
+      where: {
+        target_type: "post",
+        target_id: target.id,
+      },
+    }),
+    prisma.ow_analytics_event.findMany({
+      where: {
+        target_type: "post",
+        target_id: target.id,
+      },
+      distinct: ["device_id"],
+      select: { device_id: true },
+    }),
+  ]);
+
+  result.view_count = viewCount;
+  result.visitor_count = uniqueVisitors.length;
+  result.engagement_count =
+    target.reply_count + pureRetweetCount + quoteCount + target.like_count + target.bookmark_count;
+  result.engagement_rate =
+    viewCount > 0 ? Number(((result.engagement_count / viewCount) * 100).toFixed(2)) : 0;
+
   // 仅作者可见收藏数
   if (isAuthor) {
     result.bookmark_count = target.bookmark_count;
@@ -1778,11 +1858,180 @@ export async function getPostAnalytics({ postId, viewerId }) {
 }
 
 /**
+ * 获取帖子浏览分析明细（基于 ow_analytics_event / ow_analytics_device）
+ * 仅发帖人可查看
+ */
+export async function getPostViewAnalytics({ postId, viewerId, startDate, endDate }) {
+  const target = await prisma.ow_posts.findFirst({
+    where: { id: Number(postId), is_deleted: false },
+    select: { id: true, author_id: true },
+  });
+  if (!target) throw new Error("帖子不存在");
+
+  if (!viewerId || target.author_id !== Number(viewerId)) {
+    throw new Error("无权查看帖子浏览分析");
+  }
+
+  const now = new Date();
+  const defaultStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  const parsedStart = startDate ? new Date(startDate) : defaultStart;
+  const parsedEnd = endDate ? new Date(endDate) : now;
+
+  if (Number.isNaN(parsedStart.getTime()) || Number.isNaN(parsedEnd.getTime())) {
+    throw new Error("无效的日期格式");
+  }
+
+  if (parsedStart > parsedEnd) {
+    throw new Error("开始时间不能晚于结束时间");
+  }
+
+  const rangeStart = new Date(parsedStart);
+  rangeStart.setHours(0, 0, 0, 0);
+  const rangeEnd = new Date(parsedEnd);
+  rangeEnd.setHours(23, 59, 59, 999);
+
+  const analytics = await getAnalytics(
+    "post",
+    target.id,
+    parsedStart.toISOString().split("T")[0],
+    parsedEnd.toISOString().split("T")[0]
+  );
+
+  const [
+    likes,
+    bookmarks,
+    replies,
+    retweets,
+    quotes,
+  ] = await Promise.all([
+    prisma.ow_posts_like.findMany({
+      where: {
+        post_id: target.id,
+        created_at: { gte: rangeStart, lte: rangeEnd },
+      },
+      select: { created_at: true },
+    }),
+    prisma.ow_posts_bookmark.findMany({
+      where: {
+        post_id: target.id,
+        created_at: { gte: rangeStart, lte: rangeEnd },
+      },
+      select: { created_at: true },
+    }),
+    prisma.ow_posts.findMany({
+      where: {
+        in_reply_to_id: target.id,
+        post_type: "reply",
+        is_deleted: false,
+        created_at: { gte: rangeStart, lte: rangeEnd },
+      },
+      select: { created_at: true },
+    }),
+    prisma.ow_posts.findMany({
+      where: {
+        retweet_post_id: target.id,
+        post_type: "retweet",
+        is_deleted: false,
+        created_at: { gte: rangeStart, lte: rangeEnd },
+      },
+      select: { created_at: true },
+    }),
+    prisma.ow_posts.findMany({
+      where: {
+        quoted_post_id: target.id,
+        post_type: "quote",
+        is_deleted: false,
+        created_at: { gte: rangeStart, lte: rangeEnd },
+      },
+      select: { created_at: true },
+    }),
+  ]);
+
+  const bucketByDay = (rows) => {
+    const map = new Map();
+    for (const row of rows) {
+      const day = new Date(row.created_at).toISOString().slice(0, 10);
+      map.set(day, (map.get(day) || 0) + 1);
+    }
+    return map;
+  };
+
+  const likesByDay = bucketByDay(likes);
+  const bookmarksByDay = bucketByDay(bookmarks);
+  const repliesByDay = bucketByDay(replies);
+  const retweetsByDay = bucketByDay(retweets);
+  const quotesByDay = bucketByDay(quotes);
+
+  const allDays = new Set([
+    ...likesByDay.keys(),
+    ...bookmarksByDay.keys(),
+    ...repliesByDay.keys(),
+    ...retweetsByDay.keys(),
+    ...quotesByDay.keys(),
+  ]);
+
+  const engagementSeries = [...allDays]
+    .sort()
+    .map((day) => {
+      const likeCount = likesByDay.get(day) || 0;
+      const bookmarkCount = bookmarksByDay.get(day) || 0;
+      const replyCount = repliesByDay.get(day) || 0;
+      const retweetCount = retweetsByDay.get(day) || 0;
+      const quoteCount = quotesByDay.get(day) || 0;
+      return {
+        x: `${day}T00:00:00`,
+        y: likeCount + bookmarkCount + replyCount + retweetCount + quoteCount,
+      };
+    });
+
+  const impressions = analytics?.overview?.pageviews?.value || 0;
+  const engagements =
+    likes.length + bookmarks.length + replies.length + retweets.length + quotes.length;
+  const engagementRate = impressions > 0
+    ? Number(((engagements / impressions) * 100).toFixed(2))
+    : 0;
+
+  return {
+    post_id: target.id,
+    range: {
+      start_date: parsedStart.toISOString().split("T")[0],
+      end_date: parsedEnd.toISOString().split("T")[0],
+    },
+    twitter_like_overview: {
+      impressions,
+      detail_expands: impressions,
+      engagements,
+      engagement_rate: engagementRate,
+      likes: likes.length,
+      replies: replies.length,
+      reposts: retweets.length,
+      quotes: quotes.length,
+      bookmarks: bookmarks.length,
+    },
+    engagement_breakdown: {
+      likes: likes.length,
+      replies: replies.length,
+      reposts: retweets.length,
+      quotes: quotes.length,
+      bookmarks: bookmarks.length,
+    },
+    twitter_like_timeseries: {
+      impressions: analytics?.timeseries?.pageviews || [],
+      visitors: analytics?.timeseries?.sessions || [],
+      engagements: engagementSeries,
+    },
+    ...analytics,
+  };
+}
+
+/**
  * 构建带祖先链的回帖列表响应
  */
 async function buildRepliesListResponse(rawPosts, limit, viewerId = null) {
   let posts = rawPosts.map(formatPost);
   posts = await addViewerContext(posts, viewerId);
+  posts = await attachPostViewCounts(posts);
 
   // 为每个回帖获取祖先链
   const postsWithAncestors = await Promise.all(
@@ -1795,6 +2044,7 @@ async function buildRepliesListResponse(rawPosts, limit, viewerId = null) {
         const filteredAncestors = ancestorRaws.filter((a) => a.id !== raw.id);
         ancestors = filteredAncestors.map(formatPost);
         ancestors = await addViewerContext(ancestors, viewerId);
+        ancestors = await attachPostViewCounts(ancestors);
       }
 
       return { post, ancestors };
@@ -1928,6 +2178,7 @@ export async function getUserLikedPosts({ userId, cursor, limit = 20, viewerId }
   const rawPosts = likes.map((l) => l.post).filter(Boolean);
   let posts = rawPosts.map(formatPost);
   posts = await addViewerContext(posts, viewerId);
+  posts = await attachPostViewCounts(posts);
 
   const refIds = collectReferencedIds(posts);
   let referencedPosts = await fetchReferencedPosts(refIds);
@@ -1984,6 +2235,7 @@ export async function getUserBookmarks({ userId, cursor, limit = 20, viewerId })
   const rawPosts = bookmarks.map((b) => b.post).filter(Boolean);
   let posts = rawPosts.map(formatPost);
   posts = await addViewerContext(posts, viewerId);
+  posts = await attachPostViewCounts(posts);
 
   const refIds = collectReferencedIds(posts);
   let referencedPosts = await fetchReferencedPosts(refIds);
@@ -2049,6 +2301,7 @@ export async function getRecommendedFeed({
 
   let posts = orderedRaw.map(formatPost);
   posts = await addViewerContext(posts, userId);
+  posts = await attachPostViewCounts(posts);
 
   const refIds = collectReferencedIds(posts);
   let referencedPosts = await fetchReferencedPosts(refIds);
@@ -2176,6 +2429,7 @@ export async function getSimilarPosts({ postId, limit = 10, viewerId = null, min
 
   let posts = trimmed.map(formatPost);
   posts = await addViewerContext(posts, viewerId);
+  posts = await attachPostViewCounts(posts);
 
   // 附加相似度分数
   posts = posts.map(p => ({
