@@ -14,8 +14,6 @@ async function enqueueProjectJobs(projectIds, remoteUserId, job) {
         return 0;
     }
 
-    const projectStaggerMs = Math.max(0, Number(await zcconfig.get('mirror40code.queue.project_stagger_ms', 100)) || 0);
-
     let enqueued = 0;
     for (const projectId of projectIds) {
         const normalizedId = Number(projectId);
@@ -31,7 +29,6 @@ async function enqueueProjectJobs(projectIds, remoteUserId, job) {
             }, {
                 jobId,
                 deduplication: { id: jobId },
-                delay: projectStaggerMs > 0 ? enqueued * projectStaggerMs : 0,
                 attempts: 5,
                 backoff: { type: 'exponential', delay: 15000 },
                 removeOnComplete: { age: 86400 },
@@ -54,8 +51,6 @@ async function processFullSync(job) {
     const userIds = await mirror40CodeSyncService.collectTopUserIds();
     await job.log(`已获取用户 ${userIds.length} 个`);
 
-    const userStaggerMs = Math.max(0, Number(await zcconfig.get('mirror40code.queue.user_stagger_ms', 300)) || 0);
-
     const queue = getMirror40CodeQueue();
     if (!queue) {
         throw new Error('mirror-40code queue 不可用，无法为用户入队');
@@ -72,7 +67,6 @@ async function processFullSync(job) {
             }, {
                 jobId,
                 deduplication: { id: jobId },
-                delay: userStaggerMs > 0 ? enqueuedUsers * userStaggerMs : 0,
                 attempts: 5,
                 backoff: { type: 'exponential', delay: 15000 },
                 removeOnComplete: { age: 86400 },
@@ -86,12 +80,11 @@ async function processFullSync(job) {
         }
     }
 
-    await job.log(`全量用户入队完成: ${enqueuedUsers}/${userIds.length}，userStaggerMs=${userStaggerMs}`);
+    await job.log(`全量用户入队完成: ${enqueuedUsers}/${userIds.length}`);
     return {
         mode: 'full-sync',
         fetchedUsers: userIds.length,
         enqueuedUsers,
-        userStaggerMs,
     };
 }
 
@@ -170,8 +163,6 @@ async function createMirror40CodeWorker() {
     }
 
     const concurrency = Number(await zcconfig.get('mirror40code.queue.concurrency', 2)) || 2;
-    const limiterMax = Math.max(1, Number(await zcconfig.get('mirror40code.queue.limiter.max', 5)) || 5);
-    const limiterDuration = Math.max(100, Number(await zcconfig.get('mirror40code.queue.limiter.duration_ms', 1000)) || 1000);
     const connection = await createConnection('worker-mirror-40code');
 
     worker = new Worker(
@@ -180,7 +171,6 @@ async function createMirror40CodeWorker() {
         {
             connection,
             concurrency: Math.max(1, concurrency),
-            limiter: { max: limiterMax, duration: limiterDuration },
         }
     );
 
@@ -196,7 +186,7 @@ async function createMirror40CodeWorker() {
         logger.error('[mirror-40code] Worker error:', err.message);
     });
 
-    logger.info(`[mirror-40code] Worker started concurrency=${Math.max(1, concurrency)} limiter=${limiterMax}/${limiterDuration}ms`);
+    logger.info(`[mirror-40code] Worker started concurrency=${Math.max(1, concurrency)}`);
     return worker;
 }
 
