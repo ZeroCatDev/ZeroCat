@@ -10,6 +10,11 @@ const TARGET_TYPE_PROJECT = 'mirror40_project';
 const TARGET_KEY_LOCAL_USER_ID = 'local_user_id';
 const TARGET_KEY_LOCAL_PROJECT_ID = 'local_project_id';
 const TARGET_KEY_LOCAL_PROFILE_PROJECT_ID = 'local_profile_project_id';
+const TARGET_KEY_LAST_SYNC_AT = 'last_sync_at';
+const TARGET_KEY_LAST_SYNC_STATUS = 'last_sync_status';
+const TARGET_KEY_LAST_SYNC_DETAIL = 'last_sync_detail';
+const TARGET_KEY_SYNC_DISABLED = 'sync_disabled';
+const TARGET_KEY_SYNC_DISABLED_REASON = 'sync_disabled_reason';
 const MAX_AVATAR_DOWNLOAD_SIZE = 10 * 1024 * 1024;
 const MAX_PROJECT_ASSET_DOWNLOAD_SIZE = 20 * 1024 * 1024;
 const MIRROR40_PROJECT_ASSET_BASE_URL = 'https://abc.520gxx.com/static/internalapi/asset';
@@ -331,6 +336,61 @@ function isNoSuchKeyError(error) {
 
     return status === 404
         && (/NoSuchKey/i.test(rawBody) || /The specified key does not exist/i.test(rawBody));
+}
+
+function isUserAccessBlockedError(error) {
+    const status = Number(error?.status || error?.response?.status || 0);
+    const body = error?.responseData || error?.response?.data || null;
+    const text = String(
+        body?.errmsg
+        || body?.msg
+        || body?.message
+        || error?.message
+        || ''
+    );
+
+    if (status !== 403) return false;
+    return /暂停访问|违规|封禁|禁止访问/i.test(text);
+}
+
+function isUserNotFoundError(error) {
+    const status = Number(error?.status || error?.response?.status || 0);
+    if (status === 404) return true;
+
+    const body = error?.responseData || error?.response?.data || null;
+    const text = String(
+        body?.errmsg
+        || body?.msg
+        || body?.message
+        || error?.message
+        || ''
+    );
+
+    if (status === 403 && /这个人不存在|用户不存在|not\s*found/i.test(text)) {
+        return true;
+    }
+
+    return false;
+}
+
+function isProjectNotFoundError(error) {
+    const status = Number(error?.status || error?.response?.status || 0);
+    if (status === 404) return true;
+
+    const body = error?.responseData || error?.response?.data || null;
+    const text = String(
+        body?.errmsg
+        || body?.msg
+        || body?.message
+        || error?.message
+        || ''
+    );
+
+    if (status === 403 && /作品不存在|项目不存在|not\s*found/i.test(text)) {
+        return true;
+    }
+
+    return false;
 }
 
 function extractWorkSourcePayload(payload) {
@@ -782,6 +842,185 @@ class Mirror40CodeSyncService {
         return Number.isFinite(id) && id > 0 ? id : null;
     }
 
+    async listMappedRemoteUserIds({ includeSyncDisabled = false } = {}) {
+        const records = await prisma.ow_target_configs.findMany({
+            where: {
+                target_type: TARGET_TYPE_USER,
+                key: TARGET_KEY_LOCAL_USER_ID,
+            },
+            select: { target_id: true },
+        });
+
+        const ids = records
+            .map((item) => Number(item?.target_id))
+            .filter((id) => Number.isFinite(id) && id > 0);
+
+        const uniqueSorted = Array.from(new Set(ids)).sort((a, b) => a - b);
+        if (includeSyncDisabled || uniqueSorted.length === 0) {
+            return uniqueSorted;
+        }
+
+        const disabledRecords = await prisma.ow_target_configs.findMany({
+            where: {
+                target_type: TARGET_TYPE_USER,
+                key: TARGET_KEY_SYNC_DISABLED,
+                value: 'true',
+            },
+            select: { target_id: true },
+        });
+        const disabled = new Set(
+            disabledRecords
+                .map((item) => Number(item?.target_id))
+                .filter((id) => Number.isFinite(id) && id > 0)
+        );
+
+        return uniqueSorted.filter((id) => !disabled.has(id));
+    }
+
+    async getLatestMappedRemoteUserId() {
+        const ids = await this.listMappedRemoteUserIds({ includeSyncDisabled: true });
+        if (!ids.length) return 0;
+        return ids[ids.length - 1];
+    }
+
+    async listMappedRemoteProjectIds() {
+        const records = await prisma.ow_target_configs.findMany({
+            where: {
+                target_type: TARGET_TYPE_PROJECT,
+                key: TARGET_KEY_LOCAL_PROJECT_ID,
+            },
+            select: { target_id: true },
+        });
+
+        const ids = records
+            .map((item) => Number(item?.target_id))
+            .filter((id) => Number.isFinite(id) && id > 0);
+        return Array.from(new Set(ids)).sort((a, b) => a - b);
+    }
+
+    async getLatestMappedRemoteProjectId() {
+        const ids = await this.listMappedRemoteProjectIds();
+        if (!ids.length) return 0;
+        return ids[ids.length - 1];
+    }
+
+    async probeProjectAvailability(cfg, remoteProjectId) {
+        const parsedId = Number(remoteProjectId);
+        if (!Number.isFinite(parsedId) || parsedId <= 0) {
+            return { notFound: true, project: null };
+        }
+
+        try {
+            const { project } = await this.fetchWorkInfo(cfg, parsedId);
+            if (!project || Number(project?.id) !== parsedId) {
+                return { notFound: true, project: null };
+            }
+            return { notFound: false, project };
+        } catch (error) {
+            if (isProjectNotFoundError(error)) {
+                return { notFound: true, project: null };
+            }
+            throw error;
+        }
+    }
+
+    async collectIncrementalNewProjectItems() {
+        const cfg = await this.getConfig();
+        this.ensureEnabled(cfg);
+
+        const latestId = await this.getLatestMappedRemoteProjectId();
+        if (!Number.isFinite(latestId) || latestId <= 0) {
+            logger.info('[mirror-40code] 增量项目扫描跳过：暂无已同步项目基线');
+            return [];
+        }
+
+        const maxScan = Math.max(1, Number(await zcconfig.get('mirror40code.incremental_projects.max_scan', 5000)) || 5000);
+        const items = [];
+
+        for (let offset = 1; offset <= maxScan; offset++) {
+            const projectId = latestId + offset;
+            const probe = await this.probeProjectAvailability(cfg, projectId);
+
+            if (probe.notFound) {
+                logger.info(`[mirror-40code] 增量项目扫描停止 latest=${latestId} stopAt=${projectId} new=${items.length}`);
+                break;
+            }
+
+            const remoteUserId = Number(probe?.project?.author);
+            items.push({
+                remoteProjectId: projectId,
+                remoteUserId: Number.isFinite(remoteUserId) && remoteUserId > 0 ? remoteUserId : null,
+            });
+
+            if (offset === maxScan) {
+                logger.warn(`[mirror-40code] 增量项目扫描达到上限 max_scan=${maxScan}，请考虑增大配置`);
+            }
+        }
+
+        return items;
+    }
+
+    async probeUserAvailability(cfg, remoteUserId) {
+        const parsedId = Number(remoteUserId);
+        if (!Number.isFinite(parsedId) || parsedId <= 0) {
+            return { notFound: true, blocked: false, user: null };
+        }
+
+        try {
+            const { user } = await this.fetchUserInfo(cfg, parsedId);
+            if (!user) return { notFound: true, blocked: false, user: null };
+            return { notFound: false, blocked: false, user };
+        } catch (error) {
+            if (isUserNotFoundError(error)) {
+                return { notFound: true, blocked: false, user: null };
+            }
+            if (isUserAccessBlockedError(error)) {
+                return {
+                    notFound: false,
+                    blocked: true,
+                    user: null,
+                    reason: String(error?.responseData?.errmsg || error?.message || 'blocked'),
+                };
+            }
+            throw error;
+        }
+    }
+
+    async collectIncrementalNewUserIds() {
+        const cfg = await this.getConfig();
+        this.ensureEnabled(cfg);
+
+        const latestId = await this.getLatestMappedRemoteUserId();
+        if (!Number.isFinite(latestId) || latestId <= 0) {
+            logger.info('[mirror-40code] 增量用户扫描跳过：暂无已同步用户基线');
+            return [];
+        }
+
+        const maxScan = Math.max(1, Number(await zcconfig.get('mirror40code.incremental.max_scan', 5000)) || 5000);
+        const newIds = [];
+
+        for (let offset = 1; offset <= maxScan; offset++) {
+            const userId = latestId + offset;
+            const probe = await this.probeUserAvailability(cfg, userId);
+
+            if (probe.notFound) {
+                logger.info(`[mirror-40code] 增量用户扫描停止 latest=${latestId} stopAt=${userId} new=${newIds.length}`);
+                break;
+            }
+
+            newIds.push(userId);
+            if (probe.blocked) {
+                logger.info(`[mirror-40code] 增量用户命中封禁用户 id=${userId}，将标记后跳过项目同步`);
+            }
+
+            if (offset === maxScan) {
+                logger.warn(`[mirror-40code] 增量用户扫描达到上限 max_scan=${maxScan}，请考虑增大配置`);
+            }
+        }
+
+        return newIds;
+    }
+
     async upsertUserMapping(remoteUserId, localUserId) {
         await prisma.ow_target_configs.upsert({
             where: {
@@ -799,6 +1038,127 @@ class Mirror40CodeSyncService {
                 value: String(localUserId),
             },
         });
+    }
+
+    async upsertTargetConfig(targetType, targetId, key, value) {
+        await prisma.ow_target_configs.upsert({
+            where: {
+                target_type_target_id_key: {
+                    target_type: String(targetType),
+                    target_id: String(targetId),
+                    key: String(key),
+                },
+            },
+            update: { value: String(value ?? '') },
+            create: {
+                target_type: String(targetType),
+                target_id: String(targetId),
+                key: String(key),
+                value: String(value ?? ''),
+            },
+        });
+    }
+
+    async recordUserSyncState(remoteUserId, {
+        status = 'success',
+        detail = '',
+        localUserId = null,
+    } = {}) {
+        const targetId = String(remoteUserId);
+        const now = new Date().toISOString();
+        const tasks = [
+            this.upsertTargetConfig(TARGET_TYPE_USER, targetId, TARGET_KEY_LAST_SYNC_AT, now),
+            this.upsertTargetConfig(TARGET_TYPE_USER, targetId, TARGET_KEY_LAST_SYNC_STATUS, status),
+            this.upsertTargetConfig(TARGET_TYPE_USER, targetId, TARGET_KEY_LAST_SYNC_DETAIL, truncateText(String(detail || ''), 1000)),
+        ];
+
+        if (Number.isFinite(Number(localUserId)) && Number(localUserId) > 0) {
+            tasks.push(this.upsertTargetConfig(TARGET_TYPE_USER, targetId, TARGET_KEY_LOCAL_USER_ID, String(localUserId)));
+        }
+
+        await Promise.all(tasks);
+    }
+
+    async markUserSyncDisabled(remoteUserId, reason) {
+        await Promise.all([
+            this.upsertTargetConfig(TARGET_TYPE_USER, String(remoteUserId), TARGET_KEY_SYNC_DISABLED, 'true'),
+            this.upsertTargetConfig(TARGET_TYPE_USER, String(remoteUserId), TARGET_KEY_SYNC_DISABLED_REASON, truncateText(String(reason || ''), 1000)),
+        ]);
+    }
+
+    async ensureBlockedProxyUser(remoteUserId, reason = '') {
+        const remoteId = Number(remoteUserId);
+        if (!Number.isFinite(remoteId) || remoteId <= 0) {
+            throw new Error(`远程用户ID无效: ${remoteUserId}`);
+        }
+
+        const mappedUserId = await this.getMappedLocalUserId(remoteId);
+        const username = `${remoteId}@40code.com`;
+        const legacyUsername = `m40u_${remoteId}`;
+        const email = `${remoteId}@40code.com`;
+        const detail = truncateText(String(reason || '此用户主页含违规内容，暂停同步'), 1000);
+
+        let user = null;
+        if (mappedUserId) {
+            user = await prisma.ow_users.findUnique({ where: { id: mappedUserId } });
+        }
+        if (!user) {
+            user = await prisma.ow_users.findUnique({ where: { username } });
+        }
+        if (!user) {
+            user = await prisma.ow_users.findUnique({ where: { username: legacyUsername } });
+        }
+        if (!user) {
+            user = await prisma.ow_users.findFirst({ where: { email } });
+        }
+
+        const data = {
+            username,
+            email,
+            display_name: username,
+            status: 'banned',
+            type: 'user',
+            bio: detail,
+            loginTime: new Date(),
+        };
+
+        if (!user) {
+            user = await prisma.ow_users.create({
+                data: {
+                    ...data,
+                    regTime: new Date(),
+                },
+            });
+        } else {
+            user = await prisma.ow_users.update({
+                where: { id: user.id },
+                data,
+            });
+        }
+
+        await this.upsertUserMapping(remoteId, user.id);
+        await this.markUserSyncDisabled(remoteId, detail);
+        return user;
+    }
+
+    async recordProjectSyncState(remoteProjectId, {
+        status = 'success',
+        detail = '',
+        localProjectId = null,
+    } = {}) {
+        const targetId = String(remoteProjectId);
+        const now = new Date().toISOString();
+        const tasks = [
+            this.upsertTargetConfig(TARGET_TYPE_PROJECT, targetId, TARGET_KEY_LAST_SYNC_AT, now),
+            this.upsertTargetConfig(TARGET_TYPE_PROJECT, targetId, TARGET_KEY_LAST_SYNC_STATUS, status),
+            this.upsertTargetConfig(TARGET_TYPE_PROJECT, targetId, TARGET_KEY_LAST_SYNC_DETAIL, truncateText(String(detail || ''), 1000)),
+        ];
+
+        if (Number.isFinite(Number(localProjectId)) && Number(localProjectId) > 0) {
+            tasks.push(this.upsertTargetConfig(TARGET_TYPE_PROJECT, targetId, TARGET_KEY_LOCAL_PROJECT_ID, String(localProjectId)));
+        }
+
+        await Promise.all(tasks);
     }
 
     async upsertProjectMapping(remoteProjectId, localProjectId) {
@@ -1075,22 +1435,60 @@ class Mirror40CodeSyncService {
             throw new Error(`无效远程用户ID: ${remoteUserId}`);
         }
 
-        const { user: remoteUser } = await this.fetchUserInfo(cfg, parsedUserId);
-        if (!remoteUser) {
-            throw new Error(`远程用户不存在或无法获取: ${parsedUserId}`);
+        try {
+            const { user: remoteUser } = await this.fetchUserInfo(cfg, parsedUserId);
+            if (!remoteUser) {
+                throw new Error(`远程用户不存在或无法获取: ${parsedUserId}`);
+            }
+
+            const localUser = await this.ensureProxyUser(remoteUser, cfg);
+            const profileArticleProject = await this.ensureProfileArticleProject(remoteUser, localUser);
+            const projectIds = await this.collectUserProjectIds(cfg, parsedUserId);
+
+            await this.recordUserSyncState(parsedUserId, {
+                status: 'success',
+                detail: `projects=${projectIds.length}`,
+                localUserId: localUser.id,
+            });
+
+            return {
+                remoteUserId: parsedUserId,
+                localUserId: localUser.id,
+                profileArticleProjectId: profileArticleProject.id,
+                projectIds,
+                displayName: localUser.display_name,
+            };
+        } catch (error) {
+            if (isUserAccessBlockedError(error)) {
+                const reason = String(
+                    error?.responseData?.errmsg
+                    || error?.responseData?.msg
+                    || error?.message
+                    || '此主页含有违规内容，已被暂停访问'
+                );
+                const localUser = await this.ensureBlockedProxyUser(parsedUserId, reason);
+                await this.recordUserSyncState(parsedUserId, {
+                    status: 'skipped',
+                    detail: `blocked:${reason}`,
+                    localUserId: localUser.id,
+                }).catch(() => {});
+
+                return {
+                    remoteUserId: parsedUserId,
+                    localUserId: localUser.id,
+                    skipped: true,
+                    reason: 'user_blocked',
+                    projectIds: [],
+                    displayName: localUser.display_name,
+                };
+            }
+
+            await this.recordUserSyncState(parsedUserId, {
+                status: 'failed',
+                detail: error.message,
+            }).catch(() => {});
+            throw error;
         }
-
-        const localUser = await this.ensureProxyUser(remoteUser, cfg);
-        const profileArticleProject = await this.ensureProfileArticleProject(remoteUser, localUser);
-        const projectIds = await this.collectUserProjectIds(cfg, parsedUserId);
-
-        return {
-            remoteUserId: parsedUserId,
-            localUserId: localUser.id,
-            profileArticleProjectId: profileArticleProject.id,
-            projectIds,
-            displayName: localUser.display_name,
-        };
     }
 
     async getMappedLocalProjectId(remoteProjectId) {
@@ -1296,6 +1694,14 @@ class Mirror40CodeSyncService {
             }
             return this.ensureProxyUser(remoteUser, cfg);
         } catch (error) {
+            if (isUserNotFoundError(error)) {
+                if (mappedUser) {
+                    logger.warn(`[mirror-40code] 作者远端不存在，使用本地映射用户 remoteUser=${id} localUser=${mappedUser.id}`);
+                    return mappedUser;
+                }
+                logger.warn(`[mirror-40code] 作者远端不存在，跳过项目同步 remoteUser=${id}`);
+                return null;
+            }
             if (mappedUser) {
                 logger.warn(`[mirror-40code] 作者信息刷新失败，使用本地映射用户 remoteUser=${id} localUser=${mappedUser.id} error=${error.message}`);
                 return mappedUser;
@@ -1313,57 +1719,110 @@ class Mirror40CodeSyncService {
             throw new Error(`无效远程项目ID: ${remoteProjectId}`);
         }
 
-        const { project: remoteProject } = await this.fetchWorkInfo(cfg, parsedProjectId);
-        if (!remoteProject || Number(remoteProject?.id) !== parsedProjectId) {
-            return {
-                remoteProjectId: parsedProjectId,
-                skipped: true,
-                reason: 'not_found',
-            };
-        }
+        try {
+            const { project: remoteProject } = await this.fetchWorkInfo(cfg, parsedProjectId);
+            if (!remoteProject || Number(remoteProject?.id) !== parsedProjectId) {
+                await this.recordProjectSyncState(parsedProjectId, {
+                    status: 'skipped',
+                    detail: 'not_found',
+                });
+                return {
+                    remoteProjectId: parsedProjectId,
+                    skipped: true,
+                    reason: 'not_found',
+                };
+            }
 
-        const remoteAuthorId = Number(remoteProject?.author || remoteAuthorHint);
-        const localAuthor = await this.ensureAuthorByRemoteId(cfg, remoteAuthorId);
-        const localProject = await this.ensureMirrorProject(remoteProject, localAuthor.id, remoteAuthorId);
+            const remoteAuthorId = Number(remoteProject?.author || remoteAuthorHint);
+            if (!Number.isFinite(remoteAuthorId) || remoteAuthorId <= 0) {
+                await this.recordProjectSyncState(parsedProjectId, {
+                    status: 'skipped',
+                    detail: 'author_missing',
+                });
+                return {
+                    remoteProjectId: parsedProjectId,
+                    skipped: true,
+                    reason: 'author_missing',
+                };
+            }
 
-        await this.syncProjectThumbnail(cfg, remoteProject, localProject, localAuthor.id).catch((error) => {
-            logger.warn(`[mirror-40code] 项目封面同步异常 remoteProject=${parsedProjectId} localProject=${localProject.id} error=${error.message}`);
-        });
+            const localAuthor = await this.ensureAuthorByRemoteId(cfg, remoteAuthorId);
+            if (!localAuthor) {
+                await this.recordProjectSyncState(parsedProjectId, {
+                    status: 'skipped',
+                    detail: 'author_not_found',
+                });
+                return {
+                    remoteProjectId: parsedProjectId,
+                    remoteAuthorId,
+                    skipped: true,
+                    reason: 'author_not_found',
+                };
+            }
 
-        const { source, missing } = await this.fetchWorkSource(cfg, parsedProjectId);
-        if (missing) {
+            const localProject = await this.ensureMirrorProject(remoteProject, localAuthor.id, remoteAuthorId);
+
+            await this.syncProjectThumbnail(cfg, remoteProject, localProject, localAuthor.id).catch((error) => {
+                logger.warn(`[mirror-40code] 项目封面同步异常 remoteProject=${parsedProjectId} localProject=${localProject.id} error=${error.message}`);
+            });
+
+            const { source, missing } = await this.fetchWorkSource(cfg, parsedProjectId);
+            if (missing) {
+                await this.recordProjectSyncState(parsedProjectId, {
+                    status: 'skipped',
+                    detail: 'source_not_found',
+                    localProjectId: localProject.id,
+                });
+                return {
+                    remoteProjectId: parsedProjectId,
+                    remoteAuthorId,
+                    localAuthorId: localAuthor.id,
+                    localProjectId: localProject.id,
+                    skipped: true,
+                    reason: 'source_not_found',
+                };
+            }
+
+            if (source === null || source === undefined || source === '') {
+                await this.recordProjectSyncState(parsedProjectId, {
+                    status: 'skipped',
+                    detail: 'source_empty',
+                    localProjectId: localProject.id,
+                });
+                return {
+                    remoteProjectId: parsedProjectId,
+                    remoteAuthorId,
+                    localAuthorId: localAuthor.id,
+                    localProjectId: localProject.id,
+                    skipped: true,
+                    reason: 'source_empty',
+                };
+            }
+
+            const commitResult = await this.saveProjectSourceAndCommit(localProject, localAuthor.id, remoteProject, source);
+
+            await this.recordProjectSyncState(parsedProjectId, {
+                status: 'success',
+                detail: commitResult.updated ? 'updated' : 'unchanged',
+                localProjectId: localProject.id,
+            });
+
             return {
                 remoteProjectId: parsedProjectId,
                 remoteAuthorId,
                 localAuthorId: localAuthor.id,
                 localProjectId: localProject.id,
-                skipped: true,
-                reason: 'source_not_found',
+                updated: commitResult.updated,
+                commitId: commitResult.commitId,
+                sourceSha: commitResult.sourceSha,
             };
+        } catch (error) {
+            await this.recordProjectSyncState(parsedProjectId, {
+                status: 'failed',
+                detail: error.message,
+            }).catch(() => {});
+            throw error;
         }
-
-        if (source === null || source === undefined || source === '') {
-            return {
-                remoteProjectId: parsedProjectId,
-                remoteAuthorId,
-                localAuthorId: localAuthor.id,
-                localProjectId: localProject.id,
-                skipped: true,
-                reason: 'source_empty',
-            };
-        }
-
-        const commitResult = await this.saveProjectSourceAndCommit(localProject, localAuthor.id, remoteProject, source);
-
-        return {
-            remoteProjectId: parsedProjectId,
-            remoteAuthorId,
-            localAuthorId: localAuthor.id,
-            localProjectId: localProject.id,
-            updated: commitResult.updated,
-            commitId: commitResult.commitId,
-            sourceSha: commitResult.sourceSha,
-        };
     }
 
     async syncProjectAssets(remoteProjectId) {

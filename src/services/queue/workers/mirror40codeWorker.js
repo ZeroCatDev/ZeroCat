@@ -4,46 +4,9 @@ import { QUEUE_NAMES, getMirror40CodeQueue } from '../queues.js';
 import zcconfig from '../../config/zcconfig.js';
 import logger from '../../logger.js';
 import mirror40CodeSyncService from '../../mirror40code/syncService.js';
+import { enqueueProjectSyncJobs, enqueueUserSyncJobs, syncProjectAndAssets } from './mirror40codeWorkerTools.js';
 
 let worker = null;
-
-async function enqueueProjectJobs(projectIds, remoteUserId, job) {
-    const queue = getMirror40CodeQueue();
-    if (!queue) {
-        await job.log('mirror-40code queue 不可用，跳过项目入队');
-        return 0;
-    }
-
-    let enqueued = 0;
-    for (const projectId of projectIds) {
-        const normalizedId = Number(projectId);
-        if (!Number.isFinite(normalizedId) || normalizedId <= 0) continue;
-
-        const jobId = `m40-project-${normalizedId}`;
-        try {
-            await queue.add('sync-project', {
-                type: 'sync-project',
-                remoteProjectId: normalizedId,
-                remoteUserId: Number(remoteUserId),
-                triggeredBy: 'user-sync',
-            }, {
-                jobId,
-                deduplication: { id: jobId },
-                attempts: 5,
-                backoff: { type: 'exponential', delay: 15000 },
-                removeOnComplete: { age: 86400 },
-                removeOnFail: { age: 604800 },
-            });
-            enqueued += 1;
-        } catch (error) {
-            if (!String(error?.message || '').includes('Job is already waiting')) {
-                logger.warn(`[mirror-40code] 项目 ${normalizedId} 入队失败: ${error.message}`);
-            }
-        }
-    }
-
-    return enqueued;
-}
 
 async function processFullSync(job) {
     await job.log('开始全量镜像：拉取40code用户列表');
@@ -56,29 +19,7 @@ async function processFullSync(job) {
         throw new Error('mirror-40code queue 不可用，无法为用户入队');
     }
 
-    let enqueuedUsers = 0;
-    for (const userId of userIds) {
-        const jobId = `m40-user-${userId}`;
-        try {
-            await queue.add('sync-user', {
-                type: 'sync-user',
-                remoteUserId: userId,
-                triggeredBy: 'full-sync',
-            }, {
-                jobId,
-                deduplication: { id: jobId },
-                attempts: 5,
-                backoff: { type: 'exponential', delay: 15000 },
-                removeOnComplete: { age: 86400 },
-                removeOnFail: { age: 604800 },
-            });
-            enqueuedUsers += 1;
-        } catch (error) {
-            if (!String(error?.message || '').includes('Job is already waiting')) {
-                logger.warn(`[mirror-40code] 用户 ${userId} 入队失败: ${error.message}`);
-            }
-        }
-    }
+    const enqueuedUsers = await enqueueUserSyncJobs(queue, userIds, 'full-sync');
 
     await job.log(`全量用户入队完成: ${enqueuedUsers}/${userIds.length}`);
     return {
@@ -96,15 +37,94 @@ async function processUserSync(job) {
 
     await job.log(`开始同步用户 ${remoteUserId}`);
     const result = await mirror40CodeSyncService.syncUser(remoteUserId);
+
+    if (result?.skipped) {
+        await job.log(`用户 ${remoteUserId} 跳过: ${result.reason}`);
+        return {
+            mode: 'sync-user',
+            remoteUserId,
+            localUserId: result.localUserId || null,
+            skipped: true,
+            reason: result.reason,
+            projects: 0,
+            enqueuedProjects: 0,
+        };
+    }
+
     await job.log(`用户 ${remoteUserId} 同步完成，待同步项目 ${result.projectIds.length} 个`);
 
-    const enqueuedProjects = await enqueueProjectJobs(result.projectIds, remoteUserId, job);
+    const queue = getMirror40CodeQueue();
+    if (!queue) {
+        await job.log('mirror-40code queue 不可用，跳过项目入队');
+        return {
+            mode: 'sync-user',
+            remoteUserId,
+            localUserId: result.localUserId,
+            projects: result.projectIds.length,
+            enqueuedProjects: 0,
+        };
+    }
+
+    const projectItems = result.projectIds.map((projectId) => ({
+        remoteProjectId: Number(projectId),
+        remoteUserId,
+    }));
+    const enqueuedProjects = await enqueueProjectSyncJobs(queue, projectItems, 'user-sync');
 
     return {
         mode: 'sync-user',
         remoteUserId,
         localUserId: result.localUserId,
         projects: result.projectIds.length,
+        enqueuedProjects,
+    };
+}
+
+async function processIncrementalUsers(job) {
+    await job.log('开始增量扫描40code新用户');
+    const userIds = await mirror40CodeSyncService.collectIncrementalNewUserIds();
+    await job.log(`增量发现用户 ${userIds.length} 个`);
+
+    const queue = getMirror40CodeQueue();
+    if (!queue) {
+        throw new Error('mirror-40code queue 不可用，无法为增量用户入队');
+    }
+
+    const enqueuedUsers = await enqueueUserSyncJobs(queue, userIds, 'incremental-users');
+
+    await job.log(`增量用户入队完成: ${enqueuedUsers}/${userIds.length}`);
+    return {
+        mode: 'incremental-users',
+        discoveredUsers: userIds.length,
+        enqueuedUsers,
+    };
+}
+
+async function processIncrementalProjects(job) {
+    await job.log('开始增量同步项目：先触发新用户同步');
+
+    const discoveredUsers = await mirror40CodeSyncService.collectIncrementalNewUserIds();
+    await job.log(`增量项目前置：发现新用户 ${discoveredUsers.length} 个`);
+
+    const queue = getMirror40CodeQueue();
+    if (!queue) {
+        throw new Error('mirror-40code queue 不可用，无法为增量项目入队');
+    }
+
+    const enqueuedUsers = await enqueueUserSyncJobs(queue, discoveredUsers, 'incremental-projects-before-projects');
+    await job.log(`增量项目前置：用户入队完成 ${enqueuedUsers}/${discoveredUsers.length}`);
+
+    const projectItems = await mirror40CodeSyncService.collectIncrementalNewProjectItems();
+    await job.log(`增量项目扫描完成，发现 ${projectItems.length} 个新项目`);
+
+    const enqueuedProjects = await enqueueProjectSyncJobs(queue, projectItems, 'incremental-projects');
+    await job.log(`增量项目入队完成: ${enqueuedProjects}/${projectItems.length}`);
+
+    return {
+        mode: 'incremental-projects',
+        discoveredUsers: discoveredUsers.length,
+        enqueuedUsers,
+        discoveredProjects: projectItems.length,
         enqueuedProjects,
     };
 }
@@ -118,40 +138,7 @@ async function processProjectSync(job) {
     }
 
     await job.log(`开始同步项目 ${remoteProjectId}`);
-    const result = await mirror40CodeSyncService.syncProject(
-        remoteProjectId,
-        Number.isFinite(remoteUserId) ? remoteUserId : null
-    );
-
-    if (result?.skipped) {
-        await job.log(`项目 ${remoteProjectId} 跳过: ${result.reason}`);
-        return {
-            mode: 'sync-project',
-            remoteProjectId,
-            skipped: true,
-            reason: result.reason,
-        };
-    }
-
-    let assetsResult = null;
-    try {
-        assetsResult = await mirror40CodeSyncService.syncProjectAssets(remoteProjectId);
-        if (assetsResult?.skipped) {
-            await job.log(`项目 ${remoteProjectId} 素材同步跳过: ${assetsResult.reason}`);
-        } else {
-            await job.log(`项目 ${remoteProjectId} 素材同步完成 total=${assetsResult.assetsTotal} uploaded=${assetsResult.uploaded} failed=${assetsResult.failed} skipped=${assetsResult.skipped}`);
-        }
-    } catch (error) {
-        await job.log(`项目 ${remoteProjectId} 素材同步失败: ${error.message}`);
-        logger.warn(`[mirror-40code] 项目 ${remoteProjectId} 素材同步失败: ${error.message}`);
-    }
-
-    await job.log(`项目 ${remoteProjectId} 同步完成，本地项目 ${result.localProjectId}，updated=${result.updated}`);
-    return {
-        mode: 'sync-project',
-        assets: assetsResult,
-        ...result,
-    };
+    return syncProjectAndAssets(job, remoteProjectId, Number.isFinite(remoteUserId) ? remoteUserId : null);
 }
 
 async function processMirror40Code(job) {
@@ -164,6 +151,10 @@ async function processMirror40Code(job) {
         return processUserSync(job);
     case 'sync-project':
         return processProjectSync(job);
+    case 'incremental-users':
+        return processIncrementalUsers(job);
+    case 'incremental-projects':
+        return processIncrementalProjects(job);
     default:
         throw new Error(`未知 mirror40code 任务类型: ${type}`);
     }

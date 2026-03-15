@@ -18,6 +18,86 @@ let initialized = false;
 const sanitize = (v) => String(v).replace(/[^a-zA-Z0-9_-]/g, '_');
 
 const queueManager = {
+    async syncMirror40CodeSchedulers() {
+        const mirrorQueue = getMirror40CodeQueue();
+        if (!mirrorQueue) return;
+
+        const mirrorEnabled = await zcconfig.get('mirror40code.enabled', false);
+        const periodicEnabled = await zcconfig.get('mirror40code.periodic.enabled', true);
+        const schedulerIds = [
+            'mirror40code-periodic-incremental-users',
+            'mirror40code-periodic-incremental-projects',
+            'mirror40code-periodic-refresh-projects',
+        ];
+
+        if (!mirrorEnabled || !periodicEnabled) {
+            if (typeof mirrorQueue.removeJobScheduler === 'function') {
+                for (const schedulerId of schedulerIds) {
+                    await mirrorQueue.removeJobScheduler(schedulerId).catch(() => {});
+                }
+            }
+            logger.info('[queue-manager] Mirror40Code periodic scheduler disabled');
+            return;
+        }
+
+        if (typeof mirrorQueue.upsertJobScheduler !== 'function') {
+            logger.warn('[queue-manager] Mirror40Code queue does not support upsertJobScheduler, skip periodic scheduler');
+            return;
+        }
+
+        const upsertOrRemove = async ({
+            schedulerId,
+            enabled,
+            every,
+            type,
+        }) => {
+            if (!enabled) {
+                if (typeof mirrorQueue.removeJobScheduler === 'function') {
+                    await mirrorQueue.removeJobScheduler(schedulerId).catch(() => {});
+                }
+                return;
+            }
+
+            await mirrorQueue.upsertJobScheduler(
+                schedulerId,
+                { every },
+                {
+                    name: type,
+                    data: {
+                        type,
+                        triggeredBy: 'periodic-scheduler',
+                    },
+                    opts: {
+                        attempts: 3,
+                        backoff: { type: 'exponential', delay: 30000 },
+                        removeOnComplete: { age: 86400 },
+                        removeOnFail: { age: 604800 },
+                    },
+                }
+            );
+        };
+
+        const incrementalEnabled = await zcconfig.get('mirror40code.periodic.incremental_users.enabled', true);
+        const incrementalInterval = Math.max(60000, Number(await zcconfig.get('mirror40code.periodic.incremental_users.interval_ms', 600000)) || 600000);
+        await upsertOrRemove({
+            schedulerId: 'mirror40code-periodic-incremental-users',
+            enabled: incrementalEnabled,
+            every: incrementalInterval,
+            type: 'incremental-users',
+        });
+
+        const incrementalProjectsEnabled = await zcconfig.get('mirror40code.periodic.incremental_projects.enabled', true);
+        const incrementalProjectsInterval = Math.max(60000, Number(await zcconfig.get('mirror40code.periodic.incremental_projects.interval_ms', 600000)) || 600000);
+        await upsertOrRemove({
+            schedulerId: 'mirror40code-periodic-incremental-projects',
+            enabled: incrementalProjectsEnabled,
+            every: incrementalProjectsInterval,
+            type: 'incremental-projects',
+        });
+
+        logger.info('[queue-manager] Mirror40Code periodic schedulers synced');
+    },
+
     async initialize() {
         const enabled = await zcconfig.get('bullmq.enabled');
         if (enabled === false) {
@@ -50,6 +130,8 @@ const queueManager = {
                 await createMirror40CodeWorker();
                 logger.info('[queue-manager] Mirror40Code worker created');
             }
+
+            await this.syncMirror40CodeSchedulers();
 
             // Register repeatable jobs
             await this.registerRepeatableJobs();
