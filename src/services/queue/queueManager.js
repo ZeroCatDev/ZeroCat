@@ -1,5 +1,5 @@
 import { createTransport } from 'nodemailer';
-import { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue, getDataTaskQueue, getSocialSyncQueue, getApFederationQueue, getEmbeddingQueue } from './queues.js';
+import { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue, getDataTaskQueue, getSocialSyncQueue, getApFederationQueue, getEmbeddingQueue, getMirror40CodeQueue } from './queues.js';
 import { createEmailWorker, getEmailWorker } from './workers/emailWorker.js';
 import { createScheduledTasksWorker, getScheduledTasksWorker } from './workers/scheduledTasksWorker.js';
 import { createCommentNotificationWorker, getCommentNotificationWorker } from './workers/commentNotificationWorker.js';
@@ -7,6 +7,7 @@ import { createDataTaskWorker, getDataTaskWorker } from './workers/dataTaskWorke
 import { createSocialSyncWorker, getSocialSyncWorker } from './workers/socialSyncWorker.js';
 import { createApFederationWorker, getApFederationWorker } from './workers/apFederationWorker.js';
 import { createEmbeddingWorker, getEmbeddingWorker } from './workers/embeddingWorker.js';
+import { createMirror40CodeWorker, getMirror40CodeWorker } from './workers/mirror40codeWorker.js';
 import { closeAll as closeAllConnections } from './redisConnectionFactory.js';
 import zcconfig from '../config/zcconfig.js';
 import logger from '../logger.js';
@@ -41,6 +42,13 @@ const queueManager = {
             if (embeddingEnabled) {
                 await createEmbeddingWorker();
                 logger.info('[queue-manager] Embedding worker created');
+            }
+
+            // Mirror40Code worker
+            const mirror40CodeEnabled = await zcconfig.get('mirror40code.enabled', false);
+            if (mirror40CodeEnabled) {
+                await createMirror40CodeWorker();
+                logger.info('[queue-manager] Mirror40Code worker created');
             }
 
             // Register repeatable jobs
@@ -532,6 +540,7 @@ const queueManager = {
             const dataTaskWorker = getDataTaskWorker();
             const socialSyncWorker = getSocialSyncWorker();
             const apFederationWorker = getApFederationWorker();
+            const mirror40CodeWorker = getMirror40CodeWorker();
 
             if (emailWorker) await emailWorker.close();
             if (scheduledWorker) await scheduledWorker.close();
@@ -539,6 +548,7 @@ const queueManager = {
             if (dataTaskWorker) await dataTaskWorker.close();
             if (socialSyncWorker) await socialSyncWorker.close();
             if (apFederationWorker) await apFederationWorker.close();
+            if (mirror40CodeWorker) await mirror40CodeWorker.close();
 
             const embeddingWorker = getEmbeddingWorker();
             if (embeddingWorker) await embeddingWorker.close();
@@ -550,6 +560,7 @@ const queueManager = {
             const dataTaskQueue = getDataTaskQueue();
             const socialSyncQueue = getSocialSyncQueue();
             const apFederationQueue = getApFederationQueue();
+            const mirror40CodeQueue = getMirror40CodeQueue();
 
             if (emailQueue) await emailQueue.close();
             if (scheduledQueue) await scheduledQueue.close();
@@ -557,6 +568,7 @@ const queueManager = {
             if (dataTaskQueue) await dataTaskQueue.close();
             if (socialSyncQueue) await socialSyncQueue.close();
             if (apFederationQueue) await apFederationQueue.close();
+            if (mirror40CodeQueue) await mirror40CodeQueue.close();
 
             const embeddingQueue = getEmbeddingQueue();
             if (embeddingQueue) await embeddingQueue.close();
@@ -717,6 +729,136 @@ const queueManager = {
             logger.error('[queue-manager] Failed to enqueue batch user embedding:', error.message);
             return null;
         }
+    },
+
+    async enqueueMirror40CodeFullSync() {
+        const queue = getMirror40CodeQueue();
+        if (!queue || !initialized) {
+            logger.warn('[queue-manager] Mirror40Code queue not available');
+            return null;
+        }
+
+        const jobId = 'm40-full-sync';
+        try {
+            const job = await queue.add('full-sync', {
+                type: 'full-sync',
+                requestedAt: new Date().toISOString(),
+            }, {
+                jobId,
+                deduplication: { id: jobId },
+                attempts: 3,
+                backoff: { type: 'exponential', delay: 30000 },
+                removeOnComplete: { age: 86400 },
+                removeOnFail: { age: 604800 },
+            });
+
+            return { jobId: job.id, queued: true };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue Mirror40Code full-sync:', error.message);
+            return null;
+        }
+    },
+
+    async enqueueMirror40CodeUserSync(remoteUserId) {
+        const queue = getMirror40CodeQueue();
+        if (!queue || !initialized) {
+            logger.warn('[queue-manager] Mirror40Code queue not available');
+            return null;
+        }
+
+        const userId = Number(remoteUserId);
+        if (!Number.isFinite(userId) || userId <= 0) {
+            throw new Error(`Invalid remoteUserId: ${remoteUserId}`);
+        }
+
+        const jobId = `m40-user-${userId}`;
+        try {
+            const job = await queue.add('sync-user', {
+                type: 'sync-user',
+                remoteUserId: userId,
+                requestedAt: new Date().toISOString(),
+            }, {
+                jobId,
+                deduplication: { id: jobId },
+                attempts: 5,
+                backoff: { type: 'exponential', delay: 15000 },
+                removeOnComplete: { age: 86400 },
+                removeOnFail: { age: 604800 },
+            });
+
+            return { jobId: job.id, queued: true };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue Mirror40Code user-sync:', error.message);
+            return null;
+        }
+    },
+
+    async enqueueMirror40CodeProjectSync(remoteProjectId, remoteUserId = null) {
+        const queue = getMirror40CodeQueue();
+        if (!queue || !initialized) {
+            logger.warn('[queue-manager] Mirror40Code queue not available');
+            return null;
+        }
+
+        const projectId = Number(remoteProjectId);
+        if (!Number.isFinite(projectId) || projectId <= 0) {
+            throw new Error(`Invalid remoteProjectId: ${remoteProjectId}`);
+        }
+
+        const authorId = Number(remoteUserId);
+        const jobId = `m40-project-${projectId}`;
+        try {
+            const job = await queue.add('sync-project', {
+                type: 'sync-project',
+                remoteProjectId: projectId,
+                remoteUserId: Number.isFinite(authorId) && authorId > 0 ? authorId : null,
+                requestedAt: new Date().toISOString(),
+            }, {
+                jobId,
+                deduplication: { id: jobId },
+                attempts: 5,
+                backoff: { type: 'exponential', delay: 15000 },
+                removeOnComplete: { age: 86400 },
+                removeOnFail: { age: 604800 },
+            });
+
+            return { jobId: job.id, queued: true };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue Mirror40Code project-sync:', error.message);
+            return null;
+        }
+    },
+
+    async getMirror40CodeQueueStatus() {
+        const queue = getMirror40CodeQueue();
+        if (!queue || !initialized) {
+            return {
+                available: false,
+                initialized,
+            };
+        }
+
+        const [counts, jobs] = await Promise.all([
+            queue.getJobCounts('active', 'completed', 'delayed', 'failed', 'paused', 'prioritized', 'waiting', 'waiting-children'),
+            queue.getJobs(['active', 'waiting', 'delayed', 'failed', 'completed'], 0, 20, true),
+        ]);
+
+        return {
+            available: true,
+            initialized,
+            counts,
+            recentJobs: jobs.map((job) => ({
+                id: job.id,
+                name: job.name,
+                data: job.data,
+                progress: job.progress,
+                attemptsMade: job.attemptsMade,
+                failedReason: job.failedReason,
+                timestamp: job.timestamp,
+                processedOn: job.processedOn,
+                finishedOn: job.finishedOn,
+            })),
+        };
     },
 };
 
