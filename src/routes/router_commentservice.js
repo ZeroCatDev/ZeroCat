@@ -433,7 +433,7 @@ router.post('/ui/login', needLogin, async (req, res, next) => {
             select: {
                 id: true, username: true, display_name: true,
                 avatar: true, email: true, type: true,
-                url: true, motto: true, bio: true, label: true,
+                url: true, bio: true, label: true,
             },
         });
 
@@ -477,7 +477,6 @@ router.post('/ui/login', needLogin, async (req, res, next) => {
                 // ZeroCat 用户扩展信息
                 username: user.username,
                 display_name: user.display_name,
-                motto: user.motto || '',
                 bio: user.bio || '',
             },
         });

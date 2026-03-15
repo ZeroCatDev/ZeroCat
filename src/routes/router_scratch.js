@@ -555,7 +555,6 @@ router.get("/projectinfo", async function (req, res, next) {
                 display_name: true,
                 avatar: true,
                 bio: true,
-                motto: true,
 
             },
         });

@@ -158,7 +158,6 @@ function projectSelectionFields() {
                 display_name: true,
                 status: true,
                 bio: true,
-                motto: true,
 
                 avatar: true,
                 regTime: true,
@@ -185,7 +184,6 @@ function authorSelectionFields() {
         status: true,
         regTime: true,
         bio: true,
-        motto: true,
 
         avatar: true,
     };

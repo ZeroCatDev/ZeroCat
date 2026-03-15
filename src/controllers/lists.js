@@ -51,7 +51,6 @@ export async function getProjectList(listId, userId) {
                         username: true,
                         display_name: true,
                         bio: true,
-                        motto: true,
 
                         avatar: true,
                         regTime: true,
@@ -299,7 +298,6 @@ export async function getUserListInfo(userId) {
                         username: true,
                         display_name: true,
                         bio: true,
-                        motto: true,
 
                         avatar: true,
                         regTime: true,
@@ -344,7 +342,6 @@ export async function getUserListInfoPublic(userId, currentUserId) {
                         username: true,
                         display_name: true,
                         bio: true,
-                        motto: true,
 
                         avatar: true,
                         regTime: true,

@@ -613,7 +613,6 @@ async function resolveExternalFromOriginalEmbed(embed, frontend) {
                 username: true,
                 display_name: true,
                 bio: true,
-                motto: true,
                 avatar: true,
             },
         });
@@ -621,7 +620,7 @@ async function resolveExternalFromOriginalEmbed(embed, frontend) {
         return {
             uri: `${frontend}/${encodeURIComponent(user.username)}`,
             title: shortText(user.display_name || user.username, 100),
-            description: shortText(`@${user.username}${user.bio ? `\n${user.bio}` : user.motto ? `\n${user.motto}` : ''}`, 300),
+            description: shortText(`@${user.username}${user.bio ? `\n${user.bio}` : ''}`, 300),
             thumbUrl: buildAssetUrl(staticBase, user.avatar, { defaultExt: 'webp' }),
         };
     }

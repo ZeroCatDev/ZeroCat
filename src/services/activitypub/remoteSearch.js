@@ -61,7 +61,7 @@ export async function federatedUserSearch(keyword, options = {}) {
             },
             select: {
                 id: true, username: true, display_name: true,
-                avatar: true, bio: true, motto: true, url: true,
+                avatar: true, bio: true, url: true,
                 type: true, status: true,
             },
             take: limit,
@@ -117,7 +117,6 @@ export async function federatedUserSearch(keyword, options = {}) {
                     display_name: proxyUser.display_name,
                     avatar: proxyUser.avatar,
                     bio: proxyUser.bio,
-                    motto: proxyUser.motto,
                     url: proxyUser.url,
                     type: REMOTE_USER_TYPE,
                     is_remote: true,

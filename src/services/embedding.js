@@ -343,7 +343,6 @@ export function buildUserProfileText(user) {
     if (user.display_name) parts.push(user.display_name);
     if (user.username) parts.push(`@${user.username}`);
     if (user.bio) parts.push(user.bio);
-    if (user.motto) parts.push(user.motto);
     return parts.join(' ').trim();
 }
 

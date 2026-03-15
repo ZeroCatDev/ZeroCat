@@ -78,7 +78,6 @@ router.get("/", async (req, res) => {
                     location: true,
                     region: true,
                     url: true,
-                    motto: true,
                     bio: true,
                     birthday: true,
                     sex: true,
@@ -223,7 +222,6 @@ router.post("/", async (req, res) => {
  * @apiBody {String} [updates.email] Primary email address
  * @apiBody {String} [updates.status] User status (active, suspended, banned, pending)
  * @apiBody {String} [updates.type] User type (user, admin, etc)
- * @apiBody {String} [updates.motto] One-line introduction
  * @apiBody {String} [updates.bio] Markdown biography
  * @apiBody {String} [updates.location] User location
  * @apiBody {String} [updates.region] User region
@@ -557,7 +555,6 @@ router.put("/:id/profile", async (req, res) => {
         const userId = parseInt(req.params.id);
         const {
             display_name,
-            motto,
             bio,
             location,
             region,
@@ -572,7 +569,6 @@ router.put("/:id/profile", async (req, res) => {
             where: {id: userId},
             data: {
                 display_name: display_name,
-                motto: motto,
                 bio: bio,
                 location: location,
                 region: region,

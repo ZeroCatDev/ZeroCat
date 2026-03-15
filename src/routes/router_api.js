@@ -48,7 +48,6 @@ router.get("/getuserinfo", async function (req, res, next) {
                 id: true,
                 display_name: true,
                 bio: true,
-                motto: true,
 
                 avatar: true,
                 regTime: true,
@@ -150,7 +149,6 @@ router.get("/projectinfo", async function (req, res, next) {
                 display_name: true,
                 avatar: true,
                 bio: true,
-                motto: true,
 
             },
         });

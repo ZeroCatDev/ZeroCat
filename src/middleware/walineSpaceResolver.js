@@ -94,7 +94,7 @@ export const walineSpaceResolver = async (req, res, next) => {
                     select: {
                         id: true, username: true, display_name: true,
                         avatar: true, email: true, type: true,
-                        url: true, label: true, motto: true, bio: true,
+                        url: true, label: true, bio: true,
                     },
                 });
                 if (zcUser) {

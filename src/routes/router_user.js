@@ -32,7 +32,6 @@ router.get("/id/:id", async function (req, res, next) {
                 id: true,
                 display_name: true,
                 bio: true,
-                motto: true,
 
                 avatar: true,
                 regTime: true,
@@ -86,7 +85,6 @@ router.get("/username/:username", async function (req, res, next) {
                 id: true,
                 display_name: true,
                 bio: true,
-                motto: true,
 
                 avatar: true,
                 regTime: true,
@@ -156,7 +154,6 @@ router.post("/batch/:type", async function (req, res, next) {
                 id: true,
                 display_name: true,
                 bio: true,
-                motto: true,
 
                 avatar: true,
                 regTime: true,
@@ -205,7 +202,6 @@ router.get("/me", needLogin, async function (req, res, next) {
                 type: true,
                 status: true,
                 bio: true,
-                motto: true,
 
                 location: true,
                 region: true,
@@ -511,7 +507,6 @@ router.post("/change-username", needLogin, requireSudo, changeUsername);
                 username: true,
                 display_name: true,
                 bio: true,
-                motto: true,
 
                 avatar: true,
                 regTime: true,

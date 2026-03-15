@@ -117,7 +117,6 @@ async function processUserEmbedding(job) {
             username: true,
             display_name: true,
             bio: true,
-            motto: true,
         },
     });
 

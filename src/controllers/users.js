@@ -14,7 +14,6 @@ async function getUsersByList(userIds) {
         status: true,
         regTime: true,
         bio: true,
-        motto: true,
 
         avatar: true,
     };
@@ -42,7 +41,6 @@ export async function getUserByUsername(username) {
                 status: true,
                 regTime: true,
                 bio: true,
-                motto: true,
                 avatar: true,
             }
         });

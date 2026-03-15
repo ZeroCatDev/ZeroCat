@@ -204,7 +204,7 @@ async function searchUsersByTrgm({ keyword, userStatus, skip, take }) {
   const ilikePattern = `%${escapeIlike(keyword)}%`;
   const params = [keyword, ilikePattern];
   const conditions = [
-    `(COALESCE(u.username, '') % $1 OR COALESCE(u.display_name, '') % $1 OR COALESCE(u.bio, '') % $1 OR COALESCE(u.motto, '') % $1 OR COALESCE(u.location, '') % $1 OR COALESCE(u.region, '') % $1 OR u.username ILIKE $2 OR u.display_name ILIKE $2 OR u.bio ILIKE $2 OR u.motto ILIKE $2 OR u.location ILIKE $2 OR u.region ILIKE $2)`,
+    `(COALESCE(u.username, '') % $1 OR COALESCE(u.display_name, '') % $1 OR COALESCE(u.bio, '') % $1 OR COALESCE(u.location, '') % $1 OR COALESCE(u.region, '') % $1 OR u.username ILIKE $2 OR u.display_name ILIKE $2 OR u.bio ILIKE $2 OR u.location ILIKE $2 OR u.region ILIKE $2)`,
   ];
   let paramIndex = 3;
 
@@ -215,7 +215,7 @@ async function searchUsersByTrgm({ keyword, userStatus, skip, take }) {
   }
 
   const scoreExpr =
-    "GREATEST(similarity(COALESCE(u.username, ''), $1), similarity(COALESCE(u.display_name, ''), $1), similarity(COALESCE(u.bio, ''), $1), similarity(COALESCE(u.motto, ''), $1), similarity(COALESCE(u.location, ''), $1), similarity(COALESCE(u.region, ''), $1))";
+    "GREATEST(similarity(COALESCE(u.username, ''), $1), similarity(COALESCE(u.display_name, ''), $1), similarity(COALESCE(u.bio, ''), $1), similarity(COALESCE(u.location, ''), $1), similarity(COALESCE(u.region, ''), $1))";
 
   const whereSql = `WHERE ${conditions.join(" AND ")}`;
 
@@ -474,7 +474,6 @@ router.get("/", async (req, res, next) => {
               { display_name: { contains: keyword, mode: "insensitive" } },
               { email: { contains: keyword, mode: "insensitive" } },
               { bio: { contains: keyword, mode: "insensitive" } },
-              { motto: { contains: keyword, mode: "insensitive" } },
               { location: { contains: keyword, mode: "insensitive" } },
               { region: { contains: keyword, mode: "insensitive" } },
             ],
@@ -635,7 +634,7 @@ router.get("/", async (req, res, next) => {
                 where: { id: { in: userIds } },
                 select: {
                   id: true, username: true, display_name: true, avatar: true,
-                  status: true, bio: true, motto: true, location: true, region: true, regTime: true,
+                  status: true, bio: true, location: true, region: true, regTime: true,
                 },
               });
               const userMap = new Map(userRows.map((row) => [row.id, row]));
@@ -648,7 +647,7 @@ router.get("/", async (req, res, next) => {
                 where: userWhere, orderBy: { regTime: "desc" },
                 select: {
                   id: true, username: true, display_name: true, avatar: true,
-                  status: true, bio: true, motto: true, location: true, region: true, regTime: true,
+                  status: true, bio: true, location: true, region: true, regTime: true,
                 },
                 skip, take,
               }),
@@ -674,7 +673,6 @@ router.get("/", async (req, res, next) => {
               avatar: true,
               status: true,
               bio: true,
-              motto: true,
               location: true,
               region: true,
               regTime: true,
@@ -696,7 +694,6 @@ router.get("/", async (req, res, next) => {
               avatar: true,
               status: true,
               bio: true,
-              motto: true,
               location: true,
               region: true,
               regTime: true,

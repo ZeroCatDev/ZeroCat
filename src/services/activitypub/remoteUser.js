@@ -70,7 +70,7 @@ function safeMediaUrl(url, maxLen = LIMITS.AVATAR) {
  * @returns {object|null} 本地代理用户
  */
 export async function findProxyUserByActorUrl(actorUrl) {
-    const selectFields = { id: true, username: true, display_name: true, type: true, avatar: true, bio: true, motto: true };
+    const selectFields = { id: true, username: true, display_name: true, type: true, avatar: true, bio: true };
 
     // 1. 全局索引: actor_map:{actorUrl} -> userId
     const mapping = await getTargetConfig(REMOTE_USER_TARGET_TYPE, '0', `actor_map:${actorUrl}`);
@@ -123,7 +123,7 @@ export async function findProxyUserByRemoteUsername(remoteUsername) {
         },
         select: {
             id: true, username: true, display_name: true, type: true,
-            avatar: true, bio: true, motto: true, images: true,
+            avatar: true, bio: true, images: true,
             url: true, location: true, status: true,
         },
     });
@@ -138,7 +138,7 @@ export async function findProxyUserByRemoteUsername(remoteUsername) {
                 where: { id: userId },
                 select: {
                     id: true, username: true, display_name: true, type: true,
-                    avatar: true, bio: true, motto: true, images: true,
+                    avatar: true, bio: true, images: true,
                     url: true, location: true, status: true,
                 },
             });
@@ -232,7 +232,6 @@ export async function ensureProxyUser(actorUrl, actorData = null) {
                 display_name: displayName,
                 type: REMOTE_USER_TYPE,
                 status: 'active',
-                motto: (actor.summary || '').replace(/<[^>]*>/g, '').substring(0, 255) || null,
                 bio: (actor.summary || '').replace(/<[^>]*>/g, '').substring(0, 255) || null,
                 url: actorUrlStr,
                 avatar: DEFAULT_HASH,
@@ -294,7 +293,6 @@ async function updateProxyUser(proxyUserId, actor) {
                 actor.name || actor.preferredUsername || '',
                 LIMITS.DISPLAY_NAME
             ),
-            motto: (actor.summary || '').replace(/<[^>]*>/g, '').substring(0, 255) || null,
             bio: (actor.summary || '').replace(/<[^>]*>/g, '').substring(0, 255) || null,
             url: safeTruncate(actor.url || actor.id, LIMITS.URL),
         };
@@ -524,7 +522,7 @@ export async function listProxyUsers(limit = 50, offset = 0) {
         where: { type: REMOTE_USER_TYPE },
         select: {
             id: true, username: true, display_name: true,
-            avatar: true, bio: true, motto: true, url: true,
+            avatar: true, bio: true, url: true,
             status: true, regTime: true, updatedAt: true,
         },
         orderBy: { id: 'desc' },
@@ -550,7 +548,7 @@ export async function searchProxyUsers(keyword, limit = 20) {
         },
         select: {
             id: true, username: true, display_name: true,
-            avatar: true, bio: true, motto: true, url: true,
+            avatar: true, bio: true, url: true,
         },
         take: limit,
     });

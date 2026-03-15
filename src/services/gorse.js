@@ -102,7 +102,7 @@ async function upsertItemsInBatches(client, items, batchSize = GORSE_UPSERT_BATC
 /**
  * 为缺失 embedding 的用户内联生成向量并存储
  * 仅在 embedding 服务已启用时生效，服务未启用则静默跳过
- * @param {Array} usersWithoutEmbedding - 需要生成的用户列表，每项包含 { id, username, display_name, bio, motto }
+ * @param {Array} usersWithoutEmbedding - 需要生成的用户列表，每项包含 { id, username, display_name, bio }
  * @returns {Promise<Map<number, number[]>>} 新生成的 embedding map
  */
 async function generateMissingUserEmbeddings(usersWithoutEmbedding) {
@@ -633,7 +633,7 @@ export async function syncAllUsers() {
         const users = await prisma.ow_users.findMany({
             skip: cursor,
             take: batchSize,
-            select: { id: true, username: true, display_name: true, bio: true, motto: true },
+            select: { id: true, username: true, display_name: true, bio: true },
             orderBy: { id: 'asc' },
         });
 
