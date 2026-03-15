@@ -133,9 +133,23 @@ async function processProjectSync(job) {
         };
     }
 
+    let assetsResult = null;
+    try {
+        assetsResult = await mirror40CodeSyncService.syncProjectAssets(remoteProjectId);
+        if (assetsResult?.skipped) {
+            await job.log(`项目 ${remoteProjectId} 素材同步跳过: ${assetsResult.reason}`);
+        } else {
+            await job.log(`项目 ${remoteProjectId} 素材同步完成 total=${assetsResult.assetsTotal} uploaded=${assetsResult.uploaded} failed=${assetsResult.failed} skipped=${assetsResult.skipped}`);
+        }
+    } catch (error) {
+        await job.log(`项目 ${remoteProjectId} 素材同步失败: ${error.message}`);
+        logger.warn(`[mirror-40code] 项目 ${remoteProjectId} 素材同步失败: ${error.message}`);
+    }
+
     await job.log(`项目 ${remoteProjectId} 同步完成，本地项目 ${result.localProjectId}，updated=${result.updated}`);
     return {
         mode: 'sync-project',
+        assets: assetsResult,
         ...result,
     };
 }

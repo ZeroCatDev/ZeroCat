@@ -3,7 +3,7 @@ import axios from 'axios';
 import { prisma } from '../prisma.js';
 import zcconfig from '../config/zcconfig.js';
 import logger from '../logger.js';
-import { uploadFile } from '../assets.js';
+import { uploadFile, uploadToS3 } from '../assets.js';
 
 const TARGET_TYPE_USER = 'mirror40_user';
 const TARGET_TYPE_PROJECT = 'mirror40_project';
@@ -11,6 +11,8 @@ const TARGET_KEY_LOCAL_USER_ID = 'local_user_id';
 const TARGET_KEY_LOCAL_PROJECT_ID = 'local_project_id';
 const TARGET_KEY_LOCAL_PROFILE_PROJECT_ID = 'local_profile_project_id';
 const MAX_AVATAR_DOWNLOAD_SIZE = 10 * 1024 * 1024;
+const MAX_PROJECT_ASSET_DOWNLOAD_SIZE = 20 * 1024 * 1024;
+const MIRROR40_PROJECT_ASSET_BASE_URL = 'https://abc.520gxx.com/static/internalapi/asset';
 
 const USER_SEARCH_PAYLOAD = {
     name: '',
@@ -273,6 +275,51 @@ function buildProjectCoverUrlCandidates(baseUrl, remoteProject) {
     return Array.from(new Set(candidates));
 }
 
+function normalizeMd5Ext(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+
+    const withoutQuery = raw.split('?')[0].split('#')[0];
+    const filename = withoutQuery.split('/').pop() || '';
+    if (!filename || !filename.includes('.')) return null;
+
+    const dotIndex = filename.indexOf('.');
+    const md5 = filename.slice(0, dotIndex).toLowerCase();
+    const ext = filename.slice(dotIndex + 1).toLowerCase();
+
+    if (!/^[a-f0-9]{32}$/.test(md5)) return null;
+    if (!/^[a-z0-9]+$/.test(ext)) return null;
+
+    return `${md5}.${ext}`;
+}
+
+function extractProjectAssetMd5ExtList(projectJson) {
+    const targets = Array.isArray(projectJson?.targets) ? projectJson.targets : [];
+    const values = new Set();
+
+    for (const target of targets) {
+        const costumes = Array.isArray(target?.costumes) ? target.costumes : [];
+        for (const costume of costumes) {
+            const md5ext = normalizeMd5Ext(costume?.md5ext || `${costume?.assetId || ''}.${costume?.dataFormat || ''}`);
+            if (md5ext) values.add(md5ext);
+        }
+
+        const sounds = Array.isArray(target?.sounds) ? target.sounds : [];
+        for (const sound of sounds) {
+            const md5ext = normalizeMd5Ext(sound?.md5ext || `${sound?.assetId || ''}.${sound?.dataFormat || ''}`);
+            if (md5ext) values.add(md5ext);
+        }
+    }
+
+    return Array.from(values);
+}
+
+function buildProjectAssetUrl(md5ext) {
+    const filename = normalizeMd5Ext(md5ext);
+    if (!filename) return null;
+    return `${MIRROR40_PROJECT_ASSET_BASE_URL}/${filename}`;
+}
+
 function isNoSuchKeyError(error) {
     const status = Number(error?.status || error?.response?.status || 0);
     const rawBody = String(
@@ -407,6 +454,71 @@ class Mirror40CodeSyncService {
         }
 
         return { buffer, contentType };
+    }
+
+    async downloadBinaryBuffer(url, timeoutMs, purpose = '素材') {
+        const response = await axios({
+            url,
+            method: 'GET',
+            responseType: 'arraybuffer',
+            timeout: timeoutMs,
+            maxContentLength: MAX_PROJECT_ASSET_DOWNLOAD_SIZE,
+            validateStatus: () => true,
+            headers: {
+                Accept: '*/*',
+                'User-Agent': 'ZeroCat-Mirror40Code/1.0',
+            },
+        });
+
+        if (response.status < 200 || response.status >= 300) {
+            throw new Error(`${purpose}下载失败: HTTP ${response.status}`);
+        }
+
+        const buffer = Buffer.from(response.data || '');
+        if (!buffer || buffer.length === 0) {
+            throw new Error(`${purpose}下载失败: 空内容`);
+        }
+
+        if (buffer.length > MAX_PROJECT_ASSET_DOWNLOAD_SIZE) {
+            throw new Error(`${purpose}下载失败: 大小超过限制 ${MAX_PROJECT_ASSET_DOWNLOAD_SIZE}`);
+        }
+
+        return {
+            buffer,
+            contentType: String(response.headers?.['content-type'] || '').toLowerCase(),
+        };
+    }
+
+    async syncSingleProjectAsset(cfg, remoteProjectId, md5ext) {
+        const normalized = normalizeMd5Ext(md5ext);
+        if (!normalized) {
+            return { status: 'skipped', md5ext, reason: 'invalid_md5ext' };
+        }
+
+        const [md5] = normalized.split('.');
+        const s3Key = `assets/${md5.slice(0, 2)}/${md5.slice(2, 4)}/${normalized}`;
+        const assetUrl = buildProjectAssetUrl(normalized);
+        if (!assetUrl) {
+            return { status: 'skipped', md5ext, reason: 'invalid_asset_url' };
+        }
+
+        try {
+            const { buffer, contentType } = await this.downloadBinaryBuffer(assetUrl, cfg.timeoutMs, '项目素材');
+            await uploadToS3(buffer, s3Key, contentType || 'application/octet-stream');
+            return {
+                status: 'uploaded',
+                md5ext: normalized,
+                s3Key,
+                sourceUrl: assetUrl,
+            };
+        } catch (error) {
+            logger.warn(`[mirror-40code] 项目素材同步失败 remoteProject=${remoteProjectId} asset=${normalized} url=${sanitizeUrlForLog(assetUrl)} error=${error.message}`);
+            return {
+                status: 'failed',
+                md5ext: normalized,
+                reason: error?.message || 'unknown',
+            };
+        }
     }
 
     async syncProxyUserAvatar(cfg, remoteUser, localUser) {
@@ -1251,6 +1363,93 @@ class Mirror40CodeSyncService {
             updated: commitResult.updated,
             commitId: commitResult.commitId,
             sourceSha: commitResult.sourceSha,
+        };
+    }
+
+    async syncProjectAssets(remoteProjectId) {
+        const cfg = await this.getConfig();
+        this.ensureEnabled(cfg);
+
+        const parsedProjectId = Number(remoteProjectId);
+        if (!Number.isFinite(parsedProjectId) || parsedProjectId <= 0) {
+            throw new Error(`无效远程项目ID: ${remoteProjectId}`);
+        }
+
+        const { source, missing } = await this.fetchWorkSource(cfg, parsedProjectId);
+        if (missing) {
+            return {
+                remoteProjectId: parsedProjectId,
+                skipped: true,
+                reason: 'source_not_found',
+            };
+        }
+
+        if (source === null || source === undefined || source === '') {
+            return {
+                remoteProjectId: parsedProjectId,
+                skipped: true,
+                reason: 'source_empty',
+            };
+        }
+
+        const projectJson = (() => {
+            if (typeof source === 'object' && source !== null) return source;
+            if (typeof source === 'string') {
+                try {
+                    return JSON.parse(source);
+                } catch {
+                    return null;
+                }
+            }
+            return null;
+        })();
+
+        if (!projectJson || typeof projectJson !== 'object') {
+            return {
+                remoteProjectId: parsedProjectId,
+                skipped: true,
+                reason: 'source_not_json',
+            };
+        }
+
+        const md5extList = extractProjectAssetMd5ExtList(projectJson);
+        if (md5extList.length === 0) {
+            return {
+                remoteProjectId: parsedProjectId,
+                assetsTotal: 0,
+                uploaded: 0,
+                failed: 0,
+                skipped: 0,
+            };
+        }
+
+        const results = await Promise.allSettled(
+            md5extList.map((md5ext) => this.syncSingleProjectAsset(cfg, parsedProjectId, md5ext))
+        );
+
+        let uploaded = 0;
+        let failed = 0;
+        let skipped = 0;
+        for (const result of results) {
+            if (result?.status === 'rejected') {
+                failed += 1;
+                continue;
+            }
+
+            const item = result?.value;
+            if (item?.status === 'uploaded') uploaded += 1;
+            else if (item?.status === 'skipped') skipped += 1;
+            else failed += 1;
+        }
+
+        logger.info(`[mirror-40code] 项目素材同步完成 remoteProject=${parsedProjectId} total=${md5extList.length} uploaded=${uploaded} failed=${failed} skipped=${skipped} concurrency=unlimited`);
+        return {
+            remoteProjectId: parsedProjectId,
+            assetsTotal: md5extList.length,
+            uploaded,
+            failed,
+            skipped,
+            concurrency: 'unlimited',
         };
     }
 
