@@ -718,6 +718,38 @@ export const CONFIG_TYPES = {
         transform: typeTransformers.number,
         validate: (value) => value >= 1 && value <= 20,
     },
+    "mirror40code.queue.limiter.max": {
+        type: "number",
+        required: false,
+        default: 5,
+        description: "40code镜像队列限流窗口内最大任务数",
+        transform: typeTransformers.number,
+        validate: (value) => value >= 1 && value <= 200,
+    },
+    "mirror40code.queue.limiter.duration_ms": {
+        type: "number",
+        required: false,
+        default: 1000,
+        description: "40code镜像队列限流窗口时长(毫秒)",
+        transform: typeTransformers.number,
+        validate: (value) => value >= 100,
+    },
+    "mirror40code.queue.user_stagger_ms": {
+        type: "number",
+        required: false,
+        default: 300,
+        description: "full-sync 用户任务入队延迟步长(毫秒)",
+        transform: typeTransformers.number,
+        validate: (value) => value >= 0,
+    },
+    "mirror40code.queue.project_stagger_ms": {
+        type: "number",
+        required: false,
+        default: 100,
+        description: "user-sync 项目任务入队延迟步长(毫秒)",
+        transform: typeTransformers.number,
+        validate: (value) => value >= 0,
+    },
     // Comment Service Configuration
     "commentservice.akismet.keys": {
         type: "array",
