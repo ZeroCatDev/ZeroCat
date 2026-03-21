@@ -55,6 +55,7 @@ export async function enqueueProjectSyncJobs(queue, projectItems, triggeredBy) {
         const projectId = Number(item?.remoteProjectId ?? item?.projectId ?? item);
         const remoteUserId = Number(item?.remoteUserId ?? item?.authorId);
         const remoteUpdateTime = Number(item?.remoteUpdateTime || 0);
+        const forceSync = Boolean(item?.forceSync);
         if (!Number.isFinite(projectId) || projectId <= 0) continue;
 
         const jobId = `m40-project-${projectId}`;
@@ -64,6 +65,7 @@ export async function enqueueProjectSyncJobs(queue, projectItems, triggeredBy) {
                 remoteProjectId: projectId,
                 remoteUserId: Number.isFinite(remoteUserId) && remoteUserId > 0 ? remoteUserId : null,
                 remoteUpdateTime: Number.isFinite(remoteUpdateTime) && remoteUpdateTime > 0 ? remoteUpdateTime : null,
+                forceSync,
                 triggeredBy,
             }, {
                 jobId,
@@ -90,9 +92,11 @@ export async function enqueueProjectSyncJobs(queue, projectItems, triggeredBy) {
 }
 
 export async function syncProjectAndAssets(job, remoteProjectId, remoteUserId = null) {
+    const forceSync = Boolean(job.data?.forceSync);
     const result = await mirror40CodeSyncService.syncProject(
         remoteProjectId,
-        Number.isFinite(remoteUserId) ? remoteUserId : null
+        Number.isFinite(remoteUserId) ? remoteUserId : null,
+        { forceSync }
     );
 
     if (result?.skipped) {

@@ -10,6 +10,10 @@ let worker = null;
 
 async function processDailySync(job) {
     await job.log('开始每日镜像同步：边扫描边分批入队');
+    const forceProjectSync = Boolean(job.data?.forceProjectSync);
+    if (forceProjectSync) {
+        await job.log('项目同步模式=强制全量（忽略已同步状态）');
+    }
 
     const queue = getMirror40CodeQueue();
     if (!queue) {
@@ -96,7 +100,9 @@ async function processDailySync(job) {
             seenProjectIds.add(remoteProjectId);
 
             const remoteUpdateTime = Number(item?.update_time || item?.time || item?.publish_time || 0);
-            const needSync = await mirror40CodeSyncService.shouldEnqueueProjectByTimestamp(remoteProjectId, remoteUpdateTime);
+            const needSync = forceProjectSync
+                ? true
+                : await mirror40CodeSyncService.shouldEnqueueProjectByTimestamp(remoteProjectId, remoteUpdateTime);
             if (!needSync) {
                 stopProjectScan = true;
                 await job.log(`项目扫描提前停止 page=${page} remoteProject=${remoteProjectId} reason=already-synced`);
@@ -108,6 +114,7 @@ async function processDailySync(job) {
                 remoteProjectId,
                 remoteUserId: Number.isFinite(remoteUserId) && remoteUserId > 0 ? remoteUserId : null,
                 remoteUpdateTime: Number.isFinite(remoteUpdateTime) && remoteUpdateTime > 0 ? remoteUpdateTime : null,
+                forceSync: forceProjectSync,
             });
         }
 
@@ -122,6 +129,7 @@ async function processDailySync(job) {
     await job.log(`每日同步入队完成 users=${enqueuedUsers}/${discoveredUsers + discoveredSyncedUsers} projects=${enqueuedProjects}/${discoveredProjects}`);
     return {
         mode: 'daily-sync',
+        forceProjectSync,
         discoveredUsers: discoveredUsers + discoveredSyncedUsers,
         discoveredProjects,
         enqueuedUsers,
@@ -186,12 +194,13 @@ async function processUserSync(job) {
 async function processProjectSync(job) {
     const remoteProjectId = Number(job.data?.remoteProjectId);
     const remoteUserId = Number(job.data?.remoteUserId);
+    const forceSync = Boolean(job.data?.forceSync);
 
     if (!Number.isFinite(remoteProjectId) || remoteProjectId <= 0) {
         throw new Error(`无效 remoteProjectId: ${job.data?.remoteProjectId}`);
     }
 
-    await job.log(`开始同步项目 ${remoteProjectId}`);
+    await job.log(`开始同步项目 ${remoteProjectId} forceSync=${forceSync}`);
     return syncProjectAndAssets(job, remoteProjectId, Number.isFinite(remoteUserId) ? remoteUserId : null);
 }
 

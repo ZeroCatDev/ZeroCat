@@ -888,17 +888,19 @@ const queueManager = {
         }
     },
 
-    async enqueueMirror40CodeFullSync() {
+    async enqueueMirror40CodeFullSync(options = {}) {
         const queue = getMirror40CodeQueue();
         if (!queue || !initialized) {
             logger.warn('[queue-manager] Mirror40Code queue not available');
             return null;
         }
 
+        const forceProjectSync = Boolean(options?.forceProjectSync);
         const jobId = 'm40-daily-sync';
         try {
             const job = await queue.add('daily-sync', {
                 type: 'daily-sync',
+                forceProjectSync,
                 requestedAt: new Date().toISOString(),
             }, {
                 jobId,
@@ -909,7 +911,7 @@ const queueManager = {
                 removeOnFail: { age: 604800 },
             });
 
-            return { jobId: job.id, queued: true };
+            return { jobId: job.id, queued: true, forceProjectSync };
         } catch (error) {
             logger.error('[queue-manager] Failed to enqueue Mirror40Code daily-sync:', error.message);
             return null;

@@ -39,6 +39,23 @@ router.post('/daily-sync', async (req, res) => {
     }
 });
 
+router.post('/force-sync-projects', async (req, res) => {
+    try {
+        const result = await queueManager.enqueueMirror40CodeFullSync({ forceProjectSync: true });
+        if (!result) {
+            return res.status(503).json({ status: 'error', message: '队列不可用或未初始化' });
+        }
+        res.json({
+            status: 'success',
+            message: '40code 项目强制全量同步任务已入队',
+            data: result,
+        });
+    } catch (error) {
+        logger.error('[admin/mirror40code] 入队 force-sync-projects 失败:', error);
+        res.status(500).json({ status: 'error', message: '40code 项目强制全量同步任务入队失败', error: error.message });
+    }
+});
+
 router.post('/sync-user', async (req, res) => {
     try {
         const remoteUserId = Number(req.body?.remoteUserId);
