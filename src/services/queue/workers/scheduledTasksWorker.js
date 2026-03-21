@@ -3,6 +3,7 @@ import { createConnection } from '../redisConnectionFactory.js';
 import { QUEUE_NAMES } from '../queues.js';
 import memoryCache from '../../memoryCache.js';
 import logger from '../../logger.js';
+import zcconfig from '../../config/zcconfig.js';
 
 let worker = null;
 
@@ -69,6 +70,126 @@ taskHandlers.set('sitemap-auto-update', async (data, job) => {
         await job.log(`ERROR: sitemap-auto-update failed: ${err.message}`);
         throw err;
     }
+});
+
+taskHandlers.set('embedding-daily-project-check', async (data, job) => {
+    await job.log('Executing embedding daily project check');
+
+    const embeddingEnabled = await zcconfig.get('embedding.enabled', false);
+    if (!embeddingEnabled) {
+        await job.log('Embedding disabled, skip daily project check');
+        return;
+    }
+
+    const minViewCount = Math.max(0, Number(await zcconfig.get('embedding.periodic.project_check.min_view_count', 100)) || 100);
+    const minStarCount = Math.max(0, Number(await zcconfig.get('embedding.periodic.project_check.min_star_count', 10)) || 10);
+    const scanLimit = Math.max(1, Number(await zcconfig.get('embedding.periodic.project_check.scan_limit', 2000)) || 2000);
+
+    const [{ prisma }, { getEmbeddingQueue }] = await Promise.all([
+        import('../../prisma.js'),
+        import('../queues.js'),
+    ]);
+
+    const embeddingQueue = getEmbeddingQueue();
+    if (!embeddingQueue) {
+        await job.log('Embedding queue unavailable, skip daily project check');
+        return;
+    }
+
+        const candidates = await prisma.$queryRawUnsafe(
+                `
+                SELECT p.id
+                FROM ow_projects p
+                LEFT JOIN ow_embeddings e
+                    ON e.entity_type = 'project'
+                 AND e.entity_id = p.id
+                LEFT JOIN (
+                        SELECT
+                        target_id AS project_id,
+                                COUNT(*)::int AS local_view_count
+                        FROM ow_analytics_event
+                        WHERE target_type = 'project'
+                        GROUP BY target_id
+                ) av
+                    ON av.project_id = p.id
+                LEFT JOIN LATERAL (
+                        SELECT
+                                CASE
+                                        WHEN tc.value ~ '^[0-9]+$' THEN tc.value::int
+                                        ELSE 0
+                                END AS remote_view_count
+                        FROM project_config tc
+                        WHERE tc.target_type = 'project'
+                            AND tc.target_id = p.id::text
+                            AND tc.key IN ('mirror.remote_view_count', 'mirror40.remote_view_count')
+                        ORDER BY tc.updated_at DESC
+                        LIMIT 1
+                ) rv ON true
+                LEFT JOIN (
+                        SELECT
+                                projectid AS project_id,
+                                COUNT(*)::int AS star_count
+                        FROM ow_projects_stars
+                        WHERE projectid IS NOT NULL
+                        GROUP BY projectid
+                ) ps
+                    ON ps.project_id = p.id
+                WHERE e.id IS NULL
+                    AND COALESCE(p.type, '') = 'scratch'
+                    AND COALESCE(p.state, '') <> 'deleted'
+                    AND (
+                        (COALESCE(av.local_view_count, 0) + COALESCE(rv.remote_view_count, 0)) > $1
+                        OR COALESCE(ps.star_count, 0) > $2
+                    )
+                ORDER BY
+                    (COALESCE(av.local_view_count, 0) + COALESCE(rv.remote_view_count, 0)) DESC,
+                    COALESCE(ps.star_count, 0) DESC,
+                    p.id DESC
+                LIMIT $3
+                `,
+                Number(minViewCount),
+                Number(minStarCount),
+                Number(scanLimit)
+        );
+
+    const projectIds = (Array.isArray(candidates) ? candidates : [])
+        .map((item) => Number(item?.id))
+        .filter((id) => Number.isFinite(id) && id > 0);
+
+    await job.log(`Found ${projectIds.length} missing project embeddings (scratch, realViews>${minViewCount} or realStars>${minStarCount})`);
+
+    let enqueued = 0;
+    let duplicated = 0;
+    let failed = 0;
+
+    for (const projectId of projectIds) {
+        const jobId = `emb-project-${projectId}`;
+        try {
+            await embeddingQueue.add('embedding', {
+                type: 'project_embedding',
+                projectId,
+                force: false,
+                triggerType: 'daily-project-check',
+            }, {
+                jobId,
+                attempts: 3,
+                backoff: { type: 'exponential', delay: 15000 },
+                removeOnComplete: { age: 86400 },
+                removeOnFail: { age: 604800 },
+                deduplication: { id: jobId },
+            });
+            enqueued += 1;
+        } catch (error) {
+            if (String(error?.message || '').includes('Job is already waiting')) {
+                duplicated += 1;
+            } else {
+                failed += 1;
+                logger.warn(`[scheduled-worker] embedding-daily-project-check enqueue failed project=${projectId} error=${error.message}`);
+            }
+        }
+    }
+
+    await job.log(`Embedding daily project check done: enqueued=${enqueued}, duplicated=${duplicated}, failed=${failed}`);
 });
 
 function registerTaskHandler(name, handler) {

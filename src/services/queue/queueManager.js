@@ -201,6 +201,21 @@ const queueManager = {
             { name: 'extension-sync', data: {} }
         );
 
+        // embedding-daily-project-check: every day
+        const embeddingEnabled = await zcconfig.get('embedding.enabled', false);
+        const embeddingDailyProjectCheckEnabled = await zcconfig.get('embedding.periodic.project_check.enabled', true);
+        const embeddingDailyProjectCheckInterval = Math.max(
+            60000,
+            Number(await zcconfig.get('embedding.periodic.project_check.interval_ms', 86400000)) || 86400000
+        );
+
+        await upsertOrRemove(
+            'embedding-daily-project-check',
+            embeddingEnabled && embeddingDailyProjectCheckEnabled,
+            { every: embeddingDailyProjectCheckInterval },
+            { name: 'embedding-daily-project-check', data: {} }
+        );
+
         logger.info('[queue-manager] Repeatable jobs synchronized');
     },
 

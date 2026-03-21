@@ -996,6 +996,45 @@ export const CONFIG_TYPES = {
         description: "用户向量自动刷新间隔(小时)",
         transform: typeTransformers.number,
         validate: (value) => value >= 1,
+    },
+    "embedding.periodic.project_check.enabled": {
+        type: "boolean",
+        required: false,
+        default: true,
+        description: "是否启用每日项目 Embedding 补齐检查任务",
+        transform: typeTransformers.boolean,
+    },
+    "embedding.periodic.project_check.interval_ms": {
+        type: "number",
+        required: false,
+        default: 86400000,
+        description: "每日项目 Embedding 补齐检查任务间隔(毫秒)",
+        transform: typeTransformers.number,
+        validate: (value) => value >= 60000,
+    },
+    "embedding.periodic.project_check.min_view_count": {
+        type: "number",
+        required: false,
+        default: 100,
+        description: "每日项目 Embedding 补齐检查的最低浏览量阈值(>该值)",
+        transform: typeTransformers.number,
+        validate: (value) => value >= 0,
+    },
+    "embedding.periodic.project_check.min_star_count": {
+        type: "number",
+        required: false,
+        default: 10,
+        description: "每日项目 Embedding 补齐检查的最低收藏量阈值(>该值)",
+        transform: typeTransformers.number,
+        validate: (value) => value >= 0,
+    },
+    "embedding.periodic.project_check.scan_limit": {
+        type: "number",
+        required: false,
+        default: 2000,
+        description: "每日项目 Embedding 补齐检查单次最多扫描并尝试入队的项目数",
+        transform: typeTransformers.number,
+        validate: (value) => value >= 1 && value <= 50000,
     }
 };
 

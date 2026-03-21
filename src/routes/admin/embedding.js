@@ -7,6 +7,8 @@ import logger from "../../services/logger.js";
 import embeddingService from "../../services/embedding.js";
 import queueManager from "../../services/queue/queueManager.js";
 import { prisma } from "../../services/prisma.js";
+import zcconfig from "../../services/config/zcconfig.js";
+import { getEmbeddingQueue } from "../../services/queue/queues.js";
 
 const router = Router();
 
@@ -336,6 +338,249 @@ router.post("/generate/project/:id", async (req, res) => {
         res.status(500).json({
             status: "error",
             message: `失败: ${error.message}`,
+        });
+    }
+});
+
+/**
+ * @api {post} /admin/embedding/generate/projects/missing-daily-check
+ * 按“每日补齐规则”手动触发项目向量生成
+ * @apiName GenerateMissingProjectEmbeddingsByDailyRule
+ * @apiGroup AdminEmbedding
+ * @apiPermission admin
+ */
+router.post("/generate/projects/missing-daily-check", async (req, res) => {
+    try {
+        const embeddingEnabled = await zcconfig.get('embedding.enabled', false);
+        if (!embeddingEnabled) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Embedding 未启用，请先设置 embedding.enabled=true',
+            });
+        }
+
+        const minViewCount = Math.max(0, Number(await zcconfig.get('embedding.periodic.project_check.min_view_count', 100)) || 100);
+        const minStarCount = Math.max(0, Number(await zcconfig.get('embedding.periodic.project_check.min_star_count', 10)) || 10);
+        const scanLimit = Math.max(1, Number(await zcconfig.get('embedding.periodic.project_check.scan_limit', 2000)) || 2000);
+
+                const candidates = await prisma.$queryRawUnsafe(
+                        `
+                        SELECT p.id
+                        FROM ow_projects p
+                        LEFT JOIN ow_embeddings e
+                            ON e.entity_type = 'project'
+                         AND e.entity_id = p.id
+                        LEFT JOIN (
+                                SELECT
+                                target_id AS project_id,
+                                        COUNT(*)::int AS local_view_count
+                                FROM ow_analytics_event
+                                WHERE target_type = 'project'
+                                GROUP BY target_id
+                        ) av
+                            ON av.project_id = p.id
+                        LEFT JOIN LATERAL (
+                                SELECT
+                                        CASE
+                                                WHEN tc.value ~ '^[0-9]+$' THEN tc.value::int
+                                                ELSE 0
+                                        END AS remote_view_count
+                                FROM project_config tc
+                                WHERE tc.target_type = 'project'
+                                    AND tc.target_id = p.id::text
+                                    AND tc.key IN ('mirror.remote_view_count', 'mirror40.remote_view_count')
+                                ORDER BY tc.updated_at DESC
+                                LIMIT 1
+                        ) rv ON true
+                        LEFT JOIN (
+                                SELECT
+                                        projectid AS project_id,
+                                        COUNT(*)::int AS star_count
+                                FROM ow_projects_stars
+                                WHERE projectid IS NOT NULL
+                                GROUP BY projectid
+                        ) ps
+                            ON ps.project_id = p.id
+                        WHERE e.id IS NULL
+                            AND COALESCE(p.type, '') = 'scratch'
+                            AND COALESCE(p.state, '') <> 'deleted'
+                            AND (
+                                (COALESCE(av.local_view_count, 0) + COALESCE(rv.remote_view_count, 0)) > $1
+                                OR COALESCE(ps.star_count, 0) > $2
+                            )
+                        ORDER BY
+                            (COALESCE(av.local_view_count, 0) + COALESCE(rv.remote_view_count, 0)) DESC,
+                            COALESCE(ps.star_count, 0) DESC,
+                            p.id DESC
+                        LIMIT $3
+                        `,
+                        Number(minViewCount),
+                        Number(minStarCount),
+                        Number(scanLimit)
+                );
+
+        const projectIds = (Array.isArray(candidates) ? candidates : [])
+            .map((item) => Number(item?.id))
+            .filter((id) => Number.isFinite(id) && id > 0);
+
+        const embeddingQueue = getEmbeddingQueue();
+        if (!embeddingQueue || !queueManager.isInitialized()) {
+            return res.status(503).json({
+                status: 'error',
+                message: 'Embedding 队列不可用或未初始化',
+            });
+        }
+
+        let enqueued = 0;
+        let duplicated = 0;
+        let failed = 0;
+
+        for (const projectId of projectIds) {
+            const jobId = `emb-project-${projectId}`;
+            try {
+                await embeddingQueue.add('embedding', {
+                    type: 'project_embedding',
+                    projectId,
+                    force: false,
+                    triggerType: 'admin-daily-project-check',
+                }, {
+                    jobId,
+                    attempts: 3,
+                    backoff: { type: 'exponential', delay: 15000 },
+                    removeOnComplete: { age: 86400 },
+                    removeOnFail: { age: 604800 },
+                    deduplication: { id: jobId },
+                });
+                enqueued += 1;
+            } catch (error) {
+                if (String(error?.message || '').includes('Job is already waiting')) {
+                    duplicated += 1;
+                } else {
+                    failed += 1;
+                    logger.warn(`[admin/embedding] missing-daily-check enqueue failed project=${projectId} error=${error.message}`);
+                }
+            }
+        }
+
+        return res.json({
+            status: 'success',
+            message: '已按每日补齐规则触发项目 Embedding 入队',
+            data: {
+                rules: {
+                    type: 'scratch',
+                    minViewCount,
+                    minStarCount,
+                    scanLimit,
+                    relation: '(analyticsViews + mirrorRemoteViews) > minViewCount OR starsCount > minStarCount',
+                },
+                candidates: projectIds.length,
+                enqueued,
+                duplicated,
+                failed,
+            },
+        });
+    } catch (error) {
+        logger.error('[admin/embedding] missing-daily-check failed:', error);
+        return res.status(500).json({
+            status: 'error',
+            message: `按每日规则触发项目 Embedding 失败: ${error.message}`,
+        });
+    }
+});
+
+/**
+ * @api {get} /admin/embedding/generate/projects/missing-daily-check/preview
+ * 预览“每日补齐规则”命中的项目（不入队）
+ * @apiName PreviewMissingProjectEmbeddingsByDailyRule
+ * @apiGroup AdminEmbedding
+ * @apiPermission admin
+ */
+router.get("/generate/projects/missing-daily-check/preview", async (req, res) => {
+    try {
+        const minViewCount = Math.max(0, Number(await zcconfig.get('embedding.periodic.project_check.min_view_count', 100)) || 100);
+        const minStarCount = Math.max(0, Number(await zcconfig.get('embedding.periodic.project_check.min_star_count', 10)) || 10);
+        const scanLimit = Math.max(1, Number(await zcconfig.get('embedding.periodic.project_check.scan_limit', 2000)) || 2000);
+
+                const candidates = await prisma.$queryRawUnsafe(
+                        `
+                        SELECT p.id
+                        FROM ow_projects p
+                        LEFT JOIN ow_embeddings e
+                            ON e.entity_type = 'project'
+                         AND e.entity_id = p.id
+                        LEFT JOIN (
+                                SELECT
+                                target_id AS project_id,
+                                        COUNT(*)::int AS local_view_count
+                                FROM ow_analytics_event
+                                WHERE target_type = 'project'
+                                GROUP BY target_id
+                        ) av
+                            ON av.project_id = p.id
+                        LEFT JOIN LATERAL (
+                                SELECT
+                                        CASE
+                                                WHEN tc.value ~ '^[0-9]+$' THEN tc.value::int
+                                                ELSE 0
+                                        END AS remote_view_count
+                                FROM project_config tc
+                                WHERE tc.target_type = 'project'
+                                    AND tc.target_id = p.id::text
+                                    AND tc.key IN ('mirror.remote_view_count', 'mirror40.remote_view_count')
+                                ORDER BY tc.updated_at DESC
+                                LIMIT 1
+                        ) rv ON true
+                        LEFT JOIN (
+                                SELECT
+                                        projectid AS project_id,
+                                        COUNT(*)::int AS star_count
+                                FROM ow_projects_stars
+                                WHERE projectid IS NOT NULL
+                                GROUP BY projectid
+                        ) ps
+                            ON ps.project_id = p.id
+                        WHERE e.id IS NULL
+                            AND COALESCE(p.type, '') = 'scratch'
+                            AND COALESCE(p.state, '') <> 'deleted'
+                            AND (
+                                (COALESCE(av.local_view_count, 0) + COALESCE(rv.remote_view_count, 0)) > $1
+                                OR COALESCE(ps.star_count, 0) > $2
+                            )
+                        ORDER BY
+                            (COALESCE(av.local_view_count, 0) + COALESCE(rv.remote_view_count, 0)) DESC,
+                            COALESCE(ps.star_count, 0) DESC,
+                            p.id DESC
+                        LIMIT $3
+                        `,
+                        Number(minViewCount),
+                        Number(minStarCount),
+                        Number(scanLimit)
+                );
+
+        const projectIds = (Array.isArray(candidates) ? candidates : [])
+            .map((item) => Number(item?.id))
+            .filter((id) => Number.isFinite(id) && id > 0);
+
+        return res.json({
+            status: 'success',
+            message: '每日补齐规则预览完成（未入队）',
+            data: {
+                rules: {
+                    type: 'scratch',
+                    minViewCount,
+                    minStarCount,
+                    scanLimit,
+                    relation: '(analyticsViews + mirrorRemoteViews) > minViewCount OR starsCount > minStarCount',
+                },
+                candidates: projectIds.length,
+                previewProjectIds: projectIds.slice(0, 200),
+            },
+        });
+    } catch (error) {
+        logger.error('[admin/embedding] missing-daily-check preview failed:', error);
+        return res.status(500).json({
+            status: 'error',
+            message: `预览每日规则命中项目失败: ${error.message}`,
         });
     }
 });

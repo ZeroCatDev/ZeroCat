@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { createHash, createDecipheriv } from 'crypto';
 import axios from 'axios';
 import { prisma } from '../prisma.js';
 import zcconfig from '../config/zcconfig.js';
@@ -28,6 +28,8 @@ const USER_SYNC_INTERVAL_DAYS_WITHOUT_REMOTE_TS = 7;
 const MAX_AVATAR_DOWNLOAD_SIZE = 10 * 1024 * 1024;
 const MAX_PROJECT_ASSET_DOWNLOAD_SIZE = 20 * 1024 * 1024;
 const MIRROR40_PROJECT_ASSET_BASE_URL = 'https://abc.520gxx.com/static/internalapi/asset';
+const MIRROR40_DECRYPT_KEY = '9609274736591562';
+const MIRROR40_DECRYPT_IV = '4312549111852919';
 
 const USER_SEARCH_PAYLOAD = {
     name: '',
@@ -393,6 +395,9 @@ function extractWorkSourcePayload(payload) {
 
     if (typeof payload === 'string') return payload;
 
+    if (typeof payload?.data?.raw === 'string') return payload.data.raw;
+    if (typeof payload?.raw === 'string') return payload.raw;
+
     if (typeof payload?.data === 'string') return payload.data;
 
     if (payload?.data?.source !== undefined) return payload.data.source;
@@ -404,6 +409,50 @@ function extractWorkSourcePayload(payload) {
 
     if (payload?.data !== undefined) return payload.data;
     return payload;
+}
+
+function isLikelyHexCipherText(value) {
+    const text = String(value || '').trim();
+    if (!text) return false;
+    if (text.length < 32 || text.length % 2 !== 0) return false;
+    return /^[0-9a-fA-F]+$/.test(text);
+}
+
+function isLikelyJsonText(value) {
+    const text = String(value || '').trim();
+    if (!text) return false;
+    if (!(text.startsWith('{') || text.startsWith('['))) return false;
+    try {
+        JSON.parse(text);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function tryDecryptMirror40Source(source) {
+    const raw = String(source || '').trim();
+    if (!isLikelyHexCipherText(raw)) return null;
+
+    try {
+        const decipher = createDecipheriv(
+            'aes-128-cbc',
+            Buffer.from(MIRROR40_DECRYPT_KEY, 'utf8'),
+            Buffer.from(MIRROR40_DECRYPT_IV, 'utf8')
+        );
+        decipher.setAutoPadding(true);
+
+        const encrypted = Buffer.from(raw, 'hex');
+        const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');
+
+        if (!decrypted) return null;
+        const normalized = decrypted.trim();
+        if (!isLikelyJsonText(normalized)) return null;
+
+        return normalized;
+    } catch {
+        return null;
+    }
 }
 
 class Mirror40CodeSyncService {
@@ -859,11 +908,22 @@ class Mirror40CodeSyncService {
         }
 
         const source = extractWorkSourcePayload(payload);
-        const sourcePreview = typeof source === 'string'
-            ? source.slice(0, 120)
-            : truncateForLog(source, 120);
-        logger.info(`[mirror-40code] work source extracted project=${projectId} type=${typeof source} preview=${sourcePreview}`);
-        return { payload, source, missing: false };
+        let resolvedSource = source;
+        let decrypted = false;
+
+        if (typeof source === 'string' && !isLikelyJsonText(source)) {
+            const decryptedSource = tryDecryptMirror40Source(source);
+            if (decryptedSource) {
+                resolvedSource = decryptedSource;
+                decrypted = true;
+            }
+        }
+
+        const sourcePreview = typeof resolvedSource === 'string'
+            ? resolvedSource.slice(0, 120)
+            : truncateForLog(resolvedSource, 120);
+        logger.info(`[mirror-40code] work source extracted project=${projectId} type=${typeof resolvedSource} decrypted=${decrypted} preview=${sourcePreview}`);
+        return { payload, source: resolvedSource, missing: false };
     }
 
     async getMappedLocalUserId(remoteUserId) {
