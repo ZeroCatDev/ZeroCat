@@ -8,35 +8,110 @@ import { enqueueProjectSyncJobs, enqueueUserSyncJobs, syncProjectAndAssets } fro
 
 let worker = null;
 
-async function processFullSync(job) {
-    await job.log('开始全量镜像：拉取40code用户列表');
-
-    const userIds = await mirror40CodeSyncService.collectTopUserIds();
-    await job.log(`已获取用户 ${userIds.length} 个`);
+async function processDailySync(job) {
+    await job.log('开始每日镜像同步：边扫描边分批入队');
 
     const queue = getMirror40CodeQueue();
     if (!queue) {
-        throw new Error('mirror-40code queue 不可用，无法为用户入队');
+        throw new Error('mirror-40code queue 不可用，无法为每日同步入队');
     }
 
-    const enqueuedUsers = await enqueueUserSyncJobs(queue, userIds, 'full-sync');
+    const cfg = await mirror40CodeSyncService.getConfig();
+    mirror40CodeSyncService.ensureEnabled(cfg);
 
-    await job.log(`全量用户入队完成: ${enqueuedUsers}/${userIds.length}`);
+    const maxUserPages = Math.max(1, Number(await zcconfig.get('mirror40code.daily.user_scan.max_pages', cfg.maxPages || 50)) || (cfg.maxPages || 50));
+    const maxProjectPages = Math.max(1, Number(await zcconfig.get('mirror40code.daily.project_scan.max_pages', cfg.maxPages || 50)) || (cfg.maxPages || 50));
+
+    const seenUserIds = new Set();
+    const seenProjectIds = new Set();
+
+    let discoveredUsers = 0;
+    let discoveredProjects = 0;
+    let enqueuedUsers = 0;
+    let enqueuedProjects = 0;
+
+    for (let page = 1; page <= maxUserPages; page++) {
+        const result = await mirror40CodeSyncService.fetchSearchUsersPage(cfg, page);
+        const list = Array.isArray(result?.list) ? result.list : [];
+        await job.log(`用户扫描 page=${page} count=${list.length}`);
+
+        if (list.length === 0) {
+            break;
+        }
+
+        const userBatch = [];
+        for (const item of list) {
+            const remoteUserId = Number(item?.id || item?.uid || item?.userid);
+            if (!Number.isFinite(remoteUserId) || remoteUserId <= 0) continue;
+            if (seenUserIds.has(remoteUserId)) continue;
+            seenUserIds.add(remoteUserId);
+            userBatch.push(remoteUserId);
+        }
+
+        discoveredUsers += userBatch.length;
+        if (userBatch.length > 0) {
+            const queued = await enqueueUserSyncJobs(queue, userBatch, 'daily-sync-users');
+            enqueuedUsers += queued;
+            await job.log(`用户入队 page=${page} discovered=${userBatch.length} enqueued=${queued}`);
+        }
+    }
+
+    for (let page = 1; page <= maxProjectPages; page++) {
+        const result = await mirror40CodeSyncService.fetchSearchProjectsPage(cfg, page);
+        const list = Array.isArray(result?.list) ? result.list : [];
+        await job.log(`项目扫描 page=${page} count=${list.length}`);
+
+        if (list.length === 0) {
+            break;
+        }
+
+        const projectBatch = [];
+        for (const item of list) {
+            const remoteProjectId = Number(item?.id);
+            if (!Number.isFinite(remoteProjectId) || remoteProjectId <= 0) continue;
+            if (seenProjectIds.has(remoteProjectId)) continue;
+            seenProjectIds.add(remoteProjectId);
+
+            const remoteUpdateTime = Number(item?.update_time || item?.time || item?.publish_time || 0);
+            const needSync = await mirror40CodeSyncService.shouldEnqueueProjectByTimestamp(remoteProjectId, remoteUpdateTime);
+            if (!needSync) continue;
+
+            const remoteUserId = Number(item?.author);
+            projectBatch.push({
+                remoteProjectId,
+                remoteUserId: Number.isFinite(remoteUserId) && remoteUserId > 0 ? remoteUserId : null,
+                remoteUpdateTime: Number.isFinite(remoteUpdateTime) && remoteUpdateTime > 0 ? remoteUpdateTime : null,
+            });
+        }
+
+        discoveredProjects += projectBatch.length;
+        if (projectBatch.length > 0) {
+            const queued = await enqueueProjectSyncJobs(queue, projectBatch, 'daily-sync-projects');
+            enqueuedProjects += queued;
+            await job.log(`项目入队 page=${page} discovered=${projectBatch.length} enqueued=${queued}`);
+        }
+    }
+
+    await job.log(`每日同步入队完成 users=${enqueuedUsers}/${discoveredUsers} projects=${enqueuedProjects}/${discoveredProjects}`);
     return {
-        mode: 'full-sync',
-        fetchedUsers: userIds.length,
+        mode: 'daily-sync',
+        discoveredUsers,
+        discoveredProjects,
         enqueuedUsers,
+        enqueuedProjects,
     };
 }
 
 async function processUserSync(job) {
     const remoteUserId = Number(job.data?.remoteUserId);
+    const forceSync = Boolean(job.data?.forceSync);
     if (!Number.isFinite(remoteUserId) || remoteUserId <= 0) {
         throw new Error(`无效 remoteUserId: ${job.data?.remoteUserId}`);
     }
 
+    logger.debug(`[mirror-40code] processUserSync start remoteUser=${remoteUserId} forceSync=${forceSync}`);
     await job.log(`开始同步用户 ${remoteUserId}`);
-    const result = await mirror40CodeSyncService.syncUser(remoteUserId);
+    const result = await mirror40CodeSyncService.syncUser(remoteUserId, { forceSync });
 
     if (result?.skipped) {
         await job.log(`用户 ${remoteUserId} 跳过: ${result.reason}`);
@@ -51,7 +126,11 @@ async function processUserSync(job) {
         };
     }
 
-    await job.log(`用户 ${remoteUserId} 同步完成，待同步项目 ${result.projectIds.length} 个`);
+    const projectItems = Array.isArray(result?.projectItems)
+        ? result.projectItems
+        : [];
+
+    await job.log(`用户 ${remoteUserId} 同步完成，待同步项目 ${projectItems.length} 个`);
 
     const queue = getMirror40CodeQueue();
     if (!queue) {
@@ -60,71 +139,19 @@ async function processUserSync(job) {
             mode: 'sync-user',
             remoteUserId,
             localUserId: result.localUserId,
-            projects: result.projectIds.length,
+            projects: projectItems.length,
             enqueuedProjects: 0,
         };
     }
 
-    const projectItems = result.projectIds.map((projectId) => ({
-        remoteProjectId: Number(projectId),
-        remoteUserId,
-    }));
     const enqueuedProjects = await enqueueProjectSyncJobs(queue, projectItems, 'user-sync');
+    logger.debug(`[mirror-40code] processUserSync done remoteUser=${remoteUserId} projectCandidates=${projectItems.length} enqueuedProjects=${enqueuedProjects}`);
 
     return {
         mode: 'sync-user',
         remoteUserId,
         localUserId: result.localUserId,
-        projects: result.projectIds.length,
-        enqueuedProjects,
-    };
-}
-
-async function processIncrementalUsers(job) {
-    await job.log('开始增量扫描40code新用户');
-    const userIds = await mirror40CodeSyncService.collectIncrementalNewUserIds();
-    await job.log(`增量发现用户 ${userIds.length} 个`);
-
-    const queue = getMirror40CodeQueue();
-    if (!queue) {
-        throw new Error('mirror-40code queue 不可用，无法为增量用户入队');
-    }
-
-    const enqueuedUsers = await enqueueUserSyncJobs(queue, userIds, 'incremental-users');
-
-    await job.log(`增量用户入队完成: ${enqueuedUsers}/${userIds.length}`);
-    return {
-        mode: 'incremental-users',
-        discoveredUsers: userIds.length,
-        enqueuedUsers,
-    };
-}
-
-async function processIncrementalProjects(job) {
-    await job.log('开始增量同步项目：先触发新用户同步');
-
-    const discoveredUsers = await mirror40CodeSyncService.collectIncrementalNewUserIds();
-    await job.log(`增量项目前置：发现新用户 ${discoveredUsers.length} 个`);
-
-    const queue = getMirror40CodeQueue();
-    if (!queue) {
-        throw new Error('mirror-40code queue 不可用，无法为增量项目入队');
-    }
-
-    const enqueuedUsers = await enqueueUserSyncJobs(queue, discoveredUsers, 'incremental-projects-before-projects');
-    await job.log(`增量项目前置：用户入队完成 ${enqueuedUsers}/${discoveredUsers.length}`);
-
-    const projectItems = await mirror40CodeSyncService.collectIncrementalNewProjectItems();
-    await job.log(`增量项目扫描完成，发现 ${projectItems.length} 个新项目`);
-
-    const enqueuedProjects = await enqueueProjectSyncJobs(queue, projectItems, 'incremental-projects');
-    await job.log(`增量项目入队完成: ${enqueuedProjects}/${projectItems.length}`);
-
-    return {
-        mode: 'incremental-projects',
-        discoveredUsers: discoveredUsers.length,
-        enqueuedUsers,
-        discoveredProjects: projectItems.length,
+        projects: projectItems.length,
         enqueuedProjects,
     };
 }
@@ -145,16 +172,12 @@ async function processMirror40Code(job) {
     const type = String(job.data?.type || '');
 
     switch (type) {
-    case 'full-sync':
-        return processFullSync(job);
+    case 'daily-sync':
+        return processDailySync(job);
     case 'sync-user':
         return processUserSync(job);
     case 'sync-project':
         return processProjectSync(job);
-    case 'incremental-users':
-        return processIncrementalUsers(job);
-    case 'incremental-projects':
-        return processIncrementalProjects(job);
     default:
         throw new Error(`未知 mirror40code 任务类型: ${type}`);
     }

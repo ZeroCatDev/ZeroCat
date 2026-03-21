@@ -8,8 +8,11 @@ function isAlreadyQueuedError(error) {
 export async function enqueueUserSyncJobs(queue, userIds, triggeredBy) {
     let enqueuedUsers = 0;
 
+    logger.debug(`[mirror-40code] enqueueUserSyncJobs start triggeredBy=${triggeredBy} total=${Array.isArray(userIds) ? userIds.length : 0}`);
+
     for (const userId of userIds) {
-        const normalizedId = Number(userId);
+        const normalizedId = Number(userId?.remoteUserId ?? userId);
+        const forceSync = Boolean(userId?.forceSync);
         if (!Number.isFinite(normalizedId) || normalizedId <= 0) continue;
 
         const jobId = `m40-user-${normalizedId}`;
@@ -17,6 +20,7 @@ export async function enqueueUserSyncJobs(queue, userIds, triggeredBy) {
             await queue.add('sync-user', {
                 type: 'sync-user',
                 remoteUserId: normalizedId,
+                forceSync,
                 triggeredBy,
             }, {
                 jobId,
@@ -27,12 +31,17 @@ export async function enqueueUserSyncJobs(queue, userIds, triggeredBy) {
                 removeOnFail: { age: 604800 },
             });
             enqueuedUsers += 1;
+            logger.debug(`[mirror-40code] 用户入队成功 remoteUser=${normalizedId} forceSync=${forceSync} jobId=${jobId} triggeredBy=${triggeredBy}`);
         } catch (error) {
             if (!isAlreadyQueuedError(error)) {
                 logger.warn(`[mirror-40code] 用户 ${normalizedId} 入队失败: ${error.message}`);
+            } else {
+                logger.debug(`[mirror-40code] 用户入队跳过(已存在) remoteUser=${normalizedId} jobId=${jobId}`);
             }
         }
     }
+
+    logger.debug(`[mirror-40code] enqueueUserSyncJobs done triggeredBy=${triggeredBy} enqueued=${enqueuedUsers}`);
 
     return enqueuedUsers;
 }
@@ -40,9 +49,12 @@ export async function enqueueUserSyncJobs(queue, userIds, triggeredBy) {
 export async function enqueueProjectSyncJobs(queue, projectItems, triggeredBy) {
     let enqueuedProjects = 0;
 
+    logger.debug(`[mirror-40code] enqueueProjectSyncJobs start triggeredBy=${triggeredBy} total=${Array.isArray(projectItems) ? projectItems.length : 0}`);
+
     for (const item of projectItems) {
         const projectId = Number(item?.remoteProjectId ?? item?.projectId ?? item);
         const remoteUserId = Number(item?.remoteUserId ?? item?.authorId);
+        const remoteUpdateTime = Number(item?.remoteUpdateTime || 0);
         if (!Number.isFinite(projectId) || projectId <= 0) continue;
 
         const jobId = `m40-project-${projectId}`;
@@ -51,22 +63,28 @@ export async function enqueueProjectSyncJobs(queue, projectItems, triggeredBy) {
                 type: 'sync-project',
                 remoteProjectId: projectId,
                 remoteUserId: Number.isFinite(remoteUserId) && remoteUserId > 0 ? remoteUserId : null,
+                remoteUpdateTime: Number.isFinite(remoteUpdateTime) && remoteUpdateTime > 0 ? remoteUpdateTime : null,
                 triggeredBy,
             }, {
                 jobId,
                 deduplication: { id: jobId },
                 attempts: 5,
                 backoff: { type: 'exponential', delay: 15000 },
-                removeOnComplete: { age: 86400 },
+                removeOnComplete: true,
                 removeOnFail: { age: 604800 },
             });
             enqueuedProjects += 1;
+            logger.debug(`[mirror-40code] 项目入队成功 remoteProject=${projectId} remoteUser=${Number.isFinite(remoteUserId) && remoteUserId > 0 ? remoteUserId : 'null'} jobId=${jobId} triggeredBy=${triggeredBy}`);
         } catch (error) {
             if (!isAlreadyQueuedError(error)) {
                 logger.warn(`[mirror-40code] 项目 ${projectId} 入队失败: ${error.message}`);
+            } else {
+                logger.debug(`[mirror-40code] 项目入队跳过(已存在) remoteProject=${projectId} jobId=${jobId}`);
             }
         }
     }
+
+    logger.debug(`[mirror-40code] enqueueProjectSyncJobs done triggeredBy=${triggeredBy} enqueued=${enqueuedProjects}`);
 
     return enqueuedProjects;
 }
@@ -84,6 +102,18 @@ export async function syncProjectAndAssets(job, remoteProjectId, remoteUserId = 
             remoteProjectId,
             skipped: true,
             reason: result.reason,
+        };
+    }
+
+    if (result?.mocked) {
+        await job.log(`项目 ${remoteProjectId} 开发模式假数据同步完成，跳过云端素材同步`);
+        return {
+            mode: 'sync-project',
+            ...result,
+            assets: {
+                skipped: true,
+                reason: 'mocked_project_skip_assets',
+            },
         };
     }
 

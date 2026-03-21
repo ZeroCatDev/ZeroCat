@@ -15,6 +15,14 @@ const TARGET_KEY_LAST_SYNC_STATUS = 'last_sync_status';
 const TARGET_KEY_LAST_SYNC_DETAIL = 'last_sync_detail';
 const TARGET_KEY_SYNC_DISABLED = 'sync_disabled';
 const TARGET_KEY_SYNC_DISABLED_REASON = 'sync_disabled_reason';
+const LOCAL_TARGET_TYPE_USER = 'user';
+const LOCAL_TARGET_TYPE_PROJECT = 'project';
+const REMOTE_TYPE_40CODE = '40code';
+const REMOTE_META_KEY_TYPE = 'mirror.remote_type';
+const REMOTE_META_KEY_ID = 'mirror.remote_id';
+const REMOTE_META_KEY_UPDATED_AT = 'mirror.remote_updated_at';
+const REMOTE_META_KEY_LAST_SYNC_AT = 'mirror.last_sync_at';
+const USER_SYNC_INTERVAL_DAYS_WITHOUT_REMOTE_TS = 7;
 const MAX_AVATAR_DOWNLOAD_SIZE = 10 * 1024 * 1024;
 const MAX_PROJECT_ASSET_DOWNLOAD_SIZE = 20 * 1024 * 1024;
 const MIRROR40_PROJECT_ASSET_BASE_URL = 'https://abc.520gxx.com/static/internalapi/asset';
@@ -23,7 +31,7 @@ const USER_SEARCH_PAYLOAD = {
     name: '',
     author: '',
     type: 1,
-    s: '4',
+    s: '1',
     sid: '',
     fl: 0,
     fan: 0,
@@ -32,23 +40,29 @@ const USER_SEARCH_PAYLOAD = {
     folder: 0,
 };
 
-const PROJECT_SEARCH_PAYLOAD = {
-    name: '',
-    author: '',
-    type: '0',
-    s: '0',
-    sid: '',
-    fl: 0,
-    fan: 0,
-    follow: 0,
-    page: '1',
-    folder: 0,
-};
+const PROJECT_SEARCH_PAYLOAD = { "name": "", "author": "", "type": 0, "s": 2, "sid": "", "fl": 0, "fan": 0, "follow": 0, "page": "1", "folder": 0 }
 
 function toDateFromUnixSeconds(value) {
     const n = Number(value);
     if (!Number.isFinite(n) || n <= 0) return undefined;
     return new Date(n * 1000);
+}
+
+function toUnixSeconds(value) {
+    if (!value) return 0;
+    const date = value instanceof Date ? value : new Date(value);
+    const ms = date.getTime();
+    if (!Number.isFinite(ms) || ms <= 0) return 0;
+    return Math.floor(ms / 1000);
+}
+
+function normalizeRemoteUpdateSeconds(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    if (n > 9999999999) {
+        return Math.floor(n / 1000);
+    }
+    return Math.floor(n);
 }
 
 function sanitizeDisplayName(name, fallback) {
@@ -92,29 +106,6 @@ function extractProjectList(payload) {
         return pickFirstArray(data.work, data.works, data.project, data.projects, data.list, data.data);
     }
     return [];
-}
-
-function extractUserList(payload) {
-    if (!payload || typeof payload !== 'object') return [];
-
-    const data = payload.data;
-    if (Array.isArray(data)) {
-        return data.filter((item) => item && typeof item === 'object' && item.id !== undefined);
-    }
-
-    if (data && typeof data === 'object') {
-        return pickFirstArray(
-            data.user,
-            data.users,
-            data.userlist,
-            data.list,
-            data.data,
-            payload.user,
-            payload.users
-        );
-    }
-
-    return pickFirstArray(payload.user, payload.users);
 }
 
 function sanitizeUrlForLog(url) {
@@ -373,26 +364,6 @@ function isUserNotFoundError(error) {
     return false;
 }
 
-function isProjectNotFoundError(error) {
-    const status = Number(error?.status || error?.response?.status || 0);
-    if (status === 404) return true;
-
-    const body = error?.responseData || error?.response?.data || null;
-    const text = String(
-        body?.errmsg
-        || body?.msg
-        || body?.message
-        || error?.message
-        || ''
-    );
-
-    if (status === 403 && /作品不存在|项目不存在|not\s*found/i.test(text)) {
-        return true;
-    }
-
-    return false;
-}
-
 function extractWorkSourcePayload(payload) {
     if (payload === null || payload === undefined) return null;
 
@@ -412,6 +383,99 @@ function extractWorkSourcePayload(payload) {
 }
 
 class Mirror40CodeSyncService {
+    async syncProjectWithMockData(remoteProjectId, remoteAuthorHint = null) {
+        const parsedProjectId = Number(remoteProjectId);
+        const hintedAuthorId = Number(remoteAuthorHint);
+        const remoteAuthorId = Number.isFinite(hintedAuthorId) && hintedAuthorId > 0
+            ? hintedAuthorId
+            : (parsedProjectId % 900000) + 1000;
+
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        const fakeRemoteUser = {
+            id: remoteAuthorId,
+            nickname: `DevUser-${remoteAuthorId}`,
+            introduce: `开发模式用户 ${remoteAuthorId}`,
+            update_time: nowSeconds,
+        };
+
+        const localAuthor = await this.ensureProxyUser(fakeRemoteUser, null);
+
+        const fakeRemoteProject = {
+            id: parsedProjectId,
+            author: remoteAuthorId,
+            name: `DevMock-${parsedProjectId}`,
+            introduce: `开发模式模拟项目 ${parsedProjectId}`,
+            look: 0,
+            like: 0,
+            num_collections: 0,
+            update_time: nowSeconds,
+            publish_time: nowSeconds,
+            time: nowSeconds,
+        };
+
+        const localProject = await this.ensureMirrorProject(fakeRemoteProject, localAuthor.id, remoteAuthorId);
+
+        const fakeSource = {
+            targets: [
+                {
+                    isStage: true,
+                    name: 'Stage',
+                    variables: {},
+                    lists: {},
+                    broadcasts: {},
+                    blocks: {},
+                    comments: {},
+                    currentCostume: 0,
+                    costumes: [
+                        {
+                            assetId: 'cd21514d0531fdffb22204e0ec5ed84a',
+                            name: 'backdrop1',
+                            md5ext: 'cd21514d0531fdffb22204e0ec5ed84a.svg',
+                            dataFormat: 'svg',
+                            bitmapResolution: 1,
+                            rotationCenterX: 240,
+                            rotationCenterY: 180,
+                        },
+                    ],
+                    sounds: [],
+                    volume: 100,
+                    layerOrder: 0,
+                    tempo: 60,
+                    videoTransparency: 50,
+                    videoState: 'on',
+                    textToSpeechLanguage: null,
+                },
+            ],
+            monitors: [],
+            extensions: [],
+            meta: {
+                semver: '3.0.0',
+                vm: '0.2.0',
+                agent: 'ZeroCat-Mirror40Code-DevMock',
+            },
+        };
+
+        const commitResult = await this.saveProjectSourceAndCommit(localProject, localAuthor.id, fakeRemoteProject, fakeSource);
+
+        await this.recordProjectSyncState(parsedProjectId, {
+            status: 'success',
+            detail: commitResult.updated ? 'mocked_updated' : 'mocked_unchanged',
+            localProjectId: localProject.id,
+        });
+
+        logger.debug(`[mirror-40code] 开发模式项目同步(假数据) remoteProject=${parsedProjectId} localProject=${localProject.id} remoteAuthor=${remoteAuthorId}`);
+        return {
+            remoteProjectId: parsedProjectId,
+            remoteAuthorId,
+            localAuthorId: localAuthor.id,
+            localProjectId: localProject.id,
+            updated: commitResult.updated,
+            commitId: commitResult.commitId,
+            sourceSha: commitResult.sourceSha,
+            mocked: true,
+        };
+    }
+
     async getConfig() {
         const enabled = await zcconfig.get('mirror40code.enabled', false);
         const token = await zcconfig.get('mirror40code.token', '');
@@ -419,8 +483,9 @@ class Mirror40CodeSyncService {
         const timeoutMs = Number(await zcconfig.get('mirror40code.timeout_ms', 15000)) || 15000;
         const listLimit = Number(await zcconfig.get('mirror40code.work_user_l', 20)) || 20;
         const maxPages = Number(await zcconfig.get('mirror40code.max_pages', 50)) || 50;
+        const searchPageSize = Math.max(20, Number(await zcconfig.get('mirror40code.search.page_size', 100)) || 100);
 
-        return { enabled, token, baseUrl, timeoutMs, listLimit, maxPages };
+        return { enabled, token, baseUrl, timeoutMs, listLimit, maxPages, searchPageSize };
     }
 
     ensureEnabled(cfg) {
@@ -729,43 +794,6 @@ class Mirror40CodeSyncService {
         };
     }
 
-    async fetchSearchTopUsers(cfg, page = 1) {
-        const url = `${cfg.baseUrl}/search/?token=${encodeURIComponent(cfg.token)}`;
-        const pageValue = Number.isFinite(Number(page)) && Number(page) > 0
-            ? String(Number(page))
-            : '1';
-        const body = {
-            ...USER_SEARCH_PAYLOAD,
-            page: pageValue,
-        };
-
-        const payload = await this.requestJson(url, {
-            method: 'POST',
-            headers: {
-                'content-type': 'application/json',
-            },
-            body: JSON.stringify(body),
-            timeoutMs: cfg.timeoutMs,
-        });
-
-        const code = Number(payload?.code);
-        if (Number.isFinite(code) && code !== 1) {
-            throw new Error(`/search 用户查询失败 code=${code} msg=${String(payload?.msg || '')}`);
-        }
-
-        const users = extractUserList(payload);
-        const total = Number(payload?.data?.num);
-        if (users.length === 0) {
-            logger.warn(`[mirror-40code] /search 用户列表为空 page=${pageValue} payloadKeys=${Object.keys(payload || {}).join(',')} dataKeys=${Object.keys(payload?.data || {}).join(',')}`);
-        }
-        return {
-            payload,
-            users,
-            page: Number(pageValue),
-            total: Number.isFinite(total) && total > 0 ? total : null,
-        };
-    }
-
     async fetchUserInfo(cfg, userId) {
         const url = `${cfg.baseUrl}/user/info?id=${encodeURIComponent(String(userId))}&token=${encodeURIComponent(cfg.token)}`;
         const payload = await this.requestJson(url, { timeoutMs: cfg.timeoutMs });
@@ -786,7 +814,9 @@ class Mirror40CodeSyncService {
             ...PROJECT_SEARCH_PAYLOAD,
             author: String(userId),
             page: String(page),
+            l: cfg.searchPageSize,
         };
+        logger.debug(`[mirror-40code] search projects by author remoteUser=${userId} page=${page} size=${cfg.searchPageSize}`);
         const payload = await this.requestJson(url, {
             method: 'POST',
             headers: {
@@ -798,6 +828,84 @@ class Mirror40CodeSyncService {
 
         const list = extractProjectList(payload);
         return { payload, list };
+    }
+
+    async fetchSearchProjectsPage(cfg, page = 1) {
+        const url = `${cfg.baseUrl}/search/?token=${encodeURIComponent(cfg.token)}`;
+        const pageValue = Number.isFinite(Number(page)) && Number(page) > 0
+            ? String(Number(page))
+            : '1';
+
+        const body = {
+            ...PROJECT_SEARCH_PAYLOAD,
+            page: pageValue,
+            l: cfg.searchPageSize,
+        };
+
+        logger.debug(`[mirror-40code] search projects page=${pageValue} size=${cfg.searchPageSize}`);
+
+        const payload = await this.requestJson(url, {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+            },
+            body: JSON.stringify(body),
+            timeoutMs: cfg.timeoutMs,
+        });
+
+        const code = Number(payload?.code);
+        if (Number.isFinite(code) && code !== 1) {
+            throw new Error(`/search 项目查询失败 code=${code} msg=${String(payload?.msg || '')}`);
+        }
+        logger.debug(payload.data.worklist)
+        const list = payload.data.worklist;
+        return {
+            payload,
+            list,
+            page: Number(pageValue),
+        };
+    }
+
+    async fetchSearchUsersPage(cfg, page = 1) {
+        const url = `${cfg.baseUrl}/search/?token=${encodeURIComponent(cfg.token)}`;
+        const pageValue = Number.isFinite(Number(page)) && Number(page) > 0
+            ? String(Number(page))
+            : '1';
+
+        const body = {
+            ...USER_SEARCH_PAYLOAD,
+            page: pageValue,
+            l: cfg.searchPageSize,
+        };
+
+        logger.debug(`[mirror-40code] search users page=${pageValue} size=${cfg.searchPageSize}`);
+
+        const payload = await this.requestJson(url, {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+            },
+            body: JSON.stringify(body),
+            timeoutMs: cfg.timeoutMs,
+        });
+
+        const code = Number(payload?.code);
+        if (Number.isFinite(code) && code !== 1) {
+            throw new Error(`/search 用户查询失败 code=${code} msg=${String(payload?.msg || '')}`);
+        }
+
+        const list = pickFirstArray(
+            payload?.data?.user,
+            payload?.data?.users,
+            payload?.data?.author,
+            payload?.data
+        );
+
+        return {
+            payload,
+            list,
+            page: Number(pageValue),
+        };
     }
 
     async fetchWorkInfo(cfg, projectId) {
@@ -883,83 +991,6 @@ class Mirror40CodeSyncService {
         return ids[ids.length - 1];
     }
 
-    async listMappedRemoteProjectIds() {
-        const records = await prisma.ow_target_configs.findMany({
-            where: {
-                target_type: TARGET_TYPE_PROJECT,
-                key: TARGET_KEY_LOCAL_PROJECT_ID,
-            },
-            select: { target_id: true },
-        });
-
-        const ids = records
-            .map((item) => Number(item?.target_id))
-            .filter((id) => Number.isFinite(id) && id > 0);
-        return Array.from(new Set(ids)).sort((a, b) => a - b);
-    }
-
-    async getLatestMappedRemoteProjectId() {
-        const ids = await this.listMappedRemoteProjectIds();
-        if (!ids.length) return 0;
-        return ids[ids.length - 1];
-    }
-
-    async probeProjectAvailability(cfg, remoteProjectId) {
-        const parsedId = Number(remoteProjectId);
-        if (!Number.isFinite(parsedId) || parsedId <= 0) {
-            return { notFound: true, project: null };
-        }
-
-        try {
-            const { project } = await this.fetchWorkInfo(cfg, parsedId);
-            if (!project || Number(project?.id) !== parsedId) {
-                return { notFound: true, project: null };
-            }
-            return { notFound: false, project };
-        } catch (error) {
-            if (isProjectNotFoundError(error)) {
-                return { notFound: true, project: null };
-            }
-            throw error;
-        }
-    }
-
-    async collectIncrementalNewProjectItems() {
-        const cfg = await this.getConfig();
-        this.ensureEnabled(cfg);
-
-        const latestId = await this.getLatestMappedRemoteProjectId();
-        if (!Number.isFinite(latestId) || latestId <= 0) {
-            logger.info('[mirror-40code] 增量项目扫描跳过：暂无已同步项目基线');
-            return [];
-        }
-
-        const maxScan = Math.max(1, Number(await zcconfig.get('mirror40code.incremental_projects.max_scan', 5000)) || 5000);
-        const items = [];
-
-        for (let offset = 1; offset <= maxScan; offset++) {
-            const projectId = latestId + offset;
-            const probe = await this.probeProjectAvailability(cfg, projectId);
-
-            if (probe.notFound) {
-                logger.info(`[mirror-40code] 增量项目扫描停止 latest=${latestId} stopAt=${projectId} new=${items.length}`);
-                break;
-            }
-
-            const remoteUserId = Number(probe?.project?.author);
-            items.push({
-                remoteProjectId: projectId,
-                remoteUserId: Number.isFinite(remoteUserId) && remoteUserId > 0 ? remoteUserId : null,
-            });
-
-            if (offset === maxScan) {
-                logger.warn(`[mirror-40code] 增量项目扫描达到上限 max_scan=${maxScan}，请考虑增大配置`);
-            }
-        }
-
-        return items;
-    }
-
     async probeUserAvailability(cfg, remoteUserId) {
         const parsedId = Number(remoteUserId);
         if (!Number.isFinite(parsedId) || parsedId <= 0) {
@@ -986,39 +1017,263 @@ class Mirror40CodeSyncService {
         }
     }
 
-    async collectIncrementalNewUserIds() {
-        const cfg = await this.getConfig();
-        this.ensureEnabled(cfg);
+    async collectDailyUserSyncCandidates(cfg) {
+        const maxPages = Math.max(1, Number(await zcconfig.get('mirror40code.daily.user_scan.max_pages', cfg.maxPages || 50)) || (cfg.maxPages || 50));
+        const seenUserIds = new Set();
+        const userCandidates = [];
 
-        const latestId = await this.getLatestMappedRemoteUserId();
-        if (!Number.isFinite(latestId) || latestId <= 0) {
-            logger.info('[mirror-40code] 增量用户扫描跳过：暂无已同步用户基线');
-            return [];
-        }
+        for (let page = 1; page <= maxPages; page++) {
+            const result = await this.fetchSearchUsersPage(cfg, page);
+            const list = Array.isArray(result?.list) ? result.list : [];
+            logger.debug(`[mirror-40code] 每日用户扫描 page=${page} count=${list.length}`);
 
-        const maxScan = Math.max(1, Number(await zcconfig.get('mirror40code.incremental.max_scan', 5000)) || 5000);
-        const newIds = [];
-
-        for (let offset = 1; offset <= maxScan; offset++) {
-            const userId = latestId + offset;
-            const probe = await this.probeUserAvailability(cfg, userId);
-
-            if (probe.notFound) {
-                logger.info(`[mirror-40code] 增量用户扫描停止 latest=${latestId} stopAt=${userId} new=${newIds.length}`);
+            if (list.length === 0) {
+                logger.info(`[mirror-40code] 每日用户扫描在第 ${page} 页返回空列表，结束`);
                 break;
             }
 
-            newIds.push(userId);
-            if (probe.blocked) {
-                logger.info(`[mirror-40code] 增量用户命中封禁用户 id=${userId}，将标记后跳过项目同步`);
-            }
-
-            if (offset === maxScan) {
-                logger.warn(`[mirror-40code] 增量用户扫描达到上限 max_scan=${maxScan}，请考虑增大配置`);
+            for (const item of list) {
+                const remoteUserId = Number(item?.id || item?.uid || item?.userid);
+                if (!Number.isFinite(remoteUserId) || remoteUserId <= 0) continue;
+                if (seenUserIds.has(remoteUserId)) continue;
+                seenUserIds.add(remoteUserId);
+                userCandidates.push({
+                    remoteUserId,
+                    remoteUpdateTime: normalizeRemoteUpdateSeconds(
+                        item?.update_time
+                        || item?.time
+                        || item?.last_time
+                        || item?.publish_time
+                    ) || null,
+                });
             }
         }
 
-        return newIds;
+        logger.info(`[mirror-40code] 每日用户扫描完成 candidates=${userCandidates.length} scannedUnique=${seenUserIds.size}`);
+        return userCandidates;
+    }
+
+    async shouldEnqueueProjectByTimestamp(remoteProjectId, remoteUpdateTimeSeconds) {
+        const parsedProjectId = Number(remoteProjectId);
+        if (!Number.isFinite(parsedProjectId) || parsedProjectId <= 0) {
+            return false;
+        }
+
+        const mappedLocalProjectId = await this.getMappedLocalProjectId(parsedProjectId);
+        if (!mappedLocalProjectId) {
+            return true;
+        }
+
+        const marker = await prisma.ow_target_configs.findUnique({
+            where: {
+                target_type_target_id_key: {
+                    target_type: LOCAL_TARGET_TYPE_PROJECT,
+                    target_id: String(mappedLocalProjectId),
+                    key: REMOTE_META_KEY_ID,
+                },
+            },
+            select: { value: true },
+        });
+
+        const legacyMarker = !marker
+            ? await prisma.ow_target_configs.findUnique({
+                where: {
+                    target_type_target_id_key: {
+                        target_type: LOCAL_TARGET_TYPE_PROJECT,
+                        target_id: String(mappedLocalProjectId),
+                        key: 'mirror40.remote_project_id',
+                    },
+                },
+                select: { value: true },
+            })
+            : null;
+
+        const markerValue = marker?.value ?? legacyMarker?.value;
+        if (!markerValue || String(markerValue) !== String(parsedProjectId)) {
+            return true;
+        }
+
+        const localProject = await prisma.ow_projects.findUnique({
+            where: { id: mappedLocalProjectId },
+            select: { time: true },
+        });
+
+        if (!localProject?.time) {
+            return true;
+        }
+
+        const remoteTs = normalizeRemoteUpdateSeconds(remoteUpdateTimeSeconds);
+        if (!remoteTs) {
+            return true;
+        }
+
+        const localTs = toUnixSeconds(localProject.time);
+        const needSync = remoteTs > localTs;
+        logger.debug(`[mirror-40code] 项目入队判定 remoteProject=${parsedProjectId} remoteTs=${remoteTs} localTs=${localTs} needSync=${needSync}`);
+        return needSync;
+    }
+
+    async shouldEnqueueUserByTimestamp(remoteUserId, remoteUpdateTimeSeconds) {
+        const parsedUserId = Number(remoteUserId);
+        if (!Number.isFinite(parsedUserId) || parsedUserId <= 0) {
+            return false;
+        }
+
+        const mappedLocalUserId = await this.getMappedLocalUserId(parsedUserId);
+        if (!mappedLocalUserId) {
+            return true;
+        }
+
+        const marker = await prisma.ow_target_configs.findUnique({
+            where: {
+                target_type_target_id_key: {
+                    target_type: LOCAL_TARGET_TYPE_USER,
+                    target_id: String(mappedLocalUserId),
+                    key: REMOTE_META_KEY_ID,
+                },
+            },
+            select: { value: true },
+        });
+
+        const legacyMarker = !marker
+            ? await prisma.ow_target_configs.findUnique({
+                where: {
+                    target_type_target_id_key: {
+                        target_type: LOCAL_TARGET_TYPE_USER,
+                        target_id: String(mappedLocalUserId),
+                        key: 'mirror40.remote_user_id',
+                    },
+                },
+                select: { value: true },
+            })
+            : null;
+
+        const markerValue = marker?.value ?? legacyMarker?.value;
+        if (!markerValue || String(markerValue) !== String(parsedUserId)) {
+            return true;
+        }
+
+        const remoteTs = normalizeRemoteUpdateSeconds(remoteUpdateTimeSeconds);
+        if (!remoteTs) {
+            const lastSyncMarker = await prisma.ow_target_configs.findUnique({
+                where: {
+                    target_type_target_id_key: {
+                        target_type: LOCAL_TARGET_TYPE_USER,
+                        target_id: String(mappedLocalUserId),
+                        key: REMOTE_META_KEY_LAST_SYNC_AT,
+                    },
+                },
+                select: { value: true },
+            });
+
+            const legacyLastSyncMarker = !lastSyncMarker
+                ? await prisma.ow_target_configs.findUnique({
+                    where: {
+                        target_type_target_id_key: {
+                            target_type: LOCAL_TARGET_TYPE_USER,
+                            target_id: String(mappedLocalUserId),
+                            key: 'mirror40.last_sync_at',
+                        },
+                    },
+                    select: { value: true },
+                })
+                : null;
+
+            const lastSyncTs = toUnixSeconds(lastSyncMarker?.value || legacyLastSyncMarker?.value);
+            const nowTs = Math.floor(Date.now() / 1000);
+            const intervalSeconds = USER_SYNC_INTERVAL_DAYS_WITHOUT_REMOTE_TS * 24 * 60 * 60;
+            const ageSeconds = lastSyncTs > 0 ? Math.max(0, nowTs - lastSyncTs) : null;
+            const needSync = !lastSyncTs || (nowTs - lastSyncTs) >= intervalSeconds;
+            logger.debug(`[mirror-40code] 用户入队判定 remoteUser=${parsedUserId} 无远端更新时间，按间隔判定 lastSyncTs=${lastSyncTs} ageSeconds=${ageSeconds ?? 'none'} thresholdSeconds=${intervalSeconds} needSync=${needSync}`);
+            return needSync;
+        }
+
+        const updateMarker = await prisma.ow_target_configs.findUnique({
+            where: {
+                target_type_target_id_key: {
+                    target_type: LOCAL_TARGET_TYPE_USER,
+                    target_id: String(mappedLocalUserId),
+                    key: REMOTE_META_KEY_UPDATED_AT,
+                },
+            },
+            select: { value: true },
+        });
+
+        const localTs = normalizeRemoteUpdateSeconds(updateMarker?.value);
+        const needSync = !localTs || remoteTs > localTs;
+        logger.debug(`[mirror-40code] 用户入队判定 remoteUser=${parsedUserId} remoteTs=${remoteTs} localTs=${localTs} needSync=${needSync}`);
+        return needSync;
+    }
+
+    async collectDailyProjectSyncItems() {
+        const cfg = await this.getConfig();
+        this.ensureEnabled(cfg);
+
+        const maxPages = Math.max(1, Number(await zcconfig.get('mirror40code.daily.project_scan.max_pages', cfg.maxPages || 50)) || (cfg.maxPages || 50));
+        const seenProjectIds = new Set();
+        const projectItems = [];
+
+        for (let page = 1; page <= maxPages; page++) {
+            const result = await this.fetchSearchProjectsPage(cfg, page);
+            const list = Array.isArray(result?.list) ? result.list : [];
+            logger.debug(`[mirror-40code] 每日项目扫描 page=${page} count=${list.length}`);
+
+            if (list.length === 0) {
+                logger.info(`[mirror-40code] 每日项目扫描在第 ${page} 页返回空列表，结束`);
+                break;
+            }
+
+            for (const item of list) {
+                const remoteProjectId = Number(item?.id);
+                if (!Number.isFinite(remoteProjectId) || remoteProjectId <= 0) continue;
+                if (seenProjectIds.has(remoteProjectId)) continue;
+                seenProjectIds.add(remoteProjectId);
+
+                const remoteUpdateTime = normalizeRemoteUpdateSeconds(item?.update_time || item?.time || item?.publish_time || 0);
+                const needSync = await this.shouldEnqueueProjectByTimestamp(remoteProjectId, remoteUpdateTime);
+                if (!needSync) continue;
+
+                const remoteUserId = Number(item?.author);
+                projectItems.push({
+                    remoteProjectId,
+                    remoteUserId: Number.isFinite(remoteUserId) && remoteUserId > 0 ? remoteUserId : null,
+                    remoteUpdateTime: Number.isFinite(remoteUpdateTime) && remoteUpdateTime > 0 ? remoteUpdateTime : null,
+                });
+            }
+        }
+
+        logger.info(`[mirror-40code] 每日项目扫描完成 candidates=${projectItems.length} scannedUnique=${seenProjectIds.size}`);
+        return projectItems;
+    }
+
+    async collectDailySyncCandidates() {
+        const cfg = await this.getConfig();
+        this.ensureEnabled(cfg);
+
+        const userCandidates = await this.collectDailyUserSyncCandidates(cfg);
+        const projectItems = await this.collectDailyProjectSyncItems();
+        logger.debug(`[mirror-40code] 每日候选合并开始 userCandidates=${userCandidates.length} projectCandidates=${projectItems.length}`);
+
+        const userIdSet = new Set(
+            userCandidates
+                .map((item) => Number(item?.remoteUserId))
+                .filter((id) => Number.isFinite(id) && id > 0)
+        );
+
+        for (const item of projectItems) {
+            const remoteUserId = Number(item?.remoteUserId);
+            if (!Number.isFinite(remoteUserId) || remoteUserId <= 0) continue;
+            userIdSet.add(remoteUserId);
+        }
+
+        const newUserIds = Array.from(userIdSet).sort((a, b) => a - b);
+
+        logger.debug(`[mirror-40code] 每日候选合并完成 users=${newUserIds.length} projects=${projectItems.length}`);
+
+        return {
+            newUserIds,
+            projectItems,
+        };
     }
 
     async upsertUserMapping(remoteUserId, localUserId) {
@@ -1057,6 +1312,28 @@ class Mirror40CodeSyncService {
                 value: String(value ?? ''),
             },
         });
+    }
+
+    async upsertLocalRemoteMetadata(localTargetType, localTargetId, {
+        remoteType = REMOTE_TYPE_40CODE,
+        remoteId = null,
+        remoteUpdatedAt = null,
+    } = {}) {
+        const tasks = [
+            this.upsertTargetConfig(localTargetType, String(localTargetId), REMOTE_META_KEY_TYPE, String(remoteType || REMOTE_TYPE_40CODE)),
+            this.upsertTargetConfig(localTargetType, String(localTargetId), REMOTE_META_KEY_LAST_SYNC_AT, new Date().toISOString()),
+        ];
+
+        if (remoteId !== null && remoteId !== undefined && String(remoteId).length > 0) {
+            tasks.push(this.upsertTargetConfig(localTargetType, String(localTargetId), REMOTE_META_KEY_ID, String(remoteId)));
+        }
+
+        const normalizedRemoteUpdatedAt = normalizeRemoteUpdateSeconds(remoteUpdatedAt);
+        if (normalizedRemoteUpdatedAt > 0) {
+            tasks.push(this.upsertTargetConfig(localTargetType, String(localTargetId), REMOTE_META_KEY_UPDATED_AT, String(normalizedRemoteUpdatedAt)));
+        }
+
+        await Promise.all(tasks);
     }
 
     async recordUserSyncState(remoteUserId, {
@@ -1201,11 +1478,17 @@ class Mirror40CodeSyncService {
         });
     }
 
-    async markSyncedProject(localProjectId, { remoteProjectId = null, remoteUserId = null, isProfileArticle = false } = {}) {
+    async markSyncedProject(localProjectId, { remoteProjectId = null, remoteUserId = null, remoteUpdatedAt = null, remoteType = REMOTE_TYPE_40CODE, isProfileArticle = false } = {}) {
         const tasks = [
+            this.upsertLocalRemoteMetadata(LOCAL_TARGET_TYPE_PROJECT, String(localProjectId), {
+                remoteType,
+                remoteId: remoteProjectId,
+                remoteUpdatedAt,
+            }),
             this.upsertProjectSyncMarker(localProjectId, 'mirror40.synced', 'true'),
-            this.upsertProjectSyncMarker(localProjectId, 'mirror40.source', '40code'),
+            this.upsertProjectSyncMarker(localProjectId, 'mirror40.source', String(remoteType || REMOTE_TYPE_40CODE)),
             this.upsertProjectSyncMarker(localProjectId, 'mirror40.profile_article', isProfileArticle ? 'true' : 'false'),
+            this.upsertTargetConfig('project', String(localProjectId), 'mirror40.last_sync_at', new Date().toISOString()),
         ];
 
         if (Number.isFinite(Number(remoteProjectId)) && Number(remoteProjectId) > 0) {
@@ -1325,6 +1608,16 @@ class Mirror40CodeSyncService {
         }
 
         await this.upsertUserMapping(remoteId, user.id);
+        await Promise.all([
+            this.upsertLocalRemoteMetadata(LOCAL_TARGET_TYPE_USER, String(user.id), {
+                remoteType: REMOTE_TYPE_40CODE,
+                remoteId,
+                remoteUpdatedAt: remoteUser?.update_time,
+            }),
+            this.upsertTargetConfig('user', String(user.id), 'mirror40.remote_user_id', String(remoteId)),
+            this.upsertTargetConfig('user', String(user.id), 'mirror40.last_sync_at', new Date().toISOString()),
+            this.upsertTargetConfig('user', String(user.id), 'mirror40.remote_update_time', String(Number(remoteUser?.update_time || 0) || 0)),
+        ]);
 
         if (cfg) {
             await this.syncProxyUserAvatar(cfg, remoteUser, user).catch((error) => {
@@ -1396,39 +1689,43 @@ class Mirror40CodeSyncService {
         return project;
     }
 
-    async collectUserProjectIds(cfg, remoteUserId) {
-        const ids = new Set();
-
-        const workListResult = await this.fetchUserWorkList(cfg, remoteUserId);
-        for (const item of workListResult.list) {
-            const projectId = Number(item?.id);
-            if (Number.isFinite(projectId) && projectId > 0) ids.add(projectId);
-        }
+    async collectUserProjectSyncItems(cfg, remoteUserId) {
+        const items = [];
+        const seenProjectIds = new Set();
 
         for (let page = 1; page <= cfg.maxPages; page++) {
             const result = await this.fetchSearchProjectsByAuthor(cfg, remoteUserId, page);
-            const list = result.list;
-            if (!Array.isArray(list) || list.length === 0) break;
+            const list = Array.isArray(result?.list) ? result.list : [];
+            logger.debug(`[mirror-40code] 用户项目扫描 remoteUser=${remoteUserId} page=${page} count=${list.length}`);
+            if (list.length === 0) break;
 
-            let pageAdded = 0;
             for (const item of list) {
                 const projectId = Number(item?.id);
                 if (!Number.isFinite(projectId) || projectId <= 0) continue;
-                if (!ids.has(projectId)) {
-                    ids.add(projectId);
-                    pageAdded += 1;
-                }
-            }
+                if (seenProjectIds.has(projectId)) continue;
+                seenProjectIds.add(projectId);
 
-            if (pageAdded === 0) break;
+                const remoteUpdateTime = normalizeRemoteUpdateSeconds(item?.update_time || item?.time || item?.publish_time || 0);
+                const needSync = await this.shouldEnqueueProjectByTimestamp(projectId, remoteUpdateTime);
+                if (!needSync) continue;
+
+                items.push({
+                    remoteProjectId: projectId,
+                    remoteUserId: Number(remoteUserId),
+                    remoteUpdateTime: remoteUpdateTime > 0 ? remoteUpdateTime : null,
+                });
+            }
         }
 
-        return Array.from(ids);
+        logger.debug(`[mirror-40code] 用户项目候选完成 remoteUser=${remoteUserId} candidates=${items.length} scannedUnique=${seenProjectIds.size}`);
+        return items;
     }
 
-    async syncUser(remoteUserId) {
+    async syncUser(remoteUserId, options = {}) {
         const cfg = await this.getConfig();
         this.ensureEnabled(cfg);
+
+        const forceSync = Boolean(options?.forceSync);
 
         const parsedUserId = Number(remoteUserId);
         if (!Number.isFinite(parsedUserId) || parsedUserId <= 0) {
@@ -1441,13 +1738,25 @@ class Mirror40CodeSyncService {
                 throw new Error(`远程用户不存在或无法获取: ${parsedUserId}`);
             }
 
+            const remoteUpdateTime = normalizeRemoteUpdateSeconds(remoteUser?.update_time || remoteUser?.time || remoteUser?.last_time || 0);
+            const needUserUpdate = forceSync || await this.shouldEnqueueUserByTimestamp(parsedUserId, remoteUpdateTime);
+            logger.debug(`[mirror-40code] 用户同步判定 remoteUser=${parsedUserId} remoteTs=${remoteUpdateTime} force=${forceSync} needUpdate=${needUserUpdate}`);
+            if (!needUserUpdate) {
+                return {
+                    remoteUserId: parsedUserId,
+                    skipped: true,
+                    reason: 'user_unchanged',
+                    projectItems: [],
+                };
+            }
+
             const localUser = await this.ensureProxyUser(remoteUser, cfg);
             const profileArticleProject = await this.ensureProfileArticleProject(remoteUser, localUser);
-            const projectIds = await this.collectUserProjectIds(cfg, parsedUserId);
+            const projectItems = await this.collectUserProjectSyncItems(cfg, parsedUserId);
 
             await this.recordUserSyncState(parsedUserId, {
                 status: 'success',
-                detail: `projects=${projectIds.length}`,
+                detail: `projects_to_enqueue=${projectItems.length}`,
                 localUserId: localUser.id,
             });
 
@@ -1455,7 +1764,7 @@ class Mirror40CodeSyncService {
                 remoteUserId: parsedUserId,
                 localUserId: localUser.id,
                 profileArticleProjectId: profileArticleProject.id,
-                projectIds,
+                projectItems,
                 displayName: localUser.display_name,
             };
         } catch (error) {
@@ -1471,14 +1780,14 @@ class Mirror40CodeSyncService {
                     status: 'skipped',
                     detail: `blocked:${reason}`,
                     localUserId: localUser.id,
-                }).catch(() => {});
+                }).catch(() => { });
 
                 return {
                     remoteUserId: parsedUserId,
                     localUserId: localUser.id,
                     skipped: true,
                     reason: 'user_blocked',
-                    projectIds: [],
+                    projectItems: [],
                     displayName: localUser.display_name,
                 };
             }
@@ -1486,7 +1795,7 @@ class Mirror40CodeSyncService {
             await this.recordUserSyncState(parsedUserId, {
                 status: 'failed',
                 detail: error.message,
-            }).catch(() => {});
+            }).catch(() => { });
             throw error;
         }
     }
@@ -1522,7 +1831,7 @@ class Mirror40CodeSyncService {
             like_count: Number(remoteProject?.like) || 0,
             favo_count: Number(remoteProject?.num_collections) || 0,
             star_count: Number(remoteProject?.like) || 0,
-            time: toDateFromUnixSeconds(remoteProject?.publish_time || remoteProject?.time) || new Date(),
+            time: toDateFromUnixSeconds(remoteProject?.update_time || remoteProject?.publish_time || remoteProject?.time) || new Date(),
             history: true,
         };
     }
@@ -1563,6 +1872,8 @@ class Mirror40CodeSyncService {
         await this.markSyncedProject(project.id, {
             remoteProjectId,
             remoteUserId: remoteAuthorId,
+            remoteUpdatedAt: remoteProject?.update_time || remoteProject?.time || remoteProject?.publish_time,
+            remoteType: REMOTE_TYPE_40CODE,
             isProfileArticle: false,
         });
         return project;
@@ -1719,6 +2030,15 @@ class Mirror40CodeSyncService {
             throw new Error(`无效远程项目ID: ${remoteProjectId}`);
         }
 
+        if (process.env.NODE_ENV === 'development') {
+            const random = Math.floor(Math.random() * 100) + 1;
+            const useRealCloudSync = random === 1;
+            logger.debug(`[mirror-40code] 开发模式项目抽签 remoteProject=${parsedProjectId} random=${random} useRealCloudSync=${useRealCloudSync}`);
+            if (!useRealCloudSync) {
+                return this.syncProjectWithMockData(parsedProjectId, remoteAuthorHint);
+            }
+        }
+
         try {
             const { project: remoteProject } = await this.fetchWorkInfo(cfg, parsedProjectId);
             if (!remoteProject || Number(remoteProject?.id) !== parsedProjectId) {
@@ -1820,7 +2140,7 @@ class Mirror40CodeSyncService {
             await this.recordProjectSyncState(parsedProjectId, {
                 status: 'failed',
                 detail: error.message,
-            }).catch(() => {});
+            }).catch(() => { });
             throw error;
         }
     }
@@ -1910,65 +2230,6 @@ class Mirror40CodeSyncService {
             skipped,
             concurrency: 'unlimited',
         };
-    }
-
-    async collectTopUserIds() {
-        const cfg = await this.getConfig();
-        this.ensureEnabled(cfg);
-
-        let firstPage = await this.fetchSearchTopUsers(cfg, 1);
-        if (!Array.isArray(firstPage.users) || firstPage.users.length === 0) {
-            for (let attempt = 2; attempt <= 3; attempt++) {
-                logger.warn(`[mirror-40code] 首页面用户为空，重试第 ${attempt - 1} 次`);
-                firstPage = await this.fetchSearchTopUsers(cfg, 1);
-                if (Array.isArray(firstPage.users) && firstPage.users.length > 0) {
-                    break;
-                }
-            }
-        }
-
-        if (!Array.isArray(firstPage.users) || firstPage.users.length === 0) {
-            throw new Error('[mirror-40code] 全量用户抓取失败：首页面返回空用户列表，已重试');
-        }
-
-        const allIds = new Set(
-            firstPage.users
-                .map((item) => Number(item?.id))
-                .filter((id) => Number.isFinite(id) && id > 0)
-        );
-
-        const firstPageSize = firstPage.users.length;
-        const estimatedTotalPages = firstPage.total && firstPageSize > 0
-            ? Math.ceil(firstPage.total / firstPageSize)
-            : 1;
-        const pageLimit = Math.max(1, estimatedTotalPages, cfg.maxPages || 1);
-
-        for (let page = 2; page <= pageLimit; page++) {
-            const result = await this.fetchSearchTopUsers(cfg, page);
-            if (!Array.isArray(result.users) || result.users.length === 0) {
-                logger.info(`[mirror-40code] 用户分页到第 ${page} 页为空，提前结束抓取`);
-                break;
-            }
-
-            let added = 0;
-            for (const item of result.users) {
-                const id = Number(item?.id);
-                if (!Number.isFinite(id) || id <= 0) continue;
-                if (!allIds.has(id)) {
-                    allIds.add(id);
-                    added += 1;
-                }
-            }
-
-            if (added === 0) {
-                logger.info(`[mirror-40code] 用户分页到第 ${page} 页未新增用户，提前结束抓取`);
-                break;
-            }
-        }
-
-        const uniqueIds = Array.from(allIds);
-        logger.info(`[mirror-40code] 全量用户抓取完成，统计总数=${firstPage.total || 'unknown'} 有效ID=${uniqueIds.length}`);
-        return uniqueIds;
     }
 
     async pingRemote() {

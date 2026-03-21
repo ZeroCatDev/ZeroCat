@@ -3,6 +3,226 @@ import {prisma} from "../../services/prisma.js";
 
 const router = Router();
 
+const USER_TARGET_TYPE = "user";
+const MAX_ITEMS_PER_PAGE = 200;
+
+const parseUserId = (value) => {
+    const userId = Number(value);
+    if (!Number.isInteger(userId) || userId <= 0) {
+        return null;
+    }
+    return userId;
+};
+
+const normalizeConfigValue = (value) => {
+    if (typeof value === "string") {
+        return value;
+    }
+
+    try {
+        return JSON.stringify(value);
+    } catch {
+        return String(value);
+    }
+};
+
+/**
+ * @api {get} /admin/users/:id/target-configs 获取指定用户 target configs
+ * @apiName GetUserTargetConfigs
+ * @apiGroup AdminUsers
+ * @apiPermission admin
+ *
+ * @apiParam {Number} id 用户ID
+ * @apiQuery {Number} [page=1] 页码（从1开始）
+ * @apiQuery {Number} [itemsPerPage=20] 每页条数，最大200
+ * @apiQuery {String} [key] 按 key 精确匹配
+ * @apiQuery {String} [keyLike] 按 key 模糊匹配
+ *
+ * @apiSuccess {String} status 请求状态
+ * @apiSuccess {Object} data 结果数据
+ */
+router.get("/:id/target-configs", async (req, res) => {
+    try {
+        const userId = parseUserId(req.params.id);
+        if (!userId) {
+            return res.status(400).json({
+                status: "error",
+                message: "无效用户ID",
+            });
+        }
+
+        const user = await prisma.ow_users.findUnique({
+            where: {id: userId},
+            select: {id: true},
+        });
+
+        if (!user) {
+            return res.status(404).json({
+                status: "error",
+                message: "用户不存在",
+            });
+        }
+
+        const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+        const itemsPerPageRaw = Number.parseInt(req.query.itemsPerPage, 10) || 20;
+        const itemsPerPage = Math.min(MAX_ITEMS_PER_PAGE, Math.max(1, itemsPerPageRaw));
+        const key = typeof req.query.key === "string" ? req.query.key.trim() : "";
+        const keyLike = typeof req.query.keyLike === "string" ? req.query.keyLike.trim() : "";
+
+        const where = {
+            target_type: USER_TARGET_TYPE,
+            target_id: String(userId),
+        };
+
+        if (key) {
+            where.key = key;
+        } else if (keyLike) {
+            where.key = {
+                contains: keyLike,
+            };
+        }
+
+        const [items, total] = await Promise.all([
+            prisma.ow_target_configs.findMany({
+                where,
+                orderBy: [
+                    {updated_at: "desc"},
+                    {id: "desc"},
+                ],
+                skip: (page - 1) * itemsPerPage,
+                take: itemsPerPage,
+                select: {
+                    id: true,
+                    target_type: true,
+                    target_id: true,
+                    key: true,
+                    value: true,
+                    created_at: true,
+                    updated_at: true,
+                },
+            }),
+            prisma.ow_target_configs.count({where}),
+        ]);
+
+        res.json({
+            status: "success",
+            data: {
+                items,
+                total,
+                page,
+                itemsPerPage,
+            },
+        });
+    } catch (error) {
+        console.error("Error fetching user target configs:", error);
+        res.status(500).json({
+            status: "error",
+            message: "获取用户target config失败",
+        });
+    }
+});
+
+/**
+ * @api {put} /admin/users/:id/target-configs/:key 设置指定用户 target config
+ * @apiName UpsertUserTargetConfig
+ * @apiGroup AdminUsers
+ * @apiPermission admin
+ *
+ * @apiParam {Number} id 用户ID
+ * @apiParam {String} key 配置键
+ * @apiBody {String|Object|Number|Boolean} value 配置值（最终存储为字符串）
+ *
+ * @apiSuccess {String} status 请求状态
+ * @apiSuccess {String} message 结果描述
+ * @apiSuccess {Object} data 配置记录
+ */
+router.put("/:id/target-configs/:key", async (req, res) => {
+    try {
+        const userId = parseUserId(req.params.id);
+        if (!userId) {
+            return res.status(400).json({
+                status: "error",
+                message: "无效用户ID",
+            });
+        }
+
+        const configKey = String(req.params.key || "").trim();
+        if (!configKey) {
+            return res.status(400).json({
+                status: "error",
+                message: "配置key不能为空",
+            });
+        }
+
+        if (configKey.length > 255) {
+            return res.status(400).json({
+                status: "error",
+                message: "配置key长度不能超过255",
+            });
+        }
+
+        if (typeof req.body === "undefined" || typeof req.body.value === "undefined") {
+            return res.status(400).json({
+                status: "error",
+                message: "缺少value字段",
+            });
+        }
+
+        const user = await prisma.ow_users.findUnique({
+            where: {id: userId},
+            select: {id: true},
+        });
+
+        if (!user) {
+            return res.status(404).json({
+                status: "error",
+                message: "用户不存在",
+            });
+        }
+
+        const normalizedValue = normalizeConfigValue(req.body.value);
+        const record = await prisma.ow_target_configs.upsert({
+            where: {
+                target_type_target_id_key: {
+                    target_type: USER_TARGET_TYPE,
+                    target_id: String(userId),
+                    key: configKey,
+                },
+            },
+            update: {
+                value: normalizedValue,
+            },
+            create: {
+                target_type: USER_TARGET_TYPE,
+                target_id: String(userId),
+                key: configKey,
+                value: normalizedValue,
+            },
+            select: {
+                id: true,
+                target_type: true,
+                target_id: true,
+                key: true,
+                value: true,
+                created_at: true,
+                updated_at: true,
+            },
+        });
+
+        res.json({
+            status: "success",
+            message: "用户target config已更新",
+            data: record,
+        });
+    } catch (error) {
+        console.error("Error updating user target config:", error);
+        res.status(500).json({
+            status: "error",
+            message: "更新用户target config失败",
+        });
+    }
+});
+
 /**
  * @api {get} /admin/users List users with pagination, sorting and filtering
  * @apiName GetUsers

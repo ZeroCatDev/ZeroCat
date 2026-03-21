@@ -25,9 +25,7 @@ const queueManager = {
         const mirrorEnabled = await zcconfig.get('mirror40code.enabled', false);
         const periodicEnabled = await zcconfig.get('mirror40code.periodic.enabled', true);
         const schedulerIds = [
-            'mirror40code-periodic-incremental-users',
-            'mirror40code-periodic-incremental-projects',
-            'mirror40code-periodic-refresh-projects',
+            'mirror40code-periodic-daily-sync',
         ];
 
         if (!mirrorEnabled || !periodicEnabled) {
@@ -77,22 +75,13 @@ const queueManager = {
             );
         };
 
-        const incrementalEnabled = await zcconfig.get('mirror40code.periodic.incremental_users.enabled', true);
-        const incrementalInterval = Math.max(60000, Number(await zcconfig.get('mirror40code.periodic.incremental_users.interval_ms', 600000)) || 600000);
+        const dailySyncEnabled = await zcconfig.get('mirror40code.periodic.daily_sync.enabled', true);
+        const dailySyncInterval = Math.max(60000, Number(await zcconfig.get('mirror40code.periodic.daily_sync.interval_ms', 604800000)) || 604800000);
         await upsertOrRemove({
-            schedulerId: 'mirror40code-periodic-incremental-users',
-            enabled: incrementalEnabled,
-            every: incrementalInterval,
-            type: 'incremental-users',
-        });
-
-        const incrementalProjectsEnabled = await zcconfig.get('mirror40code.periodic.incremental_projects.enabled', true);
-        const incrementalProjectsInterval = Math.max(60000, Number(await zcconfig.get('mirror40code.periodic.incremental_projects.interval_ms', 600000)) || 600000);
-        await upsertOrRemove({
-            schedulerId: 'mirror40code-periodic-incremental-projects',
-            enabled: incrementalProjectsEnabled,
-            every: incrementalProjectsInterval,
-            type: 'incremental-projects',
+            schedulerId: 'mirror40code-periodic-daily-sync',
+            enabled: dailySyncEnabled,
+            every: dailySyncInterval,
+            type: 'daily-sync',
         });
 
         logger.info('[queue-manager] Mirror40Code periodic schedulers synced');
@@ -820,10 +809,10 @@ const queueManager = {
             return null;
         }
 
-        const jobId = 'm40-full-sync';
+        const jobId = 'm40-daily-sync';
         try {
-            const job = await queue.add('full-sync', {
-                type: 'full-sync',
+            const job = await queue.add('daily-sync', {
+                type: 'daily-sync',
                 requestedAt: new Date().toISOString(),
             }, {
                 jobId,
@@ -836,77 +825,7 @@ const queueManager = {
 
             return { jobId: job.id, queued: true };
         } catch (error) {
-            logger.error('[queue-manager] Failed to enqueue Mirror40Code full-sync:', error.message);
-            return null;
-        }
-    },
-
-    async enqueueMirror40CodeUserSync(remoteUserId) {
-        const queue = getMirror40CodeQueue();
-        if (!queue || !initialized) {
-            logger.warn('[queue-manager] Mirror40Code queue not available');
-            return null;
-        }
-
-        const userId = Number(remoteUserId);
-        if (!Number.isFinite(userId) || userId <= 0) {
-            throw new Error(`Invalid remoteUserId: ${remoteUserId}`);
-        }
-
-        const jobId = `m40-user-${userId}`;
-        try {
-            const job = await queue.add('sync-user', {
-                type: 'sync-user',
-                remoteUserId: userId,
-                requestedAt: new Date().toISOString(),
-            }, {
-                jobId,
-                deduplication: { id: jobId },
-                attempts: 5,
-                backoff: { type: 'exponential', delay: 15000 },
-                removeOnComplete: { age: 86400 },
-                removeOnFail: { age: 604800 },
-            });
-
-            return { jobId: job.id, queued: true };
-        } catch (error) {
-            logger.error('[queue-manager] Failed to enqueue Mirror40Code user-sync:', error.message);
-            return null;
-        }
-    },
-
-    async enqueueMirror40CodeProjectSync(remoteProjectId, remoteUserId = null) {
-        const queue = getMirror40CodeQueue();
-        if (!queue || !initialized) {
-            logger.warn('[queue-manager] Mirror40Code queue not available');
-            return null;
-        }
-
-        const projectId = Number(remoteProjectId);
-        if (!Number.isFinite(projectId) || projectId <= 0) {
-            throw new Error(`Invalid remoteProjectId: ${remoteProjectId}`);
-        }
-
-        const authorId = Number(remoteUserId);
-        const jobId = `m40-project-${projectId}`;
-        try {
-            const job = await queue.add('sync-project', {
-                type: 'sync-project',
-                remoteProjectId: projectId,
-                remoteUserId: Number.isFinite(authorId) && authorId > 0 ? authorId : null,
-                requestedAt: new Date().toISOString(),
-            }, {
-                jobId,
-                deduplication: { id: jobId },
-                attempts: 5,
-                backoff: { type: 'exponential', delay: 15000 },
-                removeOnComplete: { age: 86400 },
-                removeOnFail: { age: 604800 },
-            });
-
-            return { jobId: job.id, queued: true };
-        } catch (error) {
-            logger.error('[queue-manager] Failed to enqueue Mirror40Code project-sync:', error.message);
+            logger.error('[queue-manager] Failed to enqueue Mirror40Code daily-sync:', error.message);
             return null;
         }
     },
