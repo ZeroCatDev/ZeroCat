@@ -9,6 +9,8 @@ let worker = null;
 
 const taskHandlers = new Map();
 
+const REMOTE_VIEW_COUNT_KEYS = ['mirror.remote_view_count', 'mirror40.remote_view_count'];
+
 // Register built-in task handlers
 taskHandlers.set('hourly-cleanup', async (data, job) => {
     await job.log('Executing hourly cleanup');
@@ -16,6 +18,76 @@ taskHandlers.set('hourly-cleanup', async (data, job) => {
 
 taskHandlers.set('daily-stats', async (data, job) => {
     await job.log('Executing daily stats');
+
+    const { prisma } = await import('../../prisma.js');
+
+    const updatedRows = await prisma.$queryRawUnsafe(
+        `
+        WITH local_pageviews AS (
+            SELECT
+                e.target_id AS project_id,
+                COUNT(*)::bigint AS pageviews
+            FROM ow_analytics_event e
+            WHERE e.target_type = 'project'
+            GROUP BY e.target_id
+        ),
+        local_visitors AS (
+            SELECT
+                e.target_id AS project_id,
+                COUNT(
+                    DISTINCT COALESCE(
+                        e.device_id::text,
+                        CASE WHEN e.user_id IS NOT NULL THEN 'u:' || e.user_id::text ELSE NULL END,
+                        CASE WHEN e.ip_address IS NOT NULL AND e.ip_address <> '' THEN 'ip:' || e.ip_address ELSE NULL END,
+                        'ev:' || e.id::text
+                    )
+                )::bigint AS visitors
+            FROM ow_analytics_event e
+            WHERE e.target_type = 'project'
+            GROUP BY e.target_id
+        ),
+        remote_views AS (
+            SELECT
+                tc.target_id::int AS project_id,
+                MAX(
+                    CASE
+                        WHEN tc.value ~ '^[0-9]+$' THEN tc.value::bigint
+                        ELSE 0
+                    END
+                )::bigint AS remote_view_count
+            FROM project_config tc
+            WHERE tc.target_type = 'project'
+              AND tc.key = ANY($1::text[])
+              AND tc.target_id ~ '^[0-9]+$'
+            GROUP BY tc.target_id
+        ),
+        aggregated AS (
+            SELECT
+                p.id AS project_id,
+                LEAST(
+                    2147483647,
+                    GREATEST(
+                        0,
+                        COALESCE(lp.pageviews, 0) + COALESCE(lv.visitors, 0) + COALESCE(rv.remote_view_count, 0)
+                    )
+                )::int AS total_view_count
+            FROM ow_projects p
+            LEFT JOIN local_pageviews lp ON lp.project_id = p.id
+            LEFT JOIN local_visitors lv ON lv.project_id = p.id
+            LEFT JOIN remote_views rv ON rv.project_id = p.id
+        )
+        UPDATE ow_projects p
+        SET view_count = a.total_view_count
+        FROM aggregated a
+        WHERE p.id = a.project_id
+          AND p.view_count IS DISTINCT FROM a.total_view_count
+        RETURNING p.id
+        `,
+        REMOTE_VIEW_COUNT_KEYS
+    );
+
+    const updatedCount = Array.isArray(updatedRows) ? updatedRows.length : 0;
+    await job.log(`Daily stats sync done: updated ${updatedCount} project view_count records`);
 });
 
 taskHandlers.set('memory-cache-cleanup', async (data, job) => {
