@@ -2,6 +2,7 @@ import { prisma } from '../services/prisma.js';
 
 import logger from "../services/logger.js";
 import gorseService from "../services/gorse.js";
+import queueManager from '../services/queue/queueManager.js';
 
 
 /**
@@ -58,6 +59,10 @@ export async function starProject(userId, projectId) {
         // Gorse 反馈：项目收藏
         gorseService.feedbackProjectStar(parsedUserId, parsedProjectId).catch(e => {
             logger.debug('[gorse] star feedback failed:', e.message);
+        });
+
+        queueManager.enqueueUserEmbedding(parsedUserId, false, 'project_star').catch(e => {
+            logger.debug('[embedding] project star user enqueue failed:', e.message);
         });
 
 
@@ -122,6 +127,10 @@ export async function unstarProject(userId, projectId) {
         // Gorse 反馈：取消项目收藏
         gorseService.feedbackProjectUnstar(parsedUserId, parsedProjectId).catch(e => {
             logger.debug('[gorse] unstar feedback failed:', e.message);
+        });
+
+        queueManager.enqueueUserEmbedding(parsedUserId, false, 'project_unstar').catch(e => {
+            logger.debug('[embedding] project unstar user enqueue failed:', e.message);
         });
 
         return star;

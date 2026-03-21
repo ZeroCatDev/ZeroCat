@@ -832,6 +832,7 @@ export async function unretweetPost({ authorId, retweetPostId }) {
     queueManager.enqueueSocialPostSync(authorId, result.retweetId, "unretweet").catch((error) => {
       logger.warn("推文社交同步入队失败(unretweet):", error.message);
     });
+    queueManager.enqueueUserEmbedding(authorId, false, 'post_unretweet').catch(e => logger.debug('[embedding] unretweet user enqueue failed:', e.message));
   }
 
   return result;
@@ -1040,6 +1041,7 @@ export async function unlikePost({ userId, postId }) {
     });
     // Gorse 反馈：取消点赞
     gorseService.feedbackPostUnlike(userId, target.id).catch(e => logger.debug('[gorse] unlike feedback failed:', e.message));
+    queueManager.enqueueUserEmbedding(userId, false, 'post_unlike').catch(e => logger.debug('[embedding] unlike user enqueue failed:', e.message));
   }
 
   return result;
@@ -1114,6 +1116,7 @@ export async function unbookmarkPost({ userId, postId }) {
     });
     // Gorse 反馈：取消收藏
     gorseService.feedbackPostUnbookmark(userId, target.id).catch(e => logger.debug('[gorse] unbookmark feedback failed:', e.message));
+    queueManager.enqueueUserEmbedding(userId, false, 'post_unbookmark').catch(e => logger.debug('[embedding] unbookmark user enqueue failed:', e.message));
   }
 
   return result;

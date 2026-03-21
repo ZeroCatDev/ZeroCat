@@ -691,7 +691,7 @@ export async function searchSimilar(entityType, queryVector, limit = 20, exclude
         params.push(excludeIds);
     }
 
-    query += ` ORDER BY embedding <=> $1::vector LIMIT ${Math.min(limit, 100)}`;
+    query += ` ORDER BY embedding <=> $1::vector LIMIT ${Math.min(limit, 800)}`;
 
     const rows = await prisma.$queryRawUnsafe(query, ...params);
     return rows.map(r => ({ entityId: r.entity_id, similarity: Number(r.similarity) }));

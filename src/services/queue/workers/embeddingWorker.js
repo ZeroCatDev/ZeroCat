@@ -7,7 +7,7 @@
  *
  * 用户向量采用“基础语料 + 互动兴趣”融合策略：
  * - 基础语料：同名 README 项目源码 + 昵称/简介 + 用户作品标题/简介
- * - 互动兴趣：帖子/点赞/收藏向量，按行为权重 + 热度增强 + 时间衰减合并
+ * - 互动兴趣：帖子/点赞/收藏/转贴 + 作品(自有/收藏)向量，按行为权重 + 热度增强 + 时间衰减合并
  * - 融合结果写入 pgvector，同时记录 ow_user_embedding_updates 追踪兴趣变化
  */
 import { Worker } from 'bullmq';
@@ -310,7 +310,7 @@ async function processProjectEmbedding(job) {
 
 // ======================== 用户向量生成 ========================
 
-const USER_INTEREST_ALGO = 'interest_decay_v1';
+const USER_INTEREST_ALGO = 'interest_decay_v2_events';
 
 function normName(value) {
     return String(value || '').trim().toLowerCase();
@@ -322,6 +322,15 @@ function calcHotScore(post) {
     const retweetCount = Number(post?.retweet_count) || 0;
     const replyCount = Number(post?.reply_count) || 0;
     const engagement = likeCount + (bookmarkCount * 1.6) + (retweetCount * 1.2) + (replyCount * 0.8);
+    return Math.log1p(Math.max(0, engagement));
+}
+
+function calcProjectHotScore(project) {
+    const likeCount = Number(project?.like_count) || 0;
+    const starCount = Number(project?.star_count) || 0;
+    const favoCount = Number(project?.favo_count) || 0;
+    const viewCount = Number(project?.view_count) || 0;
+    const engagement = (likeCount * 1.1) + (starCount * 1.4) + (favoCount * 1.2) + (Math.log1p(Math.max(0, viewCount)) * 0.35);
     return Math.log1p(Math.max(0, engagement));
 }
 
@@ -389,6 +398,39 @@ function mergeWeightedVectors(baseVector, interactionVector, baseWeight, interac
     return embeddingService.normalizeVector(merged);
 }
 
+function collapseInteractionEntries(entries, maxPerSourceWeight = 2.6) {
+    if (!Array.isArray(entries) || entries.length === 0) return [];
+
+    const map = new Map();
+
+    for (const entry of entries) {
+        if (!entry?.vector || !entry?.sourceKey) continue;
+
+        const existed = map.get(entry.sourceKey);
+        if (!existed) {
+            map.set(entry.sourceKey, {
+                vector: entry.vector,
+                weight: Math.min(maxPerSourceWeight, Math.max(0, Number(entry.weight) || 0)),
+                timestamp: entry.timestamp,
+            });
+            continue;
+        }
+
+        existed.weight = Math.min(
+            maxPerSourceWeight,
+            existed.weight + Math.max(0, (Number(entry.weight) || 0) * 0.55)
+        );
+
+        const existedTs = new Date(existed.timestamp).getTime();
+        const currentTs = new Date(entry.timestamp).getTime();
+        if (Number.isFinite(currentTs) && (!Number.isFinite(existedTs) || currentTs > existedTs)) {
+            existed.timestamp = entry.timestamp;
+        }
+    }
+
+    return Array.from(map.values());
+}
+
 async function processUserEmbedding(job) {
     const { userId, force = false, triggerType = 'scheduled' } = job.data;
     await job.log(`开始处理用户 ${userId} 的向量生成 (force=${force})`);
@@ -418,6 +460,10 @@ async function processUserEmbedding(job) {
             title: true,
             description: true,
             time: true,
+            like_count: true,
+            star_count: true,
+            favo_count: true,
+            view_count: true,
         },
         orderBy: { time: 'desc' },
         take: 120,
@@ -435,28 +481,45 @@ async function processUserEmbedding(job) {
     // 收集用户交互的帖子向量（行为权重 + 热度增强 + 时间衰减）
     const entries = [];
     const interactionSignature = [];
+    const eventBreakdown = {};
     let hotScore = 0;
     let decayScore = 0;
     let interactionWithVector = 0;
+    let postInteractionCount = 0;
+    let projectInteractionCount = 0;
 
-    const pushEntry = ({ action, postId, vector, actionAt, postMeta }) => {
+    const markEventTotal = (action) => {
+        if (!eventBreakdown[action]) eventBreakdown[action] = { total: 0, withVector: 0 };
+        eventBreakdown[action].total += 1;
+    };
+
+    const markEventWithVector = (action) => {
+        if (!eventBreakdown[action]) eventBreakdown[action] = { total: 0, withVector: 0 };
+        eventBreakdown[action].withVector += 1;
+    };
+
+    const pushEntry = ({ action, sourceType, sourceId, vector, actionAt, hot = 0, baseTimestamp = null, signatureExtra = '' }) => {
         if (!vector) return;
 
         const actionWeightMap = {
             post: 1.0,
             like: 0.65,
             bookmark: 0.85,
+            repost: 0.75,
+            project_author: 0.95,
+            project_star: 0.8,
         };
 
         const actionWeight = actionWeightMap[action] || 0.5;
-        const hot = calcHotScore(postMeta);
-        const freshness = calcDecayFactor(postMeta?.created_at, 14);
-        const boostedWeight = actionWeight * (1 + hot * 0.35 * freshness);
+        const freshness = calcDecayFactor(baseTimestamp || actionAt, sourceType === 'project' ? 30 : 14);
+        const hotBoost = Math.min(2.2, Math.max(0, hot * 0.35 * freshness));
+        const boostedWeight = actionWeight * (1 + hotBoost);
 
         entries.push({
             vector,
             weight: boostedWeight,
             timestamp: actionAt,
+            sourceKey: `${sourceType}:${sourceId}`,
         });
 
         const interactionDecay = calcDecayFactor(actionAt, 30);
@@ -464,7 +527,14 @@ async function processUserEmbedding(job) {
         decayScore += interactionDecay;
         interactionWithVector += 1;
 
-        interactionSignature.push(`${action}:${postId}:${new Date(actionAt).getTime()}:${Number(postMeta?.like_count) || 0}:${Number(postMeta?.bookmark_count) || 0}`);
+        if (sourceType === 'project') {
+            projectInteractionCount += 1;
+        } else {
+            postInteractionCount += 1;
+        }
+
+        const ts = new Date(actionAt).getTime();
+        interactionSignature.push(`${action}:${sourceType}:${sourceId}:${Number.isFinite(ts) ? ts : 0}:${signatureExtra}`);
     };
 
     // 1. 用户自己发的帖子（高权重）
@@ -491,7 +561,21 @@ async function processUserEmbedding(job) {
         const postVectors = await embeddingService.getEmbeddings('post', postIds);
         for (const post of userPosts) {
             const vec = postVectors.get(post.id);
-            pushEntry({ action: 'post', postId: post.id, vector: vec, actionAt: post.created_at, postMeta: post });
+            markEventTotal('post');
+            if (vec) {
+                markEventWithVector('post');
+                const hot = calcHotScore(post);
+                pushEntry({
+                    action: 'post',
+                    sourceType: 'post',
+                    sourceId: post.id,
+                    vector: vec,
+                    actionAt: post.created_at,
+                    hot,
+                    baseTimestamp: post.created_at,
+                    signatureExtra: `${Number(post?.like_count) || 0}:${Number(post?.bookmark_count) || 0}:${Number(post?.retweet_count) || 0}:${Number(post?.reply_count) || 0}`,
+                });
+            }
         }
         await job.log(`用户帖子向量: ${interactionWithVector}/${userPosts.length} 有向量`);
     }
@@ -522,13 +606,19 @@ async function processUserEmbedding(job) {
         let likeCount = 0;
         for (const like of likedPosts) {
             const vec = likeVectors.get(like.post_id);
+            markEventTotal('like');
             if (vec) {
+                markEventWithVector('like');
+                const hot = calcHotScore(like.post);
                 pushEntry({
                     action: 'like',
-                    postId: like.post_id,
+                    sourceType: 'post',
+                    sourceId: like.post_id,
                     vector: vec,
                     actionAt: like.created_at,
-                    postMeta: like.post,
+                    hot,
+                    baseTimestamp: like.post?.created_at,
+                    signatureExtra: `${Number(like.post?.like_count) || 0}:${Number(like.post?.bookmark_count) || 0}:${Number(like.post?.retweet_count) || 0}:${Number(like.post?.reply_count) || 0}`,
                 });
                 likeCount++;
             }
@@ -562,13 +652,19 @@ async function processUserEmbedding(job) {
         let bmCount = 0;
         for (const bm of bookmarkedPosts) {
             const vec = bmVectors.get(bm.post_id);
+            markEventTotal('bookmark');
             if (vec) {
+                markEventWithVector('bookmark');
+                const hot = calcHotScore(bm.post);
                 pushEntry({
                     action: 'bookmark',
-                    postId: bm.post_id,
+                    sourceType: 'post',
+                    sourceId: bm.post_id,
                     vector: vec,
                     actionAt: bm.created_at,
-                    postMeta: bm.post,
+                    hot,
+                    baseTimestamp: bm.post?.created_at,
+                    signatureExtra: `${Number(bm.post?.like_count) || 0}:${Number(bm.post?.bookmark_count) || 0}:${Number(bm.post?.retweet_count) || 0}:${Number(bm.post?.reply_count) || 0}`,
                 });
                 bmCount++;
             }
@@ -576,9 +672,147 @@ async function processUserEmbedding(job) {
         await job.log(`用户收藏帖子向量: ${bmCount}/${bookmarkedPosts.length} 有向量`);
     }
 
+    // 4. 用户转贴的原帖（作为兴趣表达）
+    const repostPosts = await prisma.ow_posts.findMany({
+        where: {
+            author_id: userId,
+            is_deleted: false,
+            post_type: 'retweet',
+            retweet_post_id: { not: null },
+        },
+        select: {
+            id: true,
+            retweet_post_id: true,
+            created_at: true,
+            retweet_post: {
+                select: {
+                    created_at: true,
+                    like_count: true,
+                    bookmark_count: true,
+                    retweet_count: true,
+                    reply_count: true,
+                },
+            },
+        },
+        orderBy: { created_at: 'desc' },
+        take: 160,
+    });
+
+    if (repostPosts.length > 0) {
+        const repostTargetIds = repostPosts.map(r => Number(r.retweet_post_id)).filter(id => Number.isInteger(id));
+        const repostVectors = await embeddingService.getEmbeddings('post', repostTargetIds);
+        let repostWithVector = 0;
+
+        for (const repost of repostPosts) {
+            const targetId = Number(repost.retweet_post_id);
+            markEventTotal('repost');
+            if (!Number.isInteger(targetId)) continue;
+
+            const vec = repostVectors.get(targetId);
+            if (vec) {
+                markEventWithVector('repost');
+                const hot = calcHotScore(repost.retweet_post);
+                pushEntry({
+                    action: 'repost',
+                    sourceType: 'post',
+                    sourceId: targetId,
+                    vector: vec,
+                    actionAt: repost.created_at,
+                    hot,
+                    baseTimestamp: repost.retweet_post?.created_at,
+                    signatureExtra: `${Number(repost.retweet_post?.like_count) || 0}:${Number(repost.retweet_post?.bookmark_count) || 0}:${Number(repost.retweet_post?.retweet_count) || 0}:${Number(repost.retweet_post?.reply_count) || 0}`,
+                });
+                repostWithVector++;
+            }
+        }
+
+        await job.log(`用户转贴目标帖子向量: ${repostWithVector}/${repostPosts.length} 有向量`);
+    }
+
+    // 5. 用户自己的作品（project embedding）
+    if (authoredProjects.length > 0) {
+        const authoredProjectIds = authoredProjects.map(p => p.id);
+        const authoredProjectVectors = await embeddingService.getEmbeddings('project', authoredProjectIds);
+        let authoredWithVector = 0;
+
+        for (const project of authoredProjects) {
+            const vec = authoredProjectVectors.get(project.id);
+            markEventTotal('project_author');
+            if (vec) {
+                markEventWithVector('project_author');
+                const hot = calcProjectHotScore(project);
+                pushEntry({
+                    action: 'project_author',
+                    sourceType: 'project',
+                    sourceId: project.id,
+                    vector: vec,
+                    actionAt: project.time,
+                    hot,
+                    baseTimestamp: project.time,
+                    signatureExtra: `${Number(project?.like_count) || 0}:${Number(project?.star_count) || 0}:${Number(project?.favo_count) || 0}:${Number(project?.view_count) || 0}`,
+                });
+                authoredWithVector++;
+            }
+        }
+
+        await job.log(`用户作品向量: ${authoredWithVector}/${authoredProjects.length} 有向量`);
+    }
+
+    // 6. 用户收藏(Star)的作品（project embedding）
+    const starredProjects = await prisma.ow_projects_stars.findMany({
+        where: { userid: userId },
+        select: {
+            projectid: true,
+            createTime: true,
+            project: {
+                select: {
+                    time: true,
+                    like_count: true,
+                    star_count: true,
+                    favo_count: true,
+                    view_count: true,
+                },
+            },
+        },
+        orderBy: { createTime: 'desc' },
+        take: 180,
+    });
+
+    if (starredProjects.length > 0) {
+        const starredProjectIds = starredProjects.map(s => Number(s.projectid)).filter(id => Number.isInteger(id));
+        const starredProjectVectors = await embeddingService.getEmbeddings('project', starredProjectIds);
+        let starredWithVector = 0;
+
+        for (const star of starredProjects) {
+            const projectId = Number(star.projectid);
+            markEventTotal('project_star');
+            if (!Number.isInteger(projectId)) continue;
+
+            const vec = starredProjectVectors.get(projectId);
+            if (vec) {
+                markEventWithVector('project_star');
+                const hot = calcProjectHotScore(star.project);
+                pushEntry({
+                    action: 'project_star',
+                    sourceType: 'project',
+                    sourceId: projectId,
+                    vector: vec,
+                    actionAt: star.createTime,
+                    hot,
+                    baseTimestamp: star.project?.time,
+                    signatureExtra: `${Number(star.project?.like_count) || 0}:${Number(star.project?.star_count) || 0}:${Number(star.project?.favo_count) || 0}:${Number(star.project?.view_count) || 0}`,
+                });
+                starredWithVector++;
+            }
+        }
+
+        await job.log(`用户收藏作品向量: ${starredWithVector}/${starredProjects.length} 有向量`);
+    }
+
+    const mergedEntries = collapseInteractionEntries(entries);
     const interactionHash = embeddingService.hashText(interactionSignature.join('|'));
     const textHash = embeddingService.hashText(`seed:${profileTextHash}|interest:${interactionHash}|algo:${USER_INTEREST_ALGO}`);
-    logger.debug(`[embedding-worker] user=${userId} interactionEntries=${entries.length} interactionWithVector=${interactionWithVector} interactionHash=${interactionHash} textHash=${textHash}`);
+    logger.debug(`[embedding-worker] user=${userId} rawEntries=${entries.length} mergedEntries=${mergedEntries.length} interactionWithVector=${interactionWithVector} interactionHash=${interactionHash} textHash=${textHash}`);
 
     if (!force) {
         const oldHash = await embeddingService.getTextHash('user', userId);
@@ -596,10 +830,10 @@ async function processUserEmbedding(job) {
     }
 
     let interactionVector = null;
-    if (entries.length > 0) {
-        interactionVector = embeddingService.timeWeightedMerge(entries);
+    if (mergedEntries.length > 0) {
+        interactionVector = embeddingService.timeWeightedMerge(mergedEntries);
         logger.debug(`[embedding-worker] user=${userId} interactionVectorDim=${interactionVector?.length || 0}`);
-        await job.log(`用户 ${userId} 通过 ${entries.length} 条互动数据生成兴趣向量`);
+        await job.log(`用户 ${userId} 通过 ${mergedEntries.length} 个兴趣点生成兴趣向量 (原始事件${entries.length}条)`);
     }
 
     if (!baseVector && !interactionVector) {
@@ -607,9 +841,18 @@ async function processUserEmbedding(job) {
         return { skipped: true, reason: 'no_data' };
     }
 
-    const interactionBlend = entries.length > 0
-        ? Math.min(0.85, 0.35 + (Math.log1p(entries.length) / 8))
+    const sourceKinds = new Set();
+    if (postInteractionCount > 0) sourceKinds.add('post');
+    if (projectInteractionCount > 0) sourceKinds.add('project');
+
+    let interactionBlend = mergedEntries.length > 0
+        ? Math.min(0.82, 0.32 + (Math.log1p(mergedEntries.length) / 8) + (sourceKinds.size > 1 ? 0.06 : 0))
         : 0;
+
+    if (baseVector && mergedEntries.length < 4) {
+        interactionBlend = Math.min(interactionBlend, 0.55);
+    }
+
     const baseBlend = baseVector ? Math.max(0, 1 - interactionBlend) : 0;
 
     const finalVector = mergeWeightedVectors(baseVector, interactionVector, baseBlend, interactionBlend);
@@ -638,6 +881,12 @@ async function processUserEmbedding(job) {
             userPostCount: userPosts.length,
             likedCount: likedPosts.length,
             bookmarkedCount: bookmarkedPosts.length,
+            repostedCount: repostPosts.length,
+            authoredProjectCount: authoredProjects.length,
+            starredProjectCount: starredProjects.length,
+            rawInteractionEntryCount: entries.length,
+            mergedInteractionEntryCount: mergedEntries.length,
+            eventBreakdown,
             seedTextLength: seedText.length,
             hasReadmeSource: Boolean(readmeProjectSource),
         },

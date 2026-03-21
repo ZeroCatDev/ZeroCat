@@ -15,6 +15,11 @@ import {
   generateFileAccessToken,
   verifyFileAccessToken,
 } from "../services/auth/tokenManager.js";
+import {
+  getContextRecommendedProjects,
+  getRecommendedProjectsForUser,
+  getSimilarProjectsByProject,
+} from "../controllers/projectRecommendations.js";
 import { needLogin } from "../middleware/auth.js";
 import { hasProjectPermission } from "../services/auth/permissionManager.js";
 import { getUserByUsername } from "../controllers/users.js";
@@ -1895,6 +1900,82 @@ router.get("/info/:id", async (req, res, next) => {
     });
   } catch (err) {
     logger.error("Error getting project information with analytics:", err);
+    next(err);
+  }
+});
+
+// 获取当前用户项目推荐（基于用户兴趣向量）
+router.get("/recommend/me", needLogin, async (req, res, next) => {
+  try {
+    const userId = Number(res.locals.userid);
+    const { limit = 20, offset = 0, min_similarity = null } = req.query;
+
+    const data = await getRecommendedProjectsForUser({
+      userId,
+      limit,
+      offset,
+      minSimilarity: min_similarity,
+    });
+
+    return res.status(200).send({
+      status: "success",
+      message: data.message || "获取成功",
+      data,
+    });
+  } catch (err) {
+    logger.error("Error getting recommended projects for user:", err);
+    next(err);
+  }
+});
+
+// 获取当前用户 + 当前项目上下文推荐
+router.get("/recommend/context/:projectId", needLogin, async (req, res, next) => {
+  try {
+    const userId = Number(res.locals.userid);
+    const projectId = Number(req.params.projectId);
+    const { limit = 20, offset = 0, min_similarity = null } = req.query;
+
+    const data = await getContextRecommendedProjects({
+      userId,
+      projectId,
+      limit,
+      offset,
+      minSimilarity: min_similarity,
+    });
+
+    return res.status(200).send({
+      status: "success",
+      message: data.message || "获取成功",
+      data,
+    });
+  } catch (err) {
+    logger.error("Error getting context recommended projects:", err);
+    next(err);
+  }
+});
+
+// 基于项目查找相似项目
+router.get("/similar/:projectId", async (req, res, next) => {
+  try {
+    const userId = res.locals.userid || null;
+    const projectId = Number(req.params.projectId);
+    const { limit = 20, offset = 0, min_similarity = null } = req.query;
+
+    const data = await getSimilarProjectsByProject({
+      userId,
+      projectId,
+      limit,
+      offset,
+      minSimilarity: min_similarity,
+    });
+
+    return res.status(200).send({
+      status: "success",
+      message: data.message || "获取成功",
+      data,
+    });
+  } catch (err) {
+    logger.error("Error getting similar projects:", err);
     next(err);
   }
 });

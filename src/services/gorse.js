@@ -594,11 +594,13 @@ export function feedbackPostRead(userId, postId) {
 /** 项目收藏反馈（项目不同步到 Gorse，此函数为空操作） */
 export function feedbackProjectStar(_userId, _projectId) {
     // 项目不写入 Gorse，避免产生无 embedding 的 project_* item
+    return Promise.resolve();
 }
 
 /** 取消项目收藏反馈（项目不同步到 Gorse，此函数为空操作） */
 export function feedbackProjectUnstar(_userId, _projectId) {
     // 项目不写入 Gorse
+    return Promise.resolve();
 }
 
 /** 用户关注反馈 */
