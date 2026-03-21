@@ -22,6 +22,8 @@ const REMOTE_META_KEY_TYPE = 'mirror.remote_type';
 const REMOTE_META_KEY_ID = 'mirror.remote_id';
 const REMOTE_META_KEY_UPDATED_AT = 'mirror.remote_updated_at';
 const REMOTE_META_KEY_LAST_SYNC_AT = 'mirror.last_sync_at';
+const REMOTE_META_KEY_VIEW_COUNT = 'mirror.remote_view_count';
+const LEGACY_REMOTE_META_KEY_VIEW_COUNT = 'mirror40.remote_view_count';
 const USER_SYNC_INTERVAL_DAYS_WITHOUT_REMOTE_TS = 7;
 const MAX_AVATAR_DOWNLOAD_SIZE = 10 * 1024 * 1024;
 const MAX_PROJECT_ASSET_DOWNLOAD_SIZE = 20 * 1024 * 1024;
@@ -74,6 +76,17 @@ function normalizeRemoteUpdateSeconds(value) {
         return Math.floor(n / 1000);
     }
     return Math.floor(n);
+}
+
+function parseNonNegativeInteger(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0) return null;
+    return Math.floor(n);
+}
+
+function pickRemoteViewCount(remoteProject) {
+    const parsed = parseNonNegativeInteger(remoteProject?.look);
+    return parsed ?? 0;
 }
 
 function sanitizeDisplayName(name, fallback) {
@@ -1645,6 +1658,223 @@ class Mirror40CodeSyncService {
         return items;
     }
 
+    async fetchUserCollectionFolders(cfg, remoteUserId) {
+        const url = `${cfg.baseUrl}/collections/folders?id=${encodeURIComponent(String(remoteUserId))}&token=${encodeURIComponent(cfg.token)}`;
+        const payload = await this.requestJson(url, { timeoutMs: cfg.timeoutMs });
+
+        const folders = pickFirstArray(
+            payload?.folders,
+            payload?.data?.folders,
+            payload?.data,
+        );
+
+        return {
+            payload,
+            folders,
+        };
+    }
+
+    async fetchSearchProjectsByFolder(cfg, folderId, page = 1) {
+        const parsedFolderId = Number(folderId);
+        if (!Number.isFinite(parsedFolderId) || parsedFolderId <= 0) {
+            throw new Error(`无效收藏夹ID: ${folderId}`);
+        }
+
+        const url = `${cfg.baseUrl}/search/?token=${encodeURIComponent(cfg.token)}`;
+        const pageValue = Number.isFinite(Number(page)) && Number(page) > 0
+            ? String(Number(page))
+            : '1';
+
+        const body = {
+            ...PROJECT_SEARCH_PAYLOAD,
+            s: '4',
+            folder: String(parsedFolderId),
+            page: pageValue,
+            l: cfg.searchPageSize,
+        };
+
+        logger.debug(`[mirror-40code] search projects by folder folder=${parsedFolderId} page=${pageValue} size=${cfg.searchPageSize}`);
+
+        const payload = await this.requestJson(url, {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+            },
+            body: JSON.stringify(body),
+            timeoutMs: cfg.timeoutMs,
+        });
+
+        const code = Number(payload?.code);
+        if (Number.isFinite(code) && code !== 1) {
+            throw new Error(`/search 收藏夹项目查询失败 code=${code} msg=${String(payload?.msg || '')}`);
+        }
+
+        const list = pickFirstArray(
+            payload?.data?.worklist,
+            payload?.data?.work,
+            payload?.data?.works,
+            payload?.data?.list,
+            payload?.data,
+        );
+
+        return {
+            payload,
+            list,
+            page: Number(pageValue),
+            folderId: parsedFolderId,
+        };
+    }
+
+    async collectUserCollectionProjectItems(cfg, remoteUserId) {
+        const { folders } = await this.fetchUserCollectionFolders(cfg, remoteUserId);
+
+        const effectiveFolders = (Array.isArray(folders) ? folders : [])
+            .filter((folder) => {
+                const folderId = Number(folder?.id);
+                if (!Number.isFinite(folderId) || folderId <= 0) return false;
+                if (folder?.delete !== null && folder?.delete !== undefined && Number(folder?.delete) !== 0) return false;
+                return true;
+            });
+
+        const items = [];
+        const seenProjectIds = new Set();
+
+        for (const folder of effectiveFolders) {
+            const folderId = Number(folder?.id);
+            for (let page = 1; page <= cfg.maxPages; page++) {
+                const result = await this.fetchSearchProjectsByFolder(cfg, folderId, page);
+                const list = Array.isArray(result?.list) ? result.list : [];
+
+                logger.debug(`[mirror-40code] 收藏夹项目扫描 remoteUser=${remoteUserId} folder=${folderId} page=${page} count=${list.length}`);
+                if (list.length === 0) break;
+
+                for (const item of list) {
+                    const remoteProjectId = Number(item?.id);
+                    if (!Number.isFinite(remoteProjectId) || remoteProjectId <= 0) continue;
+                    if (seenProjectIds.has(remoteProjectId)) continue;
+                    seenProjectIds.add(remoteProjectId);
+
+                    const remoteAuthorId = Number(item?.author);
+                    const remoteUpdateTime = normalizeRemoteUpdateSeconds(item?.update_time || item?.time || item?.publish_time || 0);
+
+                    items.push({
+                        remoteProjectId,
+                        remoteUserId: Number.isFinite(remoteAuthorId) && remoteAuthorId > 0 ? remoteAuthorId : null,
+                        remoteUpdateTime: remoteUpdateTime > 0 ? remoteUpdateTime : null,
+                        folderId,
+                    });
+                }
+            }
+        }
+
+        logger.debug(`[mirror-40code] 收藏夹项目候选完成 remoteUser=${remoteUserId} folders=${effectiveFolders.length} candidates=${items.length}`);
+        return {
+            folders: effectiveFolders,
+            items,
+        };
+    }
+
+    async starLocalProjectForUser(localUserId, localProjectId) {
+        const parsedUserId = Number(localUserId);
+        const parsedProjectId = Number(localProjectId);
+        if (!Number.isFinite(parsedUserId) || parsedUserId <= 0) {
+            throw new Error(`无效 localUserId: ${localUserId}`);
+        }
+        if (!Number.isFinite(parsedProjectId) || parsedProjectId <= 0) {
+            throw new Error(`无效 localProjectId: ${localProjectId}`);
+        }
+
+        const created = await prisma.$transaction(async (tx) => {
+            const existing = await tx.ow_projects_stars.findFirst({
+                where: {
+                    userid: parsedUserId,
+                    projectid: parsedProjectId,
+                },
+                select: { id: true },
+            });
+
+            if (existing) {
+                return false;
+            }
+
+            await tx.ow_projects_stars.create({
+                data: {
+                    userid: parsedUserId,
+                    projectid: parsedProjectId,
+                    createTime: new Date(),
+                },
+            });
+
+            await tx.ow_projects.update({
+                where: { id: parsedProjectId },
+                data: {
+                    star_count: {
+                        increment: 1,
+                    },
+                },
+            });
+
+            return true;
+        });
+
+        return {
+            created,
+            localUserId: parsedUserId,
+            localProjectId: parsedProjectId,
+        };
+    }
+
+    async syncAndStarCollectedProjects(cfg, localUserId, projectItems) {
+        const items = Array.isArray(projectItems) ? projectItems : [];
+
+        let total = 0;
+        let starred = 0;
+        let alreadyStarred = 0;
+        let skipped = 0;
+        let failed = 0;
+
+        for (const item of items) {
+            const remoteProjectId = Number(item?.remoteProjectId ?? item?.id);
+            if (!Number.isFinite(remoteProjectId) || remoteProjectId <= 0) {
+                skipped += 1;
+                continue;
+            }
+
+            total += 1;
+
+            try {
+                let localProjectId = await this.getMappedLocalProjectId(remoteProjectId);
+                if (!localProjectId) {
+                    const syncResult = await this.syncProject(remoteProjectId, item?.remoteUserId ?? null);
+                    if (!syncResult?.skipped && Number.isFinite(Number(syncResult?.localProjectId)) && Number(syncResult?.localProjectId) > 0) {
+                        localProjectId = Number(syncResult.localProjectId);
+                    } else {
+                        skipped += 1;
+                        continue;
+                    }
+                }
+
+                const starResult = await this.starLocalProjectForUser(localUserId, localProjectId);
+                if (starResult.created) {
+                    starred += 1;
+                } else {
+                    alreadyStarred += 1;
+                }
+            } catch (error) {
+                failed += 1;
+                logger.warn(`[mirror-40code] 收藏项目星标失败 localUser=${localUserId} remoteProject=${remoteProjectId} error=${error.message}`);
+            }
+        }
+
+        return {
+            total,
+            starred,
+            alreadyStarred,
+            skipped,
+            failed,
+        };
+    }
+
     async syncUser(remoteUserId, options = {}) {
         const cfg = await this.getConfig();
         this.ensureEnabled(cfg);
@@ -1665,10 +1895,18 @@ class Mirror40CodeSyncService {
             const localUser = await this.ensureProxyUser(remoteUser, cfg);
             const profileArticleProject = await this.ensureProfileArticleProject(remoteUser, localUser);
             const projectItems = await this.collectUserProjectSyncItems(cfg, parsedUserId);
+            const collection = await this.collectUserCollectionProjectItems(cfg, parsedUserId).catch((error) => {
+                logger.warn(`[mirror-40code] 收藏夹项目拉取失败 remoteUser=${parsedUserId} error=${error.message}`);
+                return {
+                    folders: [],
+                    items: [],
+                };
+            });
+            const collectionStarSync = await this.syncAndStarCollectedProjects(cfg, localUser.id, collection.items);
 
             await this.recordUserSyncState(parsedUserId, {
                 status: 'success',
-                detail: `projects_to_enqueue=${projectItems.length}`,
+                detail: `projects_to_enqueue=${projectItems.length};collections=${collection.items.length};starred=${collectionStarSync.starred};already_starred=${collectionStarSync.alreadyStarred};star_failed=${collectionStarSync.failed}`,
                 localUserId: localUser.id,
             });
 
@@ -1677,6 +1915,9 @@ class Mirror40CodeSyncService {
                 localUserId: localUser.id,
                 profileArticleProjectId: profileArticleProject.id,
                 projectItems,
+                collectionFolders: collection.folders.length,
+                collectionProjects: collection.items.length,
+                collectionStarSync,
                 displayName: localUser.display_name,
             };
         } catch (error) {
@@ -1739,7 +1980,6 @@ class Mirror40CodeSyncService {
             state: 'public',
             authorid: localAuthorId,
             default_branch: 'main',
-            view_count: Number(remoteProject?.look) || 0,
             like_count: Number(remoteProject?.like) || 0,
             favo_count: Number(remoteProject?.num_collections) || 0,
             star_count: Number(remoteProject?.like) || 0,
@@ -1788,6 +2028,13 @@ class Mirror40CodeSyncService {
             remoteType: REMOTE_TYPE_40CODE,
             isProfileArticle: false,
         });
+
+        const remoteViewCount = pickRemoteViewCount(remoteProject);
+        await Promise.all([
+            this.upsertTargetConfig(LOCAL_TARGET_TYPE_PROJECT, String(project.id), REMOTE_META_KEY_VIEW_COUNT, String(remoteViewCount)),
+            this.upsertTargetConfig(LOCAL_TARGET_TYPE_PROJECT, String(project.id), LEGACY_REMOTE_META_KEY_VIEW_COUNT, String(remoteViewCount)),
+        ]);
+
         return project;
     }
 

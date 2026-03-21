@@ -1,5 +1,7 @@
 import {prisma} from "./prisma.js";
 
+const REMOTE_VIEW_COUNT_KEYS = ["mirror.remote_view_count", "mirror40.remote_view_count"];
+
 /**
  * 获取指定目标的分析数据
  * @param {string} targetType - 目标类型
@@ -142,6 +144,30 @@ export async function getAnalytics(targetType, targetId, startDate, endDate) {
         };
     };
 
+    let remoteViewCountBaseline = 0;
+    if (targetType === "project") {
+        const targetConfig = await prisma.ow_target_configs.findFirst({
+            where: {
+                target_type: "project",
+                target_id: String(targetId),
+                key: {
+                    in: REMOTE_VIEW_COUNT_KEYS,
+                },
+            },
+            orderBy: {
+                updated_at: "desc",
+            },
+            select: {
+                value: true,
+            },
+        });
+
+        const parsedBaseline = Number(targetConfig?.value);
+        if (Number.isFinite(parsedBaseline) && parsedBaseline > 0) {
+            remoteViewCountBaseline = Math.floor(parsedBaseline);
+        }
+    }
+
     // 处理总体统计数据
     const allTimeStats = processAllTimeStats(allTimeEvents);
 
@@ -151,7 +177,7 @@ export async function getAnalytics(targetType, targetId, startDate, endDate) {
     return {
         overview: {
             pageviews: {
-                value: allTimeStats.pageviews,
+                value: allTimeStats.pageviews + remoteViewCountBaseline,
                 prev: 0, // 不再需要比较
             },
             visitors: {

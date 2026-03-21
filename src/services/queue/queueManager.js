@@ -901,6 +901,103 @@ const queueManager = {
         }
     },
 
+    async enqueueMirror40CodeUserSync(remoteUserId, options = {}) {
+        const queue = getMirror40CodeQueue();
+        if (!queue || !initialized) {
+            logger.warn('[queue-manager] Mirror40Code queue not available');
+            return null;
+        }
+
+        const parsedRemoteUserId = Number(remoteUserId);
+        if (!Number.isFinite(parsedRemoteUserId) || parsedRemoteUserId <= 0) {
+            throw new Error(`无效 remoteUserId: ${remoteUserId}`);
+        }
+
+        const forceSync = Boolean(options?.forceSync);
+        const jobId = `m40-user-${parsedRemoteUserId}`;
+
+        try {
+            const job = await queue.add('sync-user', {
+                type: 'sync-user',
+                remoteUserId: parsedRemoteUserId,
+                forceSync,
+                requestedAt: new Date().toISOString(),
+                triggeredBy: 'admin-api',
+            }, {
+                jobId,
+                deduplication: { id: jobId },
+                attempts: 5,
+                backoff: { type: 'exponential', delay: 15000 },
+                removeOnComplete: { age: 86400 },
+                removeOnFail: { age: 604800 },
+            });
+
+            return {
+                jobId: job.id,
+                queued: true,
+                remoteUserId: parsedRemoteUserId,
+                forceSync,
+            };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue Mirror40Code sync-user:', error.message);
+            return null;
+        }
+    },
+
+    async enqueueMirror40CodeProjectSync(remoteProjectId, options = {}) {
+        const queue = getMirror40CodeQueue();
+        if (!queue || !initialized) {
+            logger.warn('[queue-manager] Mirror40Code queue not available');
+            return null;
+        }
+
+        const parsedRemoteProjectId = Number(remoteProjectId);
+        if (!Number.isFinite(parsedRemoteProjectId) || parsedRemoteProjectId <= 0) {
+            throw new Error(`无效 remoteProjectId: ${remoteProjectId}`);
+        }
+
+        const remoteUserIdValue = Number(options?.remoteUserId);
+        const remoteUserId = Number.isFinite(remoteUserIdValue) && remoteUserIdValue > 0
+            ? remoteUserIdValue
+            : null;
+
+        const remoteUpdateTimeValue = Number(options?.remoteUpdateTime);
+        const remoteUpdateTime = Number.isFinite(remoteUpdateTimeValue) && remoteUpdateTimeValue > 0
+            ? remoteUpdateTimeValue
+            : null;
+
+        const jobId = `m40-project-${parsedRemoteProjectId}`;
+
+        try {
+            const job = await queue.add('sync-project', {
+                type: 'sync-project',
+                remoteProjectId: parsedRemoteProjectId,
+                remoteUserId,
+                remoteUpdateTime,
+                requestedAt: new Date().toISOString(),
+                triggeredBy: 'admin-api',
+            }, {
+                jobId,
+                deduplication: { id: jobId },
+                attempts: 5,
+                backoff: { type: 'exponential', delay: 15000 },
+                removeOnComplete: true,
+                removeOnFail: { age: 604800 },
+            });
+
+            return {
+                jobId: job.id,
+                queued: true,
+                remoteProjectId: parsedRemoteProjectId,
+                remoteUserId,
+                remoteUpdateTime,
+            };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue Mirror40Code sync-project:', error.message);
+            return null;
+        }
+    },
+
     async getMirror40CodeQueueStatus() {
         const queue = getMirror40CodeQueue();
         if (!queue || !initialized) {
