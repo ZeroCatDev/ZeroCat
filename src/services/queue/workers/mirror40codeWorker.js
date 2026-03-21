@@ -137,6 +137,67 @@ async function processDailySync(job) {
     };
 }
 
+async function processForceSyncProjects(job) {
+    await job.log('开始强制全量项目同步：扫描所有项目并分批入队（不提前停止）');
+
+    const queue = getMirror40CodeQueue();
+    if (!queue) {
+        throw new Error('mirror-40code queue 不可用，无法为强制项目同步入队');
+    }
+
+    const cfg = await mirror40CodeSyncService.getConfig();
+    mirror40CodeSyncService.ensureEnabled(cfg);
+
+    const maxProjectPages = Math.max(1, Number(await zcconfig.get('mirror40code.daily.project_scan.max_pages', cfg.maxPages || 50)) || (cfg.maxPages || 50));
+    const seenProjectIds = new Set();
+
+    let discoveredProjects = 0;
+    let enqueuedProjects = 0;
+
+    for (let page = 1; page <= maxProjectPages; page++) {
+        const result = await mirror40CodeSyncService.fetchSearchProjectsPage(cfg, page);
+        const list = Array.isArray(result?.list) ? result.list : [];
+        await job.log(`强制项目扫描 page=${page} count=${list.length}`);
+
+        if (list.length === 0) {
+            break;
+        }
+
+        const projectBatch = [];
+        for (const item of list) {
+            const remoteProjectId = Number(item?.id);
+            if (!Number.isFinite(remoteProjectId) || remoteProjectId <= 0) continue;
+            if (seenProjectIds.has(remoteProjectId)) continue;
+            seenProjectIds.add(remoteProjectId);
+
+            const remoteUserId = Number(item?.author);
+            const remoteUpdateTime = Number(item?.update_time || item?.time || item?.publish_time || 0);
+
+            projectBatch.push({
+                remoteProjectId,
+                remoteUserId: Number.isFinite(remoteUserId) && remoteUserId > 0 ? remoteUserId : null,
+                remoteUpdateTime: Number.isFinite(remoteUpdateTime) && remoteUpdateTime > 0 ? remoteUpdateTime : null,
+                forceSync: true,
+            });
+        }
+
+        discoveredProjects += projectBatch.length;
+        if (projectBatch.length > 0) {
+            const queued = await enqueueProjectSyncJobs(queue, projectBatch, 'force-sync-projects');
+            enqueuedProjects += queued;
+            await job.log(`强制项目入队 page=${page} discovered=${projectBatch.length} enqueued=${queued}`);
+        }
+    }
+
+    await job.log(`强制全量项目同步入队完成 projects=${enqueuedProjects}/${discoveredProjects}`);
+    return {
+        mode: 'force-sync-projects',
+        discoveredProjects,
+        enqueuedProjects,
+        forceProjectSync: true,
+    };
+}
+
 async function processUserSync(job) {
     const remoteUserId = Number(job.data?.remoteUserId);
     const forceSync = Boolean(job.data?.forceSync);
@@ -210,6 +271,8 @@ async function processMirror40Code(job) {
     switch (type) {
     case 'daily-sync':
         return processDailySync(job);
+    case 'force-sync-projects':
+        return processForceSyncProjects(job);
     case 'sync-user':
         return processUserSync(job);
     case 'sync-project':

@@ -41,7 +41,7 @@ router.post('/daily-sync', async (req, res) => {
 
 router.post('/force-sync-projects', async (req, res) => {
     try {
-        const result = await queueManager.enqueueMirror40CodeFullSync({ forceProjectSync: true });
+        const result = await queueManager.enqueueMirror40CodeForceProjectSync();
         if (!result) {
             return res.status(503).json({ status: 'error', message: '队列不可用或未初始化' });
         }

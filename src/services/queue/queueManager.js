@@ -918,6 +918,35 @@ const queueManager = {
         }
     },
 
+    async enqueueMirror40CodeForceProjectSync() {
+        const queue = getMirror40CodeQueue();
+        if (!queue || !initialized) {
+            logger.warn('[queue-manager] Mirror40Code queue not available');
+            return null;
+        }
+
+        const jobId = 'm40-force-sync-projects';
+        try {
+            const job = await queue.add('force-sync-projects', {
+                type: 'force-sync-projects',
+                forceProjectSync: true,
+                requestedAt: new Date().toISOString(),
+            }, {
+                jobId,
+                deduplication: { id: jobId },
+                attempts: 3,
+                backoff: { type: 'exponential', delay: 30000 },
+                removeOnComplete: { age: 86400 },
+                removeOnFail: { age: 604800 },
+            });
+
+            return { jobId: job.id, queued: true, forceProjectSync: true, type: 'force-sync-projects' };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue Mirror40Code force-sync-projects:', error.message);
+            return null;
+        }
+    },
+
     async enqueueMirror40CodeUserSync(remoteUserId, options = {}) {
         const queue = getMirror40CodeQueue();
         if (!queue || !initialized) {
