@@ -136,6 +136,7 @@ model ow_users {
   mentioned_in_posts      ow_posts_mention[]      @relation("UserMentions")
   comment_spaces          ow_comment_spaces[]     @relation("CommentSpaceOwner")
   comment_service_users   ow_comment_service_users[] @relation("CommentServiceUser")
+  embedding_updates       ow_user_embedding_updates[]
 
   @@index([email])
   @@index([status])
@@ -147,6 +148,29 @@ model ow_users {
   @@index([location(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_ow_users_location_trgm")
   @@index([region(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_ow_users_region_trgm")
   @@map("ow_users")
+}
+
+model ow_user_embedding_updates {
+  id                 BigInt   @id @default(autoincrement())
+  user_id            Int
+  trigger_type       String   @default("scheduled") @db.VarChar(32)
+  algorithm          String   @default("interest_decay_v1") @db.VarChar(64)
+  profile_text_hash  String?  @db.VarChar(64)
+  interaction_hash   String?  @db.VarChar(64)
+  interaction_count  Int      @default(0)
+  base_weight        Float    @default(0)
+  interaction_weight Float    @default(0)
+  hot_score          Float    @default(0)
+  decay_score        Float    @default(0)
+  metadata           Json?
+  created_at         DateTime @default(now()) @db.Timestamp(6)
+  updated_at         DateTime @default(now()) @db.Timestamp(6)
+
+  user ow_users @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([user_id, created_at(sort: Desc)], map: "idx_ow_user_embedding_updates_user_created")
+  @@index([trigger_type, created_at(sort: Desc)], map: "idx_ow_user_embedding_updates_trigger")
+  @@map("ow_user_embedding_updates")
 }
 
 // 项目文件表
@@ -1089,7 +1113,7 @@ model ow_embeddings {
   id          Int                          @id @default(autoincrement())
   entity_type String                       @db.VarChar(32)
   entity_id   Int
-  embedding   Unsupported("vector(1536)")?
+  embedding   Unsupported("vector(2560)")?
   text_hash   String?                      @db.VarChar(64)
   model       String?                      @db.VarChar(128)
   created_at  DateTime                     @default(now()) @db.Timestamp(6)

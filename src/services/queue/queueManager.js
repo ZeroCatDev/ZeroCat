@@ -701,7 +701,7 @@ const queueManager = {
      * @param {number} userId
      * @param {boolean} force
      */
-    async enqueueUserEmbedding(userId, force = false) {
+    async enqueueUserEmbedding(userId, force = false, triggerType = 'scheduled') {
         const queue = getEmbeddingQueue();
         if (!queue || !initialized) {
             logger.debug('[queue-manager] Embedding queue not available, skipping user embedding');
@@ -714,6 +714,7 @@ const queueManager = {
                 type: 'user_embedding',
                 userId: Number(userId),
                 force,
+                triggerType,
             }, {
                 jobId,
                 attempts: 3,
@@ -798,6 +799,76 @@ const queueManager = {
             return { jobIds: jobs, queued: true };
         } catch (error) {
             logger.error('[queue-manager] Failed to enqueue batch user embedding:', error.message);
+            return null;
+        }
+    },
+
+    /**
+     * 为单个项目入队向量生成任务
+     * @param {number} projectId
+     * @param {boolean} force
+     */
+    async enqueueProjectEmbedding(projectId, force = false) {
+        const queue = getEmbeddingQueue();
+        if (!queue || !initialized) {
+            logger.debug('[queue-manager] Embedding queue not available, skipping project embedding');
+            return null;
+        }
+
+        try {
+            const jobId = `emb-project-${projectId}`;
+            const job = await queue.add('embedding', {
+                type: 'project_embedding',
+                projectId: Number(projectId),
+                force,
+            }, {
+                jobId,
+                attempts: 3,
+                backoff: { type: 'exponential', delay: 15000 },
+                removeOnComplete: { age: 86400 },
+                removeOnFail: { age: 604800 },
+                deduplication: { id: jobId },
+            });
+
+            logger.debug(`[queue-manager] Project embedding job ${job.id} enqueued for project=${projectId}`);
+            return { jobId: job.id, queued: true };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue project embedding:', error.message);
+            return null;
+        }
+    },
+
+    /**
+     * 批量入队项目向量生成
+     * @param {number[]} projectIds
+     * @param {boolean} force
+     */
+    async enqueueBatchProjectEmbedding(projectIds, force = false) {
+        const queue = getEmbeddingQueue();
+        if (!queue || !initialized) return null;
+
+        try {
+            const batchSize = 50;
+            const jobs = [];
+            for (let i = 0; i < projectIds.length; i += batchSize) {
+                const batch = projectIds.slice(i, i + batchSize);
+                const job = await queue.add('embedding', {
+                    type: 'batch_project_embedding',
+                    projectIds: batch,
+                    force,
+                }, {
+                    attempts: 2,
+                    backoff: { type: 'exponential', delay: 20000 },
+                    removeOnComplete: { age: 86400 },
+                    removeOnFail: { age: 604800 },
+                });
+                jobs.push(job.id);
+            }
+
+            logger.info(`[queue-manager] Batch project embedding: ${jobs.length} jobs enqueued for ${projectIds.length} projects`);
+            return { jobIds: jobs, queued: true };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue batch project embedding:', error.message);
             return null;
         }
     },

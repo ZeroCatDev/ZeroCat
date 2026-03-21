@@ -558,7 +558,7 @@ export async function createPost({ authorId, content, mediaIds = [], embed }) {
   queueManager.enqueuePostEmbedding(post.id).catch(e => logger.debug('[embedding] createPost enqueue failed:', e.message));
 
   // 异步刷新作者用户向量（帖子变化影响用户画像）
-  queueManager.enqueueUserEmbedding(authorId).catch(e => logger.debug('[embedding] createPost user enqueue failed:', e.message));
+  queueManager.enqueueUserEmbedding(authorId, false, 'post_create').catch(e => logger.debug('[embedding] createPost user enqueue failed:', e.message));
 
   const formattedPost = formatPost(post);
   const [postWithViews] = await attachPostViewCounts([formattedPost]);
@@ -678,7 +678,7 @@ export async function replyToPost({
 
   // 异步生成回复帖子向量
   queueManager.enqueuePostEmbedding(post.id).catch(e => logger.debug('[embedding] reply enqueue failed:', e.message));
-  queueManager.enqueueUserEmbedding(authorId).catch(e => logger.debug('[embedding] reply user enqueue failed:', e.message));
+  queueManager.enqueueUserEmbedding(authorId, false, 'post_reply').catch(e => logger.debug('[embedding] reply user enqueue failed:', e.message));
 
   const formattedPost = formatPost(post);
   const [postWithViews] = await attachPostViewCounts([formattedPost]);
@@ -780,7 +780,7 @@ export async function retweetPost({ authorId, retweetPostId }) {
   }).catch(e => logger.debug('[gorse] retweet upsert failed:', e.message));
 
   // 纯转推不生成向量，但刷新作者用户向量
-  queueManager.enqueueUserEmbedding(authorId).catch(e => logger.debug('[embedding] retweet user enqueue failed:', e.message));
+  queueManager.enqueueUserEmbedding(authorId, false, 'post_retweet').catch(e => logger.debug('[embedding] retweet user enqueue failed:', e.message));
 
   const formattedPost = formatPost(post);
   const [postWithViews] = await attachPostViewCounts([formattedPost]);
@@ -945,7 +945,7 @@ export async function quotePost({
 
   // 异步生成引用帖子向量
   queueManager.enqueuePostEmbedding(post.id).catch(e => logger.debug('[embedding] quote enqueue failed:', e.message));
-  queueManager.enqueueUserEmbedding(authorId).catch(e => logger.debug('[embedding] quote user enqueue failed:', e.message));
+  queueManager.enqueueUserEmbedding(authorId, false, 'post_quote').catch(e => logger.debug('[embedding] quote user enqueue failed:', e.message));
 
   const formattedPost = formatPost(post);
   const [postWithViews] = await attachPostViewCounts([formattedPost]);
@@ -1007,7 +1007,7 @@ export async function likePost({ userId, postId }) {
   gorseService.feedbackPostLike(userId, target.id).catch(e => logger.debug('[gorse] like feedback failed:', e.message));
 
   // 点赞影响用户画像，刷新用户向量
-  queueManager.enqueueUserEmbedding(userId).catch(e => logger.debug('[embedding] like user enqueue failed:', e.message));
+  queueManager.enqueueUserEmbedding(userId, false, 'post_like').catch(e => logger.debug('[embedding] like user enqueue failed:', e.message));
 
   return like;
 }
@@ -1081,7 +1081,7 @@ export async function bookmarkPost({ userId, postId }) {
   gorseService.feedbackPostBookmark(userId, target.id).catch(e => logger.debug('[gorse] bookmark feedback failed:', e.message));
 
   // 收藏影响用户画像，刷新用户向量
-  queueManager.enqueueUserEmbedding(userId).catch(e => logger.debug('[embedding] bookmark user enqueue failed:', e.message));
+  queueManager.enqueueUserEmbedding(userId, false, 'post_bookmark').catch(e => logger.debug('[embedding] bookmark user enqueue failed:', e.message));
 
   return bookmark;
 }

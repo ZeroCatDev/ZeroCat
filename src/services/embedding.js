@@ -10,6 +10,18 @@ import zcconfig from './config/zcconfig.js';
 import logger from './logger.js';
 import { prisma } from './prisma.js';
 
+function previewText(value, max = 220) {
+    const text = String(value || '').replace(/[\n\r\t]+/g, ' ').trim();
+    if (!text) return '';
+    return text.length > max ? `${text.slice(0, max)}...` : text;
+}
+
+function summarizeVectors(vectors) {
+    if (!Array.isArray(vectors)) return { count: 0, dims: [] };
+    const dims = vectors.slice(0, 3).map((vec) => Array.isArray(vec) ? vec.length : 0);
+    return { count: vectors.length, dims };
+}
+
 // ======================== 配置读取 ========================
 
 /**
@@ -29,10 +41,15 @@ async function getEmbeddingConfig() {
             zcconfig.get('embedding.request_timeout'),
         ]);
 
+    const normalizedProvider = String(provider || 'openai').trim().toLowerCase();
+    const defaultApiBase = normalizedProvider === 'aliyun'
+        ? 'https://dashscope.aliyuncs.com'
+        : 'https://api.openai.com/v1';
+
     return {
         enabled: enabled === true,
-        provider: provider || 'openai',
-        apiBase: (apiBase || 'https://api.openai.com/v1').replace(/\/+$/, ''),
+        provider: normalizedProvider,
+        apiBase: (apiBase || defaultApiBase).replace(/\/+$/, ''),
         apiKey: apiKey || '',
         model: model || 'text-embedding-3-small',
         dimensions: Number(dimensions) || 1536,
@@ -48,12 +65,76 @@ async function getEmbeddingConfig() {
 let _openaiClient = null;
 let _openaiClientKey = '';
 
+function isAliyunProvider(provider) {
+    const p = String(provider || '').toLowerCase();
+    return p === 'aliyun' || p === 'dashscope';
+}
+
+function resolveAliyunEmbeddingEndpoint(apiBase) {
+    const base = String(apiBase || '').replace(/\/+$/, '');
+    const fullPath = '/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding';
+    if (base.endsWith(fullPath)) {
+        return base;
+    }
+    return `${base}${fullPath}`;
+}
+
+function extractAliyunEmbeddings(payload) {
+    const embeddings = payload?.output?.embeddings;
+    if (!Array.isArray(embeddings)) return [];
+
+    return embeddings
+        .map((item) => item?.embedding)
+        .filter((vec) => Array.isArray(vec) && vec.length > 0);
+}
+
+async function generateEmbeddingsByAliyun(texts, config) {
+    if (!config.apiKey) {
+        throw new Error('Aliyun Embedding 缺少 API Key，请配置 embedding.api_key（DASHSCOPE_API_KEY）');
+    }
+
+    const endpoint = resolveAliyunEmbeddingEndpoint(config.apiBase);
+    const body = {
+        model: config.model,
+        input: {
+            contents: texts.map((text) => ({ text })),
+        },
+    };
+
+    logger.debug(`[embedding] aliyun request endpoint=${endpoint} model=${config.model} batch=${texts.length} firstText="${previewText(texts[0])}"`);
+
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${config.apiKey}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        const msg = payload?.message || payload?.code || response.statusText || 'unknown';
+        throw new Error(`Aliyun Embedding API 错误 (${response.status}): ${msg}`);
+    }
+
+    const vectors = extractAliyunEmbeddings(payload);
+    if (vectors.length === 0) {
+        throw new Error('Aliyun Embedding 返回空向量');
+    }
+
+    const summary = summarizeVectors(vectors);
+    logger.debug(`[embedding] aliyun response vectors=${summary.count} dims=${summary.dims.join('|')}`);
+
+    return vectors;
+}
+
 /**
  * 获取（或重建）OpenAI 客户端
  */
 async function getOpenAIClient() {
     const config = await getEmbeddingConfig();
-    logger.debug(config)
+    logger.debug(`[embedding] config provider=${config.provider} model=${config.model} apiBase=${config.apiBase} dimensions=${config.dimensions} batchSize=${config.batchSize}`);
     // 用 apiBase + apiKey 组合作为缓存 key，配置变更时重建客户端
     const cacheKey = `${config.apiBase}|${config.apiKey}|${config.timeout}`;
     if (_openaiClient && _openaiClientKey === cacheKey) {
@@ -96,6 +177,13 @@ export async function generateEmbeddings(input) {
         input: truncated,
         model: config.model,
     };
+
+    logger.debug(`[embedding] generateEmbeddings provider=${config.provider} model=${config.model} batch=${truncated.length} firstText="${previewText(truncated[0])}"`);
+
+    if (isAliyunProvider(config.provider)) {
+        return generateEmbeddingsByAliyun(truncated, config);
+    }
+
     // text-embedding-3-* 系列支持指定维度；其他模型忽略
     if (config.dimensions) {
         params.dimensions = config.dimensions;
@@ -106,7 +194,10 @@ export async function generateEmbeddings(input) {
 
         // OpenAI 返回的 data 可能乱序，按 index 排序后再取 embedding
         const sorted = resp.data.sort((a, b) => a.index - b.index);
-        return sorted.map(d => d.embedding);
+        const vectors = sorted.map(d => d.embedding);
+        const summary = summarizeVectors(vectors);
+        logger.debug(`[embedding] openai response vectors=${summary.count} dims=${summary.dims.join('|')}`);
+        return vectors;
     } catch (error) {
         if (error instanceof OpenAI.APIError) {
             throw new Error(`Embedding API 错误 (${error.status}): ${error.message}`);
@@ -123,6 +214,101 @@ export async function generateEmbedding(text) {
     return results[0] || null;
 }
 
+/**
+ * 生成 Scratch 项目 embedding：优先提交文本 + 封面图，多模态失败时回退为纯文本。
+ * @param {{text: string, coverUrl?: string|null}} payload
+ * @returns {Promise<number[]|null>}
+ */
+export async function generateProjectEmbedding({ text, coverUrl = null } = {}) {
+    const cleanText = String(text || '').trim();
+    if (!cleanText) return null;
+
+    const cleanCoverUrl = String(coverUrl || '').trim();
+    logger.debug(`[embedding] generateProjectEmbedding cover=${cleanCoverUrl ? 'yes' : 'no'} textPreview="${previewText(cleanText)}"`);
+    if (!cleanCoverUrl) {
+        return generateEmbedding(cleanText);
+    }
+
+    const { client, config } = await getOpenAIClient();
+    if (!config.enabled) {
+        throw new Error('Embedding 服务未启用，请先在配置中设置 embedding.enabled = true');
+    }
+
+    const maxChars = config.maxTokens * 3;
+    const truncated = cleanText.length > maxChars ? cleanText.substring(0, maxChars) : cleanText;
+
+    if (isAliyunProvider(config.provider)) {
+        if (!config.apiKey) {
+            throw new Error('Aliyun Embedding 缺少 API Key，请配置 embedding.api_key（DASHSCOPE_API_KEY）');
+        }
+
+        const endpoint = resolveAliyunEmbeddingEndpoint(config.apiBase);
+        const body = {
+            model: config.model,
+            input: {
+                contents: [{
+                    text: truncated,
+                    image: cleanCoverUrl,
+                }],
+            },
+        };
+
+        logger.debug(`[embedding] aliyun multimodal request model=${config.model} coverUrl=${cleanCoverUrl}`);
+
+        try {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${config.apiKey}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(body),
+            });
+
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                const msg = payload?.message || payload?.code || response.statusText || 'unknown';
+                throw new Error(`Aliyun Embedding API 错误 (${response.status}): ${msg}`);
+            }
+
+            const vector = extractAliyunEmbeddings(payload)[0] || null;
+            if (vector) {
+                logger.debug(`[embedding] aliyun multimodal response dim=${vector.length}`);
+                return vector;
+            }
+        } catch (error) {
+            logger.warn(`[embedding] Aliyun 项目多模态 embedding 失败，回退纯文本: ${error?.message || 'unknown'}`);
+        }
+
+        return generateEmbedding(truncated);
+    }
+
+    try {
+        const params = {
+            model: config.model,
+            input: [[
+                { type: 'input_text', text: truncated },
+                { type: 'input_image', image_url: cleanCoverUrl },
+            ]],
+        };
+        if (config.dimensions) {
+            params.dimensions = config.dimensions;
+        }
+
+        const resp = await client.embeddings.create(params);
+        const sorted = resp.data.sort((a, b) => a.index - b.index);
+        const vector = sorted?.[0]?.embedding || null;
+        if (vector) {
+            logger.debug(`[embedding] openai multimodal response dim=${vector.length} coverUrl=${cleanCoverUrl}`);
+            return vector;
+        }
+    } catch (error) {
+        logger.warn(`[embedding] 项目多模态 embedding 失败，回退纯文本: ${error?.message || 'unknown'}`);
+    }
+
+    return generateEmbedding(truncated);
+}
+
 // ======================== pgvector 存储 ========================
 
 /**
@@ -131,6 +317,7 @@ export async function generateEmbedding(text) {
  * 此函数作为运行时安全检查，兼容未执行迁移的环境。
  */
 let _pgvectorReady = false;
+let _userEmbeddingUpdateTableReady = false;
 
 export async function ensurePgvector() {
     if (_pgvectorReady) return;
@@ -178,6 +365,93 @@ export async function ensurePgvector() {
         logger.error('[embedding] 初始化 pgvector 失败:', error.message);
         throw error;
     }
+}
+
+/**
+ * 确保用户 embedding 更新追踪表已就绪（幂等）
+ */
+export async function ensureUserEmbeddingUpdateTable() {
+    if (_userEmbeddingUpdateTableReady) return;
+
+    await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS ow_user_embedding_updates (
+            id                  BIGSERIAL PRIMARY KEY,
+            user_id             INTEGER NOT NULL,
+            trigger_type        VARCHAR(32) NOT NULL DEFAULT 'scheduled',
+            algorithm           VARCHAR(64) NOT NULL DEFAULT 'interest_decay_v1',
+            profile_text_hash   VARCHAR(64),
+            interaction_hash    VARCHAR(64),
+            interaction_count   INTEGER NOT NULL DEFAULT 0,
+            base_weight         DOUBLE PRECISION NOT NULL DEFAULT 0,
+            interaction_weight  DOUBLE PRECISION NOT NULL DEFAULT 0,
+            hot_score           DOUBLE PRECISION NOT NULL DEFAULT 0,
+            decay_score         DOUBLE PRECISION NOT NULL DEFAULT 0,
+            metadata            JSONB,
+            created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `);
+
+    await prisma.$executeRawUnsafe(`
+        CREATE INDEX IF NOT EXISTS idx_ow_user_embedding_updates_user_created
+        ON ow_user_embedding_updates (user_id, created_at DESC)
+    `);
+
+    await prisma.$executeRawUnsafe(`
+        CREATE INDEX IF NOT EXISTS idx_ow_user_embedding_updates_trigger
+        ON ow_user_embedding_updates (trigger_type, created_at DESC)
+    `);
+
+    _userEmbeddingUpdateTableReady = true;
+}
+
+/**
+ * 记录用户 embedding 更新信息（兴趣追踪）
+ */
+export async function saveUserEmbeddingUpdate(update) {
+    await ensureUserEmbeddingUpdateTable();
+
+    const {
+        userId,
+        triggerType = 'scheduled',
+        algorithm = 'interest_decay_v1',
+        profileTextHash = null,
+        interactionHash = null,
+        interactionCount = 0,
+        baseWeight = 0,
+        interactionWeight = 0,
+        hotScore = 0,
+        decayScore = 0,
+        metadata = null,
+    } = update || {};
+
+    await prisma.$executeRawUnsafe(`
+        INSERT INTO ow_user_embedding_updates (
+            user_id,
+            trigger_type,
+            algorithm,
+            profile_text_hash,
+            interaction_hash,
+            interaction_count,
+            base_weight,
+            interaction_weight,
+            hot_score,
+            decay_score,
+            metadata,
+            updated_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())
+    `,
+    Number(userId),
+    String(triggerType || 'scheduled'),
+    String(algorithm || 'interest_decay_v1'),
+    profileTextHash,
+    interactionHash,
+    Number(interactionCount) || 0,
+    Number(baseWeight) || 0,
+    Number(interactionWeight) || 0,
+    Number(hotScore) || 0,
+    Number(decayScore) || 0,
+    metadata ? JSON.stringify(metadata) : null);
 }
 
 /**
@@ -346,6 +620,50 @@ export function buildUserProfileText(user) {
     return parts.join(' ').trim();
 }
 
+function clampText(value, maxLen = 1200) {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    return text.length > maxLen ? text.slice(0, maxLen) : text;
+}
+
+/**
+ * 构建用户 embedding 基础语料：
+ * 1) 同名 README 项目源码片段
+ * 2) 用户昵称 / 用户名 / 简介
+ * 3) 用户创建作品的名称和简介拼接
+ */
+export function buildUserSeedText({ user, readmeProjectSource = '', projects = [] } = {}) {
+    const segments = [];
+
+    const profileText = buildUserProfileText(user || {});
+    if (profileText) {
+        segments.push(`用户资料: ${clampText(profileText, 800)}`);
+    }
+
+    const readmeSource = clampText(readmeProjectSource, 4000);
+    if (readmeSource) {
+        segments.push(`README项目内容: ${readmeSource}`);
+    }
+
+    if (Array.isArray(projects) && projects.length > 0) {
+        const projectLines = projects
+            .slice(0, 80)
+            .map((project) => {
+                const title = clampText(project?.title || project?.name || '', 180);
+                const description = clampText(project?.description || '', 500);
+                const merged = [title, description].filter(Boolean).join(' - ');
+                return merged ? `作品: ${merged}` : '';
+            })
+            .filter(Boolean);
+
+        if (projectLines.length > 0) {
+            segments.push(projectLines.join('\n'));
+        }
+    }
+
+    return segments.join('\n\n').trim();
+}
+
 // ======================== 相似度搜索 ========================
 
 /**
@@ -478,6 +796,7 @@ export async function getEmbeddingStatus() {
 export default {
     generateEmbedding,
     generateEmbeddings,
+    generateProjectEmbedding,
     ensurePgvector,
     saveEmbedding,
     saveEmbeddings,
@@ -488,9 +807,12 @@ export default {
     deleteEmbedding,
     buildPostText,
     buildUserProfileText,
+    buildUserSeedText,
     searchSimilar,
     hashText,
     normalizeVector,
     timeWeightedMerge,
+    ensureUserEmbeddingUpdateTable,
+    saveUserEmbeddingUpdate,
     getEmbeddingStatus,
 };

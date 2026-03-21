@@ -146,7 +146,57 @@ router.post("/generate/users", async (req, res) => {
 });
 
 /**
- * @api {post} /admin/embedding/generate/all 全量生成所有向量（帖子 + 用户）
+ * @api {post} /admin/embedding/generate/projects 全量生成项目向量（Scratch）
+ * @apiName GenerateProjectEmbeddings
+ * @apiGroup AdminEmbedding
+ * @apiPermission admin
+ * @apiParam {Boolean} [force=false] 强制重新生成
+ */
+router.post("/generate/projects", async (req, res) => {
+    try {
+        const { force = false } = req.body || {};
+
+        logger.info(`[admin/embedding] 管理员触发项目全量向量生成 (force=${force})`);
+
+        const projects = await prisma.ow_projects.findMany({
+            where: {
+                state: { not: 'deleted' },
+                type: 'scratch',
+            },
+            select: { id: true },
+            orderBy: { id: 'asc' },
+        });
+
+        const projectIds = projects.map((item) => item.id);
+        if (projectIds.length === 0) {
+            return res.json({
+                status: "success",
+                message: "没有需要生成向量的 Scratch 项目",
+                data: { total: 0 },
+            });
+        }
+
+        const result = await queueManager.enqueueBatchProjectEmbedding(projectIds, force);
+
+        return res.json({
+            status: "success",
+            message: `已入队 ${projectIds.length} 个 Scratch 项目的向量生成任务`,
+            data: {
+                total: projectIds.length,
+                ...result,
+            },
+        });
+    } catch (error) {
+        logger.error("[admin/embedding] 项目向量生成失败:", error);
+        return res.status(500).json({
+            status: "error",
+            message: `项目向量生成失败: ${error.message}`,
+        });
+    }
+});
+
+/**
+ * @api {post} /admin/embedding/generate/all 全量生成所有向量（帖子 + 用户 + Scratch项目）
  * @apiName GenerateAllEmbeddings
  * @apiGroup AdminEmbedding
  * @apiPermission admin
@@ -177,6 +227,17 @@ router.post("/generate/all", async (req, res) => {
         });
         const userIds = users.map(u => u.id);
 
+        // 项目（Scratch）
+        const projects = await prisma.ow_projects.findMany({
+            where: {
+                state: { not: 'deleted' },
+                type: 'scratch',
+            },
+            select: { id: true },
+            orderBy: { id: 'asc' },
+        });
+        const projectIds = projects.map((p) => p.id);
+
         const postResult = postIds.length > 0
             ? await queueManager.enqueueBatchPostEmbedding(postIds, force)
             : null;
@@ -185,12 +246,17 @@ router.post("/generate/all", async (req, res) => {
             ? await queueManager.enqueueBatchUserEmbedding(userIds, force)
             : null;
 
+        const projectResult = projectIds.length > 0
+            ? await queueManager.enqueueBatchProjectEmbedding(projectIds, force)
+            : null;
+
         res.json({
             status: "success",
             message: "全量向量生成任务已入队",
             data: {
                 posts: { total: postIds.length, ...postResult },
                 users: { total: userIds.length, ...userResult },
+                projects: { total: projectIds.length, ...projectResult },
             },
         });
     } catch (error) {
@@ -240,6 +306,30 @@ router.post("/generate/user/:id", async (req, res) => {
         res.json({
             status: "success",
             message: `用户 ${userId} 向量生成任务已入队`,
+            data: result,
+        });
+    } catch (error) {
+        res.status(500).json({
+            status: "error",
+            message: `失败: ${error.message}`,
+        });
+    }
+});
+
+/**
+ * @api {post} /admin/embedding/generate/project/:id 为单个项目生成向量
+ * @apiName GenerateSingleProjectEmbedding
+ * @apiGroup AdminEmbedding
+ * @apiPermission admin
+ */
+router.post("/generate/project/:id", async (req, res) => {
+    try {
+        const projectId = Number(req.params.id);
+        const result = await queueManager.enqueueProjectEmbedding(projectId, true);
+
+        res.json({
+            status: "success",
+            message: `项目 ${projectId} 向量生成任务已入队`,
             data: result,
         });
     } catch (error) {

@@ -923,7 +923,11 @@ export const CONFIG_TYPES = {
         type: "string",
         required: false,
         default: "openai",
-        description: "Embedding 提供商类型: openai（兼容 OpenAI API 的所有服务，包括 Ollama/vLLM/LiteLLM 等）",
+        description: "Embedding 提供商类型: openai | aliyun（DashScope）",
+        validate: (value) => {
+            const normalized = String(value || '').toLowerCase();
+            return normalized === 'openai' || normalized === 'aliyun' || normalized === 'dashscope';
+        },
     },
     "embedding.api_base": {
         type: "string",
