@@ -105,18 +105,6 @@ export async function syncProjectAndAssets(job, remoteProjectId, remoteUserId = 
         };
     }
 
-    if (result?.mocked) {
-        await job.log(`项目 ${remoteProjectId} 开发模式假数据同步完成，跳过云端素材同步`);
-        return {
-            mode: 'sync-project',
-            ...result,
-            assets: {
-                skipped: true,
-                reason: 'mocked_project_skip_assets',
-            },
-        };
-    }
-
     let assetsResult = null;
     try {
         assetsResult = await mirror40CodeSyncService.syncProjectAssets(remoteProjectId);

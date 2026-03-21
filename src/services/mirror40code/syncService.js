@@ -31,7 +31,7 @@ const USER_SEARCH_PAYLOAD = {
     name: '',
     author: '',
     type: 1,
-    s: '1',
+    s: 1,
     sid: '',
     fl: 0,
     fan: 0,
@@ -40,7 +40,18 @@ const USER_SEARCH_PAYLOAD = {
     folder: 0,
 };
 
-const PROJECT_SEARCH_PAYLOAD = { "name": "", "author": "", "type": 0, "s": 2, "sid": "", "fl": 0, "fan": 0, "follow": 0, "page": "1", "folder": 0 }
+const PROJECT_SEARCH_PAYLOAD = {
+    name: '',
+    author: '',
+    type: '0',
+    s: 2,
+    sid: '',
+    fl: 0,
+    fan: 0,
+    follow: 0,
+    page: '1',
+    folder: 0,
+};
 
 function toDateFromUnixSeconds(value) {
     const n = Number(value);
@@ -383,99 +394,6 @@ function extractWorkSourcePayload(payload) {
 }
 
 class Mirror40CodeSyncService {
-    async syncProjectWithMockData(remoteProjectId, remoteAuthorHint = null) {
-        const parsedProjectId = Number(remoteProjectId);
-        const hintedAuthorId = Number(remoteAuthorHint);
-        const remoteAuthorId = Number.isFinite(hintedAuthorId) && hintedAuthorId > 0
-            ? hintedAuthorId
-            : (parsedProjectId % 900000) + 1000;
-
-        const nowSeconds = Math.floor(Date.now() / 1000);
-        const fakeRemoteUser = {
-            id: remoteAuthorId,
-            nickname: `DevUser-${remoteAuthorId}`,
-            introduce: `开发模式用户 ${remoteAuthorId}`,
-            update_time: nowSeconds,
-        };
-
-        const localAuthor = await this.ensureProxyUser(fakeRemoteUser, null);
-
-        const fakeRemoteProject = {
-            id: parsedProjectId,
-            author: remoteAuthorId,
-            name: `DevMock-${parsedProjectId}`,
-            introduce: `开发模式模拟项目 ${parsedProjectId}`,
-            look: 0,
-            like: 0,
-            num_collections: 0,
-            update_time: nowSeconds,
-            publish_time: nowSeconds,
-            time: nowSeconds,
-        };
-
-        const localProject = await this.ensureMirrorProject(fakeRemoteProject, localAuthor.id, remoteAuthorId);
-
-        const fakeSource = {
-            targets: [
-                {
-                    isStage: true,
-                    name: 'Stage',
-                    variables: {},
-                    lists: {},
-                    broadcasts: {},
-                    blocks: {},
-                    comments: {},
-                    currentCostume: 0,
-                    costumes: [
-                        {
-                            assetId: 'cd21514d0531fdffb22204e0ec5ed84a',
-                            name: 'backdrop1',
-                            md5ext: 'cd21514d0531fdffb22204e0ec5ed84a.svg',
-                            dataFormat: 'svg',
-                            bitmapResolution: 1,
-                            rotationCenterX: 240,
-                            rotationCenterY: 180,
-                        },
-                    ],
-                    sounds: [],
-                    volume: 100,
-                    layerOrder: 0,
-                    tempo: 60,
-                    videoTransparency: 50,
-                    videoState: 'on',
-                    textToSpeechLanguage: null,
-                },
-            ],
-            monitors: [],
-            extensions: [],
-            meta: {
-                semver: '3.0.0',
-                vm: '0.2.0',
-                agent: 'ZeroCat-Mirror40Code-DevMock',
-            },
-        };
-
-        const commitResult = await this.saveProjectSourceAndCommit(localProject, localAuthor.id, fakeRemoteProject, fakeSource);
-
-        await this.recordProjectSyncState(parsedProjectId, {
-            status: 'success',
-            detail: commitResult.updated ? 'mocked_updated' : 'mocked_unchanged',
-            localProjectId: localProject.id,
-        });
-
-        logger.debug(`[mirror-40code] 开发模式项目同步(假数据) remoteProject=${parsedProjectId} localProject=${localProject.id} remoteAuthor=${remoteAuthorId}`);
-        return {
-            remoteProjectId: parsedProjectId,
-            remoteAuthorId,
-            localAuthorId: localAuthor.id,
-            localProjectId: localProject.id,
-            updated: commitResult.updated,
-            commitId: commitResult.commitId,
-            sourceSha: commitResult.sourceSha,
-            mocked: true,
-        };
-    }
-
     async getConfig() {
         const enabled = await zcconfig.get('mirror40code.enabled', false);
         const token = await zcconfig.get('mirror40code.token', '');
@@ -1212,8 +1130,10 @@ class Mirror40CodeSyncService {
         const maxPages = Math.max(1, Number(await zcconfig.get('mirror40code.daily.project_scan.max_pages', cfg.maxPages || 50)) || (cfg.maxPages || 50));
         const seenProjectIds = new Set();
         const projectItems = [];
+        let stopScan = false;
 
         for (let page = 1; page <= maxPages; page++) {
+            if (stopScan) break;
             const result = await this.fetchSearchProjectsPage(cfg, page);
             const list = Array.isArray(result?.list) ? result.list : [];
             logger.debug(`[mirror-40code] 每日项目扫描 page=${page} count=${list.length}`);
@@ -1231,7 +1151,11 @@ class Mirror40CodeSyncService {
 
                 const remoteUpdateTime = normalizeRemoteUpdateSeconds(item?.update_time || item?.time || item?.publish_time || 0);
                 const needSync = await this.shouldEnqueueProjectByTimestamp(remoteProjectId, remoteUpdateTime);
-                if (!needSync) continue;
+                if (!needSync) {
+                    logger.debug(`[mirror-40code] 每日项目扫描提前停止 remoteProject=${remoteProjectId} page=${page} reason=already_synced`);
+                    stopScan = true;
+                    break;
+                }
 
                 const remoteUserId = Number(item?.author);
                 projectItems.push({
@@ -1725,8 +1649,6 @@ class Mirror40CodeSyncService {
         const cfg = await this.getConfig();
         this.ensureEnabled(cfg);
 
-        const forceSync = Boolean(options?.forceSync);
-
         const parsedUserId = Number(remoteUserId);
         if (!Number.isFinite(parsedUserId) || parsedUserId <= 0) {
             throw new Error(`无效远程用户ID: ${remoteUserId}`);
@@ -1738,17 +1660,7 @@ class Mirror40CodeSyncService {
                 throw new Error(`远程用户不存在或无法获取: ${parsedUserId}`);
             }
 
-            const remoteUpdateTime = normalizeRemoteUpdateSeconds(remoteUser?.update_time || remoteUser?.time || remoteUser?.last_time || 0);
-            const needUserUpdate = forceSync || await this.shouldEnqueueUserByTimestamp(parsedUserId, remoteUpdateTime);
-            logger.debug(`[mirror-40code] 用户同步判定 remoteUser=${parsedUserId} remoteTs=${remoteUpdateTime} force=${forceSync} needUpdate=${needUserUpdate}`);
-            if (!needUserUpdate) {
-                return {
-                    remoteUserId: parsedUserId,
-                    skipped: true,
-                    reason: 'user_unchanged',
-                    projectItems: [],
-                };
-            }
+            logger.debug(`[mirror-40code] 用户同步执行 remoteUser=${parsedUserId} mode=always-sync`);
 
             const localUser = await this.ensureProxyUser(remoteUser, cfg);
             const profileArticleProject = await this.ensureProfileArticleProject(remoteUser, localUser);
@@ -2028,15 +1940,6 @@ class Mirror40CodeSyncService {
         const parsedProjectId = Number(remoteProjectId);
         if (!Number.isFinite(parsedProjectId) || parsedProjectId <= 0) {
             throw new Error(`无效远程项目ID: ${remoteProjectId}`);
-        }
-
-        if (process.env.NODE_ENV === 'development') {
-            const random = Math.floor(Math.random() * 100) + 1;
-            const useRealCloudSync = random === 1;
-            logger.debug(`[mirror-40code] 开发模式项目抽签 remoteProject=${parsedProjectId} random=${random} useRealCloudSync=${useRealCloudSync}`);
-            if (!useRealCloudSync) {
-                return this.syncProjectWithMockData(parsedProjectId, remoteAuthorHint);
-            }
         }
 
         try {

@@ -26,11 +26,15 @@ async function processDailySync(job) {
     const seenProjectIds = new Set();
 
     let discoveredUsers = 0;
+    let discoveredSyncedUsers = 0;
     let discoveredProjects = 0;
     let enqueuedUsers = 0;
     let enqueuedProjects = 0;
+    let firstSyncedRemoteUserId = null;
 
+    let stopUserScan = false;
     for (let page = 1; page <= maxUserPages; page++) {
+        if (stopUserScan) break;
         const result = await mirror40CodeSyncService.fetchSearchUsersPage(cfg, page);
         const list = Array.isArray(result?.list) ? result.list : [];
         await job.log(`用户扫描 page=${page} count=${list.length}`);
@@ -44,6 +48,15 @@ async function processDailySync(job) {
             const remoteUserId = Number(item?.id || item?.uid || item?.userid);
             if (!Number.isFinite(remoteUserId) || remoteUserId <= 0) continue;
             if (seenUserIds.has(remoteUserId)) continue;
+
+            const mappedLocalUserId = await mirror40CodeSyncService.getMappedLocalUserId(remoteUserId);
+            if (Number.isFinite(mappedLocalUserId) && mappedLocalUserId > 0) {
+                stopUserScan = true;
+                firstSyncedRemoteUserId = remoteUserId;
+                await job.log(`用户扫描提前停止 page=${page} remoteUser=${remoteUserId} reason=already-synced localUser=${mappedLocalUserId}`);
+                break;
+            }
+
             seenUserIds.add(remoteUserId);
             userBatch.push(remoteUserId);
         }
@@ -56,7 +69,17 @@ async function processDailySync(job) {
         }
     }
 
+    if (firstSyncedRemoteUserId !== null) {
+        const syncedRemoteUserIds = await mirror40CodeSyncService.listMappedRemoteUserIds({ includeSyncDisabled: false });
+        discoveredSyncedUsers = syncedRemoteUserIds.length;
+        const queued = await enqueueUserSyncJobs(queue, syncedRemoteUserIds, 'daily-sync-users-synced');
+        enqueuedUsers += queued;
+        await job.log(`已命中已同步用户 remoteUser=${firstSyncedRemoteUserId}，批量入队所有已同步用户 total=${syncedRemoteUserIds.length} enqueued=${queued}`);
+    }
+
+    let stopProjectScan = false;
     for (let page = 1; page <= maxProjectPages; page++) {
+        if (stopProjectScan) break;
         const result = await mirror40CodeSyncService.fetchSearchProjectsPage(cfg, page);
         const list = Array.isArray(result?.list) ? result.list : [];
         await job.log(`项目扫描 page=${page} count=${list.length}`);
@@ -74,7 +97,11 @@ async function processDailySync(job) {
 
             const remoteUpdateTime = Number(item?.update_time || item?.time || item?.publish_time || 0);
             const needSync = await mirror40CodeSyncService.shouldEnqueueProjectByTimestamp(remoteProjectId, remoteUpdateTime);
-            if (!needSync) continue;
+            if (!needSync) {
+                stopProjectScan = true;
+                await job.log(`项目扫描提前停止 page=${page} remoteProject=${remoteProjectId} reason=already-synced`);
+                break;
+            }
 
             const remoteUserId = Number(item?.author);
             projectBatch.push({
@@ -92,10 +119,10 @@ async function processDailySync(job) {
         }
     }
 
-    await job.log(`每日同步入队完成 users=${enqueuedUsers}/${discoveredUsers} projects=${enqueuedProjects}/${discoveredProjects}`);
+    await job.log(`每日同步入队完成 users=${enqueuedUsers}/${discoveredUsers + discoveredSyncedUsers} projects=${enqueuedProjects}/${discoveredProjects}`);
     return {
         mode: 'daily-sync',
-        discoveredUsers,
+        discoveredUsers: discoveredUsers + discoveredSyncedUsers,
         discoveredProjects,
         enqueuedUsers,
         enqueuedProjects,
