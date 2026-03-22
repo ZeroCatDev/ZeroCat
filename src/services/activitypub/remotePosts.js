@@ -14,6 +14,178 @@ import { upsertTargetConfig, getTargetConfig } from './store.js';
 
 // target_type for remote posts
 const REMOTE_POST_TARGET_TYPE = 'ap_remote_post';
+const AP_FETCH_TIMEOUT = 15000;
+const AP_FETCH_REDIRECT_LIMIT = 6;
+
+function normalizeHttpUrl(rawUrl, baseUrl = null) {
+    const input = String(rawUrl || '').trim();
+    if (!input) return null;
+
+    try {
+        let normalizedInput = input;
+        if (/^\/\//.test(normalizedInput)) {
+            normalizedInput = `https:${normalizedInput}`;
+        }
+
+        const parsed = baseUrl
+            ? new URL(normalizedInput, baseUrl)
+            : new URL(normalizedInput);
+
+        parsed.pathname = parsed.pathname.replace(/\/{2,}/g, '/');
+        return parsed.toString();
+    } catch {
+        return null;
+    }
+}
+
+function inferRemoteDomainFromNote(note) {
+    const candidates = [
+        typeof note?.attributedTo === 'string' ? note.attributedTo : note?.attributedTo?.id,
+        typeof note?.id === 'string' ? note.id : null,
+        typeof note?.url === 'string' ? note.url : note?.url?.href,
+    ].filter(Boolean);
+
+    for (const candidate of candidates) {
+        try {
+            const host = new URL(candidate).host;
+            if (host) return host;
+        } catch {
+            continue;
+        }
+    }
+
+    return null;
+}
+
+function escapeRegExp(value) {
+    return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeMentionName(name, fallbackDomain) {
+    const raw = String(name || '').trim();
+    if (!raw) return null;
+
+    const withAt = raw.startsWith('@') ? raw : `@${raw}`;
+    const fullMatch = withAt.match(/^@([a-zA-Z0-9_.-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$/);
+    if (fullMatch) {
+        return {
+            short: fullMatch[1],
+            full: `@${fullMatch[1]}@${fullMatch[2]}`,
+            domain: fullMatch[2],
+            hasDomain: true,
+        };
+    }
+
+    const shortMatch = withAt.match(/^@([a-zA-Z0-9_.-]+)$/);
+    if (shortMatch && fallbackDomain) {
+        return {
+            short: shortMatch[1],
+            full: `@${shortMatch[1]}@${fallbackDomain}`,
+            domain: fallbackDomain,
+            hasDomain: false,
+        };
+    }
+
+    return null;
+}
+
+function buildMentionAliasMap(note, fallbackDomain) {
+    const mentionTags = Array.isArray(note?.tag)
+        ? note.tag.filter(tag => tag?.type === 'Mention')
+        : [];
+
+    const map = new Map();
+    for (const tag of mentionTags) {
+        const normalized = normalizeMentionName(tag?.name, fallbackDomain);
+        if (!normalized || normalized.hasDomain) continue;
+        map.set(normalized.short, normalized.full);
+    }
+    return map;
+}
+
+function rewriteShortMentionsToFedi(content, mentionAliasMap) {
+    if (!content || !(mentionAliasMap instanceof Map) || mentionAliasMap.size === 0) {
+        return content;
+    }
+
+    let rewritten = content;
+    const entries = [...mentionAliasMap.entries()].sort((a, b) => b[0].length - a[0].length);
+    for (const [shortName, fullMention] of entries) {
+        const mentionRegex = new RegExp(`(^|[^\\w@])@${escapeRegExp(shortName)}(?![\\w@])`, 'g');
+        rewritten = rewritten.replace(mentionRegex, (_, prefix) => `${prefix}${fullMention}`);
+    }
+
+    return rewritten;
+}
+
+function collectRawImageUrlsFromNote(note) {
+    const urls = [];
+    const pushUrl = (value) => {
+        if (!value) return;
+        if (typeof value === 'string') {
+            urls.push(value);
+            return;
+        }
+        if (typeof value === 'object') {
+            if (typeof value.url === 'string') urls.push(value.url);
+            if (typeof value.href === 'string') urls.push(value.href);
+        }
+    };
+
+    pushUrl(note?.icon);
+    pushUrl(note?.image);
+
+    const attachments = Array.isArray(note?.attachment) ? note.attachment : [];
+    for (const item of attachments) {
+        const mediaType = String(item?.mediaType || '').toLowerCase();
+        const type = String(item?.type || '').toLowerCase();
+        const likelyImage = mediaType.startsWith('image/') || type === 'image';
+        if (!likelyImage) continue;
+        pushUrl(item?.url);
+        pushUrl(item);
+    }
+
+    return urls;
+}
+
+function buildImageMirrorCandidates(rawUrl, contextUrl = null) {
+    const raw = String(rawUrl || '').trim();
+    if (!raw) return [];
+
+    const candidates = [];
+    const pushUnique = (value) => {
+        const normalized = normalizeHttpUrl(value, contextUrl);
+        if (!normalized) return;
+        if (!candidates.includes(normalized)) candidates.push(normalized);
+    };
+
+    pushUnique(raw);
+
+    const absolute = normalizeHttpUrl(raw, contextUrl);
+    if (absolute) {
+        try {
+            const parsed = new URL(absolute);
+            const host = parsed.host;
+            const path = parsed.pathname.replace(/\/{2,}/g, '/');
+
+            if (parsed.protocol === 'http:') {
+                pushUnique(`https://${host}${path}${parsed.search}`);
+            } else if (parsed.protocol === 'https:') {
+                pushUnique(`http://${host}${path}${parsed.search}`);
+            }
+
+            if (path.startsWith('/')) {
+                pushUnique(`${parsed.protocol}//${host}/media${path}${parsed.search}`);
+                pushUnique(`${parsed.protocol}//${host}/static${path}${parsed.search}`);
+                pushUnique(`${parsed.protocol}//${host}/system${path}${parsed.search}`);
+            }
+        } catch {
+            // ignore parse errors
+        }
+    }
+
+    return candidates;
+}
 
 /**
  * 拉取远程用户的 outbox 帖子
@@ -85,17 +257,48 @@ export async function fetchRemoteUserPosts(actorUrl, maxPosts = 50) {
  * @returns {object|null}
  */
 async function fetchApDocument(url) {
+    const seen = new Set();
+    let currentUrl = normalizeHttpUrl(url);
+    if (!currentUrl) {
+        logger.warn(`[ap-fetch] AP 文档 URL 无效: ${url}`);
+        return null;
+    }
+
     try {
-        const response = await axios.get(url, {
-            headers: {
-                'Accept': AP_ACCEPT_TYPES[0],
-                'User-Agent': 'ZeroCat-ActivityPub/1.0',
-            },
-            timeout: 15000,
-        });
-        return response.data;
+        for (let i = 0; i <= AP_FETCH_REDIRECT_LIMIT; i++) {
+            if (seen.has(currentUrl)) {
+                logger.warn(`[ap-fetch] 重定向循环: ${currentUrl}`);
+                return null;
+            }
+            seen.add(currentUrl);
+
+            const response = await axios.get(currentUrl, {
+                headers: {
+                    'Accept': AP_ACCEPT_TYPES[0],
+                    'User-Agent': 'ZeroCat-ActivityPub/1.0',
+                },
+                timeout: AP_FETCH_TIMEOUT,
+                maxRedirects: 0,
+                validateStatus: status => (status >= 200 && status < 300) || [301, 302, 303, 307, 308].includes(status),
+            });
+
+            if ([301, 302, 303, 307, 308].includes(response.status)) {
+                const nextUrl = normalizeHttpUrl(response.headers?.location, currentUrl);
+                if (!nextUrl) {
+                    logger.warn(`[ap-fetch] 重定向缺少有效 location: ${currentUrl}`);
+                    return null;
+                }
+                currentUrl = nextUrl;
+                continue;
+            }
+
+            return response.data;
+        }
+
+        logger.warn(`[ap-fetch] 重定向次数超过上限: ${url}`);
+        return null;
     } catch (err) {
-        logger.warn(`[ap-fetch] 获取 AP 文档失败 ${url}:`, err.message);
+        logger.warn(`[ap-fetch] 获取 AP 文档失败 ${currentUrl}:`, err.message);
         return null;
     }
 }
@@ -168,8 +371,20 @@ async function importRemoteNote(note, proxyUser) {
         // 合并超过两个连续换行为两个
         .replace(/\n{3,}/g, '\n\n')
         .trim();
+
+    // 远端提及容错：将 @user 自动补全为 @user@remote.domain
+    const remoteDomain = inferRemoteDomainFromNote(note);
+    const mentionAliasMap = buildMentionAliasMap(note, remoteDomain);
+    content = rewriteShortMentionsToFedi(content, mentionAliasMap);
+
     // 截断到合理长度
     content = content.substring(0, 5000);
+
+    // 提取更多远程图片镜像候选，便于前端查看
+    const rawImageUrls = collectRawImageUrlsFromNote(note);
+    const imageMirrorCandidates = Array.from(new Set(
+        rawImageUrls.flatMap(imageUrl => buildImageMirrorCandidates(imageUrl, noteId))
+    )).slice(0, 30);
 
     // 确定帖子类型
     let postType = 'normal';
@@ -224,6 +439,9 @@ async function importRemoteNote(note, proxyUser) {
                     sensitive: note.sensitive || false,
                     spoiler_text: note.summary || null,
                     remote_url: note.url || noteId,
+                    remote_domain: remoteDomain,
+                    mention_aliases: Object.fromEntries(mentionAliasMap),
+                    image_mirror_urls: imageMirrorCandidates,
                 },
             },
         });
@@ -455,13 +673,24 @@ async function processRemoteMentions(postId, note) {
     if (!note.tag || !Array.isArray(note.tag)) return;
 
     const instanceDomain = await getInstanceDomain();
+    const remoteDomain = inferRemoteDomainFromNote(note);
 
     for (const tag of note.tag) {
-        if (tag.type !== 'Mention' || !tag.href) continue;
+        if (tag.type !== 'Mention') continue;
+
+        let mentionHref = normalizeHttpUrl(tag.href);
+        if (!mentionHref) {
+            const normalizedMention = normalizeMentionName(tag.name, remoteDomain);
+            if (normalizedMention?.full) {
+                const resolved = await resolveWebFinger(normalizedMention.full.replace(/^@/, ''));
+                mentionHref = normalizeHttpUrl(resolved?.actorUrl);
+            }
+        }
+        if (!mentionHref) continue;
 
         try {
             // 检查是否为本地用户
-            const localNoteMatch = tag.href.match(/\/ap\/users\/([^/]+)$/);
+            const localNoteMatch = mentionHref.match(/\/ap\/users\/([^/]+)$/);
             if (localNoteMatch) {
                 const localUser = await prisma.ow_users.findFirst({
                     where: { username: localNoteMatch[1], status: 'active' },
@@ -478,10 +707,10 @@ async function processRemoteMentions(postId, note) {
             }
 
             // 远程用户提及 - 确保代理存在
-            const allowed = await isActorAllowed(tag.href);
+            const allowed = await isActorAllowed(mentionHref);
             if (!allowed) continue;
 
-            const proxyUser = await ensureProxyUser(tag.href);
+            const proxyUser = await ensureProxyUser(mentionHref);
             if (proxyUser) {
                 await prisma.ow_posts_mention.upsert({
                     where: { post_id_user_id: { post_id: postId, user_id: proxyUser.id } },
