@@ -19,6 +19,7 @@ const pwdHash = new PasswordHash();
 const s3config = {
     endpoint: await zcconfig.get("s3.endpoint"),
     region: await zcconfig.get("s3.region"),
+    forcePathStyle: await zcconfig.get("s3.forcePathStyle"),
     credentials: {
         accessKeyId: await zcconfig.get("s3.AWS_ACCESS_KEY_ID"),
         secretAccessKey: await zcconfig.get("s3.AWS_SECRET_ACCESS_KEY"),

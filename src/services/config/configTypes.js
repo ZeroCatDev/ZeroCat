@@ -122,6 +122,13 @@ export const CONFIG_TYPES = {
         required: true,
         description: "S3存储服务区域",
     },
+    "s3.forcePathStyle": {
+        type: "boolean",
+        required: false,
+        default: true,
+        description: "是否强制使用Path-Style访问S3（兼容MinIO/非子域名端点）",
+        transform: typeTransformers.boolean,
+    },
     "s3.AWS_ACCESS_KEY_ID": {
         type: "string",
         required: true,
