@@ -145,7 +145,7 @@ taskHandlers.set('sitemap-auto-update', async (data, job) => {
 });
 
 taskHandlers.set('embedding-daily-project-check', async (data, job) => {
-    await job.log('Executing embedding daily project check');
+    await job.log('Executing embedding daily project check (fill missing project embeddings only)');
 
     const embeddingEnabled = await zcconfig.get('embedding.enabled', false);
     if (!embeddingEnabled) {
@@ -168,67 +168,67 @@ taskHandlers.set('embedding-daily-project-check', async (data, job) => {
         return;
     }
 
-        const candidates = await prisma.$queryRawUnsafe(
-                `
-                SELECT p.id
-                FROM ow_projects p
-                LEFT JOIN ow_embeddings e
-                    ON e.entity_type = 'project'
-                 AND e.entity_id = p.id
-                LEFT JOIN (
-                        SELECT
-                        target_id AS project_id,
-                                COUNT(*)::int AS local_view_count
-                        FROM ow_analytics_event
-                        WHERE target_type = 'project'
-                        GROUP BY target_id
-                ) av
-                    ON av.project_id = p.id
-                LEFT JOIN LATERAL (
-                        SELECT
-                                CASE
-                                        WHEN tc.value ~ '^[0-9]+$' THEN tc.value::int
-                                        ELSE 0
-                                END AS remote_view_count
-                        FROM project_config tc
-                        WHERE tc.target_type = 'project'
-                            AND tc.target_id = p.id::text
-                            AND tc.key IN ('mirror.remote_view_count', 'mirror40.remote_view_count')
-                        ORDER BY tc.updated_at DESC
-                        LIMIT 1
-                ) rv ON true
-                LEFT JOIN (
-                        SELECT
-                                projectid AS project_id,
-                                COUNT(*)::int AS star_count
-                        FROM ow_projects_stars
-                        WHERE projectid IS NOT NULL
-                        GROUP BY projectid
-                ) ps
-                    ON ps.project_id = p.id
-                WHERE e.id IS NULL
-                    AND COALESCE(p.type, '') = 'scratch'
-                    AND COALESCE(p.state, '') <> 'deleted'
-                    AND (
-                        (COALESCE(av.local_view_count, 0) + COALESCE(rv.remote_view_count, 0)) > $1
-                        OR COALESCE(ps.star_count, 0) > $2
-                    )
-                ORDER BY
-                    (COALESCE(av.local_view_count, 0) + COALESCE(rv.remote_view_count, 0)) DESC,
-                    COALESCE(ps.star_count, 0) DESC,
-                    p.id DESC
-                LIMIT $3
-                `,
-                Number(minViewCount),
-                Number(minStarCount),
-                Number(scanLimit)
-        );
+    const candidates = await prisma.$queryRawUnsafe(
+        `
+        SELECT p.id
+        FROM ow_projects p
+        LEFT JOIN ow_embeddings e
+            ON e.entity_type = 'project'
+         AND e.entity_id = p.id
+        LEFT JOIN (
+                SELECT
+                target_id AS project_id,
+                        COUNT(*)::int AS local_view_count
+                FROM ow_analytics_event
+                WHERE target_type = 'project'
+                GROUP BY target_id
+        ) av
+            ON av.project_id = p.id
+        LEFT JOIN LATERAL (
+                SELECT
+                        CASE
+                                WHEN tc.value ~ '^[0-9]+$' THEN tc.value::int
+                                ELSE 0
+                        END AS remote_view_count
+                FROM project_config tc
+                WHERE tc.target_type = 'project'
+                    AND tc.target_id = p.id::text
+                    AND tc.key IN ('mirror.remote_view_count', 'mirror40.remote_view_count')
+                ORDER BY tc.updated_at DESC
+                LIMIT 1
+        ) rv ON true
+        LEFT JOIN (
+                SELECT
+                        projectid AS project_id,
+                        COUNT(*)::int AS star_count
+                FROM ow_projects_stars
+                WHERE projectid IS NOT NULL
+                GROUP BY projectid
+        ) ps
+            ON ps.project_id = p.id
+        WHERE e.id IS NULL
+            AND COALESCE(p.type, '') = 'scratch'
+            AND COALESCE(p.state, '') <> 'deleted'
+            AND (
+                (COALESCE(av.local_view_count, 0) + COALESCE(rv.remote_view_count, 0)) > $1
+                OR COALESCE(ps.star_count, 0) > $2
+            )
+        ORDER BY
+            (COALESCE(av.local_view_count, 0) + COALESCE(rv.remote_view_count, 0)) DESC,
+            COALESCE(ps.star_count, 0) DESC,
+            p.id DESC
+        LIMIT $3
+        `,
+        Number(minViewCount),
+        Number(minStarCount),
+        Number(scanLimit)
+    );
 
     const projectIds = (Array.isArray(candidates) ? candidates : [])
         .map((item) => Number(item?.id))
         .filter((id) => Number.isFinite(id) && id > 0);
 
-    await job.log(`Found ${projectIds.length} missing project embeddings (scratch, realViews>${minViewCount} or realStars>${minStarCount})`);
+    await job.log(`Found ${projectIds.length} projects missing embeddings (first-time fill only)`);
 
     let enqueued = 0;
     let duplicated = 0;

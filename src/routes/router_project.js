@@ -26,6 +26,7 @@ import { getUserByUsername } from "../controllers/users.js";
 import { createEvent } from "../controllers/events.js";
 import { getAnalytics } from "../services/analytics.js";
 import redisClient from "../services/redis.js";
+import queueManager from "../services/queue/queueManager.js";
 
 const router = Router();
 
@@ -446,6 +447,13 @@ router.post("/", needLogin, async (req, res, next) => {
       },
       isPrivate // 传入是否强制私密
     );
+
+    queueManager.enqueueProjectGorseSync(Number(result.id), {
+      reason: "project_create",
+      delayMs: 30000,
+    }).catch((error) => {
+      logger.debug(`[gorse] create project sync enqueue failed project=${result.id}: ${error.message}`);
+    });
 
     res.status(200).send({
       status: "success",
@@ -1309,6 +1317,13 @@ router.put("/id/:id", needLogin, async (req, res, next) => {
       project.state === "private" // 根据项目状态决定是否私密
     );
 
+    queueManager.enqueueProjectGorseSync(Number(req.params.id), {
+      reason: "project_update",
+      delayMs: 15000,
+    }).catch((error) => {
+      logger.debug(`[gorse] update project sync enqueue failed project=${req.params.id}: ${error.message}`);
+    });
+
     res.status(200).send({
       status: "success",
       message: "保存成功",
@@ -1442,6 +1457,13 @@ router.delete("/:id", needLogin, requireSudo, async (req, res, next) => {
           project_title: project.title,
         }
       );
+
+      queueManager.enqueueProjectGorseSync(Number(req.params.id), {
+        reason: "project_delete",
+        delayMs: 0,
+      }).catch((error) => {
+        logger.debug(`[gorse] delete project sync enqueue failed project=${req.params.id}: ${error.message}`);
+      });
     }
 
     res.status(200).send({
@@ -1608,6 +1630,13 @@ router.put("/rename/:id", needLogin, async (req, res, next) => {
       project.state === "private" // 根据项目状态决定是否私密
     );
 
+    queueManager.enqueueProjectGorseSync(Number(id), {
+      reason: "project_rename",
+      delayMs: 15000,
+    }).catch((error) => {
+      logger.debug(`[gorse] rename project sync enqueue failed project=${id}: ${error.message}`);
+    });
+
     res.status(200).send({
       status: "success",
       message: "重命名成功",
@@ -1643,6 +1672,13 @@ router.put("/changevisibility/:id", needLogin, requireSudo, async (req, res, nex
         });
       })
       .then((result) => {
+        queueManager.enqueueProjectGorseSync(Number(id), {
+          reason: "project_visibility",
+          delayMs: 0,
+        }).catch((error) => {
+          logger.debug(`[gorse] visibility project sync enqueue failed project=${id}: ${error.message}`);
+        });
+
         res.status(200).send({
           status: "success",
           message: "操作成功",

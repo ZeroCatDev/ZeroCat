@@ -723,6 +723,11 @@ const queueManager = {
             return null;
         }
 
+        if (!force) {
+            logger.debug(`[queue-manager] Auto user embedding disabled, skip user=${userId}, trigger=${triggerType}`);
+            return { queued: false, skipped: true, reason: 'auto_user_embedding_disabled' };
+        }
+
         try {
             const jobId = `emb-user-${userId}`;
             const job = await queue.add('embedding', {
@@ -792,6 +797,11 @@ const queueManager = {
         const queue = getEmbeddingQueue();
         if (!queue || !initialized) return null;
 
+        if (!force) {
+            logger.debug('[queue-manager] Auto batch user embedding disabled');
+            return { queued: false, skipped: true, reason: 'auto_user_embedding_disabled' };
+        }
+
         try {
             const batchSize = 50;
             const jobs = [];
@@ -830,6 +840,11 @@ const queueManager = {
             return null;
         }
 
+        if (!force) {
+            logger.debug(`[queue-manager] Auto project embedding disabled, skip project=${projectId}`);
+            return { queued: false, skipped: true, reason: 'auto_project_embedding_disabled' };
+        }
+
         try {
             const jobId = `emb-project-${projectId}`;
             const job = await queue.add('embedding', {
@@ -846,6 +861,12 @@ const queueManager = {
             });
 
             logger.debug(`[queue-manager] Project embedding job ${job.id} enqueued for project=${projectId}`);
+
+            await this.enqueueProjectGorseSync(projectId, {
+                reason: force ? 'project_embedding_force' : 'project_embedding',
+                delayMs: 45000,
+            });
+
             return { jobId: job.id, queued: true };
         } catch (error) {
             logger.error('[queue-manager] Failed to enqueue project embedding:', error.message);
@@ -861,6 +882,11 @@ const queueManager = {
     async enqueueBatchProjectEmbedding(projectIds, force = false) {
         const queue = getEmbeddingQueue();
         if (!queue || !initialized) return null;
+
+        if (!force) {
+            logger.debug('[queue-manager] Auto batch project embedding disabled');
+            return { queued: false, skipped: true, reason: 'auto_project_embedding_disabled' };
+        }
 
         try {
             const batchSize = 50;
@@ -881,9 +907,100 @@ const queueManager = {
             }
 
             logger.info(`[queue-manager] Batch project embedding: ${jobs.length} jobs enqueued for ${projectIds.length} projects`);
+
+            if (Array.isArray(projectIds) && projectIds.length > 0) {
+                await this.enqueueBatchProjectGorseSync(projectIds, {
+                    reason: force ? 'batch_project_embedding_force' : 'batch_project_embedding',
+                    delayMs: 60000,
+                });
+            }
+
             return { jobIds: jobs, queued: true };
         } catch (error) {
             logger.error('[queue-manager] Failed to enqueue batch project embedding:', error.message);
+            return null;
+        }
+    },
+
+    /**
+     * 为单个项目入队 Gorse 同步任务（独立于 project_embedding）
+     * @param {number} projectId
+     * @param {{reason?: string, delayMs?: number}} options
+     */
+    async enqueueProjectGorseSync(projectId, options = {}) {
+        const queue = getEmbeddingQueue();
+        if (!queue || !initialized) {
+            logger.debug('[queue-manager] Embedding queue not available, skipping project gorse sync');
+            return null;
+        }
+
+        const reason = String(options?.reason || 'manual');
+        const delayMs = Math.max(0, Number(options?.delayMs) || 0);
+
+        try {
+            const jobId = `gorse-project-${projectId}`;
+            const job = await queue.add('embedding', {
+                type: 'project_gorse_sync',
+                projectId: Number(projectId),
+                reason,
+            }, {
+                jobId,
+                delay: delayMs,
+                attempts: 5,
+                backoff: { type: 'exponential', delay: 20000 },
+                removeOnComplete: { age: 86400 },
+                removeOnFail: { age: 604800 },
+                deduplication: { id: jobId },
+            });
+
+            logger.debug(`[queue-manager] Project gorse sync job ${job.id} enqueued for project=${projectId}, reason=${reason}`);
+            return { jobId: job.id, queued: true };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue project gorse sync:', error.message);
+            return null;
+        }
+    },
+
+    /**
+     * 批量入队项目 Gorse 同步任务
+     * @param {number[]} projectIds
+     * @param {{reason?: string, delayMs?: number}} options
+     */
+    async enqueueBatchProjectGorseSync(projectIds, options = {}) {
+        const queue = getEmbeddingQueue();
+        if (!queue || !initialized) return null;
+
+        const reason = String(options?.reason || 'batch_manual');
+        const delayMs = Math.max(0, Number(options?.delayMs) || 0);
+
+        try {
+            const results = [];
+            for (const rawId of projectIds || []) {
+                const projectId = Number(rawId);
+                if (!Number.isInteger(projectId) || projectId <= 0) continue;
+
+                const jobId = `gorse-project-${projectId}`;
+                const job = await queue.add('embedding', {
+                    type: 'project_gorse_sync',
+                    projectId,
+                    reason,
+                }, {
+                    jobId,
+                    delay: delayMs,
+                    attempts: 5,
+                    backoff: { type: 'exponential', delay: 20000 },
+                    removeOnComplete: { age: 86400 },
+                    removeOnFail: { age: 604800 },
+                    deduplication: { id: jobId },
+                });
+
+                results.push(job.id);
+            }
+
+            logger.info(`[queue-manager] Batch project gorse sync: ${results.length} jobs enqueued`);
+            return { jobIds: results, queued: true };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue batch project gorse sync:', error.message);
             return null;
         }
     },

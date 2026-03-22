@@ -57,15 +57,13 @@ export async function starProject(userId, projectId) {
         });
 
         // Gorse 反馈：项目收藏
+        queueManager.enqueueProjectGorseSync(parsedProjectId, { reason: 'project_star', delayMs: 0 }).catch(e => {
+            logger.debug('[gorse] enqueue project gorse sync failed:', e.message);
+        });
+
         gorseService.feedbackProjectStar(parsedUserId, parsedProjectId).catch(e => {
             logger.debug('[gorse] star feedback failed:', e.message);
         });
-
-        queueManager.enqueueUserEmbedding(parsedUserId, false, 'project_star').catch(e => {
-            logger.debug('[embedding] project star user enqueue failed:', e.message);
-        });
-
-
 
         return star;
     } catch (error) {
@@ -125,12 +123,12 @@ export async function unstarProject(userId, projectId) {
         });
 
         // Gorse 反馈：取消项目收藏
-        gorseService.feedbackProjectUnstar(parsedUserId, parsedProjectId).catch(e => {
-            logger.debug('[gorse] unstar feedback failed:', e.message);
+        queueManager.enqueueProjectGorseSync(parsedProjectId, { reason: 'project_unstar', delayMs: 0 }).catch(e => {
+            logger.debug('[gorse] enqueue project gorse sync failed:', e.message);
         });
 
-        queueManager.enqueueUserEmbedding(parsedUserId, false, 'project_unstar').catch(e => {
-            logger.debug('[embedding] project unstar user enqueue failed:', e.message);
+        gorseService.feedbackProjectUnstar(parsedUserId, parsedProjectId).catch(e => {
+            logger.debug('[gorse] unstar feedback failed:', e.message);
         });
 
         return star;

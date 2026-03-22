@@ -1,7 +1,7 @@
 import logger from "../services/logger.js";
 import { prisma } from "../services/prisma.js";
 import embeddingService from "../services/embedding.js";
-import queueManager from "../services/queue/queueManager.js";
+import gorseService from "../services/gorse.js";
 import { projectSelectionFields } from "./projects.js";
 
 function normalizeLimit(limit, fallback = 20) {
@@ -39,20 +39,12 @@ function visibilityWhere(userId) {
 async function ensureProjectVector(projectId) {
   const vector = await embeddingService.getEmbedding("project", projectId);
   if (vector) return vector;
-
-  queueManager.enqueueProjectEmbedding(projectId, false).catch((error) => {
-    logger.debug(`[project-recommend] enqueue project embedding failed project=${projectId}: ${error.message}`);
-  });
   return null;
 }
 
 async function ensureUserVector(userId, triggerType = "project_recommend") {
   const vector = await embeddingService.getEmbedding("user", userId);
   if (vector) return vector;
-
-  queueManager.enqueueUserEmbedding(userId, false, triggerType).catch((error) => {
-    logger.debug(`[project-recommend] enqueue user embedding failed user=${userId}: ${error.message}`);
-  });
   return null;
 }
 
@@ -278,27 +270,45 @@ export async function getRecommendedProjectsForUser({ userId, limit = 20, offset
     throw new Error("无效的用户 ID");
   }
 
-  const userVector = await ensureUserVector(nUserId, "project_recommend_me");
-  if (!userVector) {
+  const safeLimit = normalizeLimit(limit, 20);
+  const safeOffset = normalizeOffset(offset, 0);
+  const projectIds = await gorseService.getRecommendedProjectIds(nUserId, {
+    limit: safeLimit,
+    offset: safeOffset,
+  });
+
+  if (!projectIds || projectIds.length === 0) {
     return {
       projects: [],
       total_candidates: 0,
-      offset: normalizeOffset(offset, 0),
-      limit: normalizeLimit(limit, 20),
+      offset: safeOffset,
+      limit: safeLimit,
       has_more: false,
       min_similarity: normalizeMinSimilarity(minSimilarity),
-      message: "用户兴趣向量尚未就绪，已触发异步重算，请稍后重试",
+      message: "Gorse 暂无推荐结果",
     };
   }
 
-  return findProjectRecommendationsByVector({
-    vector: userVector,
-    userId: nUserId,
-    limit,
-    offset,
-    minSimilarity,
-    excludeOwnProjects: true,
+  const projects = await prisma.ow_projects.findMany({
+    where: {
+      ...visibilityWhere(nUserId),
+      authorid: { not: nUserId },
+      id: { in: projectIds },
+    },
+    select: projectSelectionFields(),
   });
+
+  const projectMap = new Map(projects.map((project) => [Number(project.id), project]));
+  const ordered = projectIds.map((id) => projectMap.get(Number(id))).filter(Boolean);
+
+  return {
+    projects: ordered,
+    total_candidates: ordered.length,
+    offset: safeOffset,
+    limit: safeLimit,
+    has_more: ordered.length === safeLimit,
+    min_similarity: normalizeMinSimilarity(minSimilarity),
+  };
 }
 
 export async function getContextRecommendedProjects({
@@ -345,7 +355,7 @@ export async function getContextRecommendedProjects({
       has_more: false,
       min_similarity: normalizeMinSimilarity(minSimilarity),
       source_project_id: nProjectId,
-      message: "用户或项目向量尚未就绪，已触发异步重算，请稍后重试",
+      message: "用户或项目向量尚未就绪，请手动触发 embedding 生成后重试",
     };
   }
 
@@ -404,7 +414,7 @@ export async function getSimilarProjectsByProject({
       has_more: false,
       min_similarity: normalizeMinSimilarity(minSimilarity),
       source_project_id: nProjectId,
-      message: "项目向量尚未就绪，已触发异步重算，请稍后重试",
+      message: "项目向量尚未就绪，请手动触发 embedding 生成后重试",
     };
   }
 

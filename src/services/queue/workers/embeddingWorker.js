@@ -64,6 +64,14 @@ async function processPostEmbedding(job) {
         return { skipped: true, reason: 'deleted' };
     }
 
+    if (!force) {
+        const existedVector = await embeddingService.getEmbedding('post', postId);
+        if (Array.isArray(existedVector) && existedVector.length > 0) {
+            await job.log(`帖子 ${postId} 已有向量，按固定策略不重算`);
+            return { skipped: true, reason: 'already_embedded' };
+        }
+    }
+
     // 构建文本
     const text = embeddingService.buildPostText(post);
     if (!text || text.trim().length === 0) {
@@ -262,6 +270,14 @@ async function processProjectEmbedding(job) {
         return { skipped: true, reason: 'deleted' };
     }
 
+    if (!force) {
+        const existedVector = await embeddingService.getEmbedding('project', project.id);
+        if (Array.isArray(existedVector) && existedVector.length > 0) {
+            await job.log(`项目 ${projectId} 已有向量，按一次性策略不再重复计算`);
+            return { skipped: true, reason: 'already_embedded' };
+        }
+    }
+
     const source = await fetchProjectLatestSource(project.id);
     const projectJson = parseScratchProjectJson(source);
     const metadataList = Array.from(extractScratchMetadata(projectJson)).slice(0, 1200);
@@ -276,14 +292,6 @@ async function processProjectEmbedding(job) {
     const coverUrl = await buildProjectCoverUrl(project.thumbnail);
     logger.debug(`[embedding-worker] project=${project.id} textLen=${text.length} coverUrl=${coverUrl || 'none'} textPreview="${previewText(text)}"`);
     const newHash = embeddingService.hashText(`${text}\ncover:${coverUrl || ''}`);
-    if (!force) {
-        const oldHash = await embeddingService.getTextHash('project', project.id);
-        logger.debug(`[embedding-worker] project=${project.id} hash old=${oldHash || 'none'} new=${newHash}`);
-        if (oldHash === newHash) {
-            await job.log(`项目 ${projectId} 文本未变化 (hash=${newHash})，跳过`);
-            return { skipped: true, reason: 'unchanged' };
-        }
-    }
 
     const config = await getModelInfo();
     const vector = await embeddingService.generateProjectEmbedding({
@@ -306,6 +314,49 @@ async function processProjectEmbedding(job) {
         extractedTextCount: metadataList.length,
         usedCover: Boolean(coverUrl),
     };
+}
+
+async function processProjectGorseSync(job) {
+    const { projectId, reason = 'manual' } = job.data;
+    const nProjectId = Number(projectId);
+    await job.log(`开始处理项目 ${nProjectId} 的 Gorse 同步 (reason=${reason})`);
+
+    if (!Number.isInteger(nProjectId) || nProjectId <= 0) {
+        return { skipped: true, reason: 'invalid_project_id' };
+    }
+
+    const project = await prisma.ow_projects.findUnique({
+        where: { id: nProjectId },
+        select: {
+            id: true,
+            authorid: true,
+            type: true,
+            state: true,
+            title: true,
+            name: true,
+            description: true,
+            time: true,
+            project_tags: {
+                select: { name: true },
+            },
+        },
+    });
+
+    if (!project) {
+        await job.log(`项目 ${nProjectId} 不存在，跳过 Gorse 同步`);
+        return { skipped: true, reason: 'not_found' };
+    }
+
+    if (project.state === 'deleted') {
+        await gorseService.hideProject(nProjectId);
+        await job.log(`项目 ${nProjectId} 已删除，已在 Gorse 隐藏`);
+        return { projectId: nProjectId, hidden: true };
+    }
+
+    await gorseService.upsertProject(project);
+    await job.log(`项目 ${nProjectId} 已同步到 Gorse`);
+
+    return { projectId: nProjectId, synced: true, reason };
 }
 
 // ======================== 用户向量生成 ========================
@@ -1031,6 +1082,8 @@ async function createEmbeddingWorker() {
                     return processUserEmbedding(job);
                 case 'project_embedding':
                     return processProjectEmbedding(job);
+                case 'project_gorse_sync':
+                    return processProjectGorseSync(job);
                 case 'batch_post_embedding':
                     return processBatchPostEmbedding(job);
                 case 'batch_user_embedding':
@@ -1108,11 +1161,20 @@ async function processBatchPostEmbedding(job) {
     const textsToEmbed = [];
     const postsToProcess = [];
 
+    const existingVectors = force
+        ? new Map()
+        : await embeddingService.getEmbeddings('post', validPosts.map(p => p.id));
+
     const existingHashes = force
         ? new Map()
         : await embeddingService.getTextHashes('post', validPosts.map(p => p.id));
 
     for (const post of validPosts) {
+        if (!force && existingVectors.has(post.id)) {
+            skipped++;
+            continue;
+        }
+
         const text = embeddingService.buildPostText(post);
         if (!text || text.trim().length === 0) {
             skipped++;

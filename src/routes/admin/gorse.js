@@ -29,7 +29,7 @@ router.get("/status", async (req, res) => {
  * @apiName SyncAllToGorse
  * @apiGroup AdminGorse
  * @apiPermission admin
- * @apiDescription 同步所有用户、帖子和反馈数据到 Gorse 推荐系统。此操作可能耗时较长。
+ * @apiDescription 同步所有用户、帖子、项目和反馈数据到 Gorse 推荐系统。此操作可能耗时较长。
  */
 router.post("/sync/all", async (req, res) => {
     try {
@@ -45,6 +45,30 @@ router.post("/sync/all", async (req, res) => {
         res.status(500).json({
             status: "error",
             message: `全量同步失败: ${error.message}`,
+        });
+    }
+});
+
+/**
+ * @api {post} /admin/gorse/sync/projects 全量同步项目到 Gorse
+ * @apiName SyncProjectsToGorse
+ * @apiGroup AdminGorse
+ * @apiPermission admin
+ */
+router.post("/sync/projects", async (req, res) => {
+    try {
+        logger.info("[admin/gorse] 管理员触发项目全量同步");
+        const result = await gorseService.syncAllProjects();
+        res.json({
+            status: "success",
+            message: "项目同步完成",
+            data: result,
+        });
+    } catch (error) {
+        logger.error("[admin/gorse] 项目同步失败:", error);
+        res.status(500).json({
+            status: "error",
+            message: `项目同步失败: ${error.message}`,
         });
     }
 });

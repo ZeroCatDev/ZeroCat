@@ -25,9 +25,10 @@ export const FEEDBACK_TYPES = {
     READ: 'read',           // 阅读/浏览
 };
 
-// 物品前缀（仅帖子，项目不同步到 Gorse）
+// 物品前缀
 const ITEM_PREFIX = {
     POST: 'post_',
+    PROJECT: 'project_',
 };
 
 let gorseClient = null;
@@ -277,6 +278,156 @@ export async function upsertPost(post) {
 }
 
 /**
+ * 构建项目类别标签
+ */
+function buildProjectCategories(project) {
+    const categories = ['project'];
+    if (project?.type) {
+        categories.push(`type:${project.type}`);
+    }
+    return categories;
+}
+
+/**
+ * 构建项目标签（对象格式，支持 embedding 字段）
+ */
+function buildProjectLabels(project) {
+    const labels = { embedding: [] };
+    if (project?.authorid) {
+        labels.author = String(project.authorid);
+    }
+    if (project?.type) {
+        labels.type = String(project.type);
+    }
+    if (project?.state) {
+        labels.state = String(project.state);
+    }
+
+    const tags = Array.isArray(project?.project_tags)
+        ? project.project_tags.map(tag => String(tag?.name || '').trim()).filter(Boolean).slice(0, 40)
+        : [];
+    if (tags.length > 0) {
+        labels.tags = tags;
+    }
+
+    return labels;
+}
+
+/**
+ * 将项目作为物品插入/更新到 Gorse
+ * 仅同步有 embedding 的项目
+ */
+export async function upsertProject(project) {
+    try {
+        const client = await getClient();
+        if (!client) return;
+
+        const projectId = Number(project?.id);
+        if (!Number.isInteger(projectId) || projectId <= 0) return;
+
+        if (project?.state === 'deleted') {
+            await hideProject(projectId);
+            return;
+        }
+
+        let embedding = null;
+        try {
+            embedding = await embeddingService.getEmbedding('project', projectId);
+        } catch (e) {
+            // 获取失败视为无向量
+        }
+
+        if (!embedding) {
+            logger.debug(`[gorse] 项目 ${projectId} 暂无 embedding，跳过 Gorse 同步`);
+            return;
+        }
+
+        const labels = buildProjectLabels(project);
+        labels.embedding = embedding;
+
+        await client.upsertItem({
+            ItemId: `${ITEM_PREFIX.PROJECT}${projectId}`,
+            Comment: (project.title || project.name || project.description || '').substring(0, 200),
+            IsHidden: project.state !== 'public',
+            Timestamp: project.time ? new Date(project.time).toISOString() : new Date().toISOString(),
+            Categories: buildProjectCategories(project),
+            Labels: labels,
+        });
+
+        logger.debug(`[gorse] 项目已同步: ${projectId}`);
+    } catch (error) {
+        logger.warn(`[gorse] 同步项目 ${project?.id} 失败:`, error.message);
+    }
+}
+
+/**
+ * 批量插入项目到 Gorse
+ * 仅同步有 embedding 且未删除的项目
+ */
+export async function insertProjects(projects) {
+    try {
+        const client = await getClient();
+        if (!client) return;
+
+        const filteredProjects = (projects || []).filter(p => p && p.state !== 'deleted');
+        if (filteredProjects.length === 0) return;
+
+        const projectIds = filteredProjects
+            .map(project => Number(project.id))
+            .filter(id => Number.isInteger(id) && id > 0);
+
+        let embeddingMap = new Map();
+        try {
+            embeddingMap = await embeddingService.getEmbeddings('project', projectIds);
+        } catch (e) {
+            // 向量获取失败不影响主流程
+        }
+
+        const items = filteredProjects
+            .filter(project => embeddingMap.has(Number(project.id)))
+            .map(project => {
+                const labels = buildProjectLabels(project);
+                labels.embedding = embeddingMap.get(Number(project.id));
+                return {
+                    ItemId: `${ITEM_PREFIX.PROJECT}${project.id}`,
+                    Comment: (project.title || project.name || project.description || '').substring(0, 200),
+                    IsHidden: project.state !== 'public',
+                    Timestamp: project.time ? new Date(project.time).toISOString() : new Date().toISOString(),
+                    Categories: buildProjectCategories(project),
+                    Labels: labels,
+                };
+            });
+
+        if (items.length === 0) {
+            logger.debug(`[gorse] insertProjects: 全部 ${filteredProjects.length} 个项目暂无 embedding，跳过同步`);
+            return;
+        }
+
+        await upsertItemsInBatches(client, items);
+        logger.debug(`[gorse] 批量同步 ${items.length} 个项目（跳过无 embedding: ${filteredProjects.length - items.length}）`);
+    } catch (error) {
+        logger.warn('[gorse] 批量同步项目失败:', error.message);
+    }
+}
+
+/**
+ * 将项目标记为隐藏（删除/私有时）
+ */
+export async function hideProject(projectId) {
+    try {
+        const client = await getClient();
+        if (!client) return;
+
+        await client.updateItem(`${ITEM_PREFIX.PROJECT}${projectId}`, {
+            IsHidden: true,
+        });
+        logger.debug(`[gorse] 项目已隐藏: ${projectId}`);
+    } catch (error) {
+        logger.warn(`[gorse] 隐藏项目 ${projectId} 失败:`, error.message);
+    }
+}
+
+/**
  * 批量插入帖子到 Gorse
  * 纯转推不推送
  */
@@ -520,6 +671,40 @@ export async function getRecommendedPostIds(userId, { limit = 20, offset = 0, ca
 }
 
 /**
+ * 获取个性化推荐项目 ID 列表
+ * @param {number} userId - 用户ID
+ * @param {object} options - 推荐选项
+ * @param {number} options.limit - 返回数量，默认20
+ * @param {number} options.offset - 偏移量，默认0
+ * @param {string} options.category - 类别过滤
+ * @returns {Promise<number[]>} 推荐的项目 ID 列表
+ */
+export async function getRecommendedProjectIds(userId, { limit = 20, offset = 0, category } = {}) {
+    try {
+        const client = await getClient();
+        if (!client) return [];
+
+        const ids = await client.getRecommend({
+            userId: String(userId),
+            category: category || 'project',
+            writeBackType: 'read',
+            writeBackDelay: '0s',
+            cursorOptions: { n: limit, offset },
+        });
+
+        return (ids || []).map(id => {
+            if (id.startsWith(ITEM_PREFIX.PROJECT)) {
+                return parseInt(id.slice(ITEM_PREFIX.PROJECT.length), 10);
+            }
+            return null;
+        }).filter(Boolean);
+    } catch (error) {
+        logger.warn(`[gorse] 获取项目推荐失败 (user=${userId}):`, error.message);
+        return [];
+    }
+}
+
+/**
  * 获取最新热门帖子（未登录用户使用）
  * @param {object} options
  * @param {number} options.limit - 返回数量，默认20
@@ -591,16 +776,14 @@ export function feedbackPostRead(userId, postId) {
     return insertFeedback(FEEDBACK_TYPES.READ, userId, `${ITEM_PREFIX.POST}${postId}`);
 }
 
-/** 项目收藏反馈（项目不同步到 Gorse，此函数为空操作） */
-export function feedbackProjectStar(_userId, _projectId) {
-    // 项目不写入 Gorse，避免产生无 embedding 的 project_* item
-    return Promise.resolve();
+/** 项目收藏反馈 */
+export async function feedbackProjectStar(userId, projectId) {
+    return insertFeedback(FEEDBACK_TYPES.STAR, userId, `${ITEM_PREFIX.PROJECT}${projectId}`);
 }
 
-/** 取消项目收藏反馈（项目不同步到 Gorse，此函数为空操作） */
-export function feedbackProjectUnstar(_userId, _projectId) {
-    // 项目不写入 Gorse
-    return Promise.resolve();
+/** 取消项目收藏反馈 */
+export async function feedbackProjectUnstar(userId, projectId) {
+    return deleteFeedback(FEEDBACK_TYPES.STAR, userId, `${ITEM_PREFIX.PROJECT}${projectId}`);
 }
 
 /** 用户关注反馈 */
@@ -763,15 +946,87 @@ export async function syncAllPosts() {
 }
 
 /**
- * 全量同步所有反馈到 Gorse（帖子点赞、帖子收藏、用户关注）
- * 注意：项目收藏不同步到 Gorse，避免产生无 embedding 的 project_* item
- * @returns {Promise<{likes: number, bookmarks: number, follows: number}>}
+ * 全量同步所有项目到 Gorse
+ * 仅同步有 embedding 的项目（deleted 项目不写入）
+ * @returns {Promise<{total: number, synced: number}>}
+ */
+export async function syncAllProjects() {
+    const client = await getClient();
+    if (!client) throw new Error('Gorse 服务未启用');
+
+    let cursor = 0;
+    const batchSize = 500;
+    let totalSynced = 0;
+
+    while (true) {
+        const projects = await prisma.ow_projects.findMany({
+            skip: cursor,
+            take: batchSize,
+            select: {
+                id: true,
+                authorid: true,
+                type: true,
+                state: true,
+                title: true,
+                name: true,
+                description: true,
+                time: true,
+                project_tags: {
+                    select: { name: true },
+                },
+            },
+            where: { state: { not: 'deleted' } },
+            orderBy: { id: 'asc' },
+        });
+
+        if (projects.length === 0) break;
+
+        const projectIds = projects.map(p => p.id);
+        let embeddingMap = new Map();
+        try {
+            embeddingMap = await embeddingService.getEmbeddings('project', projectIds);
+        } catch (e) {
+            // 向量获取失败不影响主流程
+        }
+
+        const itemsToSync = projects
+            .filter(project => embeddingMap.has(project.id))
+            .map(project => {
+                const labels = buildProjectLabels(project);
+                labels.embedding = embeddingMap.get(project.id);
+                return {
+                    ItemId: `${ITEM_PREFIX.PROJECT}${project.id}`,
+                    Comment: (project.title || project.name || project.description || '').substring(0, 200),
+                    IsHidden: project.state !== 'public',
+                    Timestamp: project.time ? new Date(project.time).toISOString() : new Date().toISOString(),
+                    Categories: buildProjectCategories(project),
+                    Labels: labels,
+                };
+            });
+
+        if (itemsToSync.length > 0) {
+            await upsertItemsInBatches(client, itemsToSync);
+            totalSynced += itemsToSync.length;
+        }
+
+        const skippedNoEmbed = projects.length - itemsToSync.length;
+        cursor += batchSize;
+        logger.info(`[gorse] 全量同步项目进度: ${totalSynced}（本批跳过无 embedding: ${skippedNoEmbed}）`);
+    }
+
+    logger.info(`[gorse] 全量同步项目完成: ${totalSynced}`);
+    return { total: totalSynced, synced: totalSynced };
+}
+
+/**
+ * 全量同步所有反馈到 Gorse（帖子点赞、帖子收藏、项目收藏、用户关注）
+ * @returns {Promise<{likes: number, bookmarks: number, projectStars: number, follows: number}>}
  */
 export async function syncAllFeedbacks() {
     const client = await getClient();
     if (!client) throw new Error('Gorse 服务未启用');
 
-    const result = { likes: 0, bookmarks: 0, follows: 0 };
+     const result = { likes: 0, bookmarks: 0, projectStars: 0, follows: 0 };
     const batchSize = 500;
 
     // 同步帖子点赞
@@ -824,6 +1079,31 @@ export async function syncAllFeedbacks() {
     }
     logger.info(`[gorse] 全量同步收藏反馈完成: ${result.bookmarks}`);
 
+    // 同步项目收藏
+    cursor = 0;
+    while (true) {
+        const stars = await prisma.ow_projects_stars.findMany({
+            skip: cursor,
+            take: batchSize,
+            select: { userid: true, projectid: true, createTime: true },
+            orderBy: { id: 'asc' },
+        });
+        if (stars.length === 0) break;
+
+        const feedbacks = stars.map(s => ({
+            FeedbackType: FEEDBACK_TYPES.STAR,
+            UserId: String(s.userid),
+            ItemId: `${ITEM_PREFIX.PROJECT}${s.projectid}`,
+            Value: 1,
+            Timestamp: s.createTime ? new Date(s.createTime).toISOString() : new Date().toISOString(),
+        }));
+
+        await client.upsertFeedbacks(feedbacks);
+        result.projectStars += feedbacks.length;
+        cursor += batchSize;
+    }
+    logger.info(`[gorse] 全量同步项目收藏反馈完成: ${result.projectStars}`);
+
     // 同步用户关注
     cursor = 0;
     while (true) {
@@ -854,7 +1134,7 @@ export async function syncAllFeedbacks() {
 }
 
 /**
- * 全量同步所有数据（用户 + 帖子 + 反馈）
+ * 全量同步所有数据（用户 + 帖子 + 项目 + 反馈）
  */
 export async function syncAll() {
     const client = await getClient();
@@ -864,11 +1144,13 @@ export async function syncAll() {
 
     const usersResult = await syncAllUsers();
     const postsResult = await syncAllPosts();
+    const projectsResult = await syncAllProjects();
     const feedbacksResult = await syncAllFeedbacks();
 
     const summary = {
         users: usersResult,
         posts: postsResult,
+        projects: projectsResult,
         feedbacks: feedbacksResult,
     };
 
@@ -910,10 +1192,14 @@ export default {
     upsertPost,
     insertPosts,
     hidePost,
+    upsertProject,
+    insertProjects,
+    hideProject,
     insertFeedback,
     insertFeedbacks,
     deleteFeedback,
     getRecommendedPostIds,
+    getRecommendedProjectIds,
     getLatestPostIds,
     feedbackPostLike,
     feedbackPostUnlike,
@@ -929,6 +1215,7 @@ export default {
     feedbackUserUnfollow,
     syncAllUsers,
     syncAllPosts,
+    syncAllProjects,
     syncAllFeedbacks,
     syncAll,
     getGorseStatus,
