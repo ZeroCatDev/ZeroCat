@@ -786,6 +786,11 @@ export async function feedbackProjectUnstar(userId, projectId) {
     return deleteFeedback(FEEDBACK_TYPES.STAR, userId, `${ITEM_PREFIX.PROJECT}${projectId}`);
 }
 
+/** 项目阅读反馈 */
+export function feedbackProjectRead(userId, projectId, options = {}) {
+    return insertFeedback(FEEDBACK_TYPES.READ, userId, `${ITEM_PREFIX.PROJECT}${projectId}`, options);
+}
+
 /** 用户关注反馈 */
 export async function feedbackUserFollow(userId, followedUserId) {
     // 先确保被关注用户已以 item 形式存在于 Gorse，避免 Labels.embedding 为 nil
@@ -1211,6 +1216,7 @@ export default {
     feedbackPostRead,
     feedbackProjectStar,
     feedbackProjectUnstar,
+    feedbackProjectRead,
     feedbackUserFollow,
     feedbackUserUnfollow,
     syncAllUsers,
