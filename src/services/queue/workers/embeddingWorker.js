@@ -250,6 +250,7 @@ async function processProjectEmbedding(job) {
         where: { id: Number(projectId) },
         select: {
             id: true,
+            authorid: true,
             name: true,
             title: true,
             description: true,
@@ -257,6 +258,9 @@ async function processProjectEmbedding(job) {
             state: true,
             thumbnail: true,
             time: true,
+            project_tags: {
+                select: { name: true },
+            },
         },
     });
 
@@ -306,6 +310,9 @@ async function processProjectEmbedding(job) {
     await embeddingService.saveEmbedding('project', project.id, vector, newHash, config.model);
     logger.debug(`[embedding-worker] project=${project.id} vectorDim=${vector.length} model=${config.model}`);
     await job.log(`项目 ${projectId} 向量已存入 PostgreSQL`);
+
+    await gorseService.upsertProject(project);
+    await job.log(`项目 ${projectId} 向量更新后已自动同步到 Gorse`);
 
     return {
         projectId: project.id,

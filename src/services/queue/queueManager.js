@@ -216,6 +216,34 @@ const queueManager = {
             { name: 'embedding-daily-project-check', data: {} }
         );
 
+        // embedding-user-refresh: 高频刷新用户 embedding（本地算法）
+        const embeddingUserRefreshEnabled = await zcconfig.get('embedding.periodic.user_refresh.enabled', true);
+        const embeddingUserRefreshInterval = Math.max(
+            60000,
+            Number(await zcconfig.get('embedding.periodic.user_refresh.interval_ms', 21600000)) || 21600000
+        );
+
+        await upsertOrRemove(
+            'embedding-user-refresh',
+            embeddingEnabled && embeddingUserRefreshEnabled,
+            { every: embeddingUserRefreshInterval },
+            { name: 'embedding-user-refresh', data: {} }
+        );
+
+        // embedding-project-gorse-sync: 提高项目同步到 Gorse 频率
+        const embeddingProjectGorseSyncEnabled = await zcconfig.get('embedding.periodic.project_gorse_sync.enabled', true);
+        const embeddingProjectGorseSyncInterval = Math.max(
+            60000,
+            Number(await zcconfig.get('embedding.periodic.project_gorse_sync.interval_ms', 7200000)) || 7200000
+        );
+
+        await upsertOrRemove(
+            'embedding-project-gorse-sync',
+            embeddingEnabled && embeddingProjectGorseSyncEnabled,
+            { every: embeddingProjectGorseSyncInterval },
+            { name: 'embedding-project-gorse-sync', data: {} }
+        );
+
         logger.info('[queue-manager] Repeatable jobs synchronized');
     },
 
@@ -724,8 +752,11 @@ const queueManager = {
         }
 
         if (!force) {
-            logger.debug(`[queue-manager] Auto user embedding disabled, skip user=${userId}, trigger=${triggerType}`);
-            return { queued: false, skipped: true, reason: 'auto_user_embedding_disabled' };
+            const autoUserEmbeddingEnabled = await zcconfig.get('embedding.auto_user.enabled', true);
+            if (!autoUserEmbeddingEnabled) {
+                logger.debug(`[queue-manager] Auto user embedding disabled, skip user=${userId}, trigger=${triggerType}`);
+                return { queued: false, skipped: true, reason: 'auto_user_embedding_disabled' };
+            }
         }
 
         try {
@@ -798,8 +829,11 @@ const queueManager = {
         if (!queue || !initialized) return null;
 
         if (!force) {
-            logger.debug('[queue-manager] Auto batch user embedding disabled');
-            return { queued: false, skipped: true, reason: 'auto_user_embedding_disabled' };
+            const autoUserEmbeddingEnabled = await zcconfig.get('embedding.auto_user.enabled', true);
+            if (!autoUserEmbeddingEnabled) {
+                logger.debug('[queue-manager] Auto batch user embedding disabled');
+                return { queued: false, skipped: true, reason: 'auto_user_embedding_disabled' };
+            }
         }
 
         try {

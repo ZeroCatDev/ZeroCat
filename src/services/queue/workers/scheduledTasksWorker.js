@@ -264,6 +264,178 @@ taskHandlers.set('embedding-daily-project-check', async (data, job) => {
     await job.log(`Embedding daily project check done: enqueued=${enqueued}, duplicated=${duplicated}, failed=${failed}`);
 });
 
+taskHandlers.set('embedding-user-refresh', async (data, job) => {
+    await job.log('Executing embedding user refresh (higher frequency local algorithm updates)');
+
+    const embeddingEnabled = await zcconfig.get('embedding.enabled', false);
+    if (!embeddingEnabled) {
+        await job.log('Embedding disabled, skip user refresh');
+        return;
+    }
+
+    const lookbackHours = Math.max(1, Number(await zcconfig.get('embedding.periodic.user_refresh.lookback_hours', 24)) || 24);
+    const scanLimit = Math.max(1, Number(await zcconfig.get('embedding.periodic.user_refresh.scan_limit', 1200)) || 1200);
+
+    const [{ prisma }, { getEmbeddingQueue }] = await Promise.all([
+        import('../../prisma.js'),
+        import('../queues.js'),
+    ]);
+
+    const embeddingQueue = getEmbeddingQueue();
+    if (!embeddingQueue) {
+        await job.log('Embedding queue unavailable, skip user refresh');
+        return;
+    }
+
+    const activeUsers = await prisma.$queryRawUnsafe(
+        `
+        WITH active_users AS (
+            SELECT p.author_id AS user_id
+            FROM ow_posts p
+            WHERE p.author_id IS NOT NULL
+              AND p.created_at >= (NOW() - ($1::text || ' hours')::interval)
+            UNION
+            SELECT pl.user_id AS user_id
+            FROM ow_posts_like pl
+            WHERE pl.user_id IS NOT NULL
+              AND pl.created_at >= (NOW() - ($1::text || ' hours')::interval)
+            UNION
+            SELECT pb.user_id AS user_id
+            FROM ow_posts_bookmark pb
+            WHERE pb.user_id IS NOT NULL
+              AND pb.created_at >= (NOW() - ($1::text || ' hours')::interval)
+            UNION
+            SELECT ps.userid AS user_id
+            FROM ow_projects_stars ps
+            WHERE ps.userid IS NOT NULL
+              AND ps.createTime >= (NOW() - ($1::text || ' hours')::interval)
+        )
+        SELECT DISTINCT au.user_id AS id
+        FROM active_users au
+        WHERE au.user_id > 0
+        ORDER BY au.user_id DESC
+        LIMIT $2
+        `,
+        Number(lookbackHours),
+        Number(scanLimit)
+    );
+
+    const userIds = (Array.isArray(activeUsers) ? activeUsers : [])
+        .map((item) => Number(item?.id))
+        .filter((id) => Number.isFinite(id) && id > 0);
+
+    await job.log(`Found ${userIds.length} active users for embedding refresh`);
+
+    let enqueued = 0;
+    let duplicated = 0;
+    let failed = 0;
+
+    for (const userId of userIds) {
+        const jobId = `emb-user-${userId}`;
+        try {
+            await embeddingQueue.add('embedding', {
+                type: 'user_embedding',
+                userId,
+                force: false,
+                triggerType: 'periodic-user-refresh',
+            }, {
+                jobId,
+                attempts: 3,
+                backoff: { type: 'exponential', delay: 15000 },
+                removeOnComplete: { age: 86400 },
+                removeOnFail: { age: 604800 },
+                deduplication: { id: jobId },
+            });
+            enqueued += 1;
+        } catch (error) {
+            if (String(error?.message || '').includes('Job is already waiting')) {
+                duplicated += 1;
+            } else {
+                failed += 1;
+                logger.warn(`[scheduled-worker] embedding-user-refresh enqueue failed user=${userId} error=${error.message}`);
+            }
+        }
+    }
+
+    await job.log(`Embedding user refresh done: enqueued=${enqueued}, duplicated=${duplicated}, failed=${failed}`);
+});
+
+taskHandlers.set('embedding-project-gorse-sync', async (data, job) => {
+    await job.log('Executing high-frequency project gorse sync');
+
+    const embeddingEnabled = await zcconfig.get('embedding.enabled', false);
+    if (!embeddingEnabled) {
+        await job.log('Embedding disabled, skip project gorse sync');
+        return;
+    }
+
+    const scanLimit = Math.max(1, Number(await zcconfig.get('embedding.periodic.project_gorse_sync.scan_limit', 800)) || 800);
+
+    const [{ prisma }, { getEmbeddingQueue }] = await Promise.all([
+        import('../../prisma.js'),
+        import('../queues.js'),
+    ]);
+
+    const embeddingQueue = getEmbeddingQueue();
+    if (!embeddingQueue) {
+        await job.log('Embedding queue unavailable, skip project gorse sync');
+        return;
+    }
+
+    const rows = await prisma.$queryRawUnsafe(
+        `
+        SELECT p.id
+        FROM ow_projects p
+        JOIN ow_embeddings e
+          ON e.entity_type = 'project'
+         AND e.entity_id = p.id
+        WHERE COALESCE(p.state, '') <> 'deleted'
+        ORDER BY p.time DESC, p.id DESC
+        LIMIT $1
+        `,
+        Number(scanLimit)
+    );
+
+    const projectIds = (Array.isArray(rows) ? rows : [])
+        .map((item) => Number(item?.id))
+        .filter((id) => Number.isFinite(id) && id > 0);
+
+    await job.log(`Found ${projectIds.length} projects for gorse sync`);
+
+    const bucket = Math.floor(Date.now() / (60 * 60 * 1000));
+    let enqueued = 0;
+    let duplicated = 0;
+    let failed = 0;
+
+    for (const projectId of projectIds) {
+        const jobId = `gorse-project-${projectId}-${bucket}`;
+        try {
+            await embeddingQueue.add('embedding', {
+                type: 'project_gorse_sync',
+                projectId,
+                reason: 'periodic-project-gorse-sync',
+            }, {
+                jobId,
+                attempts: 5,
+                backoff: { type: 'exponential', delay: 20000 },
+                removeOnComplete: { age: 86400 },
+                removeOnFail: { age: 604800 },
+                deduplication: { id: jobId },
+            });
+            enqueued += 1;
+        } catch (error) {
+            if (String(error?.message || '').includes('Job is already waiting')) {
+                duplicated += 1;
+            } else {
+                failed += 1;
+                logger.warn(`[scheduled-worker] embedding-project-gorse-sync enqueue failed project=${projectId} error=${error.message}`);
+            }
+        }
+    }
+
+    await job.log(`Embedding project gorse sync done: enqueued=${enqueued}, duplicated=${duplicated}, failed=${failed}`);
+});
+
 function registerTaskHandler(name, handler) {
     taskHandlers.set(name, handler);
     logger.info(`[scheduled-worker] Task handler "${name}" registered`);
