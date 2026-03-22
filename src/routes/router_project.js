@@ -35,10 +35,8 @@ const PROJECT_CONFIG_TARGET_TYPE = "project";
 const PROJECT_CONFIG_KEY_CLOUD_ANON_WRITE = "scratch.clouddata.anonymouswrite";
 const PROJECT_CONFIG_KEY_CLOUD_HISTORY_ENABLED = "scratch.clouddata.history.enabled";
 const CLOUD_CONFIG_CACHE_TTL_SECONDS = 604800;
-const PROJECT_READ_FEEDBACK_DEDUP_TTL_SECONDS = 4 * 60 * 60;
 
 const cloudConfigRedisKey = (projectId) => `scratch:cloud:${projectId}:config`;
-const projectReadFeedbackDedupKey = (userId, projectId) => `gorse:project:read:${userId}:${projectId}`;
 
 const parseBooleanInput = (value) => {
   if (typeof value === "boolean") return value;
@@ -149,27 +147,6 @@ const refreshCloudConfigCache = async (projectId, config) => {
     await redisClient.client.expire(cacheKey, CLOUD_CONFIG_CACHE_TTL_SECONDS);
   } catch (error) {
     logger.warn(`[cloud-config] 刷新Redis缓存失败: ${cacheKey}`, error);
-  }
-};
-
-const tryAcquireProjectReadFeedbackWindow = async (userId, projectId) => {
-  if (!redisClient.client || !redisClient.isConnected) {
-    return true;
-  }
-
-  try {
-    const key = projectReadFeedbackDedupKey(userId, projectId);
-    const result = await redisClient.client.set(
-      key,
-      String(Date.now()),
-      "EX",
-      PROJECT_READ_FEEDBACK_DEDUP_TTL_SECONDS,
-      "NX"
-    );
-    return result === "OK";
-  } catch (error) {
-    logger.warn("[project-read] Redis 去重写入失败，降级为允许上报:", error.message);
-    return true;
   }
 };
 
@@ -2024,14 +2001,6 @@ router.post("/:id/read", needLogin, async (req, res, next) => {
     }
 
     await checkProjectPermission(projectId, userId, "read");
-
-    const shouldReport = await tryAcquireProjectReadFeedbackWindow(userId, projectId);
-    if (!shouldReport) {
-      return res.status(200).json({
-        status: "success",
-        data: { acknowledged: true, reported: false, reason: "deduplicated" },
-      });
-    }
 
     gorseService.feedbackProjectRead(userId, projectId).catch((error) => {
       logger.debug("[gorse] feedbackProjectRead failed:", error.message);
