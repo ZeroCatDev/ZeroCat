@@ -53,7 +53,7 @@ model ow_projects {
   favo_count     Int       @default(0)
   time           DateTime  @default(now()) @db.Timestamp(6)
   title          String    @default("ZeroCat新项目") @db.VarChar(1000)
-  description    String    @default("ZeroCat上的项目") @db.VarChar(1000)
+  description    String    @default("ZeroCat上的项目") @db.Text
   history        Boolean   @default(true)
   fork           Int?
   star_count     Int       @default(0)
