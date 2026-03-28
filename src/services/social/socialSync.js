@@ -801,9 +801,10 @@ async function createTwitterPost(actorUserId, post) {
             if (post.post_type === 'reply' && post.in_reply_to_id) {
                 const parent = await getPostForEvent(post.in_reply_to_id);
                 const parentRef = normalizePlatformRefs(parent?.platform_refs)?.twitter;
-                if (parentRef?.id) {
-                    body.reply = { in_reply_to_tweet_id: String(parentRef.id) };
+                if (!parentRef?.id) {
+                    return { skipped: true, reason: 'missing_reply_target_ref' };
                 }
+                body.reply = { in_reply_to_tweet_id: String(parentRef.id) };
             }
 
             if (post.post_type === 'quote' && post.quoted_post_id) {
@@ -925,12 +926,14 @@ async function createBlueskyPost(actorUserId, post) {
         const rootPost = await getPostForEvent(rootPostId);
         const rootRef = normalizePlatformRefs(rootPost?.platform_refs)?.bluesky || parentRef;
 
-        if (parentRef?.uri && parentRef?.cid && rootRef?.uri && rootRef?.cid) {
-            record.reply = {
-                root: { uri: rootRef.uri, cid: rootRef.cid },
-                parent: { uri: parentRef.uri, cid: parentRef.cid },
-            };
+        if (!parentRef?.uri || !parentRef?.cid || !rootRef?.uri || !rootRef?.cid) {
+            return { skipped: true, reason: 'missing_reply_target_ref' };
         }
+
+        record.reply = {
+            root: { uri: rootRef.uri, cid: rootRef.cid },
+            parent: { uri: parentRef.uri, cid: parentRef.cid },
+        };
     }
 
     if (post.post_type === 'quote' && post.quoted_post_id) {

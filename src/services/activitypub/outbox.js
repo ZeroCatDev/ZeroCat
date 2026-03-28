@@ -126,16 +126,18 @@ async function handlePostCreate(userId, postId) {
         return await handlePostRetweet(userId, postId);
     }
 
-    // 本轮投递的共享去重集合（跨 deliverToFollowers 调用）
-    const deliveredInboxes = new Set();
-
     // 确保被回复/引用的主贴已同步到联邦网络
+    // 注意：依赖帖子和当前帖子是不同 activity，不能共享去重集合，
+    // 否则会把当前回帖误判为已投递而被跳过。
     if (post.in_reply_to_id) {
-        await ensurePostSynced(post.in_reply_to_id, deliveredInboxes);
+        await ensurePostSynced(post.in_reply_to_id);
     }
     if (post.quoted_post_id) {
-        await ensurePostSynced(post.quoted_post_id, deliveredInboxes);
+        await ensurePostSynced(post.quoted_post_id);
     }
+
+    // 本轮投递的共享去重集合（仅用于当前 activity 的多目标投递）
+    const deliveredInboxes = new Set();
 
     // 构建 Note 对象
     const note = await postToNote(post);
