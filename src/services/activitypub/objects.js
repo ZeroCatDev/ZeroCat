@@ -5,11 +5,16 @@
 
 import { prisma } from '../prisma.js';
 import logger from '../logger.js';
-import { AP_CONTEXT, getApEndpointBaseUrl, getInstanceBaseUrl, getInstanceDomain, getStaticUrl } from './config.js';
+import axios from 'axios';
+import { AP_CONTEXT, AP_ACCEPT_TYPES, getApEndpointBaseUrl, getInstanceBaseUrl, getInstanceDomain, getStaticUrl } from './config.js';
 import { getActorUrl } from './actor.js';
 import { resolveWebFinger } from './federation.js';
 import { v4 as uuidv4 } from 'uuid';
 import twitterText from 'twitter-text';
+
+const REMOTE_REF_PROBE_TIMEOUT_MS = 5000;
+const REMOTE_REF_PROBE_CACHE_TTL_MS = 10 * 60 * 1000;
+const remoteRefProbeCache = new Map();
 
 /**
  * 生成帖子的 AP ID
@@ -73,7 +78,13 @@ async function resolveRelatedNoteRef(relatedPostId, relatedPost = null) {
     if (!relatedPostId) return null;
 
     let candidate = relatedPost;
-    if (!candidate || typeof candidate !== 'object') {
+    const hasReferenceFields =
+        candidate &&
+        typeof candidate === 'object' &&
+        Object.prototype.hasOwnProperty.call(candidate, 'platform_refs') &&
+        Object.prototype.hasOwnProperty.call(candidate, 'metadata');
+
+    if (!hasReferenceFields) {
         candidate = await prisma.ow_posts.findUnique({
             where: { id: relatedPostId },
             select: {
@@ -84,17 +95,71 @@ async function resolveRelatedNoteRef(relatedPostId, relatedPost = null) {
         });
     }
 
+    const isRemoteProxyPost = Boolean(candidate?.metadata?.remote);
     const apId = candidate?.platform_refs?.activitypub?.id;
     if (typeof apId === 'string' && /^https?:\/\//i.test(apId)) {
-        return apId;
+        if (!isRemoteProxyPost || await isPublicApObjectReachable(apId)) {
+            return apId;
+        }
+        logger.warn(`[ap-objects] 远程引用不可公开抓取，回退本地代理引用: ${apId}`);
     }
 
     const remoteUrl = candidate?.metadata?.remote_url;
     if (typeof remoteUrl === 'string' && /^https?:\/\//i.test(remoteUrl)) {
-        return remoteUrl;
+        if (!isRemoteProxyPost || await isPublicApObjectReachable(remoteUrl)) {
+            return remoteUrl;
+        }
+        logger.warn(`[ap-objects] 远程 remote_url 不可公开抓取，回退本地代理引用: ${remoteUrl}`);
     }
 
     return getNoteId(relatedPostId);
+}
+
+function readCachedProbeResult(url) {
+    const cached = remoteRefProbeCache.get(url);
+    if (!cached) return null;
+
+    if (cached.expiresAt <= Date.now()) {
+        remoteRefProbeCache.delete(url);
+        return null;
+    }
+
+    return cached.ok;
+}
+
+function writeProbeCache(url, ok) {
+    remoteRefProbeCache.set(url, {
+        ok,
+        expiresAt: Date.now() + REMOTE_REF_PROBE_CACHE_TTL_MS,
+    });
+}
+
+async function isPublicApObjectReachable(url) {
+    const cached = readCachedProbeResult(url);
+    if (cached !== null) {
+        return cached;
+    }
+
+    try {
+        const response = await axios.get(url, {
+            timeout: REMOTE_REF_PROBE_TIMEOUT_MS,
+            maxRedirects: 3,
+            headers: {
+                Accept: AP_ACCEPT_TYPES[0],
+                'User-Agent': 'ZeroCat-ActivityPub/1.0',
+            },
+            validateStatus: (status) => status >= 200 && status < 300,
+        });
+
+        const data = response?.data;
+        const type = Array.isArray(data?.type) ? data.type.join(',') : String(data?.type || '');
+        const ok = Boolean(data && typeof data === 'object' && data.id && type);
+        writeProbeCache(url, ok);
+        return ok;
+    } catch {
+        writeProbeCache(url, false);
+        return false;
+    }
 }
 
 /**
