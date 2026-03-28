@@ -11,6 +11,17 @@ import metascraperLogo from "metascraper-logo";
 import metascraperPublisher from "metascraper-publisher";
 import metascraperTitle from "metascraper-title";
 import metascraperUrl from "metascraper-url";
+import metascraperAmazon from "metascraper-amazon";
+import metascraperBluesky from "metascraper-bluesky";
+import metascraperDribbble from "metascraper-dribbble";
+import metascraperInstagram from "metascraper-instagram";
+import metascraperSoundCloud from "metascraper-soundcloud";
+import metascraperSpotify from "metascraper-spotify";
+import metascraperTelegram from "metascraper-telegram";
+import metascraperTikTok from "metascraper-tiktok";
+import metascraperUol from "metascraper-uol";
+import metascraperX from "metascraper-x";
+import metascraperYouTube from "metascraper-youtube";
 import logger from "./logger.js";
 import redisClient from "./redis.js";
 import memoryCache from "./memoryCache.js";
@@ -22,6 +33,17 @@ const scraper = metascraper([
   metascraperDescription(),
   metascraperImage(),
   metascraperLogo(),
+  metascraperAmazon(),
+  metascraperBluesky(),
+  metascraperDribbble(),
+  metascraperInstagram(),
+  metascraperSoundCloud(),
+  metascraperSpotify(),
+  metascraperTelegram(),
+  metascraperTikTok(),
+  metascraperUol(),
+  metascraperX(),
+  metascraperYouTube(),
   metascraperPublisher(),
   metascraperTitle(),
   metascraperUrl(),
@@ -187,7 +209,55 @@ function parseMaybeDate(value) {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-function buildPreviewPayload({ requestedUrl, fetchedUrl, metadata, contentType }) {
+function resolveAbsoluteUrl(maybeUrl, baseUrl) {
+  const value = sanitizePreviewText(maybeUrl, 2048);
+  if (!value) return null;
+
+  try {
+    if (baseUrl) {
+      return new URL(value, baseUrl).toString();
+    }
+    return new URL(value).toString();
+  } catch {
+    return null;
+  }
+}
+
+function extractIconFromHtml(html, baseUrl) {
+  if (!html || typeof html !== "string") return null;
+
+  // 优先匹配显式 icon，再兜底 apple-touch-icon。
+  const iconLinkRegex = /<link\b[^>]*\brel\s*=\s*['\"]([^'\"]*)['\"][^>]*\bhref\s*=\s*['\"]([^'\"]+)['\"][^>]*>/gi;
+  const iconCandidates = [];
+  let match;
+
+  while ((match = iconLinkRegex.exec(html)) !== null) {
+    const rel = String(match[1] || "").toLowerCase();
+    const href = match[2];
+    if (!rel.includes("icon")) continue;
+
+    const absolute = resolveAbsoluteUrl(href, baseUrl);
+    if (!absolute) continue;
+
+    const score = rel.includes("apple-touch-icon") ? 1 : 2;
+    iconCandidates.push({ url: absolute, score });
+  }
+
+  if (iconCandidates.length === 0) return null;
+  iconCandidates.sort((a, b) => b.score - a.score);
+  return iconCandidates[0].url;
+}
+
+function buildFaviconFallback(urlString) {
+  try {
+    const parsed = new URL(urlString);
+    return `${parsed.origin}/favicon.ico`;
+  } catch {
+    return null;
+  }
+}
+
+function buildPreviewPayload({ requestedUrl, fetchedUrl, metadata, contentType, html }) {
   const canonicalUrl = sanitizePreviewText(metadata.url || fetchedUrl || requestedUrl, 2048) || requestedUrl;
   let fallbackTitle = null;
   try {
@@ -197,7 +267,10 @@ function buildPreviewPayload({ requestedUrl, fetchedUrl, metadata, contentType }
   }
 
   const image = sanitizePreviewText(metadata.image, 2048);
-  const icon = sanitizePreviewText(metadata.logo, 2048);
+  const icon =
+    resolveAbsoluteUrl(metadata.logo, fetchedUrl || canonicalUrl) ||
+    extractIconFromHtml(html, fetchedUrl || canonicalUrl) ||
+    buildFaviconFallback(fetchedUrl || canonicalUrl);
 
   return {
     requested_url: requestedUrl,
@@ -306,20 +379,82 @@ async function fetchPageHtml(urlString) {
   try {
     const response = await axios.get(urlString, {
       timeout: REQUEST_TIMEOUT_MS,
-      responseType: "text",
+      responseType: "stream",
       maxRedirects: 5,
-      maxContentLength: MAX_HTML_BYTES,
-      maxBodyLength: MAX_HTML_BYTES,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
       validateStatus: (status) => status >= 200 && status < 400,
       headers: {
         "User-Agent": "ZeroCatBot/1.0 (+https://zerocat.top)",
         Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
       },
-      transformResponse: [(data) => (typeof data === "string" ? data : String(data ?? ""))],
     });
 
     const finalUrl = response?.request?.res?.responseUrl || urlString;
-    const html = typeof response.data === "string" ? response.data.slice(0, MAX_HTML_BYTES) : "";
+    const stream = response?.data;
+    const chunks = [];
+    let bytesRead = 0;
+    let endedByLimit = false;
+    let headProbe = "";
+
+    await new Promise((resolve, reject) => {
+      let settled = false;
+
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+
+      const fail = (error) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
+      };
+
+      stream.on("data", (chunk) => {
+        if (settled) return;
+
+        const chunkBuffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        const remaining = MAX_HTML_BYTES - bytesRead;
+
+        if (remaining <= 0) {
+          endedByLimit = true;
+          stream.destroy();
+          return finish();
+        }
+
+        if (chunkBuffer.length <= remaining) {
+          chunks.push(chunkBuffer);
+          bytesRead += chunkBuffer.length;
+        } else {
+          chunks.push(chunkBuffer.subarray(0, remaining));
+          bytesRead += remaining;
+          endedByLimit = true;
+          stream.destroy();
+          return finish();
+        }
+
+        headProbe = (headProbe + chunkBuffer.toString("utf8")).slice(-16384);
+        if (/<\/head\s*>/i.test(headProbe)) {
+          stream.destroy();
+          return finish();
+        }
+      });
+
+      stream.on("end", finish);
+      stream.on("close", finish);
+      stream.on("error", (error) => {
+        if (settled) return;
+        const isExpectedClose = endedByLimit || /premature close/i.test(String(error?.message || ""));
+        if (isExpectedClose) {
+          return finish();
+        }
+        fail(error);
+      });
+    });
+
+    const html = Buffer.concat(chunks).toString("utf8");
     const contentType = String(response.headers?.["content-type"] || "").toLowerCase();
 
     if (!html) {
@@ -340,6 +475,10 @@ async function fetchPageHtml(urlString) {
       throw error;
     }
 
+    if (String(error?.message || "").includes("maxContentLength")) {
+      throw new UrlPreviewError("目标页面体积过大", 422, "CONTENT_TOO_LARGE");
+    }
+
     if (error?.code === "ECONNABORTED") {
       throw new UrlPreviewError("抓取超时，请稍后重试", 504, "FETCH_TIMEOUT");
     }
@@ -348,7 +487,7 @@ async function fetchPageHtml(urlString) {
     if (upstreamStatus === 403 || upstreamStatus === 429) {
       throw new UrlPreviewError("目标站点拒绝抓取，请稍后重试", 502, "UPSTREAM_BLOCKED");
     }
-
+    logger.error(error);
     throw new UrlPreviewError("抓取预览失败", 502, "FETCH_FAILED");
   }
 }
@@ -363,6 +502,7 @@ async function scrapeUrlPreview(urlString) {
     fetchedUrl: finalUrl,
     metadata: metadata || {},
     contentType,
+    html,
   });
 
   if (!preview.title && !preview.description && !preview.image) {
