@@ -91,13 +91,54 @@ export async function getRecommendedUsersForUser({ userId, limit = 20, offset = 
     const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
     const safeOffset = Math.max(Number(offset) || 0, 0);
 
+    const ADMIN_USER_ID = 1; // 始终推荐的管理员用户ID
+    let needToInsertAdmin = false;
+    let adminUser = null;
+
+    // 仅在第一页时检查是否需要插入管理员用户
+    if (safeOffset === 0 && nUserId !== ADMIN_USER_ID) {
+        // 检查当前用户是否已关注用户1
+        const isFollowing = await prisma.ow_user_relationships.findFirst({
+            where: {
+                source_user_id: nUserId,
+                target_user_id: ADMIN_USER_ID,
+                relationship_type: "follow",
+            },
+        });
+
+        if (!isFollowing) {
+            // 获取管理员用户信息
+            adminUser = await prisma.ow_users.findUnique({
+                where: { id: ADMIN_USER_ID },
+                select: userSelectionFields(),
+            });
+
+            if (adminUser && adminUser.status === "active") {
+                needToInsertAdmin = true;
+            }
+        }
+    }
+
     // 从 Gorse 获取推荐用户 ID
+    // 如果需要插入管理员，减少请求数量以留出空间
+    const requestLimit = needToInsertAdmin ? safeLimit - 1 : safeLimit;
     const recommendedUserIds = await gorseService.getRecommendedUserIds(nUserId, {
-        limit: safeLimit,
+        limit: requestLimit,
         offset: safeOffset,
     });
 
     if (!recommendedUserIds || recommendedUserIds.length === 0) {
+        // 如果 Gorse 没有推荐结果，但需要推荐管理员用户
+        if (needToInsertAdmin && adminUser) {
+            return {
+                users: [adminUser],
+                total_candidates: 1,
+                offset: safeOffset,
+                limit: safeLimit,
+                has_more: false,
+            };
+        }
+
         return {
             users: [],
             total_candidates: 0,
@@ -124,12 +165,24 @@ export async function getRecommendedUsersForUser({ userId, limit = 20, offset = 
         .map((id) => userMap.get(Number(id)))
         .filter(Boolean);
 
+    // 如果需要插入管理员用户，检查是否已经在列表中
+    if (needToInsertAdmin && adminUser) {
+        const adminExists = ordered.some((user) => user.id === ADMIN_USER_ID);
+        if (!adminExists) {
+            // 将管理员用户插入到列表开头
+            ordered.unshift(adminUser);
+        }
+    }
+
+    // 限制返回数量
+    const pagedUsers = ordered.slice(0, safeLimit);
+
     return {
-        users: ordered,
-        total_candidates: ordered.length,
+        users: pagedUsers,
+        total_candidates: pagedUsers.length,
         offset: safeOffset,
         limit: safeLimit,
-        has_more: ordered.length === safeLimit,
+        has_more: ordered.length > safeLimit,
     };
 }
 
