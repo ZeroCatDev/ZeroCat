@@ -14,6 +14,7 @@ import memoryCache from '../services/memoryCache.js';
 import gorseService from '../services/gorse.js';
 
 const USER_TARGET_TYPE = 'user';
+const TWITTER_OAUTH1_REQUEST_TOKEN_KEY_PREFIX = 'twitter_oauth1_req:';
 
 function createPkcePair() {
     const verifier = crypto.randomBytes(32).toString('base64url');
@@ -213,6 +214,162 @@ function formatOAuthError(error) {
     return deduped.join(' | ') || 'unknown error';
 }
 
+function oauth1PercentEncode(value) {
+    return encodeURIComponent(String(value ?? ''))
+        .replace(/[!'()*]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
+function buildOAuth1Signature({ method, url, params, consumerSecret, tokenSecret = '' }) {
+    const normalizedParams = Object.keys(params)
+        .sort()
+        .map((key) => `${oauth1PercentEncode(key)}=${oauth1PercentEncode(params[key])}`)
+        .join('&');
+
+    const baseString = [
+        String(method || 'GET').toUpperCase(),
+        oauth1PercentEncode(url),
+        oauth1PercentEncode(normalizedParams),
+    ].join('&');
+
+    const signingKey = `${oauth1PercentEncode(consumerSecret)}&${oauth1PercentEncode(tokenSecret)}`;
+    return crypto
+        .createHmac('sha1', signingKey)
+        .update(baseString)
+        .digest('base64');
+}
+
+function buildOAuth1AuthHeader(params) {
+    const pairs = Object.keys(params)
+        .sort()
+        .map((key) => `${oauth1PercentEncode(key)}="${oauth1PercentEncode(params[key])}"`);
+    return `OAuth ${pairs.join(', ')}`;
+}
+
+function parseOAuth1FormBody(text) {
+    const body = String(text || '').trim();
+    const parsed = new URLSearchParams(body);
+    const result = {};
+    for (const [key, value] of parsed.entries()) {
+        result[key] = value;
+    }
+    return result;
+}
+
+function maskClientId(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return 'unknown';
+    return `${raw.slice(0, 5)}***`;
+}
+
+async function requestTwitterOAuth1Token({ url, consumerKey, consumerSecret, callback, token, tokenSecret, verifier }) {
+    const method = 'POST';
+    const oauthParams = {
+        oauth_consumer_key: String(consumerKey || '').trim(),
+        oauth_nonce: crypto.randomBytes(16).toString('hex'),
+        oauth_signature_method: 'HMAC-SHA1',
+        oauth_timestamp: String(Math.floor(Date.now() / 1000)),
+        oauth_version: '1.0',
+        ...(callback ? { oauth_callback: callback } : {}),
+        ...(token ? { oauth_token: token } : {}),
+        ...(verifier ? { oauth_verifier: verifier } : {}),
+    };
+
+    oauthParams.oauth_signature = buildOAuth1Signature({
+        method,
+        url,
+        params: oauthParams,
+        consumerSecret,
+        tokenSecret,
+    });
+
+    const response = await fetch(url, {
+        method,
+        headers: {
+            Authorization: buildOAuth1AuthHeader(oauthParams),
+            Accept: 'application/x-www-form-urlencoded',
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+    });
+
+    const text = await response.text();
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${text}`);
+    }
+
+    return parseOAuth1FormBody(text);
+}
+
+async function getTwitterUserInfoV1(config, tokenData) {
+    const userInfoUrl = String(config?.userInfoUrl || '').trim();
+    const consumerKey = String(config?.clientId || '').trim();
+    const consumerSecret = String(config?.clientSecret || '').trim();
+    const oauthToken = String(tokenData?.oauth_token || tokenData?.access_token || '').trim();
+    const oauthTokenSecret = String(tokenData?.oauth_token_secret || '').trim();
+
+    if (!consumerKey || !consumerSecret) {
+        throw new Error('Twitter OAuth 配置不完整（缺少 client_id 或 client_secret）');
+    }
+    if (!oauthToken || !oauthTokenSecret) {
+        throw new Error('Twitter OAuth1 令牌不完整（缺少 oauth_token 或 oauth_token_secret）');
+    }
+
+    const parsed = new URL(userInfoUrl);
+    const baseUrl = `${parsed.origin}${parsed.pathname}`;
+    const queryParams = {};
+    for (const [key, value] of parsed.searchParams.entries()) {
+        queryParams[key] = value;
+    }
+
+    const oauthParams = {
+        oauth_consumer_key: consumerKey,
+        oauth_nonce: crypto.randomBytes(16).toString('hex'),
+        oauth_signature_method: 'HMAC-SHA1',
+        oauth_timestamp: String(Math.floor(Date.now() / 1000)),
+        oauth_token: oauthToken,
+        oauth_version: '1.0',
+    };
+
+    const signatureParams = { ...queryParams, ...oauthParams };
+    oauthParams.oauth_signature = buildOAuth1Signature({
+        method: 'GET',
+        url: baseUrl,
+        params: signatureParams,
+        consumerSecret,
+        tokenSecret: oauthTokenSecret,
+    });
+
+    logger.info(`[oauth] getUserInfo: provider=twitter(v1.1), url=${baseUrl}, clientId=${maskClientId(consumerKey)}`);
+
+    const response = await fetch(userInfoUrl, {
+        headers: {
+            Authorization: buildOAuth1AuthHeader(oauthParams),
+            Accept: 'application/json',
+        },
+    });
+
+    const responseText = await response.text();
+    logger.debug(`[oauth] getUserInfo response: provider=twitter(v1.1), status=${response.status}, body=${responseText.substring(0, 500)}`);
+
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${responseText}`);
+    }
+
+    const data = JSON.parse(responseText);
+    return config.mapUserInfo(data);
+}
+
+function buildTwitterOAuthCallbackUrl(redirectUri, state) {
+    const callbackUrl = new URL(String(redirectUri || '').trim());
+    callbackUrl.searchParams.set('state', String(state || '').trim());
+    return callbackUrl.toString();
+}
+
+export function resolveTwitterOAuthStateByRequestToken(oauthToken) {
+    const key = `${TWITTER_OAUTH1_REQUEST_TOKEN_KEY_PREFIX}${String(oauthToken || '').trim()}`;
+    const context = memoryCache.get(key);
+    return context?.state || null;
+}
+
 async function saveOAuthTokens(userId, provider, tokenData, extra = {}) {
     if (!userId || !provider || !tokenData?.access_token) return;
 
@@ -365,22 +522,23 @@ export const OAUTH_PROVIDERS = {
         id: 'twitter',
         name: 'Twitter',
         type: 'oauth_twitter',
-        authUrl: 'https://twitter.com/i/oauth2/authorize',
-        tokenUrl: 'https://api.x.com/2/oauth2/token',
-        userInfoUrl: 'https://api.x.com/2/users/me?user.fields=profile_image_url',
-        scope: 'tweet.read users.read offline.access',
+        authUrl: 'https://api.twitter.com/oauth/authenticate',
+        requestTokenUrl: 'https://api.twitter.com/oauth/request_token',
+        tokenUrl: 'https://api.twitter.com/oauth/access_token',
+        userInfoUrl: 'https://api.twitter.com/1.1/account/verify_credentials.json?include_email=true&skip_status=true',
+        scope: '',
         enabled: false,
         clientId: null,
         clientSecret: null,
         redirectUri: null,
         mapUserInfo: (data) => {
-            const user = data?.data || {};
+            const user = data || {};
             return {
-                id: user.id,
+                id: user.id_str || (user.id ? String(user.id) : null),
                 email: null,
-                name: user.name || user.username,
-                username: user.username,
-                avatar: user.profile_image_url || null,
+                name: user.name || user.screen_name,
+                username: user.screen_name || null,
+                avatar: user.profile_image_url_https || user.profile_image_url || null,
             };
         },
     },
@@ -480,13 +638,29 @@ export async function generateAuthUrl(provider, state, options = {}) {
         state: state
     });
 
-    // Twitter OAuth 2.0 requires PKCE
     if (provider === 'twitter') {
-        const pkce = createPkcePair();
-        params.set('code_challenge', pkce.challenge);
-        params.set('code_challenge_method', 'S256');
-        memoryCache.set(`pkce_verifier:${state}`, pkce.verifier, 600);
-        logger.info(`[oauth] Twitter PKCE generated: challenge=${pkce.challenge.substring(0, 8)}..., state=${state}`);
+        const callbackUrl = buildTwitterOAuthCallbackUrl(config.redirectUri, state);
+        const requestTokenData = await requestTwitterOAuth1Token({
+            url: config.requestTokenUrl,
+            consumerKey: config.clientId,
+            consumerSecret: config.clientSecret,
+            callback: callbackUrl,
+        });
+
+        const oauthToken = String(requestTokenData?.oauth_token || '').trim();
+        const oauthTokenSecret = String(requestTokenData?.oauth_token_secret || '').trim();
+        if (!oauthToken || !oauthTokenSecret) {
+            throw new Error('Twitter OAuth1 获取 request token 失败');
+        }
+
+        memoryCache.set(`${TWITTER_OAUTH1_REQUEST_TOKEN_KEY_PREFIX}${oauthToken}`, {
+            oauthTokenSecret,
+            state: String(state || '').trim(),
+        }, 600);
+
+        const finalUrl = `${config.authUrl}?oauth_token=${encodeURIComponent(oauthToken)}`;
+        logger.info(`[oauth] generateAuthUrl: provider=twitter(oauth1.0a), redirectUri=${config.redirectUri}, clientId=${maskClientId(config.clientId)}`);
+        return finalUrl;
     }
 
     const finalUrl = `${authUrl}?${params.toString()}`;
@@ -504,29 +678,58 @@ async function getAccessToken(provider, code, options = {}) {
     const tokenUrl = config.tokenUrl;
     const effectiveClientId = String(config.clientId || '');
 
+    if (provider === 'twitter') {
+        const oauthToken = String(options?.oauthToken || '').trim();
+        const oauthVerifier = String(code || '').trim();
+        if (!oauthToken || !oauthVerifier) {
+            throw new Error('Twitter OAuth 回调缺少 oauth_token 或 oauth_verifier');
+        }
+
+        const requestContextKey = `${TWITTER_OAUTH1_REQUEST_TOKEN_KEY_PREFIX}${oauthToken}`;
+        const requestContext = memoryCache.get(requestContextKey);
+        if (!requestContext?.oauthTokenSecret) {
+            throw new Error('Twitter OAuth 请求状态已失效，请重新授权');
+        }
+
+        const maskedClientId = maskClientId(effectiveClientId);
+        logger.info(`[oauth] Twitter access token exchange(oauth1.0a): clientId=${maskedClientId}`);
+
+        const tokenData = await requestTwitterOAuth1Token({
+            url: tokenUrl,
+            consumerKey: config.clientId,
+            consumerSecret: config.clientSecret,
+            token: oauthToken,
+            tokenSecret: requestContext.oauthTokenSecret,
+            verifier: oauthVerifier,
+        });
+
+        memoryCache.delete(requestContextKey);
+
+        const accessToken = String(tokenData?.oauth_token || '').trim();
+        const accessTokenSecret = String(tokenData?.oauth_token_secret || '').trim();
+        if (!accessToken || !accessTokenSecret) {
+            throw new Error('Twitter OAuth1 未返回有效的访问令牌');
+        }
+
+        return {
+            access_token: accessToken,
+            token_type: 'OAuth1.0a',
+            oauth_token: accessToken,
+            oauth_token_secret: accessTokenSecret,
+            provider_user_id: tokenData?.user_id ? String(tokenData.user_id) : null,
+            provider_username: tokenData?.screen_name ? String(tokenData.screen_name) : null,
+            scope: null,
+            expires_in: null,
+        };
+    }
+
     const params = new URLSearchParams();
     params.set('client_id', effectiveClientId);
     params.set('code', code);
     params.set('redirect_uri', options?.redirectUri || config.redirectUri);
     params.set('grant_type', 'authorization_code');
 
-    // Twitter OAuth 2.0: attach PKCE code_verifier and use Basic Auth
-    const isTwitter = provider === 'twitter';
-    if (isTwitter) {
-        const stateKey = options?.state || '';
-        const codeVerifier = memoryCache.get(`pkce_verifier:${stateKey}`);
-        if (codeVerifier) {
-            params.set('code_verifier', codeVerifier);
-            memoryCache.delete(`pkce_verifier:${stateKey}`);
-            logger.info(`[oauth] Twitter PKCE code_verifier attached for state=${stateKey}`);
-        } else {
-            logger.warn(`[oauth] Twitter PKCE code_verifier NOT found in cache for state=${stateKey}`);
-        }
-    }
-
-    if (!isTwitter) {
-        params.set('client_secret', config.clientSecret);
-    }
+    params.set('client_secret', config.clientSecret);
 
     try {
         const requestHeaders = {
@@ -534,15 +737,7 @@ async function getAccessToken(provider, code, options = {}) {
             'Content-Type': 'application/x-www-form-urlencoded',
         };
 
-        // Twitter uses Basic Auth (client_id:client_secret) instead of body params
-        if (isTwitter) {
-            const credentials = Buffer.from(`${effectiveClientId}:${config.clientSecret}`).toString('base64');
-            requestHeaders['Authorization'] = `Basic ${credentials}`;
-            const maskedClientId = effectiveClientId.substring(0, 5) + '***';
-            logger.info(`[oauth] Twitter token exchange: clientId=${maskedClientId}, tokenUrl=${tokenUrl}`);
-        } else {
-            logger.info(`[oauth] getAccessToken: provider=${provider}, tokenUrl=${tokenUrl}, params=${[...params.keys()].join(',')}`);
-        }
+        logger.info(`[oauth] getAccessToken: provider=${provider}, tokenUrl=${tokenUrl}, params=${[...params.keys()].join(',')}`);
 
         const response = await fetch(tokenUrl, {
             method: 'POST',
@@ -554,15 +749,6 @@ async function getAccessToken(provider, code, options = {}) {
         logger.debug(`[oauth] getAccessToken response: provider=${provider}, status=${response.status}, body=${responseText.substring(0, 500)}`);
 
         if (!response.ok) {
-            // Twitter 特定错误诊断
-            if (isTwitter) {
-                try {
-                    const errorData = JSON.parse(responseText);
-                    const maskedClientId = effectiveClientId.substring(0, 5) + '***';
-                    const reason = errorData?.error || 'unknown';
-                    logger.error(`[oauth] Twitter token exchange failed: clientId=${maskedClientId}, error=${reason}, detail=${errorData?.error_description || ''}`);
-                } catch { /* 日志失败不中断流程 */ }
-            }
             throw new Error(`HTTP ${response.status}: ${responseText}`);
         }
 
@@ -659,6 +845,10 @@ async function getUserInfo(provider, accessToken, options = {}, tokenData = null
     const config = OAUTH_PROVIDERS[provider];
     const userInfoUrl = config.userInfoUrl;
 
+    if (provider === 'twitter') {
+        return getTwitterUserInfoV1(config, tokenData);
+    }
+
     // GitHub 需要特殊处理
     if (!config.mapUserInfo) {
         return getGitHubUserInfo(accessToken);
@@ -684,35 +874,6 @@ async function getUserInfo(provider, accessToken, options = {}, tokenData = null
                     logger.warn(`[oauth] getUserInfo ${provider} HTTP ${response.status}, retrying in ${RETRY_DELAYS[attempt]}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`);
                     await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]));
                     continue;
-                }
-
-                // 对 Twitter 特定错误提供更清晰的错误消息
-                if (provider === 'twitter' && response.status === 403) {
-                    try {
-                        const errorData = JSON.parse(responseText);
-                        const clientId = config?.clientId ? config.clientId.substring(0, 5) + '***' : 'unknown';
-                        const reason = errorData?.reason || 'unknown';
-                        const detail = errorData?.detail || '';
-
-                        logger.error(`[oauth] Twitter 403: clientId=${clientId}, reason=${reason}, detail=${detail}`);
-
-                        if (reason === 'client-not-enrolled') {
-                            throw new Error(
-                                `Twitter OAuth 应用未被附加到项目（client_id: ${clientId}）。\n` +
-                                `请检查：\n` +
-                                `1. 确认这个应用 ID 在 https://developer.twitter.com/en/portal/projects 中的某个项目内\n` +
-                                `2. 如果应用 ID 不对，检查你的 oauth.twitter.client_id 配置是否正确\n` +
-                                `3. 如果是同步功能失败，可能需要单独配置一个 Twitter App 用于同步`
-                            );
-                        }
-                        if (detail) {
-                            throw new Error(`Twitter API 错误: ${detail}`);
-                        }
-                    } catch (parseErr) {
-                        if (parseErr.message && (parseErr.message.includes('Twitter') || parseErr.message.includes('client'))) {
-                            throw parseErr;
-                        }
-                    }
                 }
 
                 throw new Error(`HTTP ${response.status}: ${responseText}`);

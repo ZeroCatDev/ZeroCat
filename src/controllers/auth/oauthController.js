@@ -2,7 +2,13 @@ import logger from "../../services/logger.js";
 import {prisma} from "../../services/prisma.js";
 import crypto from "crypto";
 import memoryCache from "../../services/memoryCache.js";
-import {generateAuthUrl, handleOAuthCallback, handleOAuthSyncBind, OAUTH_PROVIDERS,} from "../oauth.js";
+import {
+    generateAuthUrl,
+    handleOAuthCallback,
+    handleOAuthSyncBind,
+    OAUTH_PROVIDERS,
+    resolveTwitterOAuthStateByRequestToken,
+} from "../oauth.js";
 import {getAtprotoAuthAppStateByCallbackState} from "../../services/social/atprotoAuthOAuth.js";
 import zcconfig from "../../services/config/zcconfig.js";
 import {createTemporaryToken} from "../../services/auth/verification.js";
@@ -161,17 +167,34 @@ export const handleOAuthCallbackRequest = async (req, res) => {
 
     try {
         const {provider} = req.params;
-        const {code, state, error, error_description: errorDescription} = req.query;
+        const {
+            code,
+            state,
+            oauth_token: oauthToken,
+            oauth_verifier: oauthVerifier,
+            error,
+            error_description: errorDescription,
+        } = req.query;
 
-        logger.debug(`[oauthController] 接收OAuth回调: provider=${provider}, code=${code?.substring(0, 10)}...`);
+        const authCode = provider === 'twitter' ? oauthVerifier : code;
 
-        if (!state) {
+        logger.debug(`[oauthController] 接收OAuth回调: provider=${provider}, code=${authCode?.substring(0, 10)}...`);
+
+        let resolvedState = state;
+
+        if (provider === 'twitter' && !resolvedState && oauthToken) {
+            resolvedState = resolveTwitterOAuthStateByRequestToken(oauthToken);
+            if (resolvedState) {
+                logger.debug(`[oauthController] Twitter state resolved by oauth_token: ${oauthToken} -> ${resolvedState}`);
+            }
+        }
+
+        if (!resolvedState) {
             logger.warn('[oauthController] 无效的OAuth回调请求: 缺少state');
             return redirectTo('/app/account/oauth/login/error', '无效的请求参数');
         }
 
         // 对 Bluesky：回调中的 state 是库内部生成的随机值，需先解析出业务 appState
-        let resolvedState = state;
         if (provider === 'bluesky') {
             const appState = await getAtprotoAuthAppStateByCallbackState(state);
             if (appState) {
@@ -204,8 +227,8 @@ export const handleOAuthCallbackRequest = async (req, res) => {
             return redirectTo('/app/account/oauth/login/error', reason);
         }
 
-        if (!code) {
-            logger.warn('[oauthController] 无效的OAuth回调请求: 缺少code');
+        if (!authCode) {
+            logger.warn('[oauthController] 无效的OAuth回调请求: 缺少code/verifier');
             return redirectTo('/app/account/oauth/login/error', '无效的请求参数');
         }
 
@@ -257,11 +280,12 @@ export const handleOAuthCallbackRequest = async (req, res) => {
             try {
                 const bindingResult = await handleOAuthCallback(
                     provider,
-                    code,
+                    authCode,
                     userIdToBind,
                     {
                         ...(cachedState?.context || {}),
-                        state: String(state),
+                        state: String(resolvedState),
+                        ...(provider === 'twitter' && oauthToken ? { oauthToken: String(oauthToken) } : {}),
                         iss: req.query?.iss,
                         callbackQuery: req.query,
                     }
@@ -286,11 +310,12 @@ export const handleOAuthCallbackRequest = async (req, res) => {
             try {
                 const callbackResult = await handleOAuthCallback(
                     provider,
-                    code,
+                    authCode,
                     null,
                     {
                         ...(cachedState?.context || {}),
-                        state: String(state),
+                        state: String(resolvedState),
+                        ...(provider === 'twitter' && oauthToken ? { oauthToken: String(oauthToken) } : {}),
                         iss: req.query?.iss,
                         callbackQuery: req.query,
                     }
