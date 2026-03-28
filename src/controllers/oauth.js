@@ -538,9 +538,11 @@ async function getAccessToken(provider, code, options = {}) {
         if (isTwitter) {
             const credentials = Buffer.from(`${effectiveClientId}:${config.clientSecret}`).toString('base64');
             requestHeaders['Authorization'] = `Basic ${credentials}`;
+            const maskedClientId = effectiveClientId.substring(0, 5) + '***';
+            logger.info(`[oauth] Twitter token exchange: clientId=${maskedClientId}, tokenUrl=${tokenUrl}`);
+        } else {
+            logger.info(`[oauth] getAccessToken: provider=${provider}, tokenUrl=${tokenUrl}, params=${[...params.keys()].join(',')}`);
         }
-
-        logger.info(`[oauth] getAccessToken: provider=${provider}, tokenUrl=${tokenUrl}, params=${[...params.keys()].join(',')}`);
 
         const response = await fetch(tokenUrl, {
             method: 'POST',
@@ -552,12 +554,22 @@ async function getAccessToken(provider, code, options = {}) {
         logger.debug(`[oauth] getAccessToken response: provider=${provider}, status=${response.status}, body=${responseText.substring(0, 500)}`);
 
         if (!response.ok) {
+            // Twitter 特定错误诊断
+            if (isTwitter) {
+                try {
+                    const errorData = JSON.parse(responseText);
+                    const maskedClientId = effectiveClientId.substring(0, 5) + '***';
+                    const reason = errorData?.error || 'unknown';
+                    logger.error(`[oauth] Twitter token exchange failed: clientId=${maskedClientId}, error=${reason}, detail=${errorData?.error_description || ''}`);
+                } catch { /* 日志失败不中断流程 */ }
+            }
             throw new Error(`HTTP ${response.status}: ${responseText}`);
         }
 
         return JSON.parse(responseText);
     } catch (error) {
-        logger.error(`[oauth] 获取${provider}访问令牌失败: ${formatOAuthError(error)}`, error);
+        const errorMsg = formatOAuthError(error);
+        logger.error(`[oauth] 获取${provider}访问令牌失败: ${errorMsg}`, error);
         throw error;
     }
 }
@@ -673,6 +685,36 @@ async function getUserInfo(provider, accessToken, options = {}, tokenData = null
                     await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]));
                     continue;
                 }
+
+                // 对 Twitter 特定错误提供更清晰的错误消息
+                if (provider === 'twitter' && response.status === 403) {
+                    try {
+                        const errorData = JSON.parse(responseText);
+                        const clientId = config?.clientId ? config.clientId.substring(0, 5) + '***' : 'unknown';
+                        const reason = errorData?.reason || 'unknown';
+                        const detail = errorData?.detail || '';
+                        
+                        logger.error(`[oauth] Twitter 403: clientId=${clientId}, reason=${reason}, detail=${detail}`);
+                        
+                        if (reason === 'client-not-enrolled') {
+                            throw new Error(
+                                `Twitter OAuth 应用未被附加到项目（client_id: ${clientId}）。\n` +
+                                `请检查：\n` +
+                                `1. 确认这个应用 ID 在 https://developer.twitter.com/en/portal/projects 中的某个项目内\n` +
+                                `2. 如果应用 ID 不对，检查你的 oauth.twitter.client_id 配置是否正确\n` +
+                                `3. 如果是同步功能失败，可能需要单独配置一个 Twitter App 用于同步`
+                            );
+                        }
+                        if (detail) {
+                            throw new Error(`Twitter API 错误: ${detail}`);
+                        }
+                    } catch (parseErr) {
+                        if (parseErr.message && (parseErr.message.includes('Twitter') || parseErr.message.includes('client'))) {
+                            throw parseErr;
+                        }
+                    }
+                }
+
                 throw new Error(`HTTP ${response.status}: ${responseText}`);
             }
 
