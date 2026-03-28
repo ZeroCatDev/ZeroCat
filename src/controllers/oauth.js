@@ -693,9 +693,9 @@ async function getUserInfo(provider, accessToken, options = {}, tokenData = null
                         const clientId = config?.clientId ? config.clientId.substring(0, 5) + '***' : 'unknown';
                         const reason = errorData?.reason || 'unknown';
                         const detail = errorData?.detail || '';
-                        
+
                         logger.error(`[oauth] Twitter 403: clientId=${clientId}, reason=${reason}, detail=${detail}`);
-                        
+
                         if (reason === 'client-not-enrolled') {
                             throw new Error(
                                 `Twitter OAuth 应用未被附加到项目（client_id: ${clientId}）。\n` +
