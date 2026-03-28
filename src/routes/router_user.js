@@ -8,7 +8,7 @@ import {createEvent} from "../controllers/events.js";
 import jwt from "jsonwebtoken";
 import * as bcrypt from "bcrypt";
 import {PasswordHash} from "phpass";
-import { changeUsername } from "../controllers/users.js";
+import { changeUsername, getRecommendedUsersForUser } from "../controllers/users.js";
 
  // PHPass hasher for legacy password validation
  const passwordHash = new PasswordHash();
@@ -126,6 +126,28 @@ logger.debug(user);
     }
 });
 
+// 获取推荐用户
+router.get("/recommend/me", needLogin, async (req, res, next) => {
+    try {
+        const userId = Number(res.locals.userid);
+        const { limit = 20, offset = 0 } = req.query;
+
+        const data = await getRecommendedUsersForUser({
+            userId,
+            limit,
+            offset,
+        });
+
+        return res.status(200).send({
+            status: "success",
+            message: data.message || "获取成功",
+            data,
+        });
+    } catch (err) {
+        logger.error("Error getting recommended users for user:", err);
+        next(err);
+    }
+});
 
 // 批量查询用户信息
 router.post("/batch/:type", async function (req, res, next) {

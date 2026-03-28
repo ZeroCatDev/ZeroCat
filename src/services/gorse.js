@@ -705,6 +705,39 @@ export async function getRecommendedProjectIds(userId, { limit = 20, offset = 0,
 }
 
 /**
+ * 获取个性化推荐用户 ID 列表
+ * @param {number} userId - 用户ID
+ * @param {object} options - 推荐选项
+ * @param {number} options.limit - 返回数量，默认20
+ * @param {number} options.offset - 偏移量，默认0
+ * @returns {Promise<number[]>} 推荐的用户 ID 列表
+ */
+export async function getRecommendedUserIds(userId, { limit = 20, offset = 0 } = {}) {
+    try {
+        const client = await getClient();
+        if (!client) return [];
+
+        const ids = await client.getRecommend({
+            userId: String(userId),
+            category: 'user',
+            writeBackType: 'read',
+            writeBackDelay: '0s',
+            cursorOptions: { n: limit, offset },
+        });
+
+        return (ids || []).map(id => {
+            if (id.startsWith('user_')) {
+                return parseInt(id.slice('user_'.length), 10);
+            }
+            return null;
+        }).filter(Boolean);
+    } catch (error) {
+        logger.warn(`[gorse] 获取用户推荐失败 (user=${userId}):`, error.message);
+        return [];
+    }
+}
+
+/**
  * 获取最新热门帖子（未登录用户使用）
  * @param {object} options
  * @param {number} options.limit - 返回数量，默认20
@@ -803,6 +836,11 @@ export async function feedbackUserFollow(userId, followedUserId) {
 /** 取消用户关注反馈 */
 export function feedbackUserUnfollow(userId, followedUserId) {
     return deleteFeedback(FEEDBACK_TYPES.FOLLOW, userId, `user_${followedUserId}`);
+}
+
+/** 用户推荐曝光反馈 */
+export function feedbackUserRecommendationView(userId, recommendedUserId) {
+    return insertFeedback(FEEDBACK_TYPES.READ, userId, `user_${recommendedUserId}`);
 }
 
 // ======================== 全量同步 ========================
@@ -1205,6 +1243,7 @@ export default {
     deleteFeedback,
     getRecommendedPostIds,
     getRecommendedProjectIds,
+    getRecommendedUserIds,
     getLatestPostIds,
     feedbackPostLike,
     feedbackPostUnlike,
@@ -1219,6 +1258,7 @@ export default {
     feedbackProjectRead,
     feedbackUserFollow,
     feedbackUserUnfollow,
+    feedbackUserRecommendationView,
     syncAllUsers,
     syncAllPosts,
     syncAllProjects,
