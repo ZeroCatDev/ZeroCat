@@ -34,6 +34,7 @@ import {
   getRecommendedFeed,
   getSimilarPosts,
   getEmbeddingInfo,
+  getUrlPreview,
   MAX_MEDIA_COUNT,
 } from "../controllers/posts.js";
 import { handleAssetUpload, validateFileTypeFromContent } from "../services/assets.js";
@@ -310,6 +311,33 @@ router.get("/embedding/status", async (req, res) => {
   } catch (error) {
     logger.error("获取 Embedding 状态失败:", error);
     res.status(500).json({ status: "error", message: "获取 Embedding 状态失败" });
+  }
+});
+
+/**
+ * 获取链接预览元数据
+ * GET /posts/preview?url=https://example.com&force=true
+ * 公开接口，无需登录
+ */
+router.get("/preview", async (req, res) => {
+  try {
+    const url = pickQueryValue(req.query.url);
+    if (!url || (typeof url === "string" && !url.trim())) {
+      return res.status(400).json({ status: "error", message: "url 不能为空" });
+    }
+
+    const forceRefresh = parseBooleanQuery(req.query.force, false);
+    const data = await getUrlPreview({ url, forceRefresh });
+    res.status(200).json({ status: "success", data });
+  } catch (error) {
+    const statusCode = Number(error?.statusCode) || 400;
+    const message = error?.message || "获取链接预览失败";
+    logger.error("获取链接预览失败:", error);
+    res.status(statusCode).json({
+      status: "error",
+      message,
+      ...(error?.code ? { code: error.code } : {}),
+    });
   }
 });
 

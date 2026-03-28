@@ -63,6 +63,41 @@ async function getPostMentions(postId) {
 }
 
 /**
+ * 解析帖子的联邦引用 ID
+ * 优先使用远程原始引用，避免回帖 inReplyTo 错指向本地代理 Note URL。
+ * @param {number|null|undefined} relatedPostId
+ * @param {object|null|undefined} relatedPost
+ * @returns {Promise<string|null>}
+ */
+async function resolveRelatedNoteRef(relatedPostId, relatedPost = null) {
+    if (!relatedPostId) return null;
+
+    let candidate = relatedPost;
+    if (!candidate || typeof candidate !== 'object') {
+        candidate = await prisma.ow_posts.findUnique({
+            where: { id: relatedPostId },
+            select: {
+                id: true,
+                platform_refs: true,
+                metadata: true,
+            },
+        });
+    }
+
+    const apId = candidate?.platform_refs?.activitypub?.id;
+    if (typeof apId === 'string' && /^https?:\/\//i.test(apId)) {
+        return apId;
+    }
+
+    const remoteUrl = candidate?.metadata?.remote_url;
+    if (typeof remoteUrl === 'string' && /^https?:\/\//i.test(remoteUrl)) {
+        return remoteUrl;
+    }
+
+    return getNoteId(relatedPostId);
+}
+
+/**
  * 将本地帖子转换为 AP Note 对象
  * @param {object} post 帖子记录（含 author 信息）
  * @returns {object} AP Note
@@ -250,19 +285,19 @@ export async function postToNote(post) {
 
     // 处理回复关系
     if (post.in_reply_to_id) {
-        const replyRef = post.in_reply_to?.platform_refs?.activitypub?.id;
+        const replyRef = await resolveRelatedNoteRef(post.in_reply_to_id, post.in_reply_to);
         if (replyRef) {
             note.inReplyTo = replyRef;
-        } else {
-            note.inReplyTo = await getNoteId(post.in_reply_to_id);
         }
     }
 
     // 处理引用
     if (post.quoted_post_id) {
-        const quotedNoteId = await getNoteId(post.quoted_post_id);
-        note.quoteUrl = quotedNoteId;
-        note._misskey_quote = quotedNoteId;
+        const quotedNoteId = await resolveRelatedNoteRef(post.quoted_post_id, post.quoted_post);
+        if (quotedNoteId) {
+            note.quoteUrl = quotedNoteId;
+            note._misskey_quote = quotedNoteId;
+        }
     }
 
     // 处理媒体附件

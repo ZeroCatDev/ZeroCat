@@ -7,6 +7,7 @@ import queueManager from "../services/queue/queueManager.js";
 import gorseService from "../services/gorse.js";
 import * as embeddingService from "../services/embedding.js";
 import { getAnalytics } from "../services/analytics.js";
+import { getPostUrlPreview } from "../services/postPreview.js";
 
 const POST_CHAR_LIMIT = 280;
 const MAX_MEDIA_COUNT = 4;
@@ -2498,5 +2499,12 @@ export async function getEmbeddingInfo() {
     dimensions: Number(dimensions) || 1536,
     stats,
   };
+}
+
+/**
+ * 获取 URL 预览元数据（用于发帖时链接卡片）
+ */
+export async function getUrlPreview({ url, forceRefresh = false }) {
+  return getPostUrlPreview(url, { forceRefresh });
 }
 

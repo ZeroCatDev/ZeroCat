@@ -691,6 +691,20 @@ model ow_cache_kv {
   @@map("ow_cache_kv")
 }
 
+// 帖子 URL 预览持久缓存
+model ow_post_url_previews {
+  cache_key  String   @id @db.VarChar(96)
+  url        String   @db.VarChar(2048)
+  ok         Boolean  @default(true)
+  payload    Json
+  expires_at DateTime @db.Timestamp(6)
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @updatedAt @db.Timestamp(6)
+
+  @@index([expires_at], map: "idx_ow_post_url_previews_expires_at")
+  @@map("ow_post_url_previews")
+}
+
 // 通用目标配置表（无关联，按 target_type + target_id + key 存储）
 model ow_target_configs {
   id          Int      @id @default(autoincrement())
