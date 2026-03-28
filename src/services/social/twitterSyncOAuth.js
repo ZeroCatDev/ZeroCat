@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { Client as TwitterClient, auth } from 'twitter-api-sdk';
 import memoryCache from '../memoryCache.js';
+import logger from '../logger.js';
 
 const REQUIRED_SYNC_SCOPES = [
     'tweet.read',
@@ -42,8 +43,33 @@ function buildTwitterOAuthClient(appConfig) {
     });
 }
 
-async function fetchTwitterMe(accessToken) {
-    const client = new TwitterClient(String(accessToken || ''));
+function formatTwitterOauthError(error, fallback = 'Twitter OAuth 调用失败') {
+    const details = [];
+    const push = (value) => {
+        const text = String(value ?? '').trim();
+        if (text) details.push(text);
+    };
+
+    push(error?.data?.detail);
+    push(error?.data?.title);
+    push(error?.error?.detail);
+    push(error?.error?.title);
+    if (Array.isArray(error?.error?.errors)) {
+        for (const item of error.error.errors) {
+            push(item?.detail);
+            push(item?.message);
+            push(item?.title);
+        }
+    }
+    if (String(error?.message || '').trim().toLowerCase() !== 'error') {
+        push(error?.message);
+    }
+
+    return details[0] || String(fallback || '').trim() || 'Twitter OAuth 调用失败';
+}
+
+async function fetchTwitterMe(oauthClient) {
+    const client = new TwitterClient(oauthClient);
     const response = await client.users.findMyUser({
         'user.fields': ['profile_image_url'],
     });
@@ -80,7 +106,13 @@ export async function consumeTwitterSyncCallback({ state, code }) {
         throw new Error('Twitter 未返回有效 access_token');
     }
 
-    const profile = await fetchTwitterMe(token.access_token);
+    let profile = null;
+    try {
+        profile = await fetchTwitterMe(context.oauthClient);
+    } catch (error) {
+        // profile 拉取失败不应阻断授权完成，否则会导致 token 已拿到却绑定失败。
+        logger.warn('[social] twitter sync oauth callback: fetch profile failed:', formatTwitterOauthError(error, '获取 Twitter 账号资料失败'));
+    }
 
     return {
         userId: Number(context.userId),
