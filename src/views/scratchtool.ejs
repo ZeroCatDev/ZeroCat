@@ -1615,10 +1615,9 @@ function initialize() {
   mountScratchToolShell();
   cacheScratchToolElements();
 
-  if (typeof ClipCCExtension !== "undefined") {
-    zcvm = ClipCCExtension.api.getVmInstance();
-    zcgui = ClipCCExtension.api.getGuiInstance();
-  } else if (typeof window.vm !== "undefined") {
+
+  // 统一使用 window.vm，不再区分 ClipCCExtension
+  if (typeof window.vm !== "undefined") {
     zcvm = window.vm;
     zcgui = window.gui;
   } else {
