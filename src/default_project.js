@@ -3,6 +3,9 @@ const project = {
     python: "da7548a7a8cffc35d1ed73b39cf8b095b9be7bff30e74896b2288aebca20d10a",
     text: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     article: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    none: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    none: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "scratch-clipcc": "406a983d03748eb2a7d45a94f1ace0273b9b89a0bc2672d006de24f3b59b4548",
+    "scratch-02engine ": "e1e57a1c3f623b9fc7b2571fc315baf50710f7371bff398bcac4c894e51308cf",
+
 };
 export default project;

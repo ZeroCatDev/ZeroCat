@@ -31,6 +31,68 @@ import gorseService from "../services/gorse.js";
 
 const router = Router();
 
+const resolveProjectInitType = (projectType) => {
+  if (projectType && default_project[projectType]) return projectType;
+  if (default_project.text) return "text";
+  return projectType;
+};
+
+const initializeEmptyProject = async (tx, { projectId, userId, projectType }) => {
+  const initType = resolveProjectInitType(projectType);
+  const defaultSource = default_project[initType];
+  if (!defaultSource) {
+    throw new Error(`Default project template not found for type: ${initType}`);
+  }
+
+  const commitCount = await tx.ow_projects_commits.count({
+    where: { project_id: Number(projectId) },
+  });
+  if (commitCount > 0) return null;
+
+  const timestamp = new Date();
+  const commitContent = JSON.stringify({
+    userid: userId,
+    project_id: Number(projectId),
+    project_branch: "main",
+    source_sha256: defaultSource,
+    commit_message: "初始化提交",
+    parent_commit: null,
+    timestamp,
+  });
+  const commitId = createHash("sha256").update(commitContent).digest("hex");
+
+  await tx.ow_projects_branch.create({
+    data: {
+      projectid: Number(projectId),
+      latest_commit_hash: commitId,
+      name: "main",
+      creator: userId,
+      description: "默认分支",
+    },
+  });
+
+  const commit = await tx.ow_projects_commits.create({
+    data: {
+      id: commitId,
+      project_id: Number(projectId),
+      author_id: userId,
+      branch: "main",
+      commit_file: defaultSource,
+      commit_message: "初始化提交",
+      parent_commit_id: null,
+      commit_date: new Date(timestamp),
+      commit_description: "# 初始化提交",
+    },
+  });
+
+  await tx.ow_projects.update({
+    where: { id: Number(projectId) },
+    data: { default_branch: "main" },
+  });
+
+  return commit;
+};
+
 const PROJECT_CONFIG_TARGET_TYPE = "project";
 const PROJECT_CONFIG_KEY_CLOUD_ANON_WRITE = "scratch.clouddata.anonymouswrite";
 const PROJECT_CONFIG_KEY_CLOUD_HISTORY_ENABLED = "scratch.clouddata.history.enabled";
@@ -412,8 +474,9 @@ router.post("/", needLogin, async (req, res, next) => {
       });
     }
 
+    const projectType = req.body.type || "scratch";
     const outputJson = {
-      type: req.body.type || "scratch",
+      type: projectType,
       authorid: res.locals.userid,
       title: req.body.title || "新建作品",
       name: req.body.name,
@@ -423,7 +486,15 @@ router.post("/", needLogin, async (req, res, next) => {
       thumbnail: req.body.thumbnail || "",
     };
 
-    const result = await prisma.ow_projects.create({ data: outputJson });
+    const result = await prisma.$transaction(async (tx) => {
+      const created = await tx.ow_projects.create({ data: outputJson });
+      await initializeEmptyProject(tx, {
+        projectId: created.id,
+        userId: res.locals.userid,
+        projectType,
+      });
+      return created;
+    });
 
     // 根据项目状态决定事件是否公开
     const isPrivate = outputJson.state === "private";
@@ -1475,98 +1546,6 @@ router.delete("/:id", needLogin, requireSudo, async (req, res, next) => {
     });
   } catch (err) {
     logger.error("Error deleting project:", err);
-    next(err);
-  }
-});
-
-// 初始化项目
-router.post("/initlize", needLogin, async (req, res, next) => {
-  if (!res.locals.userid) {
-    return res.status(200).send({
-      status: "error",
-      message: "未登录",
-      code: "AUTH_ERROR_LOGIN",
-    });
-  }
-
-  try {
-    const { projectid, type } = req.query;
-    await checkProjectPermission(projectid, res.locals.userid, "write");
-
-    // 检查项目是否在任何分支都没有任何提交
-    const commitCount = await prisma.ow_projects_commits.count({
-      where: { project_id: Number(projectid) },
-    });
-    if (commitCount > 0) {
-      return res.status(400).send({
-        status: "error",
-        message: "项目已存在提交或不存在",
-      });
-    }
-
-    const project = await prisma.ow_projects.findFirst({
-      where: { id: Number(projectid) },
-    });
-    // 获取默认作品
-    const defaultSource = default_project[type || project.type];
-    if (!defaultSource) {
-      return res.status(200).send({
-        status: "error",
-        message: "默认作品不存在",
-      });
-    }
-    //先创建时间戳
-    const timestamp = new Date();
-    // 计算提交的哈希值作为 id
-    const commitContent = JSON.stringify({
-      userid: res.locals.userid,
-      project_id: Number(projectid),
-      project_branch: "main",
-      source_sha256: defaultSource,
-      commit_message: "初始化提交",
-      parent_commit: null,
-      timestamp: timestamp,
-    });
-    const commitId = createHash("sha256").update(commitContent).digest("hex");
-
-    // 创建分支记录
-    await prisma.ow_projects_branch.create({
-      data: {
-        projectid: Number(projectid),
-        latest_commit_hash: commitId,
-        name: "main",
-        creator: res.locals.userid,
-        description: "默认分支",
-      },
-    });
-
-    // 创建提交记录
-    const result = await prisma.ow_projects_commits.create({
-      data: {
-        id: commitId,
-        project_id: Number(projectid),
-        author_id: res.locals.userid,
-        branch: "main",
-        commit_file: defaultSource,
-        commit_message: "初始化提交",
-        parent_commit_id: null,
-        commit_date: new Date(timestamp), // 使用 Date 对象
-        commit_description: "# 初始化提交",
-      },
-    });
-    await prisma.ow_projects.update({
-      where: { id: Number(projectid) },
-      data: {
-        default_branch: "main",
-      },
-    });
-    res.status(200).send({
-      status: "success",
-      message: "初始化成功",
-      data: result,
-    });
-  } catch (err) {
-    logger.error("Error initializing project:", err);
     next(err);
   }
 });

@@ -1857,14 +1857,6 @@ async function extractInlineExtensions(projectJsonStr) {
         throw new Error(createResponse.message || "创建扩展项目失败");
       }
 
-      const initResponse = await apiRequest({
-        url: `${ZCConfig.api.getPath("/project/initlize")}?projectid=${newProjectId}&type=text`,
-        type: "POST",
-      });
-      if (initResponse.status === "error") {
-        throw new Error(initResponse.message || "初始化项目失败");
-      }
-
       const saveResponse = await apiRequest({
         url: ZCConfig.api.getPath("/project/savefile"),
         type: "POST",
