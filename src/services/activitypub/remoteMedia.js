@@ -85,7 +85,7 @@ export async function cacheRemoteImage(remoteUrl, {
         // ── 1. 下载远程图片 ──────────────────────────────
         const buffer = await downloadRemoteImage(remoteUrl);
         if (!buffer || buffer.length === 0) {
-            logger.warn(`[ap-media] 下载失败或为空: ${remoteUrl}`);
+            logger.warn(`[ap-media] 下载失败或为空: ${remoteUrl}（详见上一条下载失败/HTTP异常日志）`);
             return DEFAULT_HASH;
         }
 
@@ -229,7 +229,15 @@ async function downloadRemoteImage(url) {
         });
 
         if (!resp.ok) {
-            logger.warn(`[ap-media] 远程图片 HTTP ${resp.status}: ${url}`);
+            logger.warn('[ap-media] 远程图片 HTTP 异常', {
+                url,
+                status: resp.status,
+                statusText: resp.statusText,
+                redirected: resp.redirected,
+                finalUrl: resp.url,
+                contentType: resp.headers.get('content-type') || null,
+                contentLength: resp.headers.get('content-length') || null,
+            });
             return null;
         }
 
@@ -260,14 +268,45 @@ async function downloadRemoteImage(url) {
         return Buffer.concat(chunks);
     } catch (err) {
         if (err.name === 'AbortError') {
-            logger.warn(`[ap-media] 远程图片下载超时: ${url}`);
+            logger.warn('[ap-media] 远程图片下载超时', {
+                url,
+                timeoutMs: FETCH_TIMEOUT,
+                errorName: err.name,
+                errorMessage: err.message,
+            });
         } else {
-            logger.warn(`[ap-media] 远程图片下载失败: ${url} - ${err.message}`);
+            logger.warn('[ap-media] 远程图片下载失败', {
+                url,
+                timeoutMs: FETCH_TIMEOUT,
+                ...extractErrorDetails(err),
+            });
         }
         return null;
     } finally {
         clearTimeout(timer);
     }
+}
+
+function extractErrorDetails(err) {
+    const details = {
+        errorName: err?.name || null,
+        errorMessage: err?.message || null,
+        errorCode: err?.code || null,
+        errorType: err?.type || null,
+        stack: err?.stack || null,
+    };
+
+    const cause = err?.cause;
+    if (cause) {
+        details.cause = {
+            name: cause?.name || null,
+            message: cause?.message || null,
+            code: cause?.code || null,
+            stack: cause?.stack || null,
+        };
+    }
+
+    return details;
 }
 
 /**
