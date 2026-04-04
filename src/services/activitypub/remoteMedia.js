@@ -62,6 +62,12 @@ export async function cacheRemoteImage(remoteUrl, {
     purpose = 'avatar',
     proxyUserId = null,
     actorUrl = null,
+    // 可选：允许非 ActivityPub 场景（如 OAuth）自定义标签/元数据
+    source = 'activitypub',
+    tags = SYNC_TAG,
+    uploaderIp = 'activitypub-sync',
+    uploaderUa = 'ZeroCat-AP-Federation/1.0',
+    extraMetadata = null,
 } = {}) {
     if (!remoteUrl || typeof remoteUrl !== 'string') return DEFAULT_HASH;
 
@@ -147,16 +153,17 @@ export async function cacheRemoteImage(remoteUrl, {
             mimeType: finalMimeType,
             fileSize: processedBuffer.length,
             uploaderId: proxyUserId,
-            uploaderIp: 'activitypub-sync',
-            uploaderUa: 'ZeroCat-AP-Federation/1.0',
+            uploaderIp,
+            uploaderUa,
             metadata: {
-                source: 'activitypub',
+                source,
                 remoteUrl,
                 actorUrl: actorUrl || null,
                 purpose,
                 imageProcessing: processingMeta,
+                ...(extraMetadata && typeof extraMetadata === 'object' ? extraMetadata : {}),
             },
-            tags: SYNC_TAG,
+            tags,
             category: purpose === 'avatar' ? AVATAR_CATEGORY : BANNER_CATEGORY,
         });
 

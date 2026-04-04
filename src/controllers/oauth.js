@@ -12,9 +12,275 @@ import {
 import base32Encode from 'base32-encode';
 import memoryCache from '../services/memoryCache.js';
 import gorseService from '../services/gorse.js';
+import { cacheRemoteImage } from '../services/activitypub/remoteMedia.js';
+import {
+    checkAssetExists,
+    createAssetRecord,
+    generateMD5,
+    processImage,
+    uploadToS3,
+} from '../services/assets.js';
 
 const USER_TARGET_TYPE = 'user';
 const TWITTER_OAUTH1_REQUEST_TOKEN_KEY_PREFIX = 'twitter_oauth1_req:';
+
+const DEFAULT_AVATAR_HASHES = new Set([
+    // schema.prisma 默认值
+    '870582712ab041107f1571285bc95a83',
+    // ActivityPub 远程代理用户默认值
+    'fcd939e653195bb6d057e8c2519f5cc7',
+]);
+
+function pickHttpUrl(value) {
+    if (!value) return null;
+    const raw = String(value).trim();
+    if (!raw) return null;
+    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+    if (raw.startsWith('//')) return `https:${raw}`;
+    return null;
+}
+
+function buildLinuxdoAvatarUrl(data) {
+    const template = data?.avatar_template;
+    if (!template) return null;
+
+    const replaced = String(template).replace(/\{size\}/g, '512');
+    const direct = pickHttpUrl(replaced);
+    if (direct) return direct;
+    if (replaced.startsWith('/')) {
+        return `https://connect.linux.do${replaced}`;
+    }
+    return null;
+}
+
+function build40codeAvatarUrl(data) {
+    // 40Code OAuth 用户信息接口：https://api.abc.520gxx.com/oauth/user
+    // 头像字段：优先使用 head（兼容旧字段 avatar）
+    const raw = String(data?.head || data?.avatar || '').trim();
+    if (!raw) return null;
+
+    const asUrl = pickHttpUrl(raw);
+    if (asUrl) return asUrl;
+
+    const origin = 'https://abc.520gxx.com';
+    if (raw.startsWith('/')) {
+        return `${origin}${raw}`;
+    }
+
+    // raw 为素材标识时，按 40Code 资源路由拼接
+    return `${origin}/static/internalapi/asset/${raw}`;
+}
+
+async function cacheOAuthAvatarBuffer({
+    buffer,
+    userId,
+    provider,
+    source,
+    contentType,
+} = {}) {
+    if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+        throw new Error('empty avatar buffer');
+    }
+
+    const processed = await processImage(buffer, {
+        width: 512,
+        height: 512,
+        format: 'webp',
+        quality: 95,
+        sanitize: true,
+        maxFileSize: 500 * 1024,
+    });
+
+    const md5 = generateMD5(processed.buffer);
+
+    const existing = await checkAssetExists(md5);
+    if (!existing) {
+        const s3Key = `assets/${md5.substring(0, 2)}/${md5.substring(2, 4)}/${md5}.webp`;
+        await uploadToS3(processed.buffer, s3Key, 'image/webp');
+        await createAssetRecord({
+            md5,
+            filename: `${provider}_avatar.webp`,
+            extension: 'webp',
+            mimeType: 'image/webp',
+            fileSize: processed.buffer.length,
+            uploaderId: userId || null,
+            uploaderIp: 'oauth-sync',
+            uploaderUa: 'ZeroCat-OAuth/1.0',
+            metadata: {
+                source: 'oauth',
+                provider,
+                avatarSource: source || null,
+                upstreamContentType: contentType || null,
+                imageProcessing: {
+                    originalSize: buffer.length,
+                    processedSize: processed.size,
+                    dimensions: { width: processed.width, height: processed.height },
+                    compressionRatio: processed.compressionRatio,
+                },
+            },
+            tags: 'oauth-sync',
+            category: 'avatars',
+        });
+    }
+
+    return md5;
+}
+
+async function syncMicrosoftOAuthAvatarIfNeeded({
+    user,
+    oauthContact,
+    accessToken,
+} = {}) {
+    const userId = user?.id;
+    if (!userId) return;
+    if (!accessToken) return;
+
+    const currentAvatar = String(user?.avatar || '').trim().toLowerCase();
+    const isDefaultAvatar = !currentAvatar || DEFAULT_AVATAR_HASHES.has(currentAvatar);
+    if (!isDefaultAvatar) return;
+
+    const meta = normalizeContactMetadata(oauthContact?.metadata);
+    if (meta?.avatar_source === 'microsoft_graph_photo' && meta?.avatar_md5 === currentAvatar) {
+        return;
+    }
+
+    const response = await fetch('https://graph.microsoft.com/v1.0/me/photo/$value', {
+        headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'image/*',
+        },
+    });
+
+    if (!response.ok) {
+        // 常见原因：未设置头像、或 Graph 权限不足
+        const text = await response.text().catch(() => '');
+        throw new Error(`Microsoft photo HTTP ${response.status}: ${text}`);
+    }
+
+    const contentType = response.headers.get('content-type') || null;
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    const md5 = await cacheOAuthAvatarBuffer({
+        buffer,
+        userId,
+        provider: 'microsoft',
+        source: 'microsoft_graph:/me/photo/$value',
+        contentType,
+    });
+
+    if (md5 && md5 !== currentAvatar) {
+        await prisma.ow_users.update({
+            where: { id: userId },
+            data: { avatar: md5 },
+        });
+        user.avatar = md5;
+    }
+
+    if (oauthContact?.contact_id) {
+        const nextMeta = {
+            ...(meta && typeof meta === 'object' ? meta : {}),
+            avatar_source: 'microsoft_graph_photo',
+            avatar_md5: md5,
+        };
+        await prisma.ow_users_contacts.update({
+            where: { contact_id: oauthContact.contact_id },
+            data: {
+                metadata: nextMeta,
+                updated_at: new Date(),
+            },
+        });
+    }
+}
+
+function normalizeContactMetadata(value) {
+    if (!value) return null;
+    if (typeof value === 'object') return value;
+    try {
+        return JSON.parse(String(value));
+    } catch {
+        return null;
+    }
+}
+
+async function syncOAuthAvatarIfNeeded({
+    user,
+    oauthContact,
+    provider,
+    userInfo,
+} = {}) {
+    const userId = user?.id;
+    if (!userId) return;
+
+    const remoteAvatarUrl = String(userInfo?.avatar || '').trim();
+    if (!remoteAvatarUrl) return;
+
+    const currentAvatar = String(user?.avatar || '').trim();
+    const meta = normalizeContactMetadata(oauthContact?.metadata);
+
+    // 如果之前已缓存过且一致，则无需重复下载
+    if (
+        meta &&
+        meta.avatar &&
+        meta.avatar_md5 &&
+        String(meta.avatar).trim() === remoteAvatarUrl &&
+        String(meta.avatar_md5).trim() === currentAvatar
+    ) {
+        return;
+    }
+
+    // 避免覆盖用户自己上传的头像：仅在默认头像时同步
+    const isDefaultAvatar = !currentAvatar || DEFAULT_AVATAR_HASHES.has(currentAvatar);
+    if (!isDefaultAvatar) {
+        return;
+    }
+
+    const actorUrl = userInfo?.profile_url || userInfo?.url || `oauth:${provider}:${userInfo?.id || ''}`;
+
+    const cachedMd5 = await cacheRemoteImage(remoteAvatarUrl, {
+        purpose: 'avatar',
+        proxyUserId: userId,
+        actorUrl,
+        source: 'oauth',
+        tags: 'oauth-sync',
+        uploaderIp: 'oauth-sync',
+        uploaderUa: 'ZeroCat-OAuth/1.0',
+        extraMetadata: {
+            provider,
+            providerUserId: userInfo?.id || null,
+            providerUsername: userInfo?.username || userInfo?.handle || null,
+        },
+    });
+
+    const normalizedMd5 = String(cachedMd5 || '').trim().toLowerCase();
+    const isValidMd5 = /^[0-9a-f]{32}$/.test(normalizedMd5);
+    const isFallback = !isValidMd5 || DEFAULT_AVATAR_HASHES.has(normalizedMd5);
+
+    if (!isFallback && normalizedMd5 !== currentAvatar) {
+        await prisma.ow_users.update({
+            where: { id: userId },
+            data: { avatar: normalizedMd5 },
+        });
+        user.avatar = normalizedMd5;
+    }
+
+    if (oauthContact?.contact_id) {
+        const nextMeta = {
+            ...(meta && typeof meta === 'object' ? meta : {}),
+            ...(userInfo && typeof userInfo === 'object' ? userInfo : {}),
+            avatar: remoteAvatarUrl,
+            ...(!isFallback ? { avatar_md5: normalizedMd5 } : {}),
+        };
+
+        await prisma.ow_users_contacts.update({
+            where: { contact_id: oauthContact.contact_id },
+            data: {
+                metadata: nextMeta,
+                updated_at: new Date(),
+            },
+        });
+    }
+}
 
 function createPkcePair() {
     const verifier = crypto.randomBytes(32).toString('base64url');
@@ -459,7 +725,15 @@ export const OAUTH_PROVIDERS = {
         clientId: null,
         clientSecret: null,
         redirectUri: null,
-        mapUserInfo: (data) => ({ id: data.sub, email: data.email, name: data.name })
+        // 头像字段：Google OIDC userinfo 的 picture
+        mapUserInfo: (data) => ({
+            id: data.sub,
+            email: data.email,
+            name: data.name,
+            avatar: data.picture || null,
+            username: null,
+            profile_url: null,
+        })
     },
     microsoft: {
         id: 'microsoft',
@@ -473,7 +747,15 @@ export const OAUTH_PROVIDERS = {
         clientId: null,
         clientSecret: null,
         redirectUri: null,
-        mapUserInfo: (data) => ({ id: data.id, email: data.mail || data.userPrincipalName, name: data.displayName })
+        // 头像接口：Microsoft Graph /me/photo/$value（单独在登录/绑定后同步）
+        mapUserInfo: (data) => ({
+            id: data.id,
+            email: data.mail || data.userPrincipalName,
+            name: data.displayName,
+            username: data.userPrincipalName || null,
+            avatar: null,
+            profile_url: null,
+        })
     },
     github: {
         id: 'github',
@@ -487,7 +769,16 @@ export const OAUTH_PROVIDERS = {
         clientId: null,
         clientSecret: null,
         redirectUri: null,
-        mapUserInfo: null // GitHub needs special handling (parallel user + emails requests)
+        // GitHub 用户信息需要并行请求 user + emails；头像字段来自 user.avatar_url
+        getUserInfo: async (accessToken) => getGitHubUserInfo(accessToken),
+        mapUserInfo: (data) => ({
+            id: data?.id ? String(data.id) : null,
+            email: null,
+            name: data?.name || data?.login || null,
+            username: data?.login || null,
+            avatar: data?.avatar_url || null,
+            profile_url: data?.html_url || null,
+        }),
     },
     "40code": {
         id: '40code',
@@ -502,7 +793,15 @@ export const OAUTH_PROVIDERS = {
         clientId: null,
         clientSecret: null,
         redirectUri: null,
-        mapUserInfo: (data) => ({ id: data.id.toString(), email: data.email, name: data.nickname })
+        // 头像字段：40Code OAuth user 接口返回的 head（兼容 avatar）
+        mapUserInfo: (data) => ({
+            id: data.id.toString(),
+            email: data.email,
+            name: data.nickname,
+            username: data.username || null,
+            avatar: build40codeAvatarUrl(data),
+            profile_url: null,
+        })
     },
     linuxdo: {
         id: 'linuxdo',
@@ -516,7 +815,15 @@ export const OAUTH_PROVIDERS = {
         clientId: null,
         clientSecret: null,
         redirectUri: null,
-        mapUserInfo: (data) => ({ id: data.id.toString(), email: data.email, name: data.name || data.username })
+        // 头像字段：Linux.do user API 的 avatar_template
+        mapUserInfo: (data) => ({
+            id: data.id.toString(),
+            email: data.email,
+            name: data.name || data.username,
+            username: data.username || null,
+            avatar: buildLinuxdoAvatarUrl(data),
+            profile_url: null,
+        })
     },
     twitter: {
         id: 'twitter',
@@ -539,6 +846,7 @@ export const OAUTH_PROVIDERS = {
                 name: user.name || user.screen_name,
                 username: user.screen_name || null,
                 avatar: user.profile_image_url_https || user.profile_image_url || null,
+                profile_url: user.screen_name ? `https://twitter.com/${user.screen_name}` : null,
             };
         },
     },
@@ -561,6 +869,7 @@ export const OAUTH_PROVIDERS = {
             name: data.handle || data.did,
             handle: data.handle || null,
             did: data.did || null,
+            avatar: data.avatar || null,
         }),
     }
 };
@@ -789,7 +1098,10 @@ async function getGitHubUserInfo(accessToken) {
     return {
         id: userData.id.toString(),
         email: primaryEmail,
-        name: userData.name || userData.login
+        name: userData.name || userData.login,
+        username: userData.login || null,
+        avatar: userData.avatar_url || null,
+        profile_url: userData.html_url || null,
     };
 }
 
@@ -849,9 +1161,9 @@ async function getUserInfo(provider, accessToken, options = {}, tokenData = null
         return getTwitterUserInfoV1(config, tokenData);
     }
 
-    // GitHub 需要特殊处理
-    if (!config.mapUserInfo) {
-        return getGitHubUserInfo(accessToken);
+    // 支持 provider 自定义用户信息获取流程（用于 GitHub 等需要额外请求的场景）
+    if (typeof config.getUserInfo === 'function') {
+        return config.getUserInfo(accessToken, options, tokenData);
     }
 
     const MAX_RETRIES = 3;
@@ -863,7 +1175,10 @@ async function getUserInfo(provider, accessToken, options = {}, tokenData = null
             logger.info(`[oauth] getUserInfo: provider=${provider}, url=${userInfoUrl}, attempt=${attempt + 1}/${MAX_RETRIES + 1}`);
 
             const response = await fetch(userInfoUrl, {
-                headers: { 'Authorization': `Bearer ${accessToken}` }
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Accept': 'application/json',
+                }
             });
 
             const responseText = await response.text();
@@ -972,6 +1287,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null, o
                 name: profile?.displayName || profile?.handle || did,
                 handle: profile?.handle || null,
                 did,
+                avatar: profile?.avatar ? String(profile.avatar) : null,
             };
         } else {
             try {
@@ -1041,9 +1357,10 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null, o
             }
 
             // 绑定 OAuth 账号到指定用户
+            let boundOAuthContact = existingUserProviderContact || existingOAuthContact || null;
             try {
                 if (existingUserProviderContact && existingUserProviderContact.contact_value !== userInfo.id) {
-                    await prisma.ow_users_contacts.update({
+                    boundOAuthContact = await prisma.ow_users_contacts.update({
                         where: { contact_id: existingUserProviderContact.contact_id },
                         data: {
                             contact_value: userInfo.id,
@@ -1055,7 +1372,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null, o
                     });
                     logger.info(`[oauth] 重绑OAuth账号并覆盖联系方式: userId=${user.id}, provider=${provider}, oauthId=${userInfo.id}`);
                 } else if (!existingUserProviderContact && !existingOAuthContact) {
-                    await prisma.ow_users_contacts.create({
+                    boundOAuthContact = await prisma.ow_users_contacts.create({
                         data: {
                             user_id: user.id,
                             contact_value: userInfo.id,
@@ -1067,7 +1384,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null, o
                     });
                     logger.info(`[oauth] 成功绑定OAuth账号: userId=${user.id}, provider=${provider}`);
                 } else {
-                    await prisma.ow_users_contacts.update({
+                    boundOAuthContact = await prisma.ow_users_contacts.update({
                         where: { contact_id: (existingUserProviderContact || existingOAuthContact).contact_id },
                         data: {
                             verified: true,
@@ -1091,6 +1408,26 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null, o
             } catch (error) {
                 logger.error(`[oauth] 绑定OAuth账号失败:`, error);
                 return {success: false, message: "[oauth] 绑定OAuth账号失败: " + error.message};
+            }
+
+            // 同步头像（仅默认头像时），避免覆盖用户自定义头像
+            try {
+                await syncOAuthAvatarIfNeeded({
+                    user,
+                    oauthContact: boundOAuthContact,
+                    provider,
+                    userInfo,
+                });
+
+                if (provider === 'microsoft') {
+                    await syncMicrosoftOAuthAvatarIfNeeded({
+                        user,
+                        oauthContact: boundOAuthContact,
+                        accessToken: tokenData?.access_token,
+                    });
+                }
+            } catch (error) {
+                logger.warn(`[oauth] OAuth绑定后同步头像失败（不阻断绑定）: userId=${user.id}, provider=${provider}, err=${error.message}`);
             }
 
             // 添加邮箱联系方式（如果邮箱不存在）
@@ -1133,6 +1470,8 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null, o
                     contact_type: "oauth_" + provider
                 }
             });
+
+            const existingOAuthContact = contact;
 
             if (!contact) {
                 logger.debug(`[oauth] OAuth账号未绑定，开始注册/关联用户: provider=${provider}, email=${userInfo.email}`);
@@ -1251,6 +1590,21 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null, o
                 }
             }
 
+            // 已存在 OAuth 联系方式时，刷新 metadata（不阻断登录）
+            if (existingOAuthContact && existingOAuthContact.contact_id) {
+                try {
+                    contact = await prisma.ow_users_contacts.update({
+                        where: { contact_id: existingOAuthContact.contact_id },
+                        data: {
+                            metadata: userInfo,
+                            updated_at: new Date(),
+                        },
+                    });
+                } catch (error) {
+                    logger.warn(`[oauth] 刷新OAuth联系方式metadata失败（不阻断登录）: provider=${provider}, contactId=${existingOAuthContact.contact_id}, err=${error.message}`);
+                }
+            }
+
             // 获取用户信息
             const user = await prisma.ow_users.findUnique({
                 where: {id: contact.user_id}
@@ -1271,6 +1625,26 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null, o
             });
 
             logger.info(`[oauth] OAuth登录成功: userId=${user.id}, username=${user.username}, provider=${provider}`);
+
+            // 同步头像（仅默认头像时），避免覆盖用户自定义头像
+            try {
+                await syncOAuthAvatarIfNeeded({
+                    user,
+                    oauthContact: contact,
+                    provider,
+                    userInfo,
+                });
+
+                if (provider === 'microsoft') {
+                    await syncMicrosoftOAuthAvatarIfNeeded({
+                        user,
+                        oauthContact: contact,
+                        accessToken: tokenData?.access_token,
+                    });
+                }
+            } catch (error) {
+                logger.warn(`[oauth] OAuth登录后同步头像失败（不阻断登录）: userId=${user.id}, provider=${provider}, err=${error.message}`);
+            }
 
             // 持久化 OAuth 令牌（包括 refresh_token），以便后续刷新和 API 调用
             try {
