@@ -2,6 +2,7 @@ import logger from "../services/logger.js";
 import {Router} from "express";
 import {needLogin} from "../middleware/auth.js";
 import {createEvent} from "../controllers/events.js";
+import {prisma} from "../services/prisma.js";
 import {getProjectStars, getProjectStarStatus, starProject, unstarProject,} from "../controllers/stars.js";
 
 const router = Router();
@@ -23,6 +24,15 @@ router.post("/star", needLogin, async (req, res) => {
 
         await starProject(res.locals.userid, projectId);
 
+        const actor = await prisma.ow_users.findUnique({
+            where: { id: Number(res.locals.userid) },
+            select: {
+                username: true,
+                display_name: true,
+            },
+        });
+        const actorName = actor?.display_name?.trim() || actor?.username?.trim() || "有人";
+
         // Add star event
         await createEvent(
             "project_star",
@@ -35,8 +45,8 @@ router.post("/star", needLogin, async (req, res) => {
                 target_type: "project",
                 target_id: projectId,
                 action: "star",
-                notification_title: "项目收藏",
-                notification_content: "有人收藏了你的项目",
+                notification_title: `${actorName} 收藏了你的项目`,
+                notification_content: `${actorName} 收藏了你的项目`,
             }
         );
 

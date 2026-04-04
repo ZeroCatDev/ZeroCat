@@ -1,32 +1,401 @@
 import {prisma} from "../services/prisma.js";
 import logger from "../services/logger.js";
 import {createNotification} from "./notifications.js";
-import {AudienceDataDependencies, EventConfig,} from "../config/eventConfig.js";
+import {EventConfig} from "../config/eventConfig.js";
 
 // 重新导出这些常量供外部使用
 export {EventConfig};
-const NON_PRIMARY_BRANCH_AUDIENCE_TYPES = new Set([
-    "project_followers",
-    "project_owner_followers"
-]);
 const DEFAULT_PRIMARY_BRANCH = "main";
+
+const EVENT_NOTIFICATION_POLICIES = {
+    post_create: { audience: "actor_subscribers", minLevel: "ENHANCED" },
+    project_commit: { audience: "project_subscribers", minLevel: "ALL", includeOwner: true, respectBranch: true },
+    project_update: { audience: "project_subscribers", minLevel: "ENHANCED", includeOwner: true },
+    project_fork: { audience: "project_subscribers", minLevel: "ENHANCED", includeOwner: true },
+    project_create: { audience: "actor_subscribers", minLevel: "ENHANCED" },
+    comment_create: { includeOwner: true, includeThreadParticipants: true, includeMentions: true },
+    project_rename: { audience: "project_subscribers", minLevel: "ENHANCED", includeOwner: true },
+    project_info_update: { audience: "project_subscribers", minLevel: "ENHANCED", includeOwner: true },
+    project_delete: { audience: "project_subscribers", minLevel: "ENHANCED", includeOwner: true },
+    project_star: { includeOwner: true },
+    project_like: { includeOwner: true },
+    project_collect: { includeOwner: true },
+    user_follow: { includeTargetUser: true },
+    comment_reply: { includeCommentAuthor: true, includeMentions: true },
+    comment_like: { includeCommentAuthor: true }
+};
+
+const PROJECT_EVENT_TYPES = new Set([
+    "project_create",
+    "project_commit",
+    "project_update",
+    "project_fork",
+    "project_rename",
+    "project_info_update",
+    "project_delete",
+    "project_star",
+    "project_like",
+    "project_collect"
+]);
 
 function normalizeText(value) {
     if (value === null || value === undefined) return "";
     return String(value).trim();
 }
 
-async function getEffectiveNotifyTargets(event, eventConfig, eventData = {}) {
-    const configuredTargets = Array.isArray(eventConfig.notifyTargets)
-        ? eventConfig.notifyTargets
-        : [];
-    if (event.event_type !== "project_commit" || configuredTargets.length === 0) {
-        return configuredTargets;
+function pickFirstText(...values) {
+    for (const value of values) {
+        const normalized = normalizeText(value);
+        if (normalized) return normalized;
+    }
+    return "";
+}
+
+function truncateText(text, maxLength = 80) {
+    const normalized = normalizeText(text);
+    if (!normalized) return "";
+    if (normalized.length <= maxLength) return normalized;
+    return `${normalized.slice(0, maxLength)}...`;
+}
+
+function normalizeLinkTargetType(targetType) {
+    return normalizeText(targetType).toLowerCase();
+}
+
+function generateTargetLinkByType(targetType, targetId) {
+    if (!targetType || targetId === null || targetId === undefined) return null;
+    const normalizedType = normalizeLinkTargetType(targetType);
+    switch (normalizedType) {
+        case "project":
+            return `/app/link/project?id=${targetId}`;
+        case "post":
+            return `/app/posts/${targetId}`;
+        case "user":
+            return `/app/link/user?id=${targetId}`;
+        default:
+            return null;
+    }
+}
+
+function appendQueryString(url, queryObject) {
+    if (!url || !queryObject) return url;
+    const params = new URLSearchParams();
+    Object.entries(queryObject).forEach(([key, value]) => {
+        const normalized = normalizeText(value);
+        if (normalized) params.set(key, normalized);
+    });
+    const query = params.toString();
+    if (!query) return url;
+    return `${url}${url.includes("?") ? "&" : "?"}${query}`;
+}
+
+function buildProjectNamespaceLink(target, eventData, actor) {
+    const username = pickFirstText(
+        eventData.project_author_username,
+        target?.author?.username,
+        actor?.username
+    );
+
+    const projectName = pickFirstText(
+        eventData.project_name,
+        target?.name,
+        eventData.new_name,
+        eventData.old_name
+    );
+
+    if (!username || !projectName) {
+        return null;
+    }
+
+    return `/${encodeURIComponent(username)}/${encodeURIComponent(projectName)}`;
+}
+
+function buildEventNotificationLink(event, eventData, target, actor) {
+    const explicitLink = pickFirstText(
+        eventData.notification_link,
+        eventData.link,
+        eventData.target_url,
+        eventData.url
+    );
+    if (explicitLink) {
+        return explicitLink;
+    }
+
+    if (PROJECT_EVENT_TYPES.has(event.event_type)) {
+        const projectLink = buildProjectNamespaceLink(target, eventData, actor);
+        if (!projectLink) {
+            return null;
+        }
+
+        if (event.event_type === "project_commit") {
+            return appendQueryString(projectLink, {
+                branch: eventData.branch,
+                commitid: eventData.commit_id
+            });
+        }
+
+        return projectLink;
+    }
+
+    if (event.event_type === "user_follow") {
+        return generateTargetLinkByType("user", event.actor_id || event.target_id);
+    }
+
+    if (
+        event.event_type === "comment_create" ||
+        event.event_type === "comment_reply" ||
+        event.event_type === "comment_like"
+    ) {
+        if (eventData.post_id) {
+            return generateTargetLinkByType("post", eventData.post_id);
+        }
+        if (eventData.project_id) {
+            return generateTargetLinkByType("project", eventData.project_id);
+        }
+
+        const commentUrl = pickFirstText(target?.url, target?.link);
+        if (commentUrl) {
+            return commentUrl;
+        }
+
+        if (target?.page_type && target?.page_id) {
+            if (target.page_type === "post") {
+                return generateTargetLinkByType("post", target.page_id);
+            }
+            if (target.page_type === "project") {
+                return generateTargetLinkByType("project", target.page_id);
+            }
+        }
+    }
+
+    return generateTargetLinkByType(event.target_type, event.target_id);
+}
+
+function formatActorName(actor, eventData) {
+    return pickFirstText(
+        actor?.display_name,
+        actor?.username,
+        eventData.actor_name,
+        eventData.actor_username,
+        "有人"
+    );
+}
+
+function formatProjectName(target, eventData) {
+    return pickFirstText(
+        eventData.project_title,
+        eventData.project_name,
+        target?.title,
+        target?.name,
+        "该项目"
+    );
+}
+
+function formatSourceProjectName(eventData) {
+    return pickFirstText(eventData.source_project_title, eventData.source_project_name, "该项目");
+}
+
+function formatCommentPreview(target, eventData) {
+    const commentText = pickFirstText(eventData.comment_text, eventData.content, target?.text);
+    if (!commentText) return "一条评论";
+    return `评论「${truncateText(commentText, 40)}」`;
+}
+
+function buildDefaultEventNotificationCopy(event, eventData, actor, target) {
+    const actorName = formatActorName(actor, eventData);
+    const projectName = formatProjectName(target, eventData);
+    const eventType = event.event_type;
+
+    switch (eventType) {
+        case "post_create": {
+            return {
+                title: `${actorName} 发布了新帖子`,
+                content:  `${actorName} 发布了新帖子`
+            };
+        }
+        case "project_create":
+            return {
+                title: `${actorName} 创建了新项目`,
+                content: `${actorName} 创建了项目《${projectName}》`
+            };
+        case "project_commit": {
+            const branch = pickFirstText(eventData.branch, "main");
+            const commitSummary = pickFirstText(
+                eventData.commit_message,
+                eventData.message,
+                normalizeText(eventData.commit_id).slice(0, 8),
+                "一次代码提交"
+            );
+            return {
+                title: `${actorName} 推送了 ${branch} 分支代码`,
+                content: `项目《${projectName}》的 ${branch} 分支有新提交：${truncateText(commitSummary, 60)}`
+            };
+        }
+        case "project_update":
+        case "project_info_update": {
+            const updatedFields = Array.isArray(eventData.updated_fields)
+                ? eventData.updated_fields.filter((field) => normalizeText(field))
+                : [];
+            return {
+                title: `${actorName} 更新了项目信息`,
+                content: updatedFields.length > 0
+                    ? `${actorName} 更新了项目《${projectName}》的 ${updatedFields.join("、")}`
+                    : `${actorName} 更新了项目《${projectName}》的信息`
+            };
+        }
+        case "project_rename": {
+            const oldName = pickFirstText(eventData.old_name, projectName);
+            const newName = pickFirstText(eventData.new_name, projectName);
+            return {
+                title: `${actorName} 重命名了项目`,
+                content: `${actorName} 将项目《${oldName}》重命名为《${newName}》`
+            };
+        }
+        case "project_fork": {
+            const sourceProjectName = formatSourceProjectName(eventData);
+            return {
+                title: `${actorName} 派生了你的项目`,
+                content: `${actorName} 将项目《${sourceProjectName}》派生为《${projectName}》`
+            };
+        }
+        case "project_delete":
+            return {
+                title: `${actorName} 删除了项目`,
+                content: `${actorName} 删除了项目《${projectName}》`
+            };
+        case "project_star":
+            return {
+                title: `${actorName} 收藏了你的项目`,
+                content: `${actorName} 收藏了项目《${projectName}》`
+            };
+        case "project_like":
+            return {
+                title: `${actorName} 点赞了你的项目`,
+                content: `${actorName} 点赞了项目《${projectName}》`
+            };
+        case "project_collect":
+            return {
+                title: `${actorName} 收藏了你的项目`,
+                content: `${actorName} 收藏了项目《${projectName}》`
+            };
+        case "user_follow":
+            return {
+                title: `${actorName} 开始关注你`,
+                content: `${actorName} 开始关注你`
+            };
+        case "comment_create": {
+            const commentPreview = formatCommentPreview(target, eventData);
+            return {
+                title: `${actorName} 发表了新评论`,
+                content: `${actorName} 发表了${commentPreview}`
+            };
+        }
+        case "comment_reply": {
+            const commentPreview = formatCommentPreview(target, eventData);
+            return {
+                title: `${actorName} 回复了你的评论`,
+                content: `${actorName} 回复了你：${commentPreview}`
+            };
+        }
+        case "comment_like": {
+            const commentPreview = formatCommentPreview(target, eventData);
+            return {
+                title: `${actorName} 点赞了你的评论`,
+                content: `${actorName} 点赞了你发布的${commentPreview}`
+            };
+        }
+        default:
+            return {
+                title: `${actorName} 有新帖子`,
+                content: `${actorName} 触发了 ${eventType} 事件`
+            };
+    }
+}
+
+function normalizeUserIds(values) {
+    if (!values) return [];
+    const list = Array.isArray(values) ? values : [values];
+    return list
+        .map((item) => {
+            if (item === null || item === undefined) return null;
+            if (typeof item === "object") {
+                const candidate = item.id ?? item.user_id ?? item.userid;
+                return Number(candidate);
+            }
+            return Number(item);
+        })
+        .filter((id) => Number.isFinite(id));
+}
+
+function getNotificationLevelsAtOrAbove(minLevel) {
+    switch (minLevel) {
+        case "ALL":
+            return ["ALL"];
+        case "ENHANCED":
+            return ["ENHANCED", "ALL"];
+        case "BASIC":
+        default:
+            return ["BASIC", "ENHANCED", "ALL"];
+    }
+}
+
+async function getNotificationSubscribers(targetType, targetId, minLevel) {
+    if (!targetType || !targetId) return [];
+    const levels = getNotificationLevelsAtOrAbove(minLevel);
+    const rows = await prisma.ow_notification_settings.findMany({
+        where: {
+            target_type: targetType,
+            target_id: String(targetId),
+            level: { in: levels }
+        },
+        select: { user_id: true }
+    });
+    return rows.map((row) => row.user_id).filter((id) => id !== null && id !== undefined);
+}
+
+async function getProjectOwnerAllSubscribers(projectId) {
+    const ownerId = await getProjectOwnerId(projectId);
+    if (!ownerId) return [];
+    return getNotificationSubscribers("USER", ownerId, "ALL");
+}
+
+async function getProjectOwnerId(projectId) {
+    if (!projectId) return null;
+    const project = await prisma.ow_projects.findUnique({
+        where: { id: Number(projectId) },
+        select: { authorid: true }
+    });
+    return project?.authorid ?? null;
+}
+
+async function getCommentAuthorId(commentId) {
+    if (!commentId) return null;
+    const comment = await prisma.ow_comment.findUnique({
+        where: { id: Number(commentId) },
+        select: { user_id: true }
+    });
+    return comment?.user_id ?? null;
+}
+
+async function getThreadParticipantIds(threadRootId) {
+    if (!threadRootId) return [];
+    const participants = await prisma.ow_comment.findMany({
+        where: { pid: Number(threadRootId) },
+        select: { user_id: true }
+    });
+    return participants
+        .map((row) => row.user_id)
+        .filter((id) => id !== null && id !== undefined);
+}
+
+async function shouldNotifyProjectSubscribers(event, eventData) {
+    if (event.event_type !== "project_commit") {
+        return true;
     }
 
     const branch = normalizeText(eventData.branch);
     if (!branch) {
-        return configuredTargets;
+        return true;
     }
 
     let defaultBranch = normalizeText(eventData.default_branch || eventData.project_default_branch);
@@ -44,10 +413,85 @@ async function getEffectiveNotifyTargets(event, eventConfig, eventData = {}) {
         logger.debug(
             `事件 ${event.event_type} 分支 ${branch} 非主分支 ${defaultBranch || DEFAULT_PRIMARY_BRANCH}，仅向核心受众发送通知`
         );
-        return configuredTargets.filter(audienceType => !NON_PRIMARY_BRANCH_AUDIENCE_TYPES.has(audienceType));
+        return false;
     }
 
-    return configuredTargets;
+    return true;
+}
+
+async function resolveEventAudience(event, eventData) {
+    if (eventData.NotificationTo) {
+        return normalizeUserIds(eventData.NotificationTo);
+    }
+
+    const policy = EVENT_NOTIFICATION_POLICIES[event.event_type];
+    if (!policy) {
+        return [];
+    }
+
+    const audience = new Set();
+    const actorId = Number(event.actor_id);
+    const targetId = Number(event.target_id);
+
+    if (policy.audience === "actor_subscribers") {
+        const subscribers = await getNotificationSubscribers("USER", actorId, policy.minLevel || "BASIC");
+        subscribers.forEach((id) => audience.add(id));
+    }
+
+    if (policy.audience === "project_subscribers") {
+        // 用户对某个作者设置 ALL 时，等价于订阅该作者项目的全部通知。
+        const ownerAllSubscribers = await getProjectOwnerAllSubscribers(targetId);
+        ownerAllSubscribers.forEach((id) => audience.add(id));
+
+        const shouldNotifySubscribers = policy.respectBranch
+            ? await shouldNotifyProjectSubscribers(event, eventData)
+            : true;
+        if (shouldNotifySubscribers) {
+            const subscribers = await getNotificationSubscribers("PROJECT", targetId, policy.minLevel || "BASIC");
+            subscribers.forEach((id) => audience.add(id));
+        }
+    }
+
+    if (policy.includeOwner && event.target_type === "project") {
+        const ownerId = await getProjectOwnerId(targetId);
+        if (ownerId) audience.add(ownerId);
+    }
+
+    if (policy.includeTargetUser) {
+        if (event.target_type === "user") {
+            if (targetId) audience.add(targetId);
+        } else if (eventData.target_user) {
+            normalizeUserIds(eventData.target_user).forEach((id) => audience.add(id));
+        }
+    }
+
+    if (policy.includeCommentAuthor && event.target_type === "comment") {
+        const authorId = await getCommentAuthorId(targetId);
+        if (authorId) audience.add(authorId);
+    }
+
+    if (policy.includeThreadParticipants && event.target_type === "comment") {
+        const threadRootId = eventData.thread_root_id || eventData.thread_id || targetId;
+        const participants = await getThreadParticipantIds(threadRootId);
+        participants.forEach((id) => audience.add(id));
+    }
+
+    if (policy.includeMentions) {
+        normalizeUserIds(eventData.mentioned_users).forEach((id) => audience.add(id));
+    }
+
+    normalizeUserIds(eventData.custom_users).forEach((id) => audience.add(id));
+
+    return Array.from(audience);
+}
+
+function getEventNotificationRequirement(eventType) {
+    const policy = EVENT_NOTIFICATION_POLICIES[eventType];
+    if (!policy) return "BASIC";
+    if (policy.minLevel === "ALL") return "ALL";
+    if (policy.minLevel === "ENHANCED") return "ENHANCED";
+    if (policy.minLevel === "BASIC") return "BASIC";
+    return "BASIC";
 }
 
 /**
@@ -87,7 +531,7 @@ export async function createEvent(eventType, actorId, targetType, targetId, even
         });
 
         // 异步处理通知 - 使用 setImmediate 确保事件创建完成后再处理通知
-        if (eventConfig.notifyTargets && eventConfig.notifyTargets.length > 0) {
+        if (EVENT_NOTIFICATION_POLICIES[normalizedEventType]) {
             setImmediate(() => {
                 processNotifications(event, eventConfig, eventData)
                     .catch(error => logger.error('异步通知处理错误:', error));
@@ -205,6 +649,20 @@ async function getTarget(targetType, targetId) {
         switch (targetType) {
             case "project":
                 return await prisma.ow_projects.findUnique({
+                    where: {id: Number(targetId)},
+                    select: {
+                        id: true,
+                        name: true,
+                        title: true,
+                        author: {
+                            select: {
+                                username: true
+                            }
+                        }
+                    }
+                });
+            case "post":
+                return await prisma.ow_posts.findUnique({
                     where: {id: Number(targetId)}
                 });
             case "user":
@@ -235,37 +693,31 @@ async function processNotifications(event, eventConfig, eventData) {
     try {
         const actorId = Number(event.actor_id);
         const targetId = Number(event.target_id);
-        const notifyTargets = await getEffectiveNotifyTargets(event, eventConfig, eventData);
-        if (notifyTargets.length === 0) {
+        const notifyUsers = await resolveEventAudience(event, eventData);
+        if (notifyUsers.length === 0) {
             logger.debug(`事件 ${event.event_type} 未配置可通知受众`);
             return;
         }
 
-        const inlineCopy = {
-            title: normalizeText(eventData.notification_title),
-            content: normalizeText(eventData.notification_content)
-        };
+        const notificationRequirement = getEventNotificationRequirement(event.event_type);
+
+        const [actor, target] = await Promise.all([
+            getActor(actorId),
+            getTarget(event.target_type, targetId)
+        ]);
+
+        const generatedCopy = buildDefaultEventNotificationCopy(event, eventData, actor, target);
+        const finalTitle = normalizeText(eventData.notification_title) || generatedCopy.title;
+        const finalContent = normalizeText(eventData.notification_content) || generatedCopy.content;
+        const finalLink = buildEventNotificationLink(event, eventData, target, actor);
 
         // 收集所有需要通知的用户ID
         const notificationUsers = new Set();
-        const audienceResults = {};
-
-        // 为每个受众类型获取用户
-        for (const audienceType of notifyTargets) {
-            try {
-                const audienceUsers = await getAudienceUsers(audienceType, event, eventData, audienceResults);
-                audienceResults[audienceType] = audienceUsers;
-
-                // 添加用户到通知列表（排除事件创建者）
-                audienceUsers.forEach(userId => {
-                    if (userId && userId !== actorId) {
-                        notificationUsers.add(userId);
-                    }
-                });
-            } catch (err) {
-                logger.error(`获取受众 ${audienceType} 用户出错:`, err);
+        notifyUsers.forEach(userId => {
+            if (userId && userId !== actorId) {
+                notificationUsers.add(userId);
             }
-        }
+        });
 
         if (notificationUsers.size === 0) {
             logger.debug(`事件 ${event.event_type} 无需要通知的用户`);
@@ -284,12 +736,14 @@ async function processNotifications(event, eventConfig, eventData) {
             createNotification({
                 userId,
                 notificationType: event.event_type,
+                notificationRequirement,
                 actorId,
                 targetType: event.target_type,
                 targetId,
+                ...(finalLink ? {link: finalLink} : {}),
                 data: eventData,
-                ...(inlineCopy.title ? {title: inlineCopy.title} : {}),
-                ...(inlineCopy.content ? {content: inlineCopy.content} : {})
+                ...(finalTitle ? {title: finalTitle} : {}),
+                ...(finalContent ? {content: finalContent} : {})
             }).catch(error => {
                 logger.error(`为用户 ${userId} 创建通知失败:`, error);
                 return null;
@@ -355,177 +809,5 @@ async function filterBlacklistedUsers(actorId, userIds) {
     } catch (error) {
         logger.error('过滤黑名单用户错误:', error);
         return userIds; // 如果出错，返回原始列表
-    }
-}
-
-/**
- * 根据配置获取特定受众类型的用户
- * @param {string} audienceType - 受众类型
- * @param {Object} event - 事件对象
- * @param {Object} eventData - 事件数据
- * @param {Object} audienceResults - 已获取的受众结果（用于依赖关系）
- * @returns {Promise<number[]>} 用户ID数组
- */
-async function getAudienceUsers(audienceType, event, eventData, audienceResults = {}) {
-    try {
-        const audienceConfig = AudienceDataDependencies[audienceType];
-        if (!audienceConfig) {
-            logger.warn(`未找到受众类型配置: ${audienceType}`);
-            return [];
-        }
-
-        const actorId = Number(event.actor_id);
-        const targetId = Number(event.target_id);
-
-        // 如果事件数据中指定了通知对象，直接返回
-        if (eventData.NotificationTo) {
-            return eventData.NotificationTo;
-        }
-
-        // Handle direct target user notification
-        if (audienceType === "target_user") {
-            if (event.target_type === "user") {
-                // If target is a user, directly notify them
-                return [targetId];
-            }
-
-            // For other target types, notify their owners
-            let ownerId;
-            switch (event.target_type) {
-                case "project":
-                    const project = await prisma.ow_projects.findUnique({
-                        where: {id: targetId},
-                        select: {authorid: true}
-                    });
-                    ownerId = project?.authorid;
-                    break;
-                case "list":
-                    const list = await prisma.ow_lists.findUnique({
-                        where: {id: targetId},
-                        select: {owner_id: true}
-                    });
-                    ownerId = list?.owner_id;
-                    break;
-                // Add more cases for other target types as needed
-            }
-
-            return ownerId ? [ownerId] : [];
-        }
-
-        // 处理依赖关系：如果这个受众类型依赖于另一个受众类型的结果
-        if (audienceConfig.dependsOn) {
-            const {audienceType: dependencyType, field} = audienceConfig.dependsOn;
-
-            // 如果依赖的受众结果尚未获取，先获取它
-            if (!audienceResults[dependencyType]) {
-                audienceResults[dependencyType] = await getAudienceUsers(dependencyType, event, eventData, audienceResults);
-            }
-
-            // 没有依赖结果则直接返回空数组
-            if (!audienceResults[dependencyType] || audienceResults[dependencyType].length === 0) {
-                return [];
-            }
-
-            // 生成所有依赖受众的结果
-            let allResults = [];
-            for (const dependentId of audienceResults[dependencyType]) {
-                const usersForDependent = await getRelatedUsers(audienceConfig, dependentId);
-                allResults = [...allResults, ...usersForDependent];
-            }
-
-            // 去重并返回
-            return [...new Set(allResults)];
-        }
-
-        // 1. 从事件目标直接获取用户
-        if (audienceConfig.target) {
-            const targetType = audienceConfig.target;
-            let target;
-
-            if (targetType === 'project' && event.target_type === "project") {
-                target = await prisma.ow_projects.findUnique({
-                    where: {id: targetId},
-                    select: audienceConfig.fields.reduce((obj, field) => ({...obj, [field]: true}), {})
-                });
-            } else if (targetType === 'comment' && event.target_type === "comment") {
-                target = await prisma.ow_comment.findUnique({
-                    where: {id: targetId},
-                    select: audienceConfig.fields.reduce((obj, field) => ({...obj, [field]: true}), {})
-                });
-            }
-
-            if (target) {
-                // 提取用户ID字段
-                return audienceConfig.fields
-                    .map(field => target[field])
-                    .filter(id => id !== null && id !== undefined);
-            }
-            return [];
-        }
-
-        // 2. 从事件数据中直接提取用户
-        if (audienceConfig.eventData) {
-            const NotificationTo = eventData[audienceConfig.eventData];
-            return Array.isArray(NotificationTo) ? NotificationTo : [NotificationTo];
-        }
-
-        // 3. 从数据库查询用户关系
-        if (audienceConfig.query) {
-            // 确定关联ID
-            const relationId = audienceConfig.sourceField === 'actor_id' ?
-                actorId : targetId;
-
-            return await getRelatedUsers(audienceConfig, relationId);
-        }
-
-        return [];
-    } catch (error) {
-        logger.error(`获取受众 ${audienceType} 错误:`, error);
-        return [];
-    }
-}
-
-/**
- * 获取与特定ID相关的用户
- * 根据配置从数据库获取相关用户
- * @param {Object} config - 受众配置
- * @param {number} relationId - 关联ID
- * @returns {Promise<number[]>} 用户ID数组
- */
-async function getRelatedUsers(config, relationId) {
-    try {
-        let where = {};
-
-        // 处理特殊过滤器
-        if (config.specialFilter === 'thread') {
-            // 对于线程参与者，需要根据评论线程查询
-            where = {
-                pid: relationId,
-                ...config.additionalFilters
-            };
-        } else if (config.relationField) {
-            // 标准关联字段查询
-            where = {
-                [config.relationField]: relationId,
-                ...config.additionalFilters
-            };
-        } else {
-            logger.error(`配置缺少 relationField 或 specialFilter: ${JSON.stringify(config)}`);
-            return [];
-        }
-
-        // 执行查询
-        const relations = await prisma[config.query].findMany({
-            where,
-            select: {[config.userField]: true}
-        });
-
-        // 提取用户ID
-        return relations
-            .map(r => r[config.userField])
-            .filter(id => id !== null && id !== undefined);
-    } catch (error) {
-        logger.error(`获取相关用户错误:`, error);
-        return [];
     }
 }

@@ -1,6 +1,7 @@
 import { prisma } from "../services/prisma.js";
 import twitterText from "twitter-text";
 import { createNotification } from "./notifications.js";
+import { createEvent } from './events.js';
 import zcconfig from "../services/config/zcconfig.js";
 import logger from "../services/logger.js";
 import queueManager from "../services/queue/queueManager.js";
@@ -79,12 +80,13 @@ function analyzePostContent(content = "") {
 function extractMentionUsernames(content = "") {
   if (!content) return [];
   const usernames = new Set();
-  const regex = /@([a-zA-Z0-9_]{1,20})/g;
+  // Username length in schema is up to 64; require a non-word prefix to avoid matching emails.
+  const regex = /(?:^|[^\w@])@([a-zA-Z0-9_]{1,64})\b/g;
   let match;
   while ((match = regex.exec(content)) !== null) {
-    usernames.add(match[1]);
+    usernames.add(String(match[1] || "").trim());
   }
-  return [...usernames];
+  return [...usernames].filter(Boolean);
 }
 
 async function resolveMentionedUsers(content, authorId) {
@@ -93,7 +95,12 @@ async function resolveMentionedUsers(content, authorId) {
 
   const users = await prisma.ow_users.findMany({
     where: {
-      username: { in: usernames },
+      OR: usernames.map((username) => ({
+        username: {
+          equals: username,
+          mode: "insensitive",
+        },
+      })),
     },
     select: {
       id: true,
@@ -103,6 +110,36 @@ async function resolveMentionedUsers(content, authorId) {
   });
 
   return users.filter((user) => user.id !== authorId);
+}
+
+function formatNotificationActorName(user) {
+  const displayName = typeof user?.display_name === "string" ? user.display_name.trim() : "";
+  const username = typeof user?.username === "string" ? user.username.trim() : "";
+  return displayName || username || "有人";
+}
+
+async function getNotificationActorName(userId) {
+  if (!userId) return "有人";
+  const user = await prisma.ow_users.findUnique({
+    where: { id: Number(userId) },
+    select: {
+      username: true,
+      display_name: true,
+    },
+  });
+  return formatNotificationActorName(user);
+}
+
+function getPostTargetLabel(post) {
+  return post?.in_reply_to_id ? "回复" : "帖子";
+}
+
+function buildPostPreview(content, maxLength = 40) {
+  if (!content) return "";
+  const normalized = String(content).replace(/\s+/g, " ").trim();
+  if (!normalized) return "";
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, maxLength)}...`;
 }
 
 function buildLeanSelect() {
@@ -450,12 +487,15 @@ function normalizeCursor(cursor) {
   return parsed;
 }
 async function notifyMentions(mentionedUsers, actorId, postId) {
+  const actorName = await getNotificationActorName(actorId);
+
   await Promise.all(
     mentionedUsers.map((user) =>
       createNotification({
         notificationType: "post_mention",
-        title: "推文提及",
-        content: "有人在推文中提到了你",
+        notificationRequirement: "BASIC",
+        title: `${actorName} 提到了你`,
+        content: `${actorName} 在一条动态中提到了你`,
         userId: user.id,
         actorId,
         targetType: "post",
@@ -548,6 +588,21 @@ export async function createPost({ authorId, content, mediaIds = [], embed }) {
     await notifyMentions(mentionedUsers, authorId, post.id);
   }
 
+  const authorName = formatNotificationActorName(post.author);
+
+  // 触发 post_create 事件
+  createEvent(
+    'post_create',
+    authorId,
+    'post',
+    post.id,
+    {
+      post_content: content,
+      notification_title: `${authorName} 发布了新帖子`,
+      notification_content: ``,
+    }
+  ).catch(e => logger.error('[event] create post_create event failed:', e.message));
+
   queueManager.enqueueSocialPostSync(authorId, post.id, "create").catch((error) => {
     logger.warn("推文社交同步入队失败(create):", error.message);
   });
@@ -584,7 +639,7 @@ export async function replyToPost({
 
   const target = await prisma.ow_posts.findFirst({
     where: { id: Number(replyToId), is_deleted: false },
-    select: { id: true, author_id: true, thread_root_id: true },
+    select: { id: true, author_id: true, thread_root_id: true, in_reply_to_id: true },
   });
   if (!target) {
     throw new Error("目标推文不存在");
@@ -653,10 +708,13 @@ export async function replyToPost({
   });
 
   if (target.author_id && target.author_id !== authorId) {
+    const actorName = await getNotificationActorName(authorId);
+    const targetLabel = getPostTargetLabel(target);
     await createNotification({
       notificationType: "post_reply",
-      title: "推文回复",
-      content: "有人回复了你的推文",
+      notificationRequirement: "BASIC",
+      title: `${actorName} 回复了你的${targetLabel}`,
+      content: `${actorName} 回复了你的${targetLabel}`,
       userId: target.author_id,
       actorId: authorId,
       targetType: "post",
@@ -695,7 +753,7 @@ export async function replyToPost({
 export async function retweetPost({ authorId, retweetPostId }) {
   const target = await prisma.ow_posts.findFirst({
     where: { id: Number(retweetPostId), is_deleted: false },
-    select: { id: true, author_id: true, post_type: true, retweet_post_id: true, content: true, embed: true },
+    select: { id: true, author_id: true, post_type: true, retweet_post_id: true, in_reply_to_id: true, content: true, embed: true },
   });
   if (!target) {
     throw new Error("目标推文不存在");
@@ -756,10 +814,13 @@ export async function retweetPost({ authorId, retweetPostId }) {
   });
 
   if (originalAuthorId && originalAuthorId !== authorId) {
+    const actorName = await getNotificationActorName(authorId);
+    const targetLabel = getPostTargetLabel(target);
     await createNotification({
       notificationType: "post_retweet",
-      title: "推文转推",
-      content: "有人转推了你的推文",
+      notificationRequirement: "BASIC",
+      title: `${actorName} 转发了你的${targetLabel}`,
+      content: `${actorName} 转发了你的${targetLabel}`,
       userId: originalAuthorId,
       actorId: authorId,
       targetType: "post",
@@ -854,7 +915,7 @@ export async function quotePost({
 
   const target = await prisma.ow_posts.findFirst({
     where: { id: Number(quotedPostId), is_deleted: false },
-    select: { id: true, author_id: true },
+    select: { id: true, author_id: true, in_reply_to_id: true },
   });
   if (!target) {
     throw new Error("目标推文不存在");
@@ -921,10 +982,13 @@ export async function quotePost({
   });
 
   if (target.author_id && target.author_id !== authorId) {
+    const actorName = await getNotificationActorName(authorId);
+    const targetLabel = getPostTargetLabel(target);
     await createNotification({
       notificationType: "post_quote",
-      title: "推文引用",
-      content: "有人引用了你的推文",
+      notificationRequirement: "BASIC",
+      title: `${actorName} 引用了你的${targetLabel}`,
+      content: `${actorName} 引用了你的${targetLabel}`,
       userId: target.author_id,
       actorId: authorId,
       targetType: "post",
@@ -963,7 +1027,7 @@ export async function quotePost({
 export async function likePost({ userId, postId }) {
   const target = await prisma.ow_posts.findFirst({
     where: { id: Number(postId), is_deleted: false },
-    select: { id: true, author_id: true },
+    select: { id: true, author_id: true, in_reply_to_id: true },
   });
   if (!target) throw new Error("目标推文不存在");
 
@@ -989,10 +1053,13 @@ export async function likePost({ userId, postId }) {
   });
 
   if (target.author_id && target.author_id !== userId) {
+    const actorName = await getNotificationActorName(userId);
+    const targetLabel = getPostTargetLabel(target);
     await createNotification({
       notificationType: "post_like",
-      title: "推文点赞",
-      content: "有人点赞了你的推文",
+      notificationRequirement: "BASIC",
+      title: `${actorName} 喜欢了你的${targetLabel}`,
+      content: `${actorName} 喜欢了你的${targetLabel}`,
       userId: target.author_id,
       actorId: userId,
       targetType: "post",

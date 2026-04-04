@@ -58,7 +58,7 @@ export async function sendMagicLinkEmail(email, magicLink, options = {}) {
     try {
         const templateType = options.templateType || 'login';
         const userId = options.userId || null;
-        
+
         // 需要userId才能发送通知
         if (!userId) {
             // 如果没有userId，先根据email查找用户
@@ -69,32 +69,33 @@ export async function sendMagicLinkEmail(email, magicLink, options = {}) {
                     contact_type: 'email'
                 }
             });
-            
+
             if (!contact) {
                 throw new Error('无法发送魔术链接邮件：未找到用户');
             }
-            
+
             options.userId = contact.user_id;
         }
-        
+
         const titleMap = {
             login: '魔术链接登录',
             register: '完成账户注册',
             password_reset: '密码重置'
         };
-        
+
         const contentMap = {
             login: '点击下方链接快速登录您的账户',
             register: '点击下方链接完成您的账户注册',
             password_reset: '点击下方链接重置您的密码'
         };
-        
+
         // 使用createNotification发送魔术链接通知
         await createNotification({
             userId: options.userId,
             title: titleMap[templateType] || '魔术链接',
             content: `${contentMap[templateType] || '点击下方链接继续操作'}：\n\n${magicLink}\n\n链接将在30分钟后失效，请及时使用。`,
             notificationType: 'magic_link_email',
+            notificationRequirement: 'BASIC',
             hidden: true,
             pushChannels: ['email'],
             data: {

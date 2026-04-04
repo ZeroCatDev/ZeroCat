@@ -687,7 +687,7 @@ async function resolveExternalFromOriginalEmbed(embed, frontend) {
             },
         });
         return {
-            uri: `${frontend}/posts/${Number(embed.id)}`,
+            uri: `${frontend}/app/posts/${Number(embed.id)}`,
             title: shortText('ZeroCat 帖子', 100),
             description: shortText(`${refPost?.author?.username ? `作者: @${refPost.author.username}\n` : ''}${refPost?.content || ''}`, 300),
         };

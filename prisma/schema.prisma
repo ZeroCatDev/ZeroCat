@@ -137,6 +137,7 @@ model ow_users {
   comment_spaces          ow_comment_spaces[]     @relation("CommentSpaceOwner")
   comment_service_users   ow_comment_service_users[] @relation("CommentServiceUser")
   embedding_updates       ow_user_embedding_updates[]
+  notification_settings ow_notification_settings[]
 
   @@index([email])
   @@index([status])
@@ -1136,4 +1137,38 @@ model ow_embeddings {
   @@unique([entity_type, entity_id])
   @@index([entity_type, entity_id])
   @@map("ow_embeddings")
+}
+
+// Enum for notification target types
+enum NotificationTargetType {
+  USER
+  PROJECT
+}
+
+// Enum for notification levels
+enum NotificationLevel {
+  DEFAULT // 旧版默认，兼容历史数据
+  BASIC   // 基础通知
+  ENHANCED // 增强通知
+  ALL     // 全部 (接收所有通知，例如关注用户的动态)
+  NONE    // 不接收任何通知
+}
+
+// 用户通知设置表
+model ow_notification_settings {
+  id          Int                    @id @default(autoincrement())
+  user_id     Int
+  target_id   String                 @db.VarChar(64)
+  target_type NotificationTargetType
+  level       NotificationLevel      @default(BASIC)
+  created_at  DateTime               @default(now()) @db.Timestamp(6)
+  updated_at  DateTime               @updatedAt @db.Timestamp(6)
+
+  // 关联
+  user        ow_users               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, target_type, target_id])
+  @@index([user_id])
+  @@index([target_type, target_id])
+  @@map("ow_notification_settings")
 }

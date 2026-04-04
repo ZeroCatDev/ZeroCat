@@ -443,8 +443,8 @@ router.post("/", needLogin, async (req, res, next) => {
         project_title: result.title,
         project_description: result.description,
         project_state: result.state,
-        notification_title: "新建项目",
-        notification_content: `创建了新项目 ${result.title || result.name}`,
+        notification_title: `${res.locals.username || "有人"} 创建了新项目`,
+        notification_content: `${res.locals.username || "有人"} 创建了项目《${result.title || result.name}》`,
       },
       isPrivate // 传入是否强制私密
     );
@@ -774,8 +774,8 @@ router.put("/commit/id/:id", needLogin, async (req, res, next) => {
         project_type: project.type,
         project_description: project.description,
         project_state: project.state,
-        notification_title: "代码推送",
-        notification_content: `${branch} 分支有新提交：${message || commitId.slice(0, 8)}`,
+        notification_title: `${res.locals.username || "有人"} 推送了 ${branch} 分支代码`,
+        notification_content: `项目《${project.title || project.name}》的 ${branch} 分支有新提交：${message || commitId.slice(0, 8)}`,
       },
       isPrivate // 传入是否强制私密
     );
@@ -1310,10 +1310,10 @@ router.put("/id/:id", needLogin, async (req, res, next) => {
         project_type: updatedData.type || project.type,
         project_description: updatedData.description || project.description,
         project_state: updatedData.state || project.state,
-        notification_title: "项目信息更新",
+        notification_title: `${res.locals.username || "有人"} 更新了项目信息`,
         notification_content: changes.updated_fields.length > 0
-          ? `更新了 ${changes.updated_fields.join("、")}`
-          : "更新了项目信息",
+          ? `${res.locals.username || "有人"} 更新了项目《${updatedData.title || project.title || project.name}》的 ${changes.updated_fields.join("、")}`
+          : `${res.locals.username || "有人"} 更新了项目《${updatedData.title || project.title || project.name}》的信息`,
       },
       project.state === "private" // 根据项目状态决定是否私密
     );
@@ -1456,6 +1456,8 @@ router.delete("/:id", needLogin, requireSudo, async (req, res, next) => {
           project_name: project.name,
           project_type: project.type,
           project_title: project.title,
+          notification_title: `${res.locals.username || "有人"} 删除了项目`,
+          notification_content: `${res.locals.username || "有人"} 删除了项目《${project.title || project.name}》`,
         }
       );
 
@@ -1625,8 +1627,8 @@ router.put("/rename/:id", needLogin, async (req, res, next) => {
         project_title: project.title,
         project_type: project.type,
         project_state: project.state,
-        notification_title: "项目重命名",
-        notification_content: `将项目 ${project.name} 重命名为 ${newName}`,
+        notification_title: `${res.locals.username || "有人"} 重命名了项目`,
+        notification_content: `${res.locals.username || "有人"} 将项目《${project.name}》重命名为《${newName}》`,
       },
       project.state === "private" // 根据项目状态决定是否私密
     );
@@ -1836,8 +1838,8 @@ router.post("/fork", needLogin, async (req, res, next) => {
         project_title: forkedProject.title,
         source_project_name: project.name,
         source_project_title: project.title,
-        notification_title: "项目派生",
-        notification_content: `派生了你的项目 ${project.title || project.name}`,
+        notification_title: `${res.locals.username || "有人"} 派生了你的项目`,
+        notification_content: `${res.locals.username || "有人"} 将你的项目《${project.title || project.name}》派生为《${forkedProject.title || forkedProject.name}》`,
       },
       isPrivate
     );

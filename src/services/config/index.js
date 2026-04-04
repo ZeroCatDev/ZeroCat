@@ -16,7 +16,7 @@ class ConfigService extends EventEmitter {
             // 从数据库加载所有配置
             const dbConfigs = await prisma.ow_config.findMany();
 
-            // 更新动态配置类型
+            // 更新帖子配置类型
             updateDynamicConfigTypes(dbConfigs);
 
             // 更新缓存

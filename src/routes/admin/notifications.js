@@ -35,6 +35,7 @@ router.post("/send", needAdmin, async (req, res) => {
             hidden = false,               // 是否隐藏通知
             high_priority = false,        // 是否高优先级
             notification_type = 'admin_notification',
+            notification_requirement = 'BASIC',
 
             // 目标信息
             target_type,
@@ -89,7 +90,8 @@ router.post("/send", needAdmin, async (req, res) => {
                 recipient_type,
                 batch_size: recipientList.length,
                 ...metadata
-            }
+            },
+            notificationRequirement: notification_requirement,
         };
 
         // 统一发送处理

@@ -270,6 +270,7 @@ export const sendLoginCode = async (req, res) => {
             title: '登录验证码',
             content: `您的登录验证码：${code}\n\n请在登录页面输入此验证码完成登录。\n\n验证码5分钟内有效，请及时使用。`,
             notificationType: 'login_code_email',
+            notificationRequirement: 'BASIC',
             hidden: true,
             pushChannels: ['email'],
             data: {

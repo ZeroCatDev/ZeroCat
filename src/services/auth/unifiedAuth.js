@@ -121,6 +121,7 @@ export class UnifiedAuthService {
             // 发送邮件类型通知
             await createNotification({
                 notificationType: 'verification_code',
+                notificationRequirement: 'BASIC',
                 title,
                 content,userId,
                 pushChannels: ['email'],

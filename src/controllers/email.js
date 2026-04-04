@@ -183,6 +183,7 @@ const sendVerificationEmail = async (contactValue, contactHash, template = 'DEFA
         title: '验证您的邮箱',
         content: `您的验证码：${token}\n\n此验证码将在5分钟内有效。\n\n您也可以点击以下链接完成验证：\n${verifyUrl}`,
         notificationType: 'email_verification',
+        notificationRequirement: 'BASIC',
         hidden: true,
         pushChannels: ['email'],
         data: {

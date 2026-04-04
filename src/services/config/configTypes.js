@@ -1053,7 +1053,7 @@ export function getMergedConfigTypes() {
     return {...CONFIG_TYPES, ...DYNAMIC_CONFIG_TYPES};
 }
 
-// 更新动态配置类型
+// 更新帖子配置类型
 export function updateDynamicConfigTypes(dbConfigs) {
     DYNAMIC_CONFIG_TYPES = {};
     for (const config of dbConfigs) {

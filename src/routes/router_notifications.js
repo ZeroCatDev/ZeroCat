@@ -172,6 +172,7 @@ router.post("/send-enhanced", needLogin, async (req, res) => {
             title,
             content,
             link,
+            notification_requirement = 'BASIC',
             push_channels = ['browser'],
             hidden = false,
             actor_id,
@@ -203,6 +204,7 @@ router.post("/send-enhanced", needLogin, async (req, res) => {
             title,
             content,
             link,
+            notificationRequirement: notification_requirement,
             pushChannels: push_channels,
             hidden,
             actorId: actor_id || res.locals.userid,
@@ -235,6 +237,7 @@ router.post("/send", needLogin, async (req, res) => {
             content,
             link,
             channel = 'browser',
+            notification_requirement = 'BASIC',
             actor_id,
             target_type,
             target_id,
@@ -255,6 +258,7 @@ router.post("/send", needLogin, async (req, res) => {
             content,
             link,
             channel,
+            notificationRequirement: notification_requirement,
             actorId: actor_id || res.locals.userid,
             targetType: target_type,
             targetId: target_id,
@@ -437,6 +441,141 @@ router.get("/push-status/:id", needLogin, async (req, res) => {
     }
 });
 
+
+/**
+ * @route PUT /notifications/settings
+ * @desc 更新或创建通知设置
+ * @access Private
+ */
+router.get("/settings/metadata", needLogin, async (req, res) => {
+    try {
+        const metadata = notificationUtils.getNotificationSettingsMetadata();
+        res.json({ success: true, metadata });
+    } catch (error) {
+        logger.error("获取通知设置元数据出错:", error);
+        res.status(500).json({ error: "获取通知设置元数据失败" });
+    }
+});
+
+/**
+ * @route GET /notifications/settings
+ * @desc 获取通知设置列表
+ * @access Private
+ */
+router.get("/settings", needLogin, async (req, res) => {
+    try {
+        const userId = res.locals.userid;
+        const { target_type, target_ids, limit, offset } = req.query;
+
+        const parsedTargetIds = target_ids
+            ? String(target_ids)
+                .split(",")
+                .map((id) => id.trim())
+                .filter((id) => id)
+            : [];
+
+        const result = await notificationUtils.listNotificationSettings({
+            userId,
+            targetType: target_type,
+            targetIds: parsedTargetIds,
+            limit: limit ? parseInt(limit, 10) : 50,
+            offset: offset ? parseInt(offset, 10) : 0
+        });
+
+        res.json({ success: true, ...result });
+    } catch (error) {
+        logger.error("获取通知设置列表出错:", error);
+        res.status(500).json({ error: "获取通知设置列表失败" });
+    }
+});
+
+router.put("/settings", needLogin, async (req, res) => {
+    try {
+        const userId = res.locals.userid;
+        const { targetId, targetType, level } = req.body;
+
+        if (!targetId || !targetType || !level) {
+            return res.status(400).json({ error: "需要提供 targetId, targetType 和 level" });
+        }
+
+        const setting = await notificationUtils.updateNotificationSetting({
+            userId,
+            targetId,
+            targetType,
+            level,
+        });
+
+        res.json({ success: true, setting });
+    } catch (error) {
+        logger.error("更新通知设置出错:", error);
+        res.status(500).json({ error: error.message || "更新通知设置失败" });
+    }
+});
+
+/**
+ * @route PUT /notifications/settings/bulk
+ * @desc 批量更新通知设置
+ * @access Private
+ */
+router.put("/settings/bulk", needLogin, async (req, res) => {
+    try {
+        const userId = res.locals.userid;
+        const { settings } = req.body;
+
+        if (!Array.isArray(settings) || settings.length === 0) {
+            return res.status(400).json({ error: "需要提供 settings 数组" });
+        }
+
+        const results = await Promise.all(
+            settings.map((setting) =>
+                notificationUtils.updateNotificationSetting({
+                    userId,
+                    targetId: setting.targetId,
+                    targetType: setting.targetType,
+                    level: setting.level
+                })
+            )
+        );
+
+        res.json({ success: true, settings: results });
+    } catch (error) {
+        logger.error("批量更新通知设置出错:", error);
+        res.status(500).json({ error: error.message || "批量更新通知设置失败" });
+    }
+});
+
+/**
+ * @route GET /notifications/settings/:targetType/:targetId
+ * @desc 获取特定目标的通知设置
+ * @access Private
+ */
+router.get("/settings/:targetType/:targetId", needLogin, async (req, res) => {
+    try {
+        const userId = res.locals.userid;
+        const { targetType, targetId } = req.params;
+
+        const setting = await notificationUtils.getNotificationSetting(
+            userId,
+            targetType,
+            targetId
+        );
+
+        res.json({
+            success: true,
+            setting: setting || {
+                target_id: targetId,
+                target_type: targetType,
+                level: "BASIC", // 如果没有设置，返回默认基础类型
+            },
+        });
+    } catch (error) {
+        logger.error("获取通知设置出错:", error);
+        res.status(500).json({ error: "获取通知设置失败" });
+    }
+});
+
+
+
 /**
  * @route GET /notifications/:id
  * @desc 获取单个通知详情
@@ -503,9 +642,6 @@ router.get("/:id", needLogin, async (req, res) => {
         res.status(500).json({error: "获取通知详情失败"});
     }
 });
-
-
-
 
 
 

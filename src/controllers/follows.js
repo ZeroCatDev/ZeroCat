@@ -44,6 +44,12 @@ async function getApRemoteUser() {
     return _apRemoteUser;
 }
 
+function formatFollowerName(user) {
+    const displayName = typeof user?.display_name === "string" ? user.display_name.trim() : "";
+    const username = typeof user?.username === "string" ? user.username.trim() : "";
+    return displayName || username || "有人";
+}
+
 /**
  * Follow a user
  *
@@ -67,6 +73,15 @@ export async function followUser(followerId, followedId, note = "") {
         if (!followedUser) {
             throw new Error("用户不存在");
         }
+
+        const followerUser = await prisma.ow_users.findUnique({
+            where: {id: followerId},
+            select: {
+                username: true,
+                display_name: true,
+            },
+        });
+        const followerName = formatFollowerName(followerUser);
 
         // Check if already following
         const existingFollow = await prisma.ow_user_relationships.findUnique({
@@ -98,14 +113,35 @@ export async function followUser(followerId, followedId, note = "") {
                 },
             },
         });
+
+        // 关注用户时，自动启用该用户的增强通知。
+        await prisma.ow_notification_settings.upsert({
+            where: {
+                user_id_target_type_target_id: {
+                    user_id: followerId,
+                    target_type: "USER",
+                    target_id: String(followedId)
+                }
+            },
+            update: {
+                level: "ENHANCED"
+            },
+            create: {
+                user_id: followerId,
+                target_type: "USER",
+                target_id: String(followedId),
+                level: "ENHANCED"
+            }
+        });
+
         await createEvent(
             "user_follow",
             followerId,
             "user",
             followedId,
             {
-                notification_title: "新关注",
-                notification_content: "有人开始关注你了",
+                notification_title: `${followerName} 开始关注你`,
+                notification_content: `${followerName} 开始关注你`,
             }
         );
 
@@ -172,6 +208,29 @@ export async function unfollowUser(followerId, followedId) {
                 relationship_type: "follow",
             },
         });
+
+        // 取消关注时，如果该用户通知等级是 ENHANCED，则删除配置回到默认 BASIC。
+        const userSetting = await prisma.ow_notification_settings.findUnique({
+            where: {
+                user_id_target_type_target_id: {
+                    user_id: followerId,
+                    target_type: "USER",
+                    target_id: String(followedId)
+                }
+            },
+            select: {
+                id: true,
+                level: true
+            }
+        });
+
+        if (userSetting?.level === "ENHANCED") {
+            await prisma.ow_notification_settings.delete({
+                where: {
+                    id: userSetting.id
+                }
+            });
+        }
 
         // Gorse 反馈：取消关注
         if (result.count > 0) {

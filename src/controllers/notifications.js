@@ -121,11 +121,16 @@ async function getTargetInfo(targetType, targetId) {
  * @returns {string|null} 生成的链接
  */
 function generateTargetLink(targetType, targetId) {
-    switch (targetType) {
+    if (!targetType || targetId === null || targetId === undefined) {
+        return null;
+    }
+
+    const normalizedType = String(targetType).toLowerCase();
+    switch (normalizedType) {
         case 'project':
             return `/app/link/project?id=${targetId}`;
         case 'post':
-            return `/posts/${targetId}`;
+            return `/app/posts/${targetId}`;
         case 'user':
             return `/app/link/user?id=${targetId}`;
         default:
@@ -341,6 +346,133 @@ async function sendEmailNotificationDirect(emailData) {
 
 
 /**
+ * 检查是否应根据用户设置发送通知
+ * @param {number} userId - 接收通知的用户ID
+ * @param {string} notificationRequirement - 通知要求等级 BASIC|ENHANCED|ALL
+ * @param {number} [actorId] - 触发通知的用户ID
+ * @param {string} [targetType] - 目标类型
+ * @param {number} [targetId] - 目标ID
+ * @returns {Promise<boolean>}
+ */
+const NOTIFICATION_LEVEL_ORDER = {
+    NONE: 0,
+    BASIC: 1,
+    ENHANCED: 2,
+    ALL: 3
+};
+
+const NOTIFICATION_REQUIREMENT_ORDER = {
+    BASIC: 1,
+    ENHANCED: 2,
+    ALL: 3
+};
+
+
+function normalizeNotificationLevel(level) {
+    if (!level) return "BASIC";
+    const normalized = String(level).toUpperCase();
+    if (normalized === "DEFAULT") return "BASIC";
+    if (NOTIFICATION_LEVEL_ORDER[normalized] !== undefined) {
+        return normalized;
+    }
+    return "BASIC";
+}
+
+function normalizeTargetTypeForSettings(targetType) {
+    if (!targetType) return null;
+    const normalized = String(targetType).toUpperCase();
+    if (normalized === "USER" || normalized === "PROJECT") {
+        return normalized;
+    }
+    if (normalized === "USERS") return "USER";
+    if (normalized === "PROJECTS") return "PROJECT";
+    return null;
+}
+
+function normalizeNotificationRequirement(requirement) {
+    const normalized = String(requirement || "").toUpperCase();
+    if (normalized === "DIRECT") {
+        return "BASIC";
+    }
+    if (NOTIFICATION_REQUIREMENT_ORDER[normalized] !== undefined) {
+        return normalized;
+    }
+    return "BASIC";
+}
+
+function isLevelAllowed(level, required) {
+    const levelRank = NOTIFICATION_LEVEL_ORDER[normalizeNotificationLevel(level)];
+    const requiredRank = NOTIFICATION_REQUIREMENT_ORDER[required];
+    return levelRank >= requiredRank;
+}
+
+async function getProjectOwnerSetting(userId, projectId) {
+    if (!userId || !projectId) return null;
+    const project = await prisma.ow_projects.findUnique({
+        where: { id: Number(projectId) },
+        select: { authorid: true }
+    });
+    if (!project?.authorid) {
+        return null;
+    }
+    return getNotificationSetting(userId, "USER", project.authorid);
+}
+
+async function shouldSendNotification({ userId, notificationRequirement, actorId, targetType, targetId }) {
+    const requirement = normalizeNotificationRequirement(notificationRequirement);
+    const normalizedTargetType = normalizeTargetTypeForSettings(targetType);
+
+    // 1. 检查针对 target 的设置
+    let targetSetting = null;
+    let projectOwnerSetting = null;
+    if (normalizedTargetType && targetId) {
+        targetSetting = await getNotificationSetting(userId, normalizedTargetType, targetId);
+
+        // 项目有单独配置时，优先级最高，直接按项目配置判断。
+        if (normalizedTargetType === "PROJECT" && targetSetting) {
+            const projectLevel = normalizeNotificationLevel(targetSetting.level);
+            if (projectLevel === "NONE") {
+                logger.debug(`用户 ${userId} 已通过项目配置屏蔽 PROJECT:${targetId} 的通知`);
+                return false;
+            }
+            return isLevelAllowed(projectLevel, requirement);
+        }
+
+        // 项目未配置时，回退到用户总配置（项目所有者设置）。
+        if (normalizedTargetType === "PROJECT" && !targetSetting) {
+            projectOwnerSetting = await getProjectOwnerSetting(userId, targetId);
+        }
+
+        const targetLevel = normalizeNotificationLevel(targetSetting?.level);
+        if (targetLevel === "NONE") {
+            logger.debug(`用户 ${userId} 已屏蔽对 ${normalizedTargetType}:${targetId} 的通知`);
+            return false;
+        }
+    }
+
+    // 2. 检查针对 actor 的设置
+    let actorSetting = null;
+    if (actorId) {
+        actorSetting = await getNotificationSetting(userId, "USER", actorId);
+        if (normalizeNotificationLevel(actorSetting?.level) === "NONE") {
+            logger.debug(`用户 ${userId} 已屏蔽来自用户 ${actorId} 的通知`);
+            return false;
+        }
+    }
+
+    const candidateLevels = [];
+    if (targetSetting) candidateLevels.push(normalizeNotificationLevel(targetSetting.level));
+    if (projectOwnerSetting) candidateLevels.push(normalizeNotificationLevel(projectOwnerSetting.level));
+    if (actorSetting) candidateLevels.push(normalizeNotificationLevel(actorSetting.level));
+
+    if (candidateLevels.length === 0) {
+        return isLevelAllowed("BASIC", requirement);
+    }
+
+    return candidateLevels.some((level) => isLevelAllowed(level, requirement));
+}
+
+/**
  * 创建新通知
  * 使用模板生成通知内容并存储到数据库
  *
@@ -350,6 +482,7 @@ async function sendEmailNotificationDirect(emailData) {
  * @param {number} [notificationData.actorId] - 触发通知的用户ID
  * @param {string} [notificationData.targetType] - 目标类型
  * @param {number} [notificationData.targetId] - 目标ID
+ * @param {string} [notificationData.notificationRequirement] - 通知要求等级 BASIC|ENHANCED|ALL
  * @param {Object} [notificationData.data] - 通知的附加数据
  * @param {boolean} [notificationData.highPriority] - 是否为高优先级通知
  * @param {boolean} [notificationData.hidden] - 是否为隐藏通知(不在用户列表中显示)
@@ -364,6 +497,21 @@ export async function createNotification(notificationData) {
         const notificationType = notificationData.notificationType
             ? String(notificationData.notificationType)
             : 'custom_notification';
+
+        // 在创建前检查用户设置
+        const shouldSend = await shouldSendNotification({
+            userId: notificationData.userId,
+            notificationRequirement: notificationData.notificationRequirement,
+            actorId: notificationData.actorId,
+            targetType: notificationData.targetType,
+            targetId: notificationData.targetId,
+        });
+
+        if (!shouldSend) {
+            logger.debug(`根据用户 ${notificationData.userId} 的设置，已跳过通知创建`);
+            return null; // or some indicator that it was skipped
+        }
+
 
         const template = NotificationTemplates[notificationType] || {
             title: notificationType,
@@ -391,7 +539,10 @@ export async function createNotification(notificationData) {
             normalizeNotificationText(data.content) ||
             '您有一条新通知';
 
-        const link = notificationData.link || null;
+        const link =
+            notificationData.link ||
+            generateTargetLink(notificationData.targetType, notificationData.targetId) ||
+            null;
 
         // 默认推送渠道设置
         const defaultChannels = notificationData.hidden ? [] : ['browser'];
@@ -698,6 +849,7 @@ export async function formatNotificationForClient(notification) {
  * @param {number} [notificationData.actorId] - 行为者ID
  * @param {string} [notificationData.targetType] - 目标类型
  * @param {number} [notificationData.targetId] - 目标ID
+ * @param {string} [notificationData.notificationRequirement] - 通知要求等级 BASIC|ENHANCED|ALL
  * @param {Object} [notificationData.metadata] - 元数据
  * @returns {Promise<Object>} 发送结果
  */
@@ -713,6 +865,7 @@ export async function sendEnhancedNotification(notificationData) {
             actorId,
             targetType,
             targetId,
+            notificationRequirement = 'BASIC',
             metadata = {}
         } = notificationData;
 
@@ -729,6 +882,7 @@ export async function sendEnhancedNotification(notificationData) {
             content,
             link: finalLink,
             notificationType: 'enhanced_notification',
+            notificationRequirement,
             actorId,
             targetType,
             targetId,
@@ -767,6 +921,7 @@ export async function sendEnhancedNotification(notificationData) {
  * @param {number} [notificationData.actorId] - 行为者ID
  * @param {string} [notificationData.targetType] - 目标类型，当link为'target'时使用
  * @param {number} [notificationData.targetId] - 目标ID，当link为'target'时使用
+ * @param {string} [notificationData.notificationRequirement] - 通知要求等级 BASIC|ENHANCED|ALL
  * @param {Object} [notificationData.metadata] - 元数据
  * @returns {Promise<Object>} 发送结果
  */
@@ -781,6 +936,7 @@ export async function sendNotification(notificationData) {
             actorId,
             targetType,
             targetId,
+            notificationRequirement = 'BASIC',
             metadata = {}
         } = notificationData;
 
@@ -800,6 +956,7 @@ export async function sendNotification(notificationData) {
                 content,
                 link: finalLink,
                 notificationType: 'custom_notification',
+                notificationRequirement,
                 actorId,
                 targetType,
                 targetId,
@@ -975,6 +1132,7 @@ export async function adminSendUnified(unifiedData) {
                     title: notificationConfig.title,
                     content: notificationConfig.content,
                     link: notificationConfig.link,
+                    notificationRequirement: notificationConfig.notificationRequirement || 'BASIC',
                     pushChannels: notificationConfig.pushChannels,
                     hidden: notificationConfig.hidden,
                     actorId: notificationConfig.actorId,
@@ -1594,6 +1752,146 @@ export async function getNotificationStats() {
     }
 }
 
+/**
+ * 获取用户对特定目标的通知设置
+ * @param {number} userId - 用户ID
+ * @param {string} targetType - 目标类型
+ * @param {string} targetId - 目标ID
+ * @returns {Promise<Object|null>}
+ */
+export async function getNotificationSetting(userId, targetType, targetId) {
+    const normalizedTargetType = normalizeTargetTypeForSettings(targetType);
+    if (!userId || !normalizedTargetType || !targetId) {
+        return null;
+    }
+    return prisma.ow_notification_settings.findUnique({
+        where: {
+            user_id_target_type_target_id: {
+                user_id: userId,
+                target_type: normalizedTargetType,
+                target_id: String(targetId),
+            },
+        },
+    });
+}
+
+/**
+ * 更新或创建用户对特定目标的通知设置
+ * @param {Object} settingData - 设置数据
+ * @param {number} settingData.userId - 用户ID
+ * @param {string} settingData.targetId - 目标ID
+ * @param {string} settingData.targetType - 目标类型
+ * @param {string} settingData.level - 通知级别
+ * @returns {Promise<Object>}
+ */
+export async function updateNotificationSetting({ userId, targetId, targetType, level }) {
+    // 1. 验证输入
+    const normalizedTargetType = normalizeTargetTypeForSettings(targetType);
+    if (!normalizedTargetType) {
+        throw new Error(`无效的目标类型: ${targetType}`);
+    }
+
+    const normalizedLevel = normalizeNotificationLevel(level);
+    if (NOTIFICATION_LEVEL_ORDER[normalizedLevel] === undefined) {
+        throw new Error(`无效的通知级别: ${level}`);
+    }
+
+    // 2. 验证目标是否存在
+    let targetExists = false;
+    const numericTargetId = Number(targetId);
+    if (isNaN(numericTargetId)) {
+        throw new Error("目标ID必须是数字");
+    }
+
+    switch (normalizedTargetType) {
+        case 'USER':
+            const user = await prisma.ow_users.findUnique({ where: { id: numericTargetId } });
+            if (user) targetExists = true;
+            break;
+        case 'PROJECT':
+            const project = await prisma.ow_projects.findUnique({ where: { id: numericTargetId } });
+            if (project) targetExists = true;
+            break;
+        default:
+            throw new Error(`未处理的目标类型: ${targetType}`);
+    }
+
+    if (!targetExists) {
+        throw new Error(`目标不存在: ${targetType} with ID ${targetId}`);
+    }
+
+    // 3. Upsert 设置
+    const setting = await prisma.ow_notification_settings.upsert({
+        where: {
+            user_id_target_type_target_id: {
+                user_id: userId,
+                target_type: normalizedTargetType,
+                target_id: String(targetId),
+            },
+        },
+        update: {
+            level: normalizedLevel,
+        },
+        create: {
+            user_id: userId,
+            target_id: String(targetId),
+            target_type: normalizedTargetType,
+            level: normalizedLevel,
+        },
+    });
+
+    return setting;
+}
+
+/**
+ * 获取用户的通知设置列表
+ * @param {Object} options - 查询选项
+ * @param {number} options.userId - 用户ID
+ * @param {string} [options.targetType] - 目标类型过滤
+ * @param {string[]} [options.targetIds] - 目标ID过滤
+ * @param {number} [options.limit] - 返回条数
+ * @param {number} [options.offset] - 偏移
+ * @returns {Promise<Object>}
+ */
+export async function listNotificationSettings({ userId, targetType, targetIds, limit = 50, offset = 0 }) {
+    const normalizedTargetType = normalizeTargetTypeForSettings(targetType);
+    const where = {
+        user_id: userId,
+        ...(normalizedTargetType ? { target_type: normalizedTargetType } : {}),
+        ...(Array.isArray(targetIds) && targetIds.length > 0
+            ? { target_id: { in: targetIds.map((id) => String(id)) } }
+            : {})
+    };
+
+    const [settings, total] = await Promise.all([
+        prisma.ow_notification_settings.findMany({
+            where,
+            orderBy: { updated_at: "desc" },
+            take: limit,
+            skip: offset
+        }),
+        prisma.ow_notification_settings.count({ where })
+    ]);
+
+    return {
+        settings,
+        total,
+        limit,
+        offset
+    };
+}
+
+/**
+ * 获取通知设置元数据
+ * @returns {Object}
+ */
+export function getNotificationSettingsMetadata() {
+    return {
+        target_types: ["USER", "PROJECT"],
+        levels: ["NONE", "BASIC", "ENHANCED", "ALL"]
+    };
+}
+
 export default {
     NotificationTemplates,
     createNotification,
@@ -1610,4 +1908,8 @@ export default {
     getAdminNotificationsListEnhanced,
     getNotificationStats,
     getEnhancedNotificationStats,
+    getNotificationSetting,
+    updateNotificationSetting,
+    listNotificationSettings,
+    getNotificationSettingsMetadata,
 };
