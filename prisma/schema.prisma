@@ -98,8 +98,8 @@ model ow_users {
   featured_projects Int?
 
   // 视觉元素
-  images  String @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(512)
-  avatar  String @default("fcd939e653195bb6d057e8c2519f5cc7") @db.VarChar(512)
+  images  String @default("870582712ab041107f1571285bc95a83") @db.VarChar(512)
+  avatar  String @default("870582712ab041107f1571285bc95a83") @db.VarChar(512)
 
   // 系统字段
   type      String    @default("guest") @db.VarChar(50)
