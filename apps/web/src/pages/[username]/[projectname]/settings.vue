@@ -162,6 +162,15 @@
 
       </v-col>
 
+      <v-col cols="12"><h1>GitHub Sync</h1></v-col>
+      <v-col cols="12">
+        <GitSyncManager
+          :project-id="projectID"
+          :project-type="project.type"
+          :is-author="isAuthor"
+        />
+      </v-col>
+
       <v-col cols="12"><h1>危险</h1></v-col>
       <v-col cols="12">
         <v-card>
@@ -296,12 +305,14 @@ import { useHead } from "@unhead/vue";
 import { getProjectInfoByNamespace } from "@/services/projectService";
 import LicenseSelector from "@/components/LicenseSelector.vue";
 import LanguageSelector from "@/components/LanguageSelector.vue";
+import GitSyncManager from "@/components/GitSyncManager.vue";
 import { useSudoManager } from "@/composables/useSudoManager";
 
 export default {
   components: {
     LicenseSelector,
     LanguageSelector,
+    GitSyncManager,
   },
   data() {
     return {

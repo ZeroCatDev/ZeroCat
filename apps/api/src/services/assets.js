@@ -2,7 +2,8 @@ import logger from "./logger.js";
 import { prisma } from "./prisma.js";
 import zcconfig from "./config/zcconfig.js";
 import { createHash } from "crypto";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { Readable } from "stream";
 import sharp from "sharp";
 import ffmpeg from "fluent-ffmpeg";
 import { fileTypeFromBuffer } from "file-type";
@@ -163,6 +164,37 @@ export async function uploadToS3(buffer, key, contentType) {
 
   await s3Client.send(command);
   return `${await zcconfig.get("s3.staticurl")}/${key}`;
+}
+
+async function streamToBuffer(stream) {
+  if (!stream) return Buffer.from('');
+  if (Buffer.isBuffer(stream)) return stream;
+  if (stream instanceof Uint8Array) return Buffer.from(stream);
+  if (typeof stream.arrayBuffer === 'function') {
+    const data = await stream.arrayBuffer();
+    return Buffer.from(data);
+  }
+
+  const chunks = [];
+  for await (const chunk of stream instanceof Readable ? stream : Readable.from(stream)) {
+    chunks.push(Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
+export async function downloadFromS3(key) {
+  const command = new GetObjectCommand({
+    Bucket: await zcconfig.get("s3.bucket"),
+    Key: key,
+  });
+
+  const response = await s3Client.send(command);
+  const buffer = await streamToBuffer(response.Body);
+  return {
+    buffer,
+    contentType: response.ContentType || null,
+    contentLength: response.ContentLength || buffer.length,
+  };
 }
 
 /**

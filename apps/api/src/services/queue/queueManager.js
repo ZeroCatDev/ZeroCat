@@ -1,5 +1,5 @@
 import { createTransport } from 'nodemailer';
-import { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue, getDataTaskQueue, getSocialSyncQueue, getApFederationQueue, getEmbeddingQueue, getMirror40CodeQueue } from './queues.js';
+import { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue, getDataTaskQueue, getSocialSyncQueue, getApFederationQueue, getEmbeddingQueue, getMirror40CodeQueue, getGitSyncQueue } from './queues.js';
 import { createEmailWorker, getEmailWorker } from './workers/emailWorker.js';
 import { createScheduledTasksWorker, getScheduledTasksWorker } from './workers/scheduledTasksWorker.js';
 import { createCommentNotificationWorker, getCommentNotificationWorker } from './workers/commentNotificationWorker.js';
@@ -8,9 +8,11 @@ import { createSocialSyncWorker, getSocialSyncWorker } from './workers/socialSyn
 import { createApFederationWorker, getApFederationWorker } from './workers/apFederationWorker.js';
 import { createEmbeddingWorker, getEmbeddingWorker } from './workers/embeddingWorker.js';
 import { createMirror40CodeWorker, getMirror40CodeWorker } from './workers/mirror40codeWorker.js';
+import { createGitSyncWorker, getGitSyncWorker } from './workers/gitSyncWorker.js';
 import { closeAll as closeAllConnections } from './redisConnectionFactory.js';
 import zcconfig from '../config/zcconfig.js';
 import logger from '../logger.js';
+import { getProjectGitSyncSettings } from '../gitSync/storage.js';
 
 let initialized = false;
 
@@ -118,6 +120,13 @@ const queueManager = {
             if (mirror40CodeEnabled) {
                 await createMirror40CodeWorker();
                 logger.info('[queue-manager] Mirror40Code worker created');
+            }
+
+            // Git sync worker
+            const gitSyncEnabled = await zcconfig.get('git.sync.enabled', false);
+            if (gitSyncEnabled) {
+                await createGitSyncWorker();
+                logger.info('[queue-manager] Git sync worker created');
             }
 
             await this.syncMirror40CodeSchedulers();
@@ -655,6 +664,7 @@ const queueManager = {
             const socialSyncWorker = getSocialSyncWorker();
             const apFederationWorker = getApFederationWorker();
             const mirror40CodeWorker = getMirror40CodeWorker();
+            const gitSyncWorker = getGitSyncWorker();
 
             if (emailWorker) await emailWorker.close();
             if (scheduledWorker) await scheduledWorker.close();
@@ -663,6 +673,7 @@ const queueManager = {
             if (socialSyncWorker) await socialSyncWorker.close();
             if (apFederationWorker) await apFederationWorker.close();
             if (mirror40CodeWorker) await mirror40CodeWorker.close();
+            if (gitSyncWorker) await gitSyncWorker.close();
 
             const embeddingWorker = getEmbeddingWorker();
             if (embeddingWorker) await embeddingWorker.close();
@@ -675,6 +686,7 @@ const queueManager = {
             const socialSyncQueue = getSocialSyncQueue();
             const apFederationQueue = getApFederationQueue();
             const mirror40CodeQueue = getMirror40CodeQueue();
+            const gitSyncQueue = getGitSyncQueue();
 
             if (emailQueue) await emailQueue.close();
             if (scheduledQueue) await scheduledQueue.close();
@@ -683,6 +695,7 @@ const queueManager = {
             if (socialSyncQueue) await socialSyncQueue.close();
             if (apFederationQueue) await apFederationQueue.close();
             if (mirror40CodeQueue) await mirror40CodeQueue.close();
+            if (gitSyncQueue) await gitSyncQueue.close();
 
             const embeddingQueue = getEmbeddingQueue();
             if (embeddingQueue) await embeddingQueue.close();
@@ -1225,6 +1238,58 @@ const queueManager = {
                 finishedOn: job.finishedOn,
             })),
         };
+    },
+
+    async enqueueGitSyncCommit(projectId, commitId, options = {}) {
+        const queue = getGitSyncQueue();
+        if (!queue || !initialized) {
+            logger.warn('[queue-manager] Git sync queue not available');
+            return null;
+        }
+
+        const enabled = await zcconfig.get('git.sync.enabled', false);
+        if (!enabled) {
+            return { queued: false, reason: 'feature_disabled' };
+        }
+
+        const parsedProjectId = Number(projectId);
+        if (!Number.isInteger(parsedProjectId) || parsedProjectId <= 0) {
+            throw new Error(`无效 projectId: ${projectId}`);
+        }
+
+        const parsedCommitId = String(commitId || '').trim();
+        if (!parsedCommitId) {
+            throw new Error('缺少 commitId');
+        }
+
+        const settings = await getProjectGitSyncSettings(parsedProjectId);
+        if (!settings?.enabled) {
+            return { queued: false, reason: 'sync_disabled' };
+        }
+
+        const jobId = `git-sync-${sanitize(parsedProjectId)}-${sanitize(parsedCommitId)}`;
+        try {
+            const job = await queue.add('git-sync', {
+                type: 'sync-project',
+                projectId: parsedProjectId,
+                commitId: parsedCommitId,
+                triggeredBy: options.triggeredBy || 'project-commit',
+                actorId: options.actorId || null,
+                requestedAt: new Date().toISOString(),
+            }, {
+                jobId,
+                deduplication: { id: jobId },
+                attempts: 3,
+                backoff: { type: 'exponential', delay: 20000 },
+                removeOnComplete: { age: 86400 },
+                removeOnFail: { age: 604800 },
+            });
+
+            return { queued: true, jobId: job.id };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue git sync:', error.message);
+            return null;
+        }
     },
 };
 

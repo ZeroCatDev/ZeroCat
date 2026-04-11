@@ -11,6 +11,7 @@ export const QUEUE_NAMES = {
     AP_FEDERATION: 'ap-federation',
     EMBEDDING: 'embedding',
     MIRROR_40CODE: 'mirror-40code',
+    GIT_SYNC: 'git-sync',
 };
 
 const QUEUE_OPTIONS = {
@@ -68,6 +69,14 @@ const QUEUE_OPTIONS = {
             backoff: { type: 'exponential', delay: 15000 },
         },
     },
+    [QUEUE_NAMES.GIT_SYNC]: {
+        defaultJobOptions: {
+            removeOnComplete: { count: 1000 },
+            removeOnFail: { count: 2000 },
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 20000 },
+        },
+    },
 };
 
 let emailQueue = null;
@@ -78,6 +87,7 @@ let socialSyncQueue = null;
 let apFederationQueue = null;
 let embeddingQueue = null;
 let mirror40CodeQueue = null;
+let gitSyncQueue = null;
 
 async function createQueues() {
     const sharedConnection = await createConnection('queue-shared');
@@ -126,8 +136,14 @@ async function createQueues() {
         ...QUEUE_OPTIONS[QUEUE_NAMES.MIRROR_40CODE],
     });
 
+    const gitSyncConnection = await createConnection('queue-git-sync');
+    gitSyncQueue = new Queue(QUEUE_NAMES.GIT_SYNC, {
+        connection: gitSyncConnection,
+        ...QUEUE_OPTIONS[QUEUE_NAMES.GIT_SYNC],
+    });
+
     logger.info('[queues] All queues created');
-    return { emailQueue, scheduledTasksQueue, commentNotificationQueue, dataTaskQueue, socialSyncQueue, apFederationQueue, embeddingQueue, mirror40CodeQueue };
+    return { emailQueue, scheduledTasksQueue, commentNotificationQueue, dataTaskQueue, socialSyncQueue, apFederationQueue, embeddingQueue, mirror40CodeQueue, gitSyncQueue };
 }
 
 function getEmailQueue() {
@@ -162,4 +178,8 @@ function getMirror40CodeQueue() {
     return mirror40CodeQueue;
 }
 
-export { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue, getDataTaskQueue, getSocialSyncQueue, getApFederationQueue, getEmbeddingQueue, getMirror40CodeQueue };
+function getGitSyncQueue() {
+    return gitSyncQueue;
+}
+
+export { createQueues, getEmailQueue, getScheduledTasksQueue, getCommentNotificationQueue, getDataTaskQueue, getSocialSyncQueue, getApFederationQueue, getEmbeddingQueue, getMirror40CodeQueue, getGitSyncQueue };

@@ -128,6 +128,10 @@ async function registerBusinessRoutes(app) {
         const oauthModule = await import('./routes/router_oauth.js');
         app.use("/oauth", oauthModule.default);
 
+        // Git同步路由
+        const gitSyncModule = await import('./routes/router_git_sync.js');
+        app.use('/git-sync', gitSyncModule.default);
+
         // CacheKV路由
         const cachekvModule = await import('./routes/router_cachekv.js');
         app.use("/cachekv", cachekvModule.default);

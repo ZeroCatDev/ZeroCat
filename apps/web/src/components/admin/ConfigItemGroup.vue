@@ -79,8 +79,53 @@
             class="flex-grow-1"
           >
             <!-- 字符串类型 -->
+            <v-textarea
+              v-if="item.type === 'string' && isMultilineField(item)"
+              :loading="savingItems[item.key]"
+              :model-value="localValues[item.key]"
+              :placeholder="item.default"
+              auto-grow
+              density="comfortable"
+              hide-details="auto"
+              rows="4"
+              variant="outlined"
+              @update:model-value="(value) => handleUpdate(item.key, value)"
+              @keydown.enter="saveItem(item)"
+            >
+              <template v-slot:append>
+                <v-btn
+                  v-if="isItemEdited(item)"
+                  :loading="savingItems[item.key]"
+                  color="success"
+                  icon="mdi-check"
+                  size="small"
+                  variant="tonal"
+                  @click="saveItem(item)"
+                >
+                </v-btn>
+                <v-btn
+                  v-if="isItemEdited(item)"
+                  color="error"
+                  icon="mdi-close"
+                  size="small"
+                  variant="tonal"
+                  @click="revertEdit(item)"
+                >
+                </v-btn>
+                <v-btn
+                  v-if="isDifferentFromDefault(item) && !isItemEdited(item)"
+                  color="warning"
+                  icon="mdi-refresh"
+                  size="small"
+                  variant="tonal"
+                  @click="resetToDefault(item)"
+                >
+                </v-btn>
+              </template>
+            </v-textarea>
+
             <v-text-field
-              v-if="item.type === 'string'"
+              v-else-if="item.type === 'string'"
               :loading="savingItems[item.key]"
               :model-value="localValues[item.key]"
               :placeholder="item.default"
@@ -439,6 +484,14 @@ const handleAppendInnerClick = (item) => {
   } else if (isDifferentFromDefault(item)) {
     resetToDefault(item);
   }
+};
+
+const isMultilineField = (item) => {
+  if (!item?.key) return false;
+  const key = String(item.key).toLowerCase();
+  if (key.includes('private_key') || key.includes('privatekey')) return true;
+  const value = localValues.value[item.key];
+  return typeof value === 'string' && value.includes('BEGIN');
 };
 
 const handleUpdate = (key, value) => {

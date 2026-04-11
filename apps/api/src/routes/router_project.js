@@ -851,6 +851,15 @@ router.put("/commit/id/:id", needLogin, async (req, res, next) => {
       isPrivate // 传入是否强制私密
     );
 
+    try {
+      await queueManager.enqueueGitSyncCommit(projectid, commitId, {
+        triggeredBy: 'project-commit',
+        actorId: res.locals.userid,
+      });
+    } catch (error) {
+      logger.warn(`[git-sync] enqueue failed project=${projectid} commit=${commitId}: ${error.message}`);
+    }
+
     res.status(200).send({
       status: "success",
       message: "保存成功",
