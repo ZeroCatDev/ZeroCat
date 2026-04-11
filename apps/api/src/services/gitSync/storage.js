@@ -8,6 +8,7 @@ const PROJECT_TARGET_TYPE = 'project';
 const USER_LINKS_KEY = 'git.links';
 const PROJECT_SETTINGS_KEY = 'git.sync.settings';
 const PROJECT_STATE_KEY = 'git.sync.state';
+const USER_TOKENS_KEY = 'git.sync.github.user.tokens';
 
 const parseJsonValue = (raw, fallback) => {
     if (!raw) return fallback;
@@ -20,6 +21,7 @@ const parseJsonValue = (raw, fallback) => {
 };
 
 const normalizeArray = (value) => (Array.isArray(value) ? value : []);
+const normalizeString = (value) => String(value || '').trim();
 
 async function readTargetConfig({ targetType, targetId, key }) {
     const record = await prisma.ow_target_configs.findUnique({
@@ -184,8 +186,85 @@ export async function setProjectGitSyncState(projectId, state) {
     return state;
 }
 
+const normalizeGitHubUserToken = (token) => {
+    const now = new Date().toISOString();
+    const accountId = normalizeString(token?.accountId || token?.account_id);
+    const accountLogin = normalizeString(token?.accountLogin || token?.account_login);
+    const accessToken = normalizeString(token?.accessToken || token?.access_token);
+    if (!accountId && !accountLogin) return null;
+    if (!accessToken) return null;
+
+    return {
+        accountId: accountId || null,
+        accountLogin: accountLogin || null,
+        accessToken,
+        tokenType: normalizeString(token?.tokenType || token?.token_type) || 'Bearer',
+        scope: token?.scope || null,
+        refreshToken: token?.refreshToken || token?.refresh_token || null,
+        expiresAt: token?.expiresAt || null,
+        createdAt: token?.createdAt || now,
+        updatedAt: now,
+    };
+};
+
+const matchGitHubToken = (token, accountId, accountLogin) => {
+    if (!token) return false;
+    const normalizedId = normalizeString(accountId);
+    const normalizedLogin = normalizeString(accountLogin).toLowerCase();
+    if (normalizedId && token.accountId && normalizeString(token.accountId) === normalizedId) return true;
+    if (normalizedLogin && token.accountLogin && normalizeString(token.accountLogin).toLowerCase() === normalizedLogin) return true;
+    return false;
+};
+
+export async function getUserGitHubUserTokens(userId) {
+    if (!userId) return [];
+    const raw = await readTargetConfig({
+        targetType: USER_TARGET_TYPE,
+        targetId: userId,
+        key: USER_TOKENS_KEY,
+    });
+    return normalizeArray(parseJsonValue(raw, []));
+}
+
+export async function upsertUserGitHubUserToken(userId, token) {
+    if (!userId) return null;
+    const normalized = normalizeGitHubUserToken(token);
+    if (!normalized) return null;
+
+    const tokens = await getUserGitHubUserTokens(userId);
+    const matchIndex = tokens.findIndex((item) => (
+        matchGitHubToken(item, normalized.accountId, normalized.accountLogin)
+    ));
+
+    if (matchIndex >= 0) {
+        tokens[matchIndex] = {
+            ...tokens[matchIndex],
+            ...normalized,
+            createdAt: tokens[matchIndex].createdAt || normalized.createdAt,
+            updatedAt: normalized.updatedAt,
+        };
+    } else {
+        tokens.push(normalized);
+    }
+
+    await writeTargetConfig({
+        targetType: USER_TARGET_TYPE,
+        targetId: userId,
+        key: USER_TOKENS_KEY,
+        value: JSON.stringify(tokens),
+    });
+
+    return normalized;
+}
+
+export async function findUserGitHubUserToken(userId, accountId, accountLogin) {
+    const tokens = await getUserGitHubUserTokens(userId);
+    return tokens.find((token) => matchGitHubToken(token, accountId, accountLogin)) || null;
+}
+
 export const GIT_SYNC_KEYS = {
     USER_LINKS_KEY,
+    USER_TOKENS_KEY,
     PROJECT_SETTINGS_KEY,
     PROJECT_STATE_KEY,
 };

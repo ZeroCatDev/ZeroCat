@@ -68,6 +68,24 @@ export async function searchRepos(token, query, options = {}) {
     return request(token, 'GET', `/search/repositories?${params.toString()}`);
 }
 
+export async function createUserRepo(token, payload) {
+    return request(token, 'POST', '/user/repos', payload);
+}
+
+export async function createOrgRepo(token, org, payload) {
+    const orgName = String(org || '').trim();
+    if (!orgName) {
+        const error = new Error('Missing organization name');
+        error.status = 400;
+        throw error;
+    }
+    return request(token, 'POST', `/orgs/${orgName}/repos`, payload);
+}
+
+export async function getAuthenticatedUser(token) {
+    return request(token, 'GET', '/user');
+}
+
 export async function getRef(token, owner, repo, branch) {
     return request(token, 'GET', `/repos/${owner}/${repo}/git/ref/heads/${branch}`);
 }

@@ -6,9 +6,9 @@ import redisClient from '../services/redis.js';
 import logger from '../services/logger.js';
 import { prisma } from '../services/prisma.js';
 import zcconfig from '../services/config/zcconfig.js';
-import { buildInstallUrl, createInstallationToken, getInstallationInfo } from '../services/gitSync/githubApp.js';
-import { getRepo, listInstallationRepos, searchRepos } from '../services/gitSync/githubApi.js';
-import { addUserGitLink, findUserGitLink, getProjectGitSyncSettings, getProjectGitSyncState, getUserGitLinks, removeUserGitLink, setProjectGitSyncState, updateProjectGitSyncSettings } from '../services/gitSync/storage.js';
+import { buildInstallUrl, buildUserTokenAuthUrl, createInstallationToken, exchangeUserToken, getInstallationInfo } from '../services/gitSync/githubApp.js';
+import { createOrgRepo, createUserRepo, getAuthenticatedUser, getRepo, listInstallationRepos, searchRepos } from '../services/gitSync/githubApi.js';
+import { addUserGitLink, findUserGitHubUserToken, findUserGitLink, getProjectGitSyncSettings, getProjectGitSyncState, getUserGitHubUserTokens, getUserGitLinks, removeUserGitLink, setProjectGitSyncState, updateProjectGitSyncSettings, upsertUserGitHubUserToken } from '../services/gitSync/storage.js';
 import queueManager from '../services/queue/queueManager.js';
 
 const router = Router();
@@ -41,6 +41,29 @@ const sanitizeFilenameInput = (value) => {
     if (!name) return null;
     if (name.includes('..') || name.includes('/') || name.includes('\\')) return null;
     return name;
+};
+
+const sanitizeRepoNameInput = (value) => {
+    const name = String(value || '').trim();
+    if (!name) return null;
+    if (name.length > 100) return null;
+    if (name.includes('..') || name.includes('/') || name.includes('\\')) return null;
+    if (!/^[0-9A-Za-z._-]+$/.test(name)) return null;
+    return name;
+};
+
+const sanitizeDescriptionInput = (value) => {
+    const description = String(value || '').trim();
+    if (!description) return null;
+    return description.slice(0, 200);
+};
+
+const normalizeAccountType = (value) => String(value || '').trim().toLowerCase();
+
+const buildExpiresAt = (expiresIn) => {
+    const seconds = Number(expiresIn);
+    if (!seconds || Number.isNaN(seconds)) return null;
+    return new Date(Date.now() + seconds * 1000).toISOString();
 };
 
 
@@ -108,7 +131,7 @@ const listAllInstallationRepos = async (token) => {
 const ensureProjectOwner = async (projectId, userId) => {
     const project = await prisma.ow_projects.findFirst({
         where: { id: Number(projectId) },
-        select: { id: true, authorid: true, default_branch: true, type: true },
+        select: { id: true, authorid: true, default_branch: true, type: true, name: true, title: true, state: true },
     });
     if (!project) {
         const error = new Error('项目不存在');
@@ -125,8 +148,27 @@ const ensureProjectOwner = async (projectId, userId) => {
 
 router.get('/links', needLogin, gitSyncRateLimit, async (req, res, next) => {
     try {
-        const links = await getUserGitLinks(res.locals.userid);
-        res.status(200).send({ status: 'success', links });
+        const [links, tokens] = await Promise.all([
+            getUserGitLinks(res.locals.userid),
+            getUserGitHubUserTokens(res.locals.userid),
+        ]);
+
+        const tokenList = Array.isArray(tokens) ? tokens : [];
+
+        const enhancedLinks = links.map((link) => {
+            const accountId = String(link?.account?.id || '').trim();
+            const accountLogin = String(link?.account?.login || '').trim();
+            const token = tokenList.find((item) => (
+                (accountId && String(item?.accountId || '').trim() === accountId)
+                || (accountLogin && String(item?.accountLogin || '').trim().toLowerCase() === accountLogin.toLowerCase())
+            ));
+            return {
+                ...link,
+                userTokenBound: Boolean(token),
+            };
+        });
+
+        res.status(200).send({ status: 'success', links: enhancedLinks });
     } catch (error) {
         next(error);
     }
@@ -149,16 +191,53 @@ router.post('/github/app/install-url', needLogin, gitSyncRateLimit, async (req, 
         const state = crypto.randomUUID();
         const stateKey = `git-sync:github:state:${state}`;
         const redirectUrl = typeof req.body?.redirectUrl === 'string' ? req.body.redirectUrl.trim() : '';
+        const parsedAutoUserToken = parseBooleanInput(req.body?.autoUserToken);
         const stored = await redisClient.set(stateKey, {
             userId: res.locals.userid,
             createdAt: new Date().toISOString(),
             redirectUrl: redirectUrl || null,
+            autoUserToken: parsedAutoUserToken === null ? false : parsedAutoUserToken,
         }, 600);
         if (!stored) {
             return res.status(500).send({ status: 'error', message: '无法创建安装状态' });
         }
 
         const url = await buildInstallUrl(state);
+        res.status(200).send({ status: 'success', url, state });
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.post('/github/app/user-token-url', needLogin, gitSyncRateLimit, async (req, res, next) => {
+    try {
+        const state = crypto.randomUUID();
+        const stateKey = `git-sync:github:user-token:state:${state}`;
+        const redirectUrl = typeof req.body?.redirectUrl === 'string' ? req.body.redirectUrl.trim() : '';
+        const linkId = String(req.body?.linkId || '').trim();
+
+        let link = null;
+        if (linkId) {
+            link = await findUserGitLink(res.locals.userid, linkId);
+            if (!link) {
+                return res.status(404).send({ status: 'error', message: '链接不存在' });
+            }
+        }
+
+        const stored = await redisClient.set(stateKey, {
+            userId: res.locals.userid,
+            createdAt: new Date().toISOString(),
+            redirectUrl: redirectUrl || null,
+            linkId: link?.id || null,
+        }, 600);
+
+        if (!stored) {
+            return res.status(500).send({ status: 'error', message: '无法创建授权状态' });
+        }
+
+        const url = await buildUserTokenAuthUrl(state, {
+            login: link?.account?.login || undefined,
+        });
         res.status(200).send({ status: 'success', url, state });
     } catch (error) {
         next(error);
@@ -208,12 +287,128 @@ router.get('/github/app/callback', gitSyncRateLimit, async (req, res, next) => {
             },
         });
 
+        const accountType = normalizeAccountType(account?.type);
+        const shouldAutoUserToken = parseBooleanInput(stateData?.autoUserToken) === true;
+        if (shouldAutoUserToken && accountType && accountType !== 'organization') {
+            const existingToken = await findUserGitHubUserToken(
+                stateData.userId,
+                account?.id,
+                account?.login
+            );
+
+            if (!existingToken) {
+                const userTokenState = crypto.randomUUID();
+                const userTokenStateKey = `git-sync:github:user-token:state:${userTokenState}`;
+                const storedUserToken = await redisClient.set(userTokenStateKey, {
+                    userId: stateData.userId,
+                    createdAt: new Date().toISOString(),
+                    redirectUrl: stateData.redirectUrl || null,
+                    linkId: link?.id || null,
+                }, 600);
+
+                if (storedUserToken) {
+                    try {
+                        const userTokenUrl = await buildUserTokenAuthUrl(userTokenState, {
+                            login: account?.login || undefined,
+                        });
+                        return res.redirect(userTokenUrl);
+                    } catch (error) {
+                        logger.warn(`[git-sync] auto user token auth failed: ${error.message}`);
+                    }
+                }
+            }
+        }
+
         const redirectUrl = await resolveFrontendRedirect(stateData.redirectUrl, '/app/account/oauth');
         if (redirectUrl) return res.redirect(redirectUrl);
         res.status(200).send({ status: 'success', link });
     } catch (error) {
         const redirectUrl = await resolveFrontendRedirect(null, '/app/account/oauth/bind/error', {
             message: 'GitHub App绑定失败',
+        });
+        if (redirectUrl) return res.redirect(redirectUrl);
+        next(error);
+    }
+});
+
+router.get('/github/app/user-token/callback', gitSyncRateLimit, async (req, res, next) => {
+    try {
+        const authCode = String(req.query.code || '').trim();
+        const state = String(req.query.state || '').trim();
+        const errorReason = String(req.query.error_description || req.query.error || '').trim();
+
+        if (errorReason) {
+            const redirectUrl = await resolveFrontendRedirect(null, '/app/account/oauth/bind/error', {
+                message: errorReason,
+            });
+            if (redirectUrl) return res.redirect(redirectUrl);
+            return res.status(400).send({ status: 'error', message: errorReason });
+        }
+
+        if (!authCode || !state) {
+            const redirectUrl = await resolveFrontendRedirect(null, '/app/account/oauth/bind/error', {
+                message: '缺少授权参数',
+            });
+            if (redirectUrl) return res.redirect(redirectUrl);
+            return res.status(400).send({ status: 'error', message: '缺少授权参数' });
+        }
+
+        const stateKey = `git-sync:github:user-token:state:${state}`;
+        const stateData = await redisClient.get(stateKey);
+        await redisClient.delete(stateKey);
+
+        if (!stateData?.userId) {
+            const redirectUrl = await resolveFrontendRedirect(null, '/app/account/oauth/bind/error', {
+                message: '授权状态已过期',
+            });
+            if (redirectUrl) return res.redirect(redirectUrl);
+            return res.status(400).send({ status: 'error', message: '授权状态已过期' });
+        }
+
+        const tokenData = await exchangeUserToken(authCode);
+        if (!tokenData?.access_token) {
+            throw new Error('GitHub未返回有效的用户令牌');
+        }
+
+        const account = await getAuthenticatedUser(tokenData.access_token);
+        const accountId = account?.id ? String(account.id) : '';
+        const accountLogin = String(account?.login || '').trim();
+        if (!accountId && !accountLogin) {
+            throw new Error('无法获取GitHub账号信息');
+        }
+
+        if (stateData.linkId) {
+            const link = await findUserGitLink(stateData.userId, stateData.linkId);
+            if (!link) {
+                throw new Error('目标账号不存在');
+            }
+            const linkAccountId = String(link?.account?.id || '').trim();
+            const linkAccountLogin = String(link?.account?.login || '').trim().toLowerCase();
+            const matches = (linkAccountId && linkAccountId === accountId)
+                || (linkAccountLogin && accountLogin && linkAccountLogin === accountLogin.toLowerCase());
+            if (!matches) {
+                throw new Error('授权账号与目标账号不一致');
+            }
+        }
+
+        await upsertUserGitHubUserToken(stateData.userId, {
+            accountId,
+            accountLogin,
+            accessToken: tokenData.access_token,
+            tokenType: tokenData.token_type || 'Bearer',
+            scope: tokenData.scope || null,
+            refreshToken: tokenData.refresh_token || null,
+            expiresAt: buildExpiresAt(tokenData.expires_in),
+        });
+
+        const redirectUrl = await resolveFrontendRedirect(stateData.redirectUrl, '/app/account/oauth', {
+            git_sync_user_token: 'success',
+        });
+        if (redirectUrl) return res.redirect(redirectUrl);
+        res.status(200).send({ status: 'success' });
+    } catch (error) {
+        const redirectUrl = await resolveFrontendRedirect(null, '/app/account/oauth/bind/error', {
+            message: `App User Token绑定失败: ${error.message}`,
         });
         if (redirectUrl) return res.redirect(redirectUrl);
         next(error);
@@ -276,6 +471,63 @@ router.get('/github/app/repos', needLogin, gitSyncRateLimit, async (req, res, ne
         }
 
         res.status(200).send({ status: 'success', repositories: merged });
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.get('/github/app/repos/check', needLogin, gitSyncRateLimit, async (req, res, next) => {
+    try {
+        const linkId = String(req.query.linkId || '').trim();
+        const repoName = sanitizeRepoNameInput(req.query.name);
+        if (!linkId || !repoName) {
+            return res.status(400).send({ status: 'error', message: '缺少仓库名称或账号' });
+        }
+
+        const link = await findUserGitLink(res.locals.userid, linkId);
+        if (!link?.installationId) {
+            return res.status(404).send({ status: 'error', message: '链接不存在' });
+        }
+
+        const accountLogin = normalizeRepoValue(link?.account?.login);
+        if (!accountLogin) {
+            return res.status(400).send({ status: 'error', message: '缺少账号信息' });
+        }
+
+        const accountType = normalizeAccountType(link?.account?.type);
+        let token = null;
+
+        if (accountType === 'organization') {
+            const installationToken = (await createInstallationToken(link.installationId)).token;
+            if (!installationToken) {
+                return res.status(500).send({ status: 'error', message: '无法创建安装令牌' });
+            }
+            token = installationToken;
+        } else {
+            const userToken = await findUserGitHubUserToken(
+                res.locals.userid,
+                link?.account?.id,
+                link?.account?.login
+            );
+            if (!userToken?.accessToken) {
+                return res.status(400).send({
+                    status: 'error',
+                    code: 'user_token_required',
+                    message: '个人仓库检查需要授权 App User Token',
+                });
+            }
+            token = userToken.accessToken;
+        }
+
+        try {
+            await getRepo(token, accountLogin, repoName);
+            return res.status(200).send({ status: 'success', available: false });
+        } catch (error) {
+            if (error?.status === 404) {
+                return res.status(200).send({ status: 'success', available: true });
+            }
+            throw error;
+        }
     } catch (error) {
         next(error);
     }
@@ -347,6 +599,82 @@ router.get('/github/app/repos/search', needLogin, gitSyncRateLimit, async (req, 
     }
 });
 
+router.post('/github/app/repos/create', needLogin, gitSyncRateLimit, async (req, res, next) => {
+    try {
+        const { linkId, name, description, private: isPrivate, autoInit } = req.body || {};
+        const repoName = sanitizeRepoNameInput(name);
+        if (!linkId || !repoName) {
+            return res.status(400).send({ status: 'error', message: '缺少仓库名称或账号' });
+        }
+
+        const link = await findUserGitLink(res.locals.userid, linkId);
+        if (!link?.installationId) {
+            return res.status(404).send({ status: 'error', message: '链接不存在' });
+        }
+
+        const payload = {
+            name: repoName,
+        };
+
+        const parsedPrivate = parseBooleanInput(isPrivate);
+        if (parsedPrivate !== null) {
+            payload.private = parsedPrivate;
+        }
+
+        const parsedAutoInit = parseBooleanInput(autoInit);
+        if (parsedAutoInit !== null) {
+            payload.auto_init = parsedAutoInit;
+        }
+
+        const normalizedDescription = sanitizeDescriptionInput(description);
+        if (normalizedDescription) {
+            payload.description = normalizedDescription;
+        }
+
+        const accountType = normalizeAccountType(link?.account?.type);
+        const accountLogin = link?.account?.login || '';
+        let repository = null;
+
+        if (accountType === 'organization') {
+            if (!accountLogin) {
+                return res.status(400).send({ status: 'error', message: '缺少组织信息' });
+            }
+            const token = (await createInstallationToken(link.installationId)).token;
+            if (!token) {
+                return res.status(500).send({ status: 'error', message: '无法创建安装令牌' });
+            }
+            repository = await createOrgRepo(token, accountLogin, payload);
+        } else {
+            const userToken = await findUserGitHubUserToken(
+                res.locals.userid,
+                link?.account?.id,
+                link?.account?.login
+            );
+            if (!userToken?.accessToken) {
+                return res.status(400).send({
+                    status: 'error',
+                    code: 'user_token_required',
+                    message: '个人仓库创建需要授权 App User Token',
+                });
+            }
+            repository = await createUserRepo(userToken.accessToken, payload);
+        }
+
+        res.status(200).send({
+            status: 'success',
+            repository: {
+                ...repository,
+                gitLinkId: link.id,
+                gitInstallationId: link.installationId,
+                gitAccount: link.account || null,
+            },
+        });
+    } catch (error) {
+        logger.warn(`[git-sync] create repo failed: ${error.message}`);
+        next(error);
+    }
+});
+
 
 router.get('/projects/:projectId', needLogin, gitSyncRateLimit, async (req, res, next) => {
     try {
@@ -359,6 +687,9 @@ router.get('/projects/:projectId', needLogin, gitSyncRateLimit, async (req, res,
             state,
             projectType: project.type,
             projectDefaultBranch: project.default_branch || 'main',
+            projectName: project.name || '',
+            projectTitle: project.title || '',
+            projectState: project.state || 'private',
         });
     } catch (error) {
         next(error);

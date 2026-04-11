@@ -13,8 +13,11 @@ export const GitSyncService = {
     return unwrap(response);
   },
 
-  async createInstallUrl(redirectUrl) {
+  async createInstallUrl(redirectUrl, options = {}) {
     const payload = redirectUrl ? { redirectUrl } : {};
+    if (options?.autoUserToken) {
+      payload.autoUserToken = true;
+    }
     const response = await axios.post('/git-sync/github/app/install-url', payload);
     return unwrap(response);
   },
@@ -35,6 +38,27 @@ export const GitSyncService = {
     if (options.perPage) params.set('per_page', String(options.perPage));
     if (options.page) params.set('page', String(options.page));
     const response = await axios.get(`/git-sync/github/app/repos/search?${params.toString()}`);
+    return unwrap(response);
+  },
+
+  async checkRepoName(linkId, name) {
+    const params = new URLSearchParams();
+    if (linkId) params.set('linkId', String(linkId));
+    if (name) params.set('name', String(name));
+    const response = await axios.get(`/git-sync/github/app/repos/check?${params.toString()}`);
+    return unwrap(response);
+  },
+
+  async createRepo(payload) {
+    const response = await axios.post('/git-sync/github/app/repos/create', payload);
+    return unwrap(response);
+  },
+
+  async createUserTokenUrl(redirectUrl, linkId) {
+    const payload = {};
+    if (redirectUrl) payload.redirectUrl = redirectUrl;
+    if (linkId) payload.linkId = linkId;
+    const response = await axios.post('/git-sync/github/app/user-token-url', payload);
     return unwrap(response);
   },
 

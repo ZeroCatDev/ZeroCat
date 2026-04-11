@@ -410,6 +410,24 @@ export const CONFIG_TYPES = {
         required: false,
         description: "GitHub App Slug",
     },
+    "git.sync.github.app.client_id": {
+        type: "string",
+        required: false,
+        description: "GitHub App OAuth Client ID",
+        public: false,
+    },
+    "git.sync.github.app.client_secret": {
+        type: "string",
+        required: false,
+        description: "GitHub App OAuth Client Secret",
+        public: false,
+    },
+    "git.sync.github.app.user_scope": {
+        type: "string",
+        required: false,
+        default: "repo read:user user:email",
+        description: "GitHub App User Token OAuth scope",
+    },
     "git.sync.github.app.private_key": {
         type: "string",
         required: false,

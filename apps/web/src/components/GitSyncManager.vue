@@ -88,6 +88,9 @@
                   <div v-if="activeLink?.account?.type" class="text-body-2">
                     类型: {{ activeLink.account.type }}
                   </div>
+                  <div v-if="isUserAccount(activeLink)" class="text-body-2">
+                    App User Token: {{ activeLink?.userTokenBound ? '已授权' : '未授权' }}
+                  </div>
                   <div v-if="activeLink?.installationId" class="text-body-2">
                     安装: #{{ activeLink.installationId }}
                   </div>
@@ -112,6 +115,140 @@
                 </v-card-actions>
               </v-card>
             </v-dialog>
+
+            <v-dialog v-model="createDialogOpen" max-width="560">
+              <v-card>
+                <v-card-title class="d-flex align-center ga-3">
+                  <v-icon size="28">mdi-source-repository</v-icon>
+                  <div>
+                    <div class="text-subtitle-1">创建仓库</div>
+                    <div class="text-caption text-medium-emphasis">一键创建并用于同步</div>
+                  </div>
+                </v-card-title>
+                <v-card-text>
+                  <div class="git-sync-create-hero mb-4">
+                    <div class="text-caption text-medium-emphasis">预览</div>
+                    <div class="text-h6 git-sync-create-preview">
+                      {{ createRepoPreview || '选择账号并填写名称' }}
+                    </div>
+                    <div class="text-caption mt-1">仓库将在所选账号下创建。</div>
+                  </div>
+
+                  <v-alert v-if="createError" type="error" variant="tonal" class="mb-3">
+                    {{ createError }}
+                  </v-alert>
+
+                  <v-select
+                    v-model="createForm.linkId"
+                    :items="linkOptions"
+                    item-title="title"
+                    item-value="value"
+                    label="账号"
+                    :disabled="!isAuthor || !links.length"
+                    class="mb-3"
+                  >
+                    <template #item="{ item, props: itemProps }">
+                      <v-list-item v-bind="itemProps" :title="undefined">
+                        <v-list-item-title>{{ item.raw.title }}</v-list-item-title>
+                        <v-list-item-subtitle>{{ item.raw.subtitle }}</v-list-item-subtitle>
+                      </v-list-item>
+                    </template>
+                  </v-select>
+
+                  <div v-if="createLinkAccountType && createLinkAccountType !== 'organization'" class="mb-3">
+                    <v-alert
+                      :type="createNeedsUserToken ? 'warning' : 'success'"
+                      variant="tonal"
+                      class="mb-2"
+                    >
+                      {{ createNeedsUserToken
+                        ? '个人账号创建仓库需要授权 App User Token。'
+                        : 'App User Token 已授权，可创建个人仓库。'
+                      }}
+                    </v-alert>
+                    <v-btn
+                      v-if="createNeedsUserToken"
+                      color="primary"
+                      variant="tonal"
+                      prepend-icon="mdi-key"
+                      :loading="authorizingUserToken"
+                      :disabled="!isAuthor"
+                      @click="startUserTokenAuth"
+                    >
+                      授权个人账号
+                    </v-btn>
+                  </div>
+
+                  <v-text-field
+                    v-model="createForm.name"
+                    label="仓库名称"
+                    placeholder="zerocat-project"
+                    hint="仅支持字母、数字、.-_"
+                    persistent-hint
+                    :disabled="!isAuthor"
+                    class="mb-3"
+                  />
+
+                  <div v-if="showRepoNameStatus" class="git-sync-name-status">
+                    <v-progress-circular
+                      v-if="repoNameCheckStatus === 'checking'"
+                      indeterminate
+                      size="16"
+                      width="2"
+                      color="primary"
+                    />
+                    <v-icon
+                      v-else
+                      :color="repoNameStatusColor"
+                      size="16"
+                    >
+                      {{ repoNameStatusIcon }}
+                    </v-icon>
+                    <span :class="['text-caption', `text-${repoNameStatusColor}`]">
+                      {{ repoNameCheckMessage }}
+                    </span>
+                  </div>
+
+                  <v-textarea
+                    v-model="createForm.description"
+                    label="描述"
+                    placeholder="可选"
+                    rows="2"
+                    auto-grow
+                    :disabled="!isAuthor"
+                    class="mb-2"
+                  />
+
+                  <div class="d-flex flex-wrap align-center ga-2">
+                    <v-btn-toggle
+                      v-model="createForm.visibility"
+                      mandatory
+                      density="compact"
+                      color="primary"
+                      class="git-sync-visibility"
+                    >
+                      <v-btn value="public" prepend-icon="mdi-earth">公开</v-btn>
+                      <v-btn value="private" prepend-icon="mdi-lock">私有</v-btn>
+                    </v-btn-toggle>
+                  </div>
+
+                  <v-alert type="info" variant="tonal" class="mt-3">
+                    GitHub App 需要拥有创建仓库权限。创建后即可直接绑定同步。
+                  </v-alert>
+                </v-card-text>
+                <v-card-actions class="justify-end">
+                  <v-btn variant="text" @click="createDialogOpen = false">取消</v-btn>
+                  <v-btn
+                    color="primary"
+                    :loading="creatingRepo"
+                    :disabled="!canCreateRepo"
+                    @click="createRepo"
+                  >
+                    创建
+                  </v-btn>
+                </v-card-actions>
+              </v-card>
+            </v-dialog>
           </v-col>
 
           <v-col cols="12" md="7">
@@ -121,6 +258,15 @@
 
               </div>
               <div class="d-flex align-center ga-2">
+                <v-btn
+                  color="primary"
+                  variant="tonal"
+                  prepend-icon="mdi-plus"
+                  :disabled="!isAuthor || !links.length"
+                  @click="openCreateDialog"
+                >
+                  创建仓库
+                </v-btn>
 
                 <v-btn
                   variant="tonal"
@@ -167,27 +313,48 @@
             </v-autocomplete>
 
 
-            <div v-if="selectedRepoMeta" class="text-caption text-medium-emphasis mb-3">
-              {{ selectedRepoMeta }}
+            <div v-if="selectedRepoMeta || selectedRepoUrl" class="d-flex flex-wrap align-center ga-2 mb-3">
+              <div v-if="selectedRepoMeta" class="text-caption text-medium-emphasis">
+                {{ selectedRepoMeta }}
+              </div>
+              <v-btn
+                v-if="selectedRepoUrl"
+                size="small"
+                variant="tonal"
+                color="primary"
+                :href="selectedRepoUrl"
+                target="_blank"
+                rel="noopener"
+              >
+                打开仓库
+                <v-icon end size="14">mdi-open-in-new</v-icon>
+              </v-btn>
             </div>
 
-            <v-combobox
-              v-model="form.branch"
-              :items="branchOptions"
-              label="分支"
-              placeholder="main"
-              :disabled="!isAuthor"
-              clearable
-              class="mb-3"
-            />
+            <v-expansion-panels variant="accordion" class="mb-3">
+              <v-expansion-panel>
+                <v-expansion-panel-title>高级设置</v-expansion-panel-title>
+                <v-expansion-panel-text>
+                  <v-combobox
+                    v-model="form.branch"
+                    :items="branchOptions"
+                    label="分支"
+                    placeholder="main"
+                    :disabled="!isAuthor"
+                    clearable
+                    class="mb-3"
+                  />
 
-            <v-text-field
-              v-model="form.fileName"
-              label="项目文件"
-              placeholder="project.json"
-              :disabled="!isAuthor"
-              class="mb-3"
-            />
+                  <v-text-field
+                    v-model="form.fileName"
+                    label="项目文件"
+                    placeholder="project.json"
+                    :disabled="!isAuthor"
+                    class="mb-3"
+                  />
+                </v-expansion-panel-text>
+              </v-expansion-panel>
+            </v-expansion-panels>
 
             <v-switch
               v-model="form.includeReadme"
@@ -251,7 +418,7 @@
 </template>
 
 <script setup>
-import { computed, getCurrentInstance, reactive, ref, watch } from 'vue';
+import { computed, getCurrentInstance, nextTick, reactive, ref, watch } from 'vue';
 import GitSyncService from '@/services/gitSyncService';
 
 const props = defineProps({
@@ -283,6 +450,10 @@ const syncing = ref(false);
 const removingLink = ref(false);
 const linkDialogOpen = ref(false);
 const activeLink = ref(null);
+const createDialogOpen = ref(false);
+const creatingRepo = ref(false);
+const authorizingUserToken = ref(false);
+const createError = ref('');
 
 const message = ref('');
 const messageType = ref('info');
@@ -292,6 +463,9 @@ const repos = ref([]);
 const selectedRepoItem = ref(null);
 const settings = ref(null);
 const state = ref(null);
+const projectName = ref('');
+const projectTitle = ref('');
+const projectState = ref('private');
 
 const projectDefaultBranch = ref('');
 const projectBranches = ref([]);
@@ -300,6 +474,8 @@ const desiredRepoFullName = ref('');
 const repoSearchQuery = ref('');
 const repoSearchToken = ref(0);
 let repoSearchTimer = null;
+const repoNameCheckToken = ref(0);
+let repoNameCheckTimer = null;
 
 const DEFAULT_PROJECT_FILE = 'project.json';
 
@@ -308,6 +484,18 @@ const form = reactive({
   fileName: '',
   includeReadme: false,
 });
+
+const createForm = reactive({
+  linkId: '',
+  name: '',
+  description: '',
+  visibility: 'private',
+  autoInit: true,
+});
+
+const repoNameCheckStatus = ref('idle');
+const repoNameCheckMessage = ref('');
+const checkingRepoName = ref(false);
 
 const isScratch = computed(() => String(props.projectType || '').toLowerCase().startsWith('scratch'));
 
@@ -332,8 +520,28 @@ const repoOptions = computed(() => sortedRepos.value.map((repo) => ({
   repo,
 })));
 
+const linkOptions = computed(() => (links.value || []).map((link) => ({
+  title: buildLinkLabel(link),
+  value: link.id,
+  subtitle: buildLinkOptionSubtitle(link),
+  link,
+})));
+
 
 const selectedRepo = computed(() => selectedRepoItem.value?.repo || null);
+const selectedRepoUrl = computed(() => (
+  selectedRepo.value?.html_url || selectedRepo.value?.htmlUrl || ''
+));
+
+const selectedCreateLink = computed(() => (
+  (links.value || []).find((link) => link.id === createForm.linkId) || null
+));
+
+const createLinkAccountType = computed(() => normalizeAccountType(selectedCreateLink.value?.account?.type));
+const createNeedsUserToken = computed(() => (
+  createLinkAccountType.value && createLinkAccountType.value !== 'organization'
+  && !selectedCreateLink.value?.userTokenBound
+));
 
 const selectedRepoMeta = computed(() => {
   const repo = selectedRepo.value;
@@ -353,6 +561,13 @@ const selectedRepoMeta = computed(() => {
   return parts.join(' · ');
 });
 
+const createRepoPreview = computed(() => {
+  const account = selectedCreateLink.value?.account?.login || selectedCreateLink.value?.account?.id || '';
+  const name = String(createForm.name || '').trim();
+  if (!account && !name) return '';
+  return `${account || 'account'}/${name || 'repo'}`;
+});
+
 const repoEmptyLabel = computed(() => {
   if (!links.value.length) return 'Install the App to load repositories.';
   if (loadingRepos.value || searchingRepos.value) return 'Loading repositories...';
@@ -369,6 +584,14 @@ const branchOptions = computed(() => (projectBranches.value || []).map((branch) 
 
 const canBind = computed(() => Boolean(selectedRepoItem.value?.repo?.gitLinkId));
 const primaryActionLabel = computed(() => (settings.value?.enabled ? '保存更改' : '启用同步'));
+const repoNameCheckBlocking = computed(() => (
+  ['checking', 'invalid', 'taken', 'needs_token'].includes(repoNameCheckStatus.value)
+));
+const canCreateRepo = computed(() => (
+  Boolean(props.isAuthor && createForm.linkId && String(createForm.name || '').trim())
+  && !createNeedsUserToken.value
+  && !repoNameCheckBlocking.value
+));
 
 const setMessage = (type, text) => {
   messageType.value = type || 'info';
@@ -400,6 +623,10 @@ const buildLinkLabel = (link) => {
   return `${account}${type}`.trim();
 };
 
+const normalizeAccountType = (value) => String(value || '').trim().toLowerCase();
+
+const isUserAccount = (link) => normalizeAccountType(link?.account?.type) === 'user';
+
 const linkAvatar = (link) => (
   link?.account?.avatar_url || link?.account?.avatarUrl || ''
 );
@@ -412,7 +639,23 @@ const buildLinkSubtitle = (link) => {
   if (link?.updatedAt) {
     details.push(`Updated ${formatTime(link.updatedAt)}`);
   }
+  if (isUserAccount(link)) {
+    details.push(link?.userTokenBound ? 'App User Token 已授权' : 'App User Token 未授权');
+  }
   return details.join(' · ');
+};
+
+const buildLinkOptionSubtitle = (link) => {
+  const parts = [];
+  if (link?.account?.login) {
+    parts.push(`@${link.account.login}`);
+  } else if (link?.account?.id) {
+    parts.push(String(link.account.id));
+  }
+  if (isUserAccount(link)) {
+    parts.push(link?.userTokenBound ? 'App User Token 已授权' : 'App User Token 未授权');
+  }
+  return parts.join(' · ');
 };
 
 const buildRepoSubtitle = (repo) => {
@@ -433,6 +676,63 @@ const buildRepoSubtitle = (repo) => {
   }
   return parts.join(' · ');
 };
+
+const buildDefaultRepoName = () => {
+  const candidates = [projectName.value, projectTitle.value];
+  for (const candidate of candidates) {
+    const normalized = sanitizeRepoName(candidate);
+    if (normalized) return normalized;
+  }
+  if (props.projectId) return `project-${props.projectId}`;
+  return '';
+};
+
+const resolveProjectVisibility = () => {
+  const normalized = String(projectState.value || '').trim().toLowerCase();
+  return normalized === 'public' ? 'public' : 'private';
+};
+
+const sanitizeRepoName = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  let next = raw.replace(/\s+/g, '-');
+  next = next.replace(/[^0-9A-Za-z._-]/g, '-');
+  next = next.replace(/-+/g, '-');
+  next = next.replace(/^[-._]+|[-._]+$/g, '');
+  return next.slice(0, 100);
+};
+
+const isValidRepoName = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return false;
+  if (raw.length > 100) return false;
+  return /^[0-9A-Za-z._-]+$/.test(raw);
+};
+
+const setRepoNameCheckState = (status, message = '') => {
+  repoNameCheckStatus.value = status;
+  repoNameCheckMessage.value = message;
+};
+
+const repoNameStatusColor = computed(() => {
+  if (repoNameCheckStatus.value === 'available') return 'success';
+  if (repoNameCheckStatus.value === 'taken') return 'error';
+  if (repoNameCheckStatus.value === 'invalid') return 'warning';
+  if (repoNameCheckStatus.value === 'needs_token') return 'warning';
+  if (repoNameCheckStatus.value === 'error') return 'error';
+  return 'info';
+});
+
+const repoNameStatusIcon = computed(() => {
+  if (repoNameCheckStatus.value === 'available') return 'mdi-check-circle';
+  if (repoNameCheckStatus.value === 'taken') return 'mdi-close-circle';
+  if (repoNameCheckStatus.value === 'invalid') return 'mdi-alert-circle';
+  if (repoNameCheckStatus.value === 'needs_token') return 'mdi-lock-alert';
+  if (repoNameCheckStatus.value === 'error') return 'mdi-alert-circle';
+  return 'mdi-information';
+});
+
+const showRepoNameStatus = computed(() => repoNameCheckStatus.value !== 'idle');
 
 const syncSelectedRepo = () => {
   if (!desiredRepoFullName.value) return;
@@ -472,6 +772,81 @@ const openLinkDialog = (link) => {
   linkDialogOpen.value = true;
 };
 
+const ensureCreateLink = () => {
+  if (!links.value.length) {
+    createForm.linkId = '';
+    return;
+  }
+  if (!links.value.some((link) => link.id === createForm.linkId)) {
+    createForm.linkId = links.value[0]?.id || '';
+  }
+};
+
+const resetCreateForm = () => {
+  createError.value = '';
+  createForm.name = buildDefaultRepoName();
+  createForm.description = '';
+  createForm.visibility = resolveProjectVisibility();
+  createForm.autoInit = true;
+  ensureCreateLink();
+  scheduleRepoNameCheck();
+};
+
+const openCreateDialog = () => {
+  resetCreateForm();
+  createDialogOpen.value = true;
+};
+
+const scheduleRepoNameCheck = () => {
+  if (repoNameCheckTimer) {
+    clearTimeout(repoNameCheckTimer);
+  }
+
+  const name = String(createForm.name || '').trim();
+  const linkId = String(createForm.linkId || '').trim();
+
+  if (!name || !linkId) {
+    setRepoNameCheckState('idle', '');
+    checkingRepoName.value = false;
+    return;
+  }
+
+  if (!isValidRepoName(name)) {
+    setRepoNameCheckState('invalid', '名称仅支持字母、数字、.-_，且长度不超过100');
+    checkingRepoName.value = false;
+    return;
+  }
+
+  repoNameCheckTimer = setTimeout(async () => {
+    const token = repoNameCheckToken.value + 1;
+    repoNameCheckToken.value = token;
+    checkingRepoName.value = true;
+    setRepoNameCheckState('checking', '正在检查名称是否可用...');
+
+    try {
+      const res = await GitSyncService.checkRepoName(linkId, name);
+      if (repoNameCheckToken.value !== token) return;
+      const available = res?.available === true;
+      setRepoNameCheckState(
+        available ? 'available' : 'taken',
+        available ? '名称可用' : '名称已被占用'
+      );
+    } catch (error) {
+      if (repoNameCheckToken.value !== token) return;
+      const code = error?.response?.data?.code;
+      if (code === 'user_token_required') {
+        setRepoNameCheckState('needs_token', '需要先授权 App User Token 才能检查名称');
+      } else {
+        setRepoNameCheckState('error', error?.message || '无法检查名称');
+      }
+    } finally {
+      if (repoNameCheckToken.value === token) {
+        checkingRepoName.value = false;
+      }
+    }
+  }, 450);
+};
+
 const applyProjectBranchDefault = () => {
   applyAutoBranch(projectDefaultBranch.value);
 };
@@ -500,6 +875,7 @@ const loadLinks = async () => {
       activeLink.value = null;
       linkDialogOpen.value = false;
     }
+    ensureCreateLink();
   } catch (error) {
     setMessage('error', error?.message || 'Failed to load links.');
   } finally {
@@ -596,6 +972,9 @@ const loadSettings = async () => {
     settings.value = res.settings || null;
     state.value = res.state || null;
     projectDefaultBranch.value = res.projectDefaultBranch || '';
+    projectName.value = res.projectName || '';
+    projectTitle.value = res.projectTitle || '';
+    projectState.value = res.projectState || 'private';
     lastAutoBranch.value = '';
     hydrateForm(settings.value);
     applyProjectBranchDefault();
@@ -616,10 +995,10 @@ const startInstall = async () => {
   installing.value = true;
   try {
     const redirectUrl = typeof window !== 'undefined' ? window.location.href : '';
-    const res = await GitSyncService.createInstallUrl(redirectUrl);
+    const res = await GitSyncService.createInstallUrl(redirectUrl, { autoUserToken: true });
     if (res.url) {
       window.open(res.url, '_blank', 'noopener');
-      notify('info', 'Install', 'Complete install, then refresh links.');
+      notify('info', 'Install', '完成安装后会尝试授权 App User Token，请稍后刷新。');
     } else {
       throw new Error(res.message || 'Missing install URL.');
     }
@@ -627,6 +1006,65 @@ const startInstall = async () => {
     setMessage('error', error?.message || 'Failed to start install.');
   } finally {
     installing.value = false;
+  }
+};
+
+const startUserTokenAuth = async () => {
+  if (!selectedCreateLink.value?.id) return;
+  authorizingUserToken.value = true;
+  createError.value = '';
+  try {
+    const redirectUrl = typeof window !== 'undefined' ? window.location.href : '';
+    const res = await GitSyncService.createUserTokenUrl(redirectUrl, selectedCreateLink.value.id);
+    if (res.url) {
+      window.open(res.url, '_blank', 'noopener');
+      notify('info', '授权', '完成授权后刷新账号列表。');
+    } else {
+      throw new Error(res.message || 'Missing auth URL.');
+    }
+  } catch (error) {
+    createError.value = error?.message || '无法发起授权。';
+  } finally {
+    authorizingUserToken.value = false;
+  }
+};
+
+const createRepo = async () => {
+  if (!canCreateRepo.value) return;
+  creatingRepo.value = true;
+  createError.value = '';
+  try {
+    const payload = {
+      linkId: createForm.linkId,
+      name: String(createForm.name || '').trim(),
+      description: String(createForm.description || '').trim(),
+      private: createForm.visibility === 'private',
+      autoInit: true,
+    };
+
+    const res = await GitSyncService.createRepo(payload);
+    const repo = res.repository || null;
+    if (repo) {
+      const key = repo.full_name || repo.name;
+      if (key) {
+        desiredRepoFullName.value = key;
+        repos.value = [repo, ...repos.value.filter((item) => (item.full_name || item.name) !== key)];
+        await nextTick();
+        syncSelectedRepo();
+        await nextTick();
+      } else {
+        repos.value = [repo, ...repos.value];
+      }
+    }
+    createDialogOpen.value = false;
+    notify('success', '创建成功', '仓库已创建。');
+    if (props.projectId && selectedRepoItem.value?.repo?.gitLinkId) {
+      await bindProject();
+    }
+  } catch (error) {
+    createError.value = error?.message || '创建仓库失败。';
+  } finally {
+    creatingRepo.value = false;
   }
 };
 
@@ -731,11 +1169,80 @@ watch(selectedRepoItem, (value) => {
   if (!value?.repo) return;
   applyRepoBranchDefault(value.repo);
 });
+
+watch([() => createForm.name, () => createForm.linkId], () => {
+  if (!createDialogOpen.value) return;
+  scheduleRepoNameCheck();
+});
+
+watch(createDialogOpen, (value) => {
+  if (value) {
+    scheduleRepoNameCheck();
+  } else if (repoNameCheckTimer) {
+    clearTimeout(repoNameCheckTimer);
+  }
+});
 </script>
 
 <style scoped>
 
 .git-sync-chip {
   cursor: pointer;
+}
+
+.git-sync-create-hero {
+  --hero-bg: linear-gradient(135deg, #e0f2ff 0%, #fef3c7 55%, #e8ffe1 100%);
+  --hero-ring: rgba(14, 116, 144, 0.12);
+  background: var(--hero-bg);
+  border: 1px solid var(--hero-ring);
+  border-radius: 16px;
+  padding: 16px 18px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 16px 30px -24px rgba(14, 116, 144, 0.6);
+  background-size: 200% 200%;
+  animation: git-sync-hero-shift 10s ease-in-out infinite;
+}
+
+.git-sync-create-hero::after {
+  content: '';
+  position: absolute;
+  inset: -20% -10% auto auto;
+  width: 180px;
+  height: 180px;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0));
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.git-sync-create-preview {
+  font-family: 'Noto Sans SC', 'HarmonyOS Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  letter-spacing: 0.3px;
+}
+
+.git-sync-visibility {
+  background: rgba(15, 23, 42, 0.04);
+  border-radius: 999px;
+  padding: 2px;
+}
+
+.git-sync-name-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: -8px;
+  margin-bottom: 8px;
+}
+
+@keyframes git-sync-hero-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
 }
 </style>
