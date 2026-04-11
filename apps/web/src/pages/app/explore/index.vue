@@ -23,10 +23,20 @@
                 @keydown.enter="handleSearch"
               />
               <div class="mt-3 d-flex ga-2">
-                <v-btn block color="primary" prepend-icon="mdi-magnify" @click="handleSearch">
+                <v-btn
+                  block
+                  color="primary"
+                  prepend-icon="mdi-magnify"
+                  @click="handleSearch"
+                >
                   搜索
                 </v-btn>
-                <v-btn block prepend-icon="mdi-refresh" variant="tonal" @click="resetSearch">
+                <v-btn
+                  block
+                  prepend-icon="mdi-refresh"
+                  variant="tonal"
+                  @click="resetSearch"
+                >
                   重置
                 </v-btn>
               </div>
@@ -101,8 +111,17 @@
             </v-card-text>
           </v-card>
         </v-col>
-      <v-col cols="12" md="9" lg="10">
-  <v-card title="查看 猜你喜欢" to="/app/recommend" border rounded="xl" hover  subtitle="基于AI的智能推荐" class="mb-2" append-icon="mdi-arrow-right"></v-card>
+        <v-col cols="12" md="9" lg="10">
+          <v-card
+            title="查看 猜你喜欢"
+            to="/app/recommend"
+            border
+            rounded="xl"
+            hover
+            subtitle="基于AI的智能推荐"
+            class="mb-2"
+            append-icon="mdi-arrow-right"
+          ></v-card>
 
           <div class="result-topbar">
             <div class="text-h6 mb-2">项目探索</div>
@@ -162,7 +181,10 @@
             </v-btn>
           </div>
 
-          <div v-else-if="projects.length" class="load-end text-medium-emphasis">
+          <div
+            v-else-if="projects.length"
+            class="load-end text-medium-emphasis"
+          >
             已加载全部项目
           </div>
         </v-col>
@@ -173,237 +195,238 @@
   <v-snackbar v-model="showError" color="error" timeout="3000">
     {{ errorMessage }}
     <template #actions>
-      <v-btn color="white" variant="text" @click="showError = false">关闭</v-btn>
+      <v-btn color="white" variant="text" @click="showError = false"
+        >关闭</v-btn
+      >
     </template>
   </v-snackbar>
 </template>
 
 <script>
-import { useSeo } from "@/composables/useSeo";
-import showProjects from "@/components/project/showProjects.vue";
-import languages from "@/constants/programming_languages.js";
-import specialTypes from "@/constants/special_languages.js";
-import { performSearch } from "@/services/searchService";
+  import { useSeo } from "@/composables/useSeo";
+  import showProjects from "@/components/project/showProjects.vue";
+  import languages from "@/constants/programming_languages.js";
+  import specialTypes from "@/constants/special_languages.js";
+  import { performSearch } from "@/services/searchService";
 
-const DEFAULT_PER_PAGE = 12;
-const DEFAULT_ORDER = "view_down";
+  const DEFAULT_PER_PAGE = 12;
+  const DEFAULT_ORDER = "view_down";
 
-const DEFAULT_SEARCH = Object.freeze({
-  keyword: "",
-  orderBy: DEFAULT_ORDER
-});
+  const DEFAULT_SEARCH = Object.freeze({
+    keyword: "",
+    orderBy: DEFAULT_ORDER,
+  });
 
-const TYPE_PRESET_KEYS = [
-  "scratch",
-  "scratch-clipcc",
-  "scratch-extension",
-  "python",
-  "javascript",
-  "java",
-  "golang",
-  "rust",
-  "text"
-];
-
-export default {
-  components: { showProjects },
-  setup() {
-    useSeo({
-      title: "探索项目",
-      description: "浏览 ZeroCat 社区的编程作品，发现精彩的 Scratch、Python 等编程项目。",
-    });
-  },
-  data() {
-    return {
-      search: {
-        ...DEFAULT_SEARCH
-      },
-      activeTag: "all",
-      activeType: "all",
-      tagOptions: [
-        { label: "全部", value: "all" },
-        { label: "动画", value: "动画" },
-        { label: "音乐", value: "音乐" },
-        { label: "游戏", value: "游戏" },
-        { label: "故事", value: "故事" },
-        { label: "教程", value: "教程" }
-      ],
-      orderitems: [
-        { name: "热门程度", type: "view_down", icon: "mdi-fire" },
-        { name: "更新时间", type: "time_down", icon: "mdi-clock-outline" },
-        { name: "星标最多", type: "star_down", icon: "mdi-star-outline" },
-        { name: "观看最多", type: "view_down", icon: "mdi-arrow-up-bold-circle-outline" }
-      ],
-      typeOptions: [{ label: "全部类型", value: "all", icon: "mdi-shape-outline" }],
-      projects: [],
-      page: 1,
-      totalCount: 0,
-      hasMore: true,
-      isLoading: false,
-      isLoadingMore: false,
-      lastLoadTime: 0,
-      showError: false,
-      errorMessage: "",
-      infiniteObserver: null
-    };
-  },
-  computed: {
-    currentOrderLabel() {
-      return this.orderitems.find((item) => item.type === this.search.orderBy)?.name || "热门程度";
-    }
-  },
-  methods: {
-    mergeProjects(incoming, replace = false) {
-      const merged = replace ? [...incoming] : [...this.projects, ...incoming];
-      const uniqueById = new Map();
-      merged.forEach((project) => {
-        if (!project || typeof project !== "object") return;
-        const key = project.id ?? `${project.name || ""}-${project.title || ""}`;
-        if (!uniqueById.has(key)) uniqueById.set(key, project);
+  export default {
+    components: { showProjects },
+    setup() {
+      useSeo({
+        title: "探索项目",
+        description:
+          "浏览 ZeroCat 社区的编程作品，发现精彩的 Scratch、Python 等编程项目。",
       });
-      this.projects = Array.from(uniqueById.values());
     },
-    buildPayload() {
-      const type = this.activeType === "all" ? "" : this.activeType;
-      const tags = this.activeTag === "all" ? [] : [this.activeTag];
-
+    data() {
       return {
-        scope: "projects",
-        keyword: String(this.search.keyword || "").trim(),
-        page: this.page,
-        perPage: DEFAULT_PER_PAGE,
-        orderBy: this.search.orderBy || DEFAULT_ORDER,
-        type,
-        tags
+        search: {
+          ...DEFAULT_SEARCH,
+        },
+        activeTag: "all",
+        activeType: "all",
+        tagOptions: [
+          { label: "全部", value: "all" },
+          { label: "动画", value: "动画" },
+          { label: "音乐", value: "音乐" },
+          { label: "游戏", value: "游戏" },
+          { label: "故事", value: "故事" },
+          { label: "教程", value: "教程" },
+        ],
+        orderitems: [
+          { name: "热门程度", type: "view_down", icon: "mdi-fire" },
+          { name: "更新时间", type: "time_down", icon: "mdi-clock-outline" },
+          { name: "星标最多", type: "star_down", icon: "mdi-star-outline" },
+          {
+            name: "观看最多",
+            type: "view_down",
+            icon: "mdi-arrow-up-bold-circle-outline",
+          },
+        ],
+        typeOptions: [
+          { label: "全部类型", value: "all", icon: "mdi-shape-outline" },
+        ],
+        projects: [],
+        page: 1,
+        totalCount: 0,
+        hasMore: true,
+        isLoading: false,
+        isLoadingMore: false,
+        lastLoadTime: 0,
+        showError: false,
+        errorMessage: "",
+        infiniteObserver: null,
       };
     },
-    async fetchProjects({ reset = false } = {}) {
-      if (this.isLoading || this.isLoadingMore) return;
-      if (!reset && !this.hasMore) return;
-
-      if (reset) {
-        this.page = 1;
-        this.projects = [];
-        this.totalCount = 0;
-        this.hasMore = true;
-      }
-
-      const startTime = performance.now();
-      if (reset || !this.projects.length) {
-        this.isLoading = true;
-      } else {
-        this.isLoadingMore = true;
-      }
-
-      try {
-        const payload = this.buildPayload();
-        const data = await performSearch(payload);
-        const incoming = Array.isArray(data.projects) ? data.projects : [];
-        this.totalCount = Number(data.totalCount || 0);
-        this.mergeProjects(incoming, reset);
-
-        if (this.totalCount > 0) {
-          this.hasMore = this.projects.length < this.totalCount;
-        } else {
-          this.hasMore = incoming.length >= payload.perPage;
-        }
-      } catch (error) {
-        this.errorMessage = error?.message || "加载失败";
-        this.showError = true;
-        if (!reset && this.page > 1) {
-          this.page -= 1;
-        }
-      } finally {
-        this.lastLoadTime = Math.round(performance.now() - startTime);
-        this.isLoading = false;
-        this.isLoadingMore = false;
-        this.$nextTick(() => {
-          this.setupInfiniteScroll();
-        });
-      }
+    computed: {
+      currentOrderLabel() {
+        return (
+          this.orderitems.find((item) => item.type === this.search.orderBy)
+            ?.name || "热门程度"
+        );
+      },
     },
-    async handleSearch() {
-      this.page = 1;
+    methods: {
+      mergeProjects(incoming, replace = false) {
+        const merged = replace ? [...incoming] : [...this.projects, ...incoming];
+        const uniqueById = new Map();
+        merged.forEach((project) => {
+          if (!project || typeof project !== "object") return;
+          const key =
+            project.id ?? `${project.name || ""}-${project.title || ""}`;
+          if (!uniqueById.has(key)) uniqueById.set(key, project);
+        });
+        this.projects = Array.from(uniqueById.values());
+      },
+      buildPayload() {
+        const type = this.activeType === "all" ? "" : this.activeType;
+        const tags = this.activeTag === "all" ? [] : [this.activeTag];
+
+        return {
+          scope: "projects",
+          keyword: String(this.search.keyword || "").trim(),
+          page: this.page,
+          perPage: DEFAULT_PER_PAGE,
+          orderBy: this.search.orderBy || DEFAULT_ORDER,
+          type,
+          tags,
+        };
+      },
+      async fetchProjects({ reset = false } = {}) {
+        if (this.isLoading || this.isLoadingMore) return;
+        if (!reset && !this.hasMore) return;
+
+        if (reset) {
+          this.page = 1;
+          this.projects = [];
+          this.totalCount = 0;
+          this.hasMore = true;
+        }
+
+        const startTime = performance.now();
+        if (reset || !this.projects.length) {
+          this.isLoading = true;
+        } else {
+          this.isLoadingMore = true;
+        }
+
+        try {
+          const payload = this.buildPayload();
+          const data = await performSearch(payload);
+          const incoming = Array.isArray(data.projects) ? data.projects : [];
+          this.totalCount = Number(data.totalCount || 0);
+          this.mergeProjects(incoming, reset);
+
+          if (this.totalCount > 0) {
+            this.hasMore = this.projects.length < this.totalCount;
+          } else {
+            this.hasMore = incoming.length >= payload.perPage;
+          }
+        } catch (error) {
+          this.errorMessage = error?.message || "加载失败";
+          this.showError = true;
+          if (!reset && this.page > 1) {
+            this.page -= 1;
+          }
+        } finally {
+          this.lastLoadTime = Math.round(performance.now() - startTime);
+          this.isLoading = false;
+          this.isLoadingMore = false;
+          this.$nextTick(() => {
+            this.setupInfiniteScroll();
+          });
+        }
+      },
+      async handleSearch() {
+        this.page = 1;
+        await this.fetchProjects({ reset: true });
+      },
+      async loadMore() {
+        if (!this.hasMore || this.isLoading || this.isLoadingMore) return;
+        this.page += 1;
+        await this.fetchProjects();
+      },
+      async resetSearch() {
+        this.search = { ...DEFAULT_SEARCH };
+        this.activeTag = "all";
+        this.activeType = "all";
+        await this.handleSearch();
+      },
+      async applyTag() {
+        await this.handleSearch();
+      },
+      async applyType() {
+        await this.handleSearch();
+      },
+      async changeOrder(orderType) {
+        if (!orderType || this.search.orderBy === orderType) return;
+        this.search.orderBy = orderType;
+        await this.handleSearch();
+      },
+      buildTypeOptions() {
+        const options = [
+          { label: "全部", value: "all", icon: "mdi-shape-outline" },
+        ];
+        const added = new Set();
+        for (const key in specialTypes) {
+          [specialTypes, languages].forEach((source) => {
+            const info = source?.[key];
+            if (info && !added.has(key)) {
+              added.add(key);
+              options.push({
+                label: info.name || key,
+                value: key,
+                icon: info.icon || "mdi-shape",
+              });
+            }
+          });
+        }
+        this.typeOptions = options;
+      },
+      setupInfiniteScroll() {
+        this.cleanupInfiniteScroll();
+        if (!this.hasMore) return;
+
+        const target = this.$refs.loadMoreRef;
+        if (!target || typeof IntersectionObserver === "undefined") return;
+
+        this.infiniteObserver = new IntersectionObserver(
+          (entries) => {
+            const entry = entries[0];
+            if (entry?.isIntersecting) {
+              this.loadMore();
+            }
+          },
+          {
+            rootMargin: "220px 0px",
+            threshold: 0,
+          },
+        );
+
+        this.infiniteObserver.observe(target);
+      },
+      cleanupInfiniteScroll() {
+        if (!this.infiniteObserver) return;
+        this.infiniteObserver.disconnect();
+        this.infiniteObserver = null;
+      },
+    },
+    async mounted() {
+      this.buildTypeOptions();
       await this.fetchProjects({ reset: true });
     },
-    async loadMore() {
-      if (!this.hasMore || this.isLoading || this.isLoadingMore) return;
-      this.page += 1;
-      await this.fetchProjects();
-    },
-    async resetSearch() {
-      this.search = { ...DEFAULT_SEARCH };
-      this.activeTag = "all";
-      this.activeType = "all";
-      await this.handleSearch();
-    },
-    async applyTag() {
-      await this.handleSearch();
-    },
-    async applyType() {
-      await this.handleSearch();
-    },
-    async changeOrder(orderType) {
-      if (!orderType || this.search.orderBy === orderType) return;
-      this.search.orderBy = orderType;
-      await this.handleSearch();
-    },
-    buildTypeOptions() {
-      const options = [{ label: "全部类型", value: "all", icon: "mdi-shape-outline" }];
-      const addOption = (key, source) => {
-        const info = source?.[key];
-        if (!info) return;
-        if (options.some((item) => item.value === key)) return;
-        options.push({
-          label: info.name || key,
-          value: key,
-          icon: info.icon || "mdi-shape"
-        });
-      };
-
-      TYPE_PRESET_KEYS.forEach((key) => {
-        addOption(key, specialTypes);
-        addOption(key, languages);
-      });
-
-      this.typeOptions = options;
-    },
-    setupInfiniteScroll() {
+    beforeUnmount() {
       this.cleanupInfiniteScroll();
-      if (!this.hasMore) return;
-
-      const target = this.$refs.loadMoreRef;
-      if (!target || typeof IntersectionObserver === "undefined") return;
-
-      this.infiniteObserver = new IntersectionObserver(
-        (entries) => {
-          const entry = entries[0];
-          if (entry?.isIntersecting) {
-            this.loadMore();
-          }
-        },
-        {
-          rootMargin: "220px 0px",
-          threshold: 0
-        }
-      );
-
-      this.infiniteObserver.observe(target);
     },
-    cleanupInfiniteScroll() {
-      if (!this.infiniteObserver) return;
-      this.infiniteObserver.disconnect();
-      this.infiniteObserver = null;
-    }
-  },
-  async mounted() {
-    this.buildTypeOptions();
-    await this.fetchProjects({ reset: true });
-  },
-  beforeUnmount() {
-    this.cleanupInfiniteScroll();
-  }
-};
+  };
 </script>
 
 <style scoped>
