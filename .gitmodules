@@ -1,0 +1,18 @@
+[submodule "apps/web/public/scratch"]
+	path = apps/web/public/scratch
+	url = https://github.com/zerocatdev/scratch-gui
+	branch = build
+[submodule "apps/web/public/python"]
+	path = apps/web/public/python
+	url = https://github.com/ZeroCatDev/python-editor.git
+[submodule "apps/web/public/clipcc"]
+	path = apps/web/public/clipcc
+	url = https://github.com/ZeroCatDev/zerocat-clipcc-gui.git
+	branch = build
+[submodule "apps/web/public/twemoji"]
+	path = apps/web/public/twemoji
+	url = https://github.com/twitter/twemoji
+[submodule "apps/web/public/02engine"]
+	path = apps/web/public/02engine
+	url = https://github.com/ZeroCatDev/02engine-scratch-gui.git
+	branch = build
