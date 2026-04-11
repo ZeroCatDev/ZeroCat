@@ -1,0 +1,40 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/.well-known/webfinger",
+      "destination": "https://api.zcservice.houlang.cloud/.well-known/webfinger"
+    },
+    {
+      "source": "/.well-known/nodeinfo",
+      "destination": "https://api.zcservice.houlang.cloud/.well-known/nodeinfo"
+    },
+    {
+      "source": "/.well-known/host-meta",
+      "destination": "https://api.zcservice.houlang.cloud/.well-known/host-meta"
+    },
+    {
+      "source": "/ap/:path*",
+      "destination": "https://api.zcservice.houlang.cloud/ap/:path*"
+    },
+    {
+      "source": "/scratch/:path*",
+      "destination": "/scratch/:path*"
+    },
+    {
+      "source": "/:path*",
+      "destination": "/"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/.well-known/webfinger",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        }
+      ]
+    }
+  ]
+}

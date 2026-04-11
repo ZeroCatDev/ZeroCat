@@ -13,10 +13,10 @@
  */
 
 import { S3Client, ListObjectsV2Command, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
-import { prisma } from '../src/services/prisma.js';
-import { processImage, generateMD5, uploadToS3 } from '../src/services/assets.js';
-import zcconfig from '../src/services/config/zcconfig.js';
-import logger from '../src/services/logger.js';
+import { prisma } from '../apps/api/src/services/prisma.js';
+import { processImage, generateMD5, uploadToS3 } from '../apps/api/src/services/assets.js';
+import zcconfig from '../apps/api/src/services/config/zcconfig.js';
+import logger from '../apps/api/src/services/logger.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 

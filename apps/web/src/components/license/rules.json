@@ -1,0 +1,76 @@
+{
+  "permissions": {
+    "commercial-use": {
+      "label": "商业用途",
+      "description": "许可的材料和衍生品可用于商业目的。"
+    },
+    "modifications": {
+      "label": "修改",
+      "description": "可以修改许可材料。"
+    },
+    "distribution": {
+      "label": "分配",
+      "description": "可以分发许可材料。"
+    },
+    "private-use": {
+      "label": "私人使用",
+      "description": "可以私下使用和修改许可材料。"
+    },
+    "patent-use": {
+      "label": "专利使用",
+      "description": "该许可提供了贡献者的明确授予专利权。"
+    }
+  },
+  "conditions": {
+    "include-copyright": {
+      "label": "许可证和版权通知",
+      "description": "许可材料必须包含许可证和版权通知的副本。"
+    },
+    "include-copyright--source": {
+      "label": "来源的许可证和版权通知",
+      "description": "许可证和版权通知的副本必须包含在源形式的许可材料中，但二进制文件不需要。"
+    },
+    "document-changes": {
+      "label": "状态变化",
+      "description": "必须记录对许可材料的更改。"
+    },
+    "disclose-source": {
+      "label": "披露来源",
+      "description": "分发许可材料时必须提供源代码。"
+    },
+    "network-use-disclose": {
+      "label": "网络使用是分布",
+      "description": "通过网络与许可材料进行交互的用户有权接收源代码的副本。"
+    },
+    "same-license": {
+      "label": "相同的许可证",
+      "description": "在分发许可材料时，必须根据相同的许可发布修改。在某些情况下，可以使用类似或相关的许可证。"
+    },
+    "same-license--file": {
+      "label": "相同的许可证（文件）",
+      "description": "在分发许可材料时，必须根据相同的许可发布现有文件的修改。在某些情况下，可以使用类似或相关的许可证。"
+    },
+    "same-license--library": {
+      "label": "相同的许可证（库）",
+      "description": "在分发许可材料时，必须根据相同的许可发布修改。在某些情况下，可以使用类似或相关的许可证，或者此条件可能不适用于使用许可材料作为库的作品。"
+    }
+  },
+  "limitations": {
+    "trademark-use": {
+      "label": "商标使用",
+      "description": "该许可明确指出，即使没有这样的声明的许可证可能没有授予任何隐性商标权，它也不授予商标权。"
+    },
+    "liability": {
+      "label": "责任",
+      "description": "该许可包括责任的限制。"
+    },
+    "patent-use": {
+      "label": "专利使用",
+      "description": "该许可明确指出，它不授予贡献者专利的任何权利。"
+    },
+    "warranty": {
+      "label": "保修单",
+      "description": "该许可明确指出，它不提供任何保修。"
+    }
+  }
+}

@@ -12,8 +12,8 @@
  */
 
 import { S3Client, ListObjectsV2Command, CopyObjectCommand, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
-import zcconfig from '../src/services/config/zcconfig.js';
-import logger from '../src/services/logger.js';
+import zcconfig from '../apps/api/src/services/config/zcconfig.js';
+import logger from '../apps/api/src/services/logger.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -157,16 +157,16 @@ class S3AssetsMigrator {
             if (error.name === 'NoSuchKey' || error.name === 'NotFound') {
                 return false;
             }
-            
+
             // Handle network errors and mirror issues
-            if (error.name === 'MirrorFailed' || 
-                error.message?.includes('502') || 
+            if (error.name === 'MirrorFailed' ||
+                error.message?.includes('502') ||
                 error.message?.includes('mirror host') ||
                 error.$metadata?.httpStatusCode === 502) {
                 logger.warn(`[S3迁移] 网络错误检查目标文件 ${targetKey}，假设文件不存在: ${error.message}`);
                 return false;
             }
-            
+
             // Log the error but don't fail the entire process
             logger.warn(`[S3迁移] 检查目标文件存在性时出错 ${targetKey}: ${error.message}，假设文件不存在`);
             return false;
@@ -191,8 +191,8 @@ class S3AssetsMigrator {
             return true;
         } catch (error) {
             // Handle network errors and mirror issues more gracefully
-            if (error.name === 'MirrorFailed' || 
-                error.message?.includes('502') || 
+            if (error.name === 'MirrorFailed' ||
+                error.message?.includes('502') ||
                 error.message?.includes('mirror host') ||
                 error.$metadata?.httpStatusCode === 502) {
                 logger.error(`[S3迁移] 网络错误复制文件 ${sourceKey} -> ${targetKey}: ${error.message}`);

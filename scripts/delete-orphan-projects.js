@@ -17,8 +17,8 @@
 
 import { promises as fs } from "fs";
 import path from "path";
-import { prisma } from "../src/services/prisma.js";
-import logger from "../src/services/logger.js";
+import { prisma } from "../apps/api/src/services/prisma.js";
+import logger from "../apps/api/src/services/logger.js";
 
 function parseArgs(argv) {
   const args = {

@@ -1,0 +1,11 @@
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" xmlns="http://www.w3.org/2000/svg" width="200" height="200"
+     viewBox="0 0 200 200" fill="none">
+    <circle cx="100" cy="100" r="100" fill="#FFFFFF">
+    </circle>
+    <path d="M38 162.867L100.5 100.367L100.5 162.867L38 162.867ZM163 100.367L100.5 100.367L100.5 162.867L163 100.367Z"
+          fill-rule="evenodd" fill="#415F91">
+    </path>
+    <path d="M38 100.367L100.5 37.8672L100.5 100.367L38 100.367ZM163 37.8672L100.5 37.8672L100.5 100.367L163 37.8672Z"
+          fill-rule="evenodd" fill="#8EACE3">
+    </path>
+</svg>

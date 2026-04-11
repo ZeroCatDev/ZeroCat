@@ -7,23 +7,28 @@ LABEL author="wuyuan"
 # 设置工作目录
 WORKDIR /app
 
-# 只复制 package.json 和 lock 文件先安装依赖
-COPY package*.json ./
+# 启用 pnpm（通过 corepack）
+RUN corepack enable
 
-# 使用缓存加速构建；锁版本保证一致性
-RUN npm install
+# 先复制依赖清单，提升构建缓存命中率
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/api/package.json ./apps/api/package.json
 
-# 复制项目文件
-COPY . .
+# 安装 workspace 依赖（后端运行时依赖根包 + apps/api）
+RUN pnpm install --frozen-lockfile
 
-# 预编译 Prisma
-RUN npx prisma generate
+# 仅复制后端应用代码，避免引入无关目录影响构建速度
+COPY apps/api ./apps/api
 
-# 设置环境变量（可选）
+# 切换到后端目录并生成 Prisma Client
+WORKDIR /app/apps/api
+RUN pnpm prisma
+
+# 设置环境变量
 ENV NODE_ENV=production
 
 # 容器对外暴露的端口
 EXPOSE 3000
 
-# 使用 exec form，避免 shell 问题
-CMD ["npm", "run", "start"]
+# 启动后端
+CMD ["pnpm", "start"]

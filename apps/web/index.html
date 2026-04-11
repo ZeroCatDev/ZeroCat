@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" href="/favicon.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ZeroCat社区</title>
+  <meta name="description" content="ZeroCat是新一代开源编程社区！创作、浏览、分享Scratch作品，体验多种不同的编辑器创作。" />
+  <meta
+    name="keywords"
+    content="scratch编程,scratch社区,python编程,python社区,在线编程,编程社区,开源,自托管,开源编程社区,代码,阿尔法营,有道小图灵,别针社区,clipcc,蝾螈池,zerocat"
+  />
+    <link rel="canonical" href="https://wuyuan.dev/">
+    <a rel="me" href="https://mastodon.social/@sunwuyuan" style="display:none;">Mastodon</a>
+  <!-- Open Graph -->
+  <meta property="og:title" content="ZeroCat社区" />
+  <meta property="og:description" content="ZeroCat是新一代开源编程社区！" />
+  <meta property="og:image" content="https://zerocat.dev/og.png" />
+  <meta property="og:url" content="https://zerocat.dev" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="ZeroCat社区" />
+  <meta name="twitter:description" content="ZeroCat是新一代开源编程社区！" />
+  <meta name="twitter:image" content="https://zerocat.dev/og.png" />
+  <meta name="twitter:url" content="https://zerocat.dev" />
+
+  <!-- PWA Configuration -->
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="ZeroCat社区" />
+  <meta name="application-name" content="ZeroCat社区" />
+  <meta name="msapplication-TileColor" content="#1976d2" />
+  <meta name="theme-color" content="#1976d2" />
+
+  <!-- Apple Touch Icons -->
+  <link rel="apple-touch-icon" href="/favicon.png" />
+  <link rel="apple-touch-icon" sizes="152x152" href="/favicon.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/favicon.png" />
+  <link rel="apple-touch-icon" sizes="167x167" href="/favicon.png" />
+
+  <!-- Manifest -->
+  <link rel="manifest" href="/manifest.webmanifest" />
+
+  <!-- Preconnect for performance -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://api.zerocat.dev" />
+  <link rel="dns-prefetch" href="https://api.zerocat.dev" />
+
+  <!-- Analytics -->
+  <script type="text/javascript">
+    (function(c,l,a,r,i,t,y){
+        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+        t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+    })(window, document, "clarity", "script", "s9nzgd46ci");
+  </script>
+</head>
+
+<body>
+  <div id="app">
+    <!-- 加载屏：Vue 挂载后自动替换 -->
+    <div id="app-shell">
+      <style>
+        *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+        html,body,#app{height:100%;margin:0;padding:0}
+        #app-shell {
+          position:fixed;inset:0;
+          display:flex;flex-direction:column;
+          align-items:center;justify-content:center;
+          background:#ffffff;
+          z-index:99999;
+        }
+        #app-shell.dark {
+          background:#121212;
+        }
+        #app-shell .shell-logo {
+          width:72px;height:72px;
+          border-radius:16px;
+          margin-bottom:32px;
+        }
+        #app-shell .shell-bar-track {
+          width:200px;height:4px;
+          background:#e0e0e0;
+          border-radius:2px;
+          overflow:hidden;
+        }
+        #app-shell.dark .shell-bar-track {
+          background:#333333;
+        }
+        #app-shell .shell-bar-fill {
+          width:40%;height:100%;
+          background:#1976d2;
+          border-radius:2px;
+          animation:shell-slide 1.2s ease-in-out infinite;
+        }
+        #app-shell.dark .shell-bar-fill {
+          background:#64b5f6;
+        }
+        @keyframes shell-slide {
+          0%{transform:translateX(-100%)}
+          100%{transform:translateX(350%)}
+        }
+      </style>
+      <script>
+        (function(){
+          var t = localStorage.getItem('theme');
+          var dark = t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme:dark)').matches);
+          if (dark) document.getElementById('app-shell').classList.add('dark');
+        })();
+      </script>
+      <img class="shell-logo" src="/favicon.png" alt="ZeroCat" />
+      <div class="shell-bar-track"><div class="shell-bar-fill"></div></div>
+    </div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>

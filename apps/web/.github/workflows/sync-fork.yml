@@ -1,0 +1,56 @@
+name: Sync Fork
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check repository URL
+        id: check_repo
+        run: |
+          CURRENT_REPO=$(git config --get remote.origin.url || echo "")
+          TARGET_REPO="git@github.com:Sunwuyuan/zerocat-frontend.git"
+          if [ "$CURRENT_REPO" = "$TARGET_REPO" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout repository
+        if: steps.check_repo.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Install SSH key
+        if: steps.check_repo.outputs.skip != 'true'
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_PRIVATE_KEY }}
+
+      - name: Configure Git
+        if: steps.check_repo.outputs.skip != 'true'
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+      - name: Sync to target repository
+        if: steps.check_repo.outputs.skip != 'true'
+        run: |
+          # Remove all existing remotes
+          git remote | xargs -r git remote remove
+
+          # Add new target remote
+          git remote add target git@github.com:Sunwuyuan/zerocat-frontend.git
+
+          # Push all branches and tags
+          git push target --all --force
+          git push target --tags --force

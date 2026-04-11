@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 import { createHash } from "crypto";
-import { prisma } from "../src/services/prisma.js";
-import logger from "../src/services/logger.js";
-import defaultProject from "../src/default_project.js";
+import { prisma } from "../apps/api/src/services/prisma.js";
+import logger from "../apps/api/src/services/logger.js";
+import defaultProject from "../apps/api/src/default_project.js";
 
 const EMPTY_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 const TARGET_TYPE = "article";

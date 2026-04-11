@@ -1,0 +1,9 @@
+# robots.txt for ZeroCat Community
+# Last updated: 2026-01-10
+
+User-agent: *
+Allow: /
+
+Disallow: /cgi-bin/
+
+Sitemap: https://zerocat.dev/sitemap.xml

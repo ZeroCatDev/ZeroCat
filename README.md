@@ -17,6 +17,49 @@
 
 [@SunWuyuan](https://github.com/sunwuyuan)
 
+## Monorepo 架构
+
+当前仓库已使用 Turborepo + pnpm workspace 组织：
+
+- 后端（Node/Express）位于 `apps/api`
+- 前端位于 `apps/web`
+- 统一使用根目录 `pnpm-lock.yaml` 作为唯一锁文件
+
+前端内嵌的外部仓库（Scratch GUI、02engine 等）已作为根仓库子模块管理。
+
+## 本地开发
+
+首次拉取（推荐）：
+
+```bash
+git clone --recurse-submodules https://github.com/ZeroCatDev/ZeroCat.git
+cd ZeroCat
+pnpm install
+```
+
+如果是已有仓库补拉子模块：
+
+```bash
+pnpm run submodules:init
+pnpm install
+```
+
+常用命令：
+
+```bash
+# 同时开发前后端（由 turbo 调度）
+pnpm run dev:all
+
+# 仅后端
+pnpm run dev:backend
+
+# 仅前端
+pnpm run dev:frontend
+
+# 全量构建（monorepo）
+pnpm run build:all
+```
+
 ## 如何贡献
 
 ZeroCat 非常欢迎你的加入！[提一个 Issue](https://github.com/ZeroCatDev/ZeroCat/issues/new) 或者提交一个 Pull Request。对于小白问题，最好在 qq 群里问，更加方便。

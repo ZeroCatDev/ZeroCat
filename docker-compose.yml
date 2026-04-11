@@ -12,4 +12,4 @@ services:
     restart: unless-stopped  # 推荐值，更安全
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=mysql://root:123456@127.0.0.1:3557/zerocat_develop
+      - DATABASE_URL=mysql://root:123456@host.docker.internal:3557/zerocat_develop

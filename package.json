@@ -3,13 +3,27 @@
   "version": "1.0.21",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@9.0.0",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js",
-    "prisma": "prisma generate",
-    "prisma:pull": "prisma db pull && prisma generate",
-    "dev": "NODE_ENV=development nodemon server.js",
-    "dev:no": "NODE_ENV=development node server.js"
+    "start": "pnpm run start:backend",
+    "start:backend": "pnpm --filter ./apps/api start",
+    "submodules:init": "git submodule update --init --recursive",
+    "submodules:sync": "git submodule sync --recursive",
+    "submodules:update": "git submodule update --remote --recursive",
+    "prisma": "pnpm --filter ./apps/api prisma",
+    "prisma:pull": "pnpm --filter ./apps/api prisma:pull",
+    "build": "pnpm run build:backend",
+    "build:backend": "pnpm --filter ./apps/api build",
+    "build:frontend": "pnpm --filter ./apps/web build",
+    "build:all": "turbo run build",
+    "dev": "pnpm run dev:backend",
+    "dev:backend": "pnpm --filter ./apps/api dev",
+    "dev:no": "pnpm --filter ./apps/api dev:no",
+    "dev:frontend": "pnpm --filter ./apps/web dev",
+    "dev:all": "turbo run dev",
+    "lint:all": "turbo run lint",
+    "typecheck:all": "turbo run typecheck"
   },
   "dependencies": {
     "@atproto/api": "^0.19.5",
@@ -102,7 +116,10 @@
     "ws": "^8.20.0"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "dotenv": "^17.3.1",
-    "prisma": "^7.6.0"
+    "nodemon": "^3.1.10",
+    "prisma": "^7.6.0",
+    "turbo": "^2.5.6"
   }
 }

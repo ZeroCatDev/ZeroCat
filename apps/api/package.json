@@ -1,0 +1,20 @@
+{
+  "name": "@zerocat/api",
+  "version": "1.0.21",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "start": "cross-env DOTENV_CONFIG_PATH=../../.env node server.js",
+    "dev": "cross-env DOTENV_CONFIG_PATH=../../.env NODE_ENV=development nodemon server.js",
+    "dev:no": "cross-env DOTENV_CONFIG_PATH=../../.env NODE_ENV=development node server.js",
+    "prisma": "cross-env DOTENV_CONFIG_PATH=../../.env prisma generate",
+    "prisma:pull": "cross-env DOTENV_CONFIG_PATH=../../.env prisma db pull && cross-env DOTENV_CONFIG_PATH=../../.env prisma generate",
+    "build": "pnpm run prisma"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "nodemon": "^3.1.10",
+    "prisma": "^7.6.0"
+  }
+}

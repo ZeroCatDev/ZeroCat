@@ -2,7 +2,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import "dotenv/config";
 import { PrismaPg } from '@prisma/adapter-pg'
-import { PrismaClient } from '../generated/prisma/client.ts'
+import { PrismaClient } from '../apps/api/generated/prisma/client.ts'
 
 const connectionString = `postgresql://zerocat:zerocat_pass_change_me@127.0.0.1:5432/zerocat`
 

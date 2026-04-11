@@ -1,0 +1,50 @@
+{
+  "google": {
+    "name": "Google",
+    "icon": "mdi-google",
+    "style": {
+      "backgroundColor": "#4285F4",
+      "color": "#FFFFFF"
+    }
+  },
+  "microsoft": {
+    "name": "Microsoft",
+    "icon": "mdi-microsoft",
+    "style": {
+      "backgroundColor": "#F25022",
+      "color": "#FFFFFF"
+    }
+  },
+  "github": {
+    "name": "GitHub",
+    "icon": "mdi-github",
+    "style": {
+      "backgroundColor": "#333333",
+      "color": "#FFFFFF"
+    }
+  },
+  "40code": {
+    "name": "40code",
+    "icon": "mdi-cat",
+    "style": {
+      "backgroundColor": "#2196f3",
+      "color": "#FFFFFF"
+    }
+  },
+  "linuxdo": {
+    "name": "LinuxDo",
+    "icon": "mdi-linux",
+    "style": {
+      "backgroundColor": "#FFB003",
+      "color": "#f0f0f0"
+    }
+  },
+  "default": {
+    "name": "Default",
+    "icon": "mdi-link",
+    "style": {
+      "backgroundColor": "#CCCCCC",
+      "color": "#000000"
+    }
+  }
+}

@@ -1,4 +1,4 @@
-import { prisma } from '../src/services/prisma.js';
+import { prisma } from '../apps/api/src/services/prisma.js';
 
 async function calculateDepth(commitId, cache = new Map()) {
     // 如果已经计算过这个提交的深度，直接返回缓存的结果

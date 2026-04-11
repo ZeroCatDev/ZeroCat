@@ -126,6 +126,7 @@ dist
 .yarn/install-state.gz
 .pnp.*
 .vercel
+.turbo
 
 .env*
 .flaskenv*
@@ -140,8 +141,8 @@ docker/redis/redis.conf
 
 meili_data
 
-cache
-/generated/prisma
+apps/api/cache
+/apps/api/generated/prisma
 
 # Sentry Config File
 .sentryclirc

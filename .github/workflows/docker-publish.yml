@@ -4,8 +4,24 @@ on:
   push:
     branches: ["main"]
     tags: ["v*"]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "apps/api/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/docker-publish.yml"
   pull_request:
     branches: ["main"]
+    paths:
+      - "Dockerfile"
+      - ".dockerignore"
+      - "apps/api/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/docker-publish.yml"
   workflow_dispatch:
 
 concurrency:
@@ -60,8 +76,10 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ./Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
