@@ -13,10 +13,6 @@
 
 ![使用Nodejs开发](public/Node.js.png)
 
-## 开发者
-
-[@SunWuyuan](https://github.com/sunwuyuan)
-
 
 ## 如何贡献
 
