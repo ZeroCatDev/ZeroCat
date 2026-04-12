@@ -431,12 +431,12 @@ const urlDescription = computed(() => {
 
 const urlImage = computed(() => {
   if (props.embed.type !== "url") return "";
-  return props.embed.image || "";
+  return "https://imageproxy.192325.xyz/?url=" + props.embed.image || "";
 });
 
 const urlIcon = computed(() => {
   if (props.embed.type !== "url") return "";
-  return props.embed.icon || "";
+  return "https://imageproxy.192325.xyz/?url=" + props.embed.icon || "";
 });
 
 const urlPath = computed(() => {
