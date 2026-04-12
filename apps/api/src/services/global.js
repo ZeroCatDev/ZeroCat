@@ -9,8 +9,7 @@ import { createRequire } from 'module';
 // Some Node.js environments or older bundlers may not support `import ... assert { type: 'json' }`.
 // Use createRequire to synchronously load JSON in a compatible way.
 const require = createRequire(import.meta.url);
-const DisposableDomains = require('disposable-domains/index.json');
-const DisposableWildcards = require('disposable-domains/wildcard.json');
+const disposableDomains = require('disposable-domains');
 //prisma client
 import { prisma } from "./prisma.js";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
@@ -112,7 +111,7 @@ function isJSON(str) {
 }
 function isDisposableEmail(email) {
 
-    //在DisposableDomains与DisposableWildcards两个array中查找域名
+    // 在 disposableDomains 中匹配根域名或子域名
     if (email) {
         email = email.toLowerCase().trim();
     }
@@ -120,9 +119,10 @@ function isDisposableEmail(email) {
         return false;
     }
 
-    const domain = email.split("@")[1];
-    return DisposableDomains.includes(domain) ||
-        DisposableWildcards.some(wildcard => domain.endsWith(wildcard));
+    const emailDomain = email.split("@")[1];
+    return disposableDomains.some((domain) =>
+        emailDomain === domain || emailDomain.endsWith(`.${domain}`)
+    );
 }
 export {
     prisma,
