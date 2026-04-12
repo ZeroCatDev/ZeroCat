@@ -7,6 +7,7 @@
       @click.stop
     >
       <slot>@{{ username }}</slot>
+
     </router-link>
   </UserHoverCard>
 </template>

@@ -17,7 +17,7 @@ const router = express.Router();
  * @desc Get events for a specific target
  * @access Public/Private (depends on event privacy)
  */
-router.get("/target/:targetType/:targetId", async (req, res) => {
+router.get("/target/:targetType/:targetId" , async (req, res) => {
     try {
         const {targetType, targetId} = req.params;
         const {limit = 10, offset = 0} = req.query;

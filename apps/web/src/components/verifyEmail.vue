@@ -33,7 +33,7 @@ const props = defineProps({
   },
   title: {
     type: String,
-    default: '验证邮箱'
+    default: '邮箱验证'
   }
 })
 
