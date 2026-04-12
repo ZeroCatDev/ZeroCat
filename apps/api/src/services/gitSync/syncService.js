@@ -14,7 +14,9 @@ const DEFAULT_README_FILE = 'README.md';
 const safeFilename = (value, fallback) => {
     const name = String(value || '').trim();
     if (!name) return fallback;
-    if (name.includes('..') || name.includes('/') || name.includes('\\')) return fallback;
+    if (name.includes('..') || name.startsWith('/') || name.startsWith('\\')) return fallback;
+    if (name.includes('\\')) return fallback;
+    if (!/^[0-9A-Za-z._/-]+$/.test(name)) return fallback;
     return name;
 };
 

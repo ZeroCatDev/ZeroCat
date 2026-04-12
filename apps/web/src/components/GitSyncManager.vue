@@ -102,6 +102,16 @@
                   </div>
                 </v-card-text>
                 <v-card-actions class="justify-end">
+                  <v-btn
+                    v-if="isUserAccount(activeLink) && !activeLink?.userTokenBound"
+                    color="primary"
+                    variant="tonal"
+                    :loading="authorizingUserToken"
+                    :disabled="!isAuthor"
+                    @click="startUserTokenAuthForLink(activeLink)"
+                  >
+                    授权个人账号
+                  </v-btn>
                   <v-btn variant="text" @click="linkDialogOpen = false">关闭</v-btn>
                   <v-btn
                     color="error"
@@ -110,7 +120,7 @@
                     :disabled="!isAuthor || !activeLink?.id"
                     @click="removeLink(activeLink?.id)"
                   >
-                    Delete
+                    解绑
                   </v-btn>
                 </v-card-actions>
               </v-card>
@@ -157,14 +167,12 @@
 
                   <div v-if="createLinkAccountType && createLinkAccountType !== 'organization'" class="mb-3">
                     <v-alert
+                    v-if="createNeedsUserToken"
                       :type="createNeedsUserToken ? 'warning' : 'success'"
                       variant="tonal"
                       class="mb-2"
                     >
-                      {{ createNeedsUserToken
-                        ? '个人账号创建仓库需要授权 App User Token。'
-                        : 'App User Token 已授权，可创建个人仓库。'
-                      }}
+                     个人账号创建仓库需要单独授权 App User Token。
                     </v-alert>
                     <v-btn
                       v-if="createNeedsUserToken"
@@ -232,9 +240,7 @@
                     </v-btn-toggle>
                   </div>
 
-                  <v-alert type="info" variant="tonal" class="mt-3">
-                    GitHub App 需要拥有创建仓库权限。创建后即可直接绑定同步。
-                  </v-alert>
+
                 </v-card-text>
                 <v-card-actions class="justify-end">
                   <v-btn variant="text" @click="createDialogOpen = false">取消</v-btn>
@@ -246,6 +252,65 @@
                   >
                     创建
                   </v-btn>
+                </v-card-actions>
+              </v-card>
+            </v-dialog>
+
+            <v-dialog v-model="fileTreeDialogOpen" max-width="720">
+              <v-card>
+                <v-card-title class="d-flex align-center ga-3">
+                  <v-icon size="24">mdi-file-tree</v-icon>
+                  <div>
+                    <div class="text-subtitle-1">选择文件</div>
+                    <div class="text-caption text-medium-emphasis">从仓库文件树中选择同步文件</div>
+                  </div>
+                  <v-spacer />
+                  <v-btn icon variant="text" @click="fileTreeDialogOpen = false">
+                    <v-icon size="20">mdi-close</v-icon>
+                  </v-btn>
+                </v-card-title>
+                <v-divider />
+                <v-card-text>
+                  <v-alert v-if="fileTreeError" type="error" variant="tonal" class="mb-3">
+                    {{ fileTreeError }}
+                  </v-alert>
+
+                  <v-text-field
+                    v-model="fileTreeSearch"
+                    label="搜索文件"
+                    prepend-inner-icon="mdi-magnify"
+                    clearable
+                    class="mb-3"
+                  />
+
+                  <div v-if="fileTreeLoading" class="d-flex align-center justify-center py-6">
+                    <v-progress-circular color="primary" indeterminate />
+                  </div>
+
+                  <v-list v-else density="compact" class="git-sync-tree-list">
+                    <v-list-item
+                      v-for="item in fileTreeItems"
+                      :key="item.path"
+                      @click="selectFileFromTree(item.path)"
+                      class="git-sync-tree-item"
+                      :style="{ paddingLeft: `${12 + item.depth * 12}px` }"
+                    >
+                      <template #prepend>
+                        <v-icon size="18">mdi-file-outline</v-icon>
+                      </template>
+                      <v-list-item-title>{{ item.name }}</v-list-item-title>
+                      <v-list-item-subtitle>{{ item.path }}</v-list-item-subtitle>
+                    </v-list-item>
+
+                    <v-list-item v-if="!fileTreeItems.length">
+                      <v-list-item-title class="text-center text-medium-emphasis">
+                        暂无可选文件
+                      </v-list-item-title>
+                    </v-list-item>
+                  </v-list>
+                </v-card-text>
+                <v-card-actions class="justify-end">
+                  <v-btn variant="text" @click="fileTreeDialogOpen = false">关闭</v-btn>
                 </v-card-actions>
               </v-card>
             </v-dialog>
@@ -331,30 +396,43 @@
               </v-btn>
             </div>
 
-            <v-expansion-panels variant="accordion" class="mb-3">
-              <v-expansion-panel>
-                <v-expansion-panel-title>高级设置</v-expansion-panel-title>
-                <v-expansion-panel-text>
-                  <v-combobox
-                    v-model="form.branch"
-                    :items="branchOptions"
-                    label="分支"
-                    placeholder="main"
-                    :disabled="!isAuthor"
-                    clearable
-                    class="mb-3"
-                  />
+                  <v-expansion-panels variant="accordion" class="mb-3">
+                    <v-expansion-panel>
+                      <v-expansion-panel-title>高级设置</v-expansion-panel-title>
+                      <v-expansion-panel-text>
+                        <v-combobox
+                          v-model="form.branch"
+                          :items="branchOptions"
+                          label="分支"
+                          placeholder="main"
+                          :disabled="!isAuthor"
+                          clearable
+                          class="mb-3"
+                        />
 
-                  <v-text-field
-                    v-model="form.fileName"
-                    label="项目文件"
-                    placeholder="project.json"
-                    :disabled="!isAuthor"
-                    class="mb-3"
-                  />
-                </v-expansion-panel-text>
-              </v-expansion-panel>
-            </v-expansion-panels>
+                        <div class="d-flex align-center ga-2 mb-1">
+                          <div class="text-subtitle-2">项目文件</div>
+                          <v-spacer />
+                          <v-btn
+                            size="small"
+                            variant="tonal"
+                            :disabled="!isAuthor || !selectedRepoItem"
+                            @click="openFileTreeDialog"
+                          >
+                            从仓库选择
+                          </v-btn>
+                        </div>
+
+                        <v-text-field
+                          v-model="form.fileName"
+                          label="文件路径"
+                          placeholder="project.json"
+                          :disabled="!isAuthor"
+                          class="mb-3"
+                        />
+                      </v-expansion-panel-text>
+                    </v-expansion-panel>
+                  </v-expansion-panels>
 
             <v-switch
               v-model="form.includeReadme"
@@ -478,6 +556,7 @@ const repoNameCheckToken = ref(0);
 let repoNameCheckTimer = null;
 
 const DEFAULT_PROJECT_FILE = 'project.json';
+const DEFAULT_ARTICLE_FILE = 'README.md';
 
 const form = reactive({
   branch: '',
@@ -496,8 +575,15 @@ const createForm = reactive({
 const repoNameCheckStatus = ref('idle');
 const repoNameCheckMessage = ref('');
 const checkingRepoName = ref(false);
+const fileTreeDialogOpen = ref(false);
+const fileTreeLoading = ref(false);
+const fileTreeError = ref('');
+const fileTreeEntries = ref([]);
+const fileTreeSearch = ref('');
 
-const isScratch = computed(() => String(props.projectType || '').toLowerCase().startsWith('scratch'));
+const normalizedProjectType = computed(() => String(props.projectType || '').toLowerCase());
+const isScratch = computed(() => normalizedProjectType.value.startsWith('scratch'));
+const isArticle = computed(() => normalizedProjectType.value === 'article');
 
 const repoUpdatedAt = (repo) => repo?.updated_at || repo?.pushed_at || repo?.created_at || null;
 
@@ -532,6 +618,20 @@ const selectedRepo = computed(() => selectedRepoItem.value?.repo || null);
 const selectedRepoUrl = computed(() => (
   selectedRepo.value?.html_url || selectedRepo.value?.htmlUrl || ''
 ));
+const selectedRepoOwner = computed(() => {
+  const repo = selectedRepo.value;
+  if (!repo) return '';
+  if (repo.owner?.login) return repo.owner.login;
+  const fullName = repo.full_name || repo.name || '';
+  return fullName.includes('/') ? fullName.split('/')[0] : '';
+});
+const selectedRepoName = computed(() => {
+  const repo = selectedRepo.value;
+  if (!repo) return '';
+  if (repo.name) return repo.name;
+  const fullName = repo.full_name || '';
+  return fullName.includes('/') ? fullName.split('/')[1] : fullName;
+});
 
 const selectedCreateLink = computed(() => (
   (links.value || []).find((link) => link.id === createForm.linkId) || null
@@ -692,6 +792,14 @@ const resolveProjectVisibility = () => {
   return normalized === 'public' ? 'public' : 'private';
 };
 
+const resolveDefaultFileName = () => (
+  isArticle.value ? DEFAULT_ARTICLE_FILE : DEFAULT_PROJECT_FILE
+);
+
+const resolveDefaultIncludeReadme = () => (
+  isArticle.value ? false : true
+);
+
 const sanitizeRepoName = (value) => {
   const raw = String(value || '').trim();
   if (!raw) return '';
@@ -757,13 +865,13 @@ const ensureSelectedRepoInList = () => {
 const hydrateForm = (nextSettings) => {
   if (!nextSettings) {
     form.branch = '';
-    form.fileName = DEFAULT_PROJECT_FILE;
-    form.includeReadme = true;
+    form.fileName = resolveDefaultFileName();
+    form.includeReadme = resolveDefaultIncludeReadme();
     return;
   }
   form.branch = nextSettings.branch || '';
-  form.fileName = nextSettings.fileName || DEFAULT_PROJECT_FILE;
-  form.includeReadme = nextSettings.includeReadme ?? true;
+  form.fileName = nextSettings.fileName || resolveDefaultFileName();
+  form.includeReadme = nextSettings.includeReadme ?? resolveDefaultIncludeReadme();
 };
 
 const openLinkDialog = (link) => {
@@ -845,6 +953,60 @@ const scheduleRepoNameCheck = () => {
       }
     }
   }, 450);
+};
+
+const fileTreeItems = computed(() => {
+  const entries = Array.isArray(fileTreeEntries.value) ? fileTreeEntries.value : [];
+  const files = entries.filter((entry) => entry?.type === 'blob' && entry?.path);
+  const normalized = files.map((entry) => {
+    const path = String(entry.path || '').trim();
+    const parts = path.split('/').filter(Boolean);
+    return {
+      path,
+      name: parts[parts.length - 1] || path,
+      depth: Math.max(0, parts.length - 1),
+    };
+  });
+
+  const keyword = String(fileTreeSearch.value || '').trim().toLowerCase();
+  const filtered = keyword
+    ? normalized.filter((item) => item.path.toLowerCase().includes(keyword))
+    : normalized;
+
+  return filtered.sort((a, b) => a.path.localeCompare(b.path));
+});
+
+const openFileTreeDialog = async () => {
+  if (!selectedRepoItem.value?.repo || !selectedRepoOwner.value || !selectedRepoName.value) {
+    setMessage('warning', '请先选择仓库');
+    return;
+  }
+
+  fileTreeDialogOpen.value = true;
+  fileTreeError.value = '';
+  fileTreeSearch.value = '';
+  fileTreeLoading.value = true;
+
+  try {
+    const repo = selectedRepo.value;
+    const res = await GitSyncService.getRepoTree({
+      linkId: repo?.gitLinkId,
+      repoOwner: selectedRepoOwner.value,
+      repoName: selectedRepoName.value,
+      branch: form.branch || repo?.default_branch || projectDefaultBranch.value || undefined,
+    });
+    fileTreeEntries.value = res.entries || [];
+  } catch (error) {
+    fileTreeError.value = error?.response?.data?.message || error?.message || '加载文件树失败';
+  } finally {
+    fileTreeLoading.value = false;
+  }
+};
+
+const selectFileFromTree = (path) => {
+  if (!path) return;
+  form.fileName = path;
+  fileTreeDialogOpen.value = false;
 };
 
 const applyProjectBranchDefault = () => {
@@ -1029,6 +1191,25 @@ const startUserTokenAuth = async () => {
   }
 };
 
+const startUserTokenAuthForLink = async (link) => {
+  if (!link?.id) return;
+  authorizingUserToken.value = true;
+  try {
+    const redirectUrl = typeof window !== 'undefined' ? window.location.href : '';
+    const res = await GitSyncService.createUserTokenUrl(redirectUrl, link.id);
+    if (res.url) {
+      window.open(res.url, '_blank', 'noopener');
+      notify('info', '授权', '完成授权后刷新账号列表。');
+    } else {
+      throw new Error(res.message || 'Missing auth URL.');
+    }
+  } catch (error) {
+    notify('error', '授权失败', error?.message || '无法发起授权。');
+  } finally {
+    authorizingUserToken.value = false;
+  }
+};
+
 const createRepo = async () => {
   if (!canCreateRepo.value) return;
   creatingRepo.value = true;
@@ -1182,6 +1363,12 @@ watch(createDialogOpen, (value) => {
     clearTimeout(repoNameCheckTimer);
   }
 });
+
+watch(fileTreeDialogOpen, (value) => {
+  if (!value) {
+    fileTreeSearch.value = '';
+  }
+});
 </script>
 
 <style scoped>
@@ -1204,16 +1391,14 @@ watch(createDialogOpen, (value) => {
   animation: git-sync-hero-shift 10s ease-in-out infinite;
 }
 
-.git-sync-create-hero::after {
-  content: '';
-  position: absolute;
-  inset: -20% -10% auto auto;
-  width: 180px;
-  height: 180px;
-  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0));
-  opacity: 0.8;
-  pointer-events: none;
+@media (prefers-color-scheme: dark) {
+  .git-sync-create-hero {
+    --hero-bg: linear-gradient(135deg, #0b1f2a 0%, #2a1d0d 55%, #122214 100%);
+    --hero-ring: rgba(148, 163, 184, 0.18);
+    box-shadow: 0 18px 34px -26px rgba(15, 23, 42, 0.8);
+  }
 }
+
 
 .git-sync-create-preview {
   font-family: 'Noto Sans SC', 'HarmonyOS Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif;
@@ -1232,6 +1417,17 @@ watch(createDialogOpen, (value) => {
   gap: 6px;
   margin-top: -8px;
   margin-bottom: 8px;
+}
+
+.git-sync-tree-list {
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
+}
+
+.git-sync-tree-item {
+  cursor: pointer;
 }
 
 @keyframes git-sync-hero-shift {

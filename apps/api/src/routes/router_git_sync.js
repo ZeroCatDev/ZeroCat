@@ -7,8 +7,8 @@ import logger from '../services/logger.js';
 import { prisma } from '../services/prisma.js';
 import zcconfig from '../services/config/zcconfig.js';
 import { buildInstallUrl, buildUserTokenAuthUrl, createInstallationToken, exchangeUserToken, getInstallationInfo } from '../services/gitSync/githubApp.js';
-import { createOrgRepo, createUserRepo, getAuthenticatedUser, getRepo, listInstallationRepos, searchRepos } from '../services/gitSync/githubApi.js';
-import { addUserGitLink, findUserGitHubUserToken, findUserGitLink, getProjectGitSyncSettings, getProjectGitSyncState, getUserGitHubUserTokens, getUserGitLinks, removeUserGitLink, setProjectGitSyncState, updateProjectGitSyncSettings, upsertUserGitHubUserToken } from '../services/gitSync/storage.js';
+import { createOrgRepo, createUserRepo, getAuthenticatedUser, getCommit, getRef, getRepo, getTree, listInstallationRepos, searchRepos } from '../services/gitSync/githubApi.js';
+import { addUserGitLink, findUserGitHubUserToken, findUserGitLink, getProjectGitSyncSettings, getProjectGitSyncState, getUserGitHubUserTokens, getUserGitLinks, removeUserGitHubUserToken, removeUserGitLink, setProjectGitSyncState, updateProjectGitSyncSettings, upsertUserGitHubUserToken } from '../services/gitSync/storage.js';
 import queueManager from '../services/queue/queueManager.js';
 
 const router = Router();
@@ -39,7 +39,9 @@ const normalizeRepoValue = (value) => String(value || '').trim();
 const sanitizeFilenameInput = (value) => {
     const name = String(value || '').trim();
     if (!name) return null;
-    if (name.includes('..') || name.includes('/') || name.includes('\\')) return null;
+    if (name.includes('..') || name.startsWith('/') || name.startsWith('\\')) return null;
+    if (!/^[0-9A-Za-z._/-]+$/.test(name)) return null;
+    if (name.includes('\\')) return null;
     return name;
 };
 
@@ -64,6 +66,33 @@ const buildExpiresAt = (expiresIn) => {
     const seconds = Number(expiresIn);
     if (!seconds || Number.isNaN(seconds)) return null;
     return new Date(Date.now() + seconds * 1000).toISOString();
+};
+
+const handleGitHubAuthError = async (error, res, context = {}) => {
+    if (error?.status !== 401) return false;
+    const tokenSource = context.tokenSource || '';
+    if (tokenSource === 'user') {
+        if (context.userId) {
+            await removeUserGitHubUserToken(
+                context.userId,
+                context.accountId,
+                context.accountLogin
+            );
+        }
+        res.status(401).send({
+            status: 'error',
+            code: 'user_token_required',
+            message: 'App User Token 已失效，请重新授权',
+        });
+        return true;
+    }
+
+    res.status(401).send({
+        status: 'error',
+        code: 'installation_token_invalid',
+        message: 'GitHub App 安装授权失效，请重新安装',
+    });
+    return true;
 };
 
 
@@ -476,6 +505,88 @@ router.get('/github/app/repos', needLogin, gitSyncRateLimit, async (req, res, ne
     }
 });
 
+router.get('/github/app/repos/tree', needLogin, gitSyncRateLimit, async (req, res, next) => {
+    try {
+        const linkId = String(req.query.linkId || '').trim();
+        const repoOwner = normalizeRepoValue(req.query.owner || req.query.repoOwner);
+        const repoName = normalizeRepoValue(req.query.repo || req.query.repoName);
+        const branch = normalizeRepoValue(req.query.branch);
+
+        if (!linkId || !repoOwner || !repoName) {
+            return res.status(400).send({ status: 'error', message: '缺少仓库参数' });
+        }
+
+        const link = await findUserGitLink(res.locals.userid, linkId);
+        if (!link?.installationId) {
+            return res.status(404).send({ status: 'error', message: '链接不存在' });
+        }
+
+        const accountType = normalizeAccountType(link?.account?.type);
+        const tokenSource = accountType === 'organization' ? 'installation' : 'user';
+        const authContext = {
+            tokenSource,
+            userId: res.locals.userid,
+            accountId: link?.account?.id,
+            accountLogin: link?.account?.login,
+        };
+        let token = null;
+
+        if (accountType === 'organization') {
+            const installationToken = (await createInstallationToken(link.installationId)).token;
+            if (!installationToken) {
+                return res.status(500).send({ status: 'error', message: '无法创建安装令牌' });
+            }
+            token = installationToken;
+        } else {
+            const userToken = await findUserGitHubUserToken(
+                res.locals.userid,
+                link?.account?.id,
+                link?.account?.login
+            );
+            if (!userToken?.accessToken) {
+                return res.status(400).send({
+                    status: 'error',
+                    code: 'user_token_required',
+                    message: '个人仓库查看需要授权 App User Token',
+                });
+            }
+            token = userToken.accessToken;
+        }
+
+        let repoInfo = null;
+        let targetBranch = branch || 'main';
+        let ref = null;
+        let commit = null;
+        let tree = null;
+        let entries = [];
+
+        try {
+            repoInfo = await getRepo(token, repoOwner, repoName);
+            targetBranch = branch || repoInfo?.default_branch || 'main';
+            ref = await getRef(token, repoOwner, repoName, targetBranch);
+            commit = await getCommit(token, repoOwner, repoName, ref?.object?.sha);
+            tree = await getTree(token, repoOwner, repoName, commit?.tree?.sha, true);
+            entries = Array.isArray(tree?.tree) ? tree.tree : [];
+        } catch (error) {
+            if (await handleGitHubAuthError(error, res, authContext)) return;
+            throw error;
+        }
+
+        res.status(200).send({
+            status: 'success',
+            branch: targetBranch,
+            truncated: Boolean(tree?.truncated),
+            entries: entries.map((item) => ({
+                path: item?.path || '',
+                type: item?.type || '',
+                size: item?.size || null,
+            })),
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
 router.get('/github/app/repos/check', needLogin, gitSyncRateLimit, async (req, res, next) => {
     try {
         const linkId = String(req.query.linkId || '').trim();
@@ -495,6 +606,13 @@ router.get('/github/app/repos/check', needLogin, gitSyncRateLimit, async (req, r
         }
 
         const accountType = normalizeAccountType(link?.account?.type);
+        const tokenSource = accountType === 'organization' ? 'installation' : 'user';
+        const authContext = {
+            tokenSource,
+            userId: res.locals.userid,
+            accountId: link?.account?.id,
+            accountLogin: link?.account?.login,
+        };
         let token = null;
 
         if (accountType === 'organization') {
@@ -526,6 +644,7 @@ router.get('/github/app/repos/check', needLogin, gitSyncRateLimit, async (req, r
             if (error?.status === 404) {
                 return res.status(200).send({ status: 'success', available: true });
             }
+            if (await handleGitHubAuthError(error, res, authContext)) return;
             throw error;
         }
     } catch (error) {
@@ -632,6 +751,13 @@ router.post('/github/app/repos/create', needLogin, gitSyncRateLimit, async (req,
         }
 
         const accountType = normalizeAccountType(link?.account?.type);
+        const tokenSource = accountType === 'organization' ? 'installation' : 'user';
+        const authContext = {
+            tokenSource,
+            userId: res.locals.userid,
+            accountId: link?.account?.id,
+            accountLogin: link?.account?.login,
+        };
         const accountLogin = link?.account?.login || '';
         let repository = null;
 
@@ -643,7 +769,12 @@ router.post('/github/app/repos/create', needLogin, gitSyncRateLimit, async (req,
             if (!token) {
                 return res.status(500).send({ status: 'error', message: '无法创建安装令牌' });
             }
-            repository = await createOrgRepo(token, accountLogin, payload);
+            try {
+                repository = await createOrgRepo(token, accountLogin, payload);
+            } catch (error) {
+                if (await handleGitHubAuthError(error, res, authContext)) return;
+                throw error;
+            }
         } else {
             const userToken = await findUserGitHubUserToken(
                 res.locals.userid,
@@ -657,7 +788,12 @@ router.post('/github/app/repos/create', needLogin, gitSyncRateLimit, async (req,
                     message: '个人仓库创建需要授权 App User Token',
                 });
             }
-            repository = await createUserRepo(userToken.accessToken, payload);
+            try {
+                repository = await createUserRepo(userToken.accessToken, payload);
+            } catch (error) {
+                if (await handleGitHubAuthError(error, res, authContext)) return;
+                throw error;
+            }
         }
 
         res.status(200).send({

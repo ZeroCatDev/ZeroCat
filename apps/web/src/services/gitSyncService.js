@@ -49,6 +49,16 @@ export const GitSyncService = {
     return unwrap(response);
   },
 
+  async getRepoTree({ linkId, repoOwner, repoName, branch }) {
+    const params = new URLSearchParams();
+    if (linkId) params.set('linkId', String(linkId));
+    if (repoOwner) params.set('owner', String(repoOwner));
+    if (repoName) params.set('repo', String(repoName));
+    if (branch) params.set('branch', String(branch));
+    const response = await axios.get(`/git-sync/github/app/repos/tree?${params.toString()}`);
+    return unwrap(response);
+  },
+
   async createRepo(payload) {
     const response = await axios.post('/git-sync/github/app/repos/create', payload);
     return unwrap(response);

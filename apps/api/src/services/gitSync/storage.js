@@ -262,6 +262,22 @@ export async function findUserGitHubUserToken(userId, accountId, accountLogin) {
     return tokens.find((token) => matchGitHubToken(token, accountId, accountLogin)) || null;
 }
 
+export async function removeUserGitHubUserToken(userId, accountId, accountLogin) {
+    if (!userId) return null;
+    const tokens = await getUserGitHubUserTokens(userId);
+    const remaining = tokens.filter((token) => !matchGitHubToken(token, accountId, accountLogin));
+    if (remaining.length === tokens.length) return false;
+
+    await writeTargetConfig({
+        targetType: USER_TARGET_TYPE,
+        targetId: userId,
+        key: USER_TOKENS_KEY,
+        value: JSON.stringify(remaining),
+    });
+
+    return true;
+}
+
 export const GIT_SYNC_KEYS = {
     USER_LINKS_KEY,
     USER_TOKENS_KEY,
