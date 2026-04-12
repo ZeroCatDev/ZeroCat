@@ -182,6 +182,17 @@ export const listNotificationSettings = async (params = {}) => {
   }
 };
 
+// 查询已修改的通知设置（仅返回非默认等级）
+export const listChangedNotificationSettings = async (params = {}) => {
+  try {
+    const response = await axios.get("/notifications/settings/changed", { params });
+    return response.data;
+  } catch (error) {
+    console.error("Error listing changed notification settings:", error);
+    throw error;
+  }
+};
+
 // 获取通知设置元数据
 export const getNotificationSettingsMetadata = async () => {
   try {

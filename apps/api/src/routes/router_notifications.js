@@ -489,6 +489,36 @@ router.get("/settings", needLogin, async (req, res) => {
     }
 });
 
+/**
+ * @route GET /notifications/settings/changed
+ * @desc 获取当前用户已修改的通知设置（仅返回非默认等级）
+ * @access Private
+ */
+router.get("/settings/changed", needLogin, async (req, res) => {
+    try {
+        const userId = res.locals.userid;
+        const { target_type, target_ids } = req.query;
+
+        const parsedTargetIds = target_ids
+            ? String(target_ids)
+                .split(",")
+                .map((id) => id.trim())
+                .filter((id) => id)
+            : [];
+
+        const result = await notificationUtils.listChangedNotificationSettings({
+            userId,
+            targetType: target_type,
+            targetIds: parsedTargetIds
+        });
+
+        res.json({ success: true, ...result });
+    } catch (error) {
+        logger.error("获取已修改通知设置出错:", error);
+        res.status(500).json({ error: "获取已修改通知设置失败" });
+    }
+});
+
 router.put("/settings", needLogin, async (req, res) => {
     try {
         const userId = res.locals.userid;

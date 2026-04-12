@@ -1882,6 +1882,36 @@ export async function listNotificationSettings({ userId, targetType, targetIds, 
 }
 
 /**
+ * 获取用户已修改的通知设置（仅返回非默认等级）
+ * @param {Object} options - 查询选项
+ * @param {number} options.userId - 用户ID
+ * @param {string} [options.targetType] - 目标类型过滤
+ * @param {string[]} [options.targetIds] - 目标ID过滤
+ * @returns {Promise<Object>}
+ */
+export async function listChangedNotificationSettings({ userId, targetType, targetIds }) {
+    const normalizedTargetType = normalizeTargetTypeForSettings(targetType);
+    const where = {
+        user_id: userId,
+        level: { notIn: ["BASIC", "DEFAULT"] },
+        ...(normalizedTargetType ? { target_type: normalizedTargetType } : {}),
+        ...(Array.isArray(targetIds) && targetIds.length > 0
+            ? { target_id: { in: targetIds.map((id) => String(id)) } }
+            : {})
+    };
+
+    const settings = await prisma.ow_notification_settings.findMany({
+        where,
+        orderBy: { updated_at: "desc" }
+    });
+
+    return {
+        settings,
+        total: settings.length
+    };
+}
+
+/**
  * 获取通知设置元数据
  * @returns {Object}
  */
@@ -1911,5 +1941,6 @@ export default {
     getNotificationSetting,
     updateNotificationSetting,
     listNotificationSettings,
+    listChangedNotificationSettings,
     getNotificationSettingsMetadata,
 };
