@@ -7,7 +7,7 @@ import logger from '../services/logger.js';
 import { prisma } from '../services/prisma.js';
 import zcconfig from '../services/config/zcconfig.js';
 import { buildInstallUrl, buildUserTokenAuthUrl, createInstallationToken, exchangeUserToken, getInstallationInfo } from '../services/gitSync/githubApp.js';
-import { createOrgRepo, createUserRepo, getAuthenticatedUser, getCommit, getRef, getRepo, getTree, listInstallationRepos, searchRepos } from '../services/gitSync/githubApi.js';
+import { createOrgRepo, createUserRepo, getAuthenticatedUser, getContent, getRepo, listInstallationRepos, searchRepos } from '../services/gitSync/githubApi.js';
 import { addUserGitLink, findUserGitHubUserToken, findUserGitLink, getProjectGitSyncSettings, getProjectGitSyncState, getUserGitHubUserTokens, getUserGitLinks, removeUserGitHubUserToken, removeUserGitLink, setProjectGitSyncState, updateProjectGitSyncSettings, upsertUserGitHubUserToken } from '../services/gitSync/storage.js';
 import queueManager from '../services/queue/queueManager.js';
 
@@ -45,12 +45,41 @@ const sanitizeFilenameInput = (value) => {
     return name;
 };
 
+const sanitizeRepoPathInput = (value) => {
+    const name = String(value || '').trim();
+    if (!name) return '';
+    if (name.includes('..') || name.startsWith('/') || name.startsWith('\\')) return null;
+    if (!/^[0-9A-Za-z._/-]+$/.test(name)) return null;
+    if (name.includes('\\')) return null;
+    return name.replace(/\/+$/, '');
+};
+
 const sanitizeRepoNameInput = (value) => {
     const name = String(value || '').trim();
     if (!name) return null;
     if (name.length > 100) return null;
     if (name.includes('..') || name.includes('/') || name.includes('\\')) return null;
     if (!/^[0-9A-Za-z._-]+$/.test(name)) return null;
+    return name;
+};
+
+const sanitizeRepoOwnerInput = (value) => {
+    const name = String(value || '').trim();
+    if (!name) return null;
+    if (name.length > 39) return null;
+    if (!/^[0-9A-Za-z](?:[0-9A-Za-z-]*[0-9A-Za-z])?$/.test(name)) return null;
+    if (name.includes('--')) return null;
+    return name;
+};
+
+const sanitizeBranchInput = (value) => {
+    const name = String(value || '').trim();
+    if (!name) return null;
+    if (name.length > 255) return null;
+    if (name.includes('..') || name.startsWith('/') || name.startsWith('\\')) return null;
+    if (name.endsWith('/') || name.endsWith('.')) return null;
+    if (name.includes('@{')) return null;
+    if (!/^[0-9A-Za-z._/-]+$/.test(name)) return null;
     return name;
 };
 
@@ -508,17 +537,33 @@ router.get('/github/app/repos', needLogin, gitSyncRateLimit, async (req, res, ne
 router.get('/github/app/repos/tree', needLogin, gitSyncRateLimit, async (req, res, next) => {
     try {
         const linkId = String(req.query.linkId || '').trim();
-        const repoOwner = normalizeRepoValue(req.query.owner || req.query.repoOwner);
-        const repoName = normalizeRepoValue(req.query.repo || req.query.repoName);
-        const branch = normalizeRepoValue(req.query.branch);
+        const repoOwner = sanitizeRepoOwnerInput(req.query.owner || req.query.repoOwner);
+        const repoName = sanitizeRepoNameInput(req.query.repo || req.query.repoName);
+        const rawBranch = req.query.branch;
+        const branch = rawBranch ? sanitizeBranchInput(rawBranch) : '';
+        const rawPath = req.query.path || req.query.dir;
+        const repoPath = rawPath ? sanitizeRepoPathInput(rawPath) : '';
 
         if (!linkId || !repoOwner || !repoName) {
             return res.status(400).send({ status: 'error', message: '缺少仓库参数' });
         }
 
+        if (rawBranch && !branch) {
+            return res.status(400).send({ status: 'error', message: '分支名称不合法' });
+        }
+
+        if (rawPath && repoPath == null) {
+            return res.status(400).send({ status: 'error', message: '路径不合法' });
+        }
+
         const link = await findUserGitLink(res.locals.userid, linkId);
         if (!link?.installationId) {
             return res.status(404).send({ status: 'error', message: '链接不存在' });
+        }
+
+        const accountLogin = normalizeRepoValue(link?.account?.login);
+        if (accountLogin && accountLogin.toLowerCase() !== repoOwner.toLowerCase()) {
+            return res.status(403).send({ status: 'error', message: '只能访问已绑定账号下的仓库' });
         }
 
         const accountType = normalizeAccountType(link?.account?.type);
@@ -555,18 +600,22 @@ router.get('/github/app/repos/tree', needLogin, gitSyncRateLimit, async (req, re
 
         let repoInfo = null;
         let targetBranch = branch || 'main';
-        let ref = null;
-        let commit = null;
-        let tree = null;
         let entries = [];
+        let limitExceeded = false;
+        const maxChildren = 100;
 
         try {
             repoInfo = await getRepo(token, repoOwner, repoName);
             targetBranch = branch || repoInfo?.default_branch || 'main';
-            ref = await getRef(token, repoOwner, repoName, targetBranch);
-            commit = await getCommit(token, repoOwner, repoName, ref?.object?.sha);
-            tree = await getTree(token, repoOwner, repoName, commit?.tree?.sha, true);
-            entries = Array.isArray(tree?.tree) ? tree.tree : [];
+            const content = await getContent(token, repoOwner, repoName, repoPath, targetBranch);
+            if (Array.isArray(content)) {
+                limitExceeded = content.length > maxChildren;
+                entries = limitExceeded ? content.slice(0, maxChildren) : content;
+            } else if (content?.type === 'file') {
+                return res.status(400).send({ status: 'error', message: '路径指向文件，请选择文件夹' });
+            } else {
+                entries = [];
+            }
         } catch (error) {
             if (await handleGitHubAuthError(error, res, authContext)) return;
             throw error;
@@ -575,9 +624,12 @@ router.get('/github/app/repos/tree', needLogin, gitSyncRateLimit, async (req, re
         res.status(200).send({
             status: 'success',
             branch: targetBranch,
-            truncated: Boolean(tree?.truncated),
+            path: repoPath || '',
+            limit: maxChildren,
+            limitExceeded,
             entries: entries.map((item) => ({
                 path: item?.path || '',
+                name: item?.name || item?.path || '',
                 type: item?.type || '',
                 size: item?.size || null,
             })),
@@ -845,15 +897,25 @@ router.post('/projects/:projectId/bind', needLogin, gitSyncRateLimit, async (req
             enabled,
         } = req.body || {};
 
-        const normalizedOwner = normalizeRepoValue(repoOwner);
-        const normalizedRepo = normalizeRepoValue(repoName);
+        const normalizedOwner = sanitizeRepoOwnerInput(repoOwner);
+        const normalizedRepo = sanitizeRepoNameInput(repoName);
+        const normalizedBranch = branch ? sanitizeBranchInput(branch) : '';
         if (!linkId || !normalizedOwner || !normalizedRepo) {
             return res.status(400).send({ status: 'error', message: '缺少绑定参数' });
+        }
+
+        if (branch && !normalizedBranch) {
+            return res.status(400).send({ status: 'error', message: '分支名称不合法' });
         }
 
         const link = await findUserGitLink(res.locals.userid, linkId);
         if (!link?.installationId) {
             return res.status(404).send({ status: 'error', message: '链接不存在' });
+        }
+
+        const accountLogin = normalizeRepoValue(link?.account?.login);
+        if (accountLogin && accountLogin.toLowerCase() !== normalizedOwner.toLowerCase()) {
+            return res.status(403).send({ status: 'error', message: '只能绑定已授权账号下的仓库' });
         }
 
         const token = (await createInstallationToken(link.installationId)).token;
@@ -871,7 +933,7 @@ router.post('/projects/:projectId/bind', needLogin, gitSyncRateLimit, async (req
             linkId,
             repoOwner: normalizedOwner,
             repoName: normalizedRepo,
-            branch: normalizeRepoValue(branch) || project.default_branch || repo?.default_branch || 'main',
+            branch: normalizedBranch || project.default_branch || repo?.default_branch || 'main',
             fileName: sanitizeFilenameInput(fileName) || undefined,
             includeReadme: parsedIncludeReadme === null ? true : parsedIncludeReadme,
             readmeFileName: undefined,

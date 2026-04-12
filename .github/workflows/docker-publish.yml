@@ -111,3 +111,48 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  deploy:
+    needs: build-and-push
+    if: github.event_name != 'pull_request'
+    runs-on: dq1
+
+    permissions:
+      deployments: write
+      contents: read
+
+    environment:
+      name: production
+      url: https://zerocat.dev
+
+    steps:
+      - name: Create deployment
+        id: deployment
+        uses: chrnorm/deployment-action@v2
+        with:
+          token: ${{ github.token }}
+          environment: production
+          environment-url: https://zerocat.dev
+
+      - name: Deploy latest containers
+        run: |
+          cd /opt/1panel/docker/compose/zerocat
+          docker compose pull
+          docker compose up -d --remove-orphans
+          docker image prune -af
+      - name: Mark deployment success
+        if: success()
+        uses: chrnorm/deployment-status@v2
+        with:
+          token: ${{ github.token }}
+          state: success
+          deployment-id: ${{ steps.deployment.outputs.deployment_id }}
+          environment-url: https://zerocat.dev
+
+      - name: Mark deployment failure
+        if: failure()
+        uses: chrnorm/deployment-status@v2
+        with:
+          token: ${{ github.token }}
+          state: failure
+          deployment-id: ${{ steps.deployment.outputs.deployment_id }}
+          environment-url: https://zerocat.dev

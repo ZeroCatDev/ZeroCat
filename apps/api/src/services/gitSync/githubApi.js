@@ -8,6 +8,15 @@ async function getApiBase() {
     return String(raw || DEFAULT_API_BASE).replace(/\/+$/, '');
 }
 
+const encodeSegment = (value) => encodeURIComponent(String(value || '').trim());
+
+const encodeRef = (value) => String(value || '')
+    .split('/')
+    .map((part) => encodeURIComponent(part))
+    .join('/');
+
+const buildRepoPath = (owner, repo) => `/repos/${encodeSegment(owner)}/${encodeSegment(repo)}`;
+
 function buildHeaders(token) {
     return {
         Authorization: `Bearer ${token}`,
@@ -38,7 +47,7 @@ async function request(token, method, path, data) {
 }
 
 export async function getRepo(token, owner, repo) {
-    return request(token, 'GET', `/repos/${owner}/${repo}`);
+    return request(token, 'GET', buildRepoPath(owner, repo));
 }
 
 export async function listInstallationRepos(token, options = {}) {
@@ -79,7 +88,7 @@ export async function createOrgRepo(token, org, payload) {
         error.status = 400;
         throw error;
     }
-    return request(token, 'POST', `/orgs/${orgName}/repos`, payload);
+    return request(token, 'POST', `/orgs/${encodeSegment(orgName)}/repos`, payload);
 }
 
 export async function getAuthenticatedUser(token) {
@@ -87,41 +96,44 @@ export async function getAuthenticatedUser(token) {
 }
 
 export async function getRef(token, owner, repo, branch) {
-    return request(token, 'GET', `/repos/${owner}/${repo}/git/ref/heads/${branch}`);
+    return request(token, 'GET', `${buildRepoPath(owner, repo)}/git/ref/heads/${encodeRef(branch)}`);
 }
 
 export async function createRef(token, owner, repo, branch, sha) {
-    return request(token, 'POST', `/repos/${owner}/${repo}/git/refs`, {
+    return request(token, 'POST', `${buildRepoPath(owner, repo)}/git/refs`, {
         ref: `refs/heads/${branch}`,
         sha,
     });
 }
 
 export async function updateRef(token, owner, repo, branch, sha) {
-    return request(token, 'PATCH', `/repos/${owner}/${repo}/git/refs/heads/${branch}`, {
+    return request(token, 'PATCH', `${buildRepoPath(owner, repo)}/git/refs/heads/${encodeRef(branch)}`, {
         sha,
         force: true,
     });
 }
 
 export async function getCommit(token, owner, repo, sha) {
-    return request(token, 'GET', `/repos/${owner}/${repo}/git/commits/${sha}`);
+    return request(token, 'GET', `${buildRepoPath(owner, repo)}/git/commits/${encodeSegment(sha)}`);
 }
 
 export async function getTree(token, owner, repo, treeSha, recursive = true) {
     const params = new URLSearchParams();
     if (recursive) params.set('recursive', '1');
-    return request(token, 'GET', `/repos/${owner}/${repo}/git/trees/${treeSha}?${params.toString()}`);
+    return request(token, 'GET', `${buildRepoPath(owner, repo)}/git/trees/${encodeSegment(treeSha)}?${params.toString()}`);
 }
 
 export async function getContent(token, owner, repo, path, ref) {
     const params = new URLSearchParams();
     if (ref) params.set('ref', ref);
-    return request(token, 'GET', `/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}?${params.toString()}`);
+    const rawPath = String(path || '').trim();
+    const basePath = `${buildRepoPath(owner, repo)}/contents`;
+    const urlPath = rawPath ? `${basePath}/${encodeURIComponent(rawPath)}` : basePath;
+    return request(token, 'GET', `${urlPath}?${params.toString()}`);
 }
 
 export async function createBlob(token, owner, repo, content, encoding = 'utf-8') {
-    return request(token, 'POST', `/repos/${owner}/${repo}/git/blobs`, {
+    return request(token, 'POST', `${buildRepoPath(owner, repo)}/git/blobs`, {
         content,
         encoding,
     });
@@ -130,11 +142,11 @@ export async function createBlob(token, owner, repo, content, encoding = 'utf-8'
 export async function createTree(token, owner, repo, tree, baseTreeSha = null) {
     const payload = { tree };
     if (baseTreeSha) payload.base_tree = baseTreeSha;
-    return request(token, 'POST', `/repos/${owner}/${repo}/git/trees`, payload);
+    return request(token, 'POST', `${buildRepoPath(owner, repo)}/git/trees`, payload);
 }
 
 export async function createCommit(token, owner, repo, message, treeSha, parents = []) {
-    return request(token, 'POST', `/repos/${owner}/${repo}/git/commits`, {
+    return request(token, 'POST', `${buildRepoPath(owner, repo)}/git/commits`, {
         message,
         tree: treeSha,
         parents,

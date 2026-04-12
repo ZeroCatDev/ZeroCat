@@ -274,6 +274,25 @@
                   <v-alert v-if="fileTreeError" type="error" variant="tonal" class="mb-3">
                     {{ fileTreeError }}
                   </v-alert>
+                  <v-alert v-if="fileTreeLimitExceeded" type="warning" variant="tonal" class="mb-3">
+                    该目录子项超过100个，仅显示前100项。
+                  </v-alert>
+
+                  <div class="d-flex align-center flex-wrap ga-2 mb-3">
+                    <v-btn
+                      size="small"
+                      variant="tonal"
+                      prepend-icon="mdi-arrow-up"
+                      :disabled="!fileTreePath"
+                      @click="goFileTreeUp"
+                    >
+                      上一级
+                    </v-btn>
+                    <div class="text-caption text-medium-emphasis">
+                      当前目录: /{{ fileTreePath || '' }}
+                    </div>
+                    <v-spacer />
+                  </div>
 
                   <v-text-field
                     v-model="fileTreeSearch"
@@ -291,15 +310,19 @@
                     <v-list-item
                       v-for="item in fileTreeItems"
                       :key="item.path"
-                      @click="selectFileFromTree(item.path)"
+                      @click="handleFileTreeItem(item)"
                       class="git-sync-tree-item"
-                      :style="{ paddingLeft: `${12 + item.depth * 12}px` }"
                     >
                       <template #prepend>
-                        <v-icon size="18">mdi-file-outline</v-icon>
+                        <v-icon size="18">
+                          {{ item.type === 'dir' ? 'mdi-folder-outline' : 'mdi-file-outline' }}
+                        </v-icon>
                       </template>
                       <v-list-item-title>{{ item.name }}</v-list-item-title>
                       <v-list-item-subtitle>{{ item.path }}</v-list-item-subtitle>
+                      <template v-if="item.type === 'dir'" #append>
+                        <v-icon size="16">mdi-chevron-right</v-icon>
+                      </template>
                     </v-list-item>
 
                     <v-list-item v-if="!fileTreeItems.length">
@@ -580,6 +603,8 @@ const fileTreeLoading = ref(false);
 const fileTreeError = ref('');
 const fileTreeEntries = ref([]);
 const fileTreeSearch = ref('');
+const fileTreePath = ref('');
+const fileTreeLimitExceeded = ref(false);
 
 const normalizedProjectType = computed(() => String(props.projectType || '').toLowerCase());
 const isScratch = computed(() => normalizedProjectType.value.startsWith('scratch'));
@@ -957,24 +982,60 @@ const scheduleRepoNameCheck = () => {
 
 const fileTreeItems = computed(() => {
   const entries = Array.isArray(fileTreeEntries.value) ? fileTreeEntries.value : [];
-  const files = entries.filter((entry) => entry?.type === 'blob' && entry?.path);
-  const normalized = files.map((entry) => {
-    const path = String(entry.path || '').trim();
-    const parts = path.split('/').filter(Boolean);
-    return {
-      path,
-      name: parts[parts.length - 1] || path,
-      depth: Math.max(0, parts.length - 1),
-    };
-  });
+  const normalized = entries
+    .map((entry) => {
+      const path = String(entry?.path || '').trim();
+      if (!path) return null;
+      const name = String(entry?.name || '').trim() || path.split('/').pop() || path;
+      return {
+        path,
+        name,
+        type: entry?.type || '',
+        size: entry?.size ?? null,
+      };
+    })
+    .filter(Boolean);
 
   const keyword = String(fileTreeSearch.value || '').trim().toLowerCase();
   const filtered = keyword
-    ? normalized.filter((item) => item.path.toLowerCase().includes(keyword))
+    ? normalized.filter((item) => (
+      item.name.toLowerCase().includes(keyword)
+      || item.path.toLowerCase().includes(keyword)
+    ))
     : normalized;
 
-  return filtered.sort((a, b) => a.path.localeCompare(b.path));
+  return filtered.sort((a, b) => {
+    const aDir = a.type === 'dir';
+    const bDir = b.type === 'dir';
+    if (aDir !== bDir) return aDir ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
 });
+
+const loadFileTree = async (path) => {
+  fileTreeLoading.value = true;
+  fileTreeError.value = '';
+  fileTreeSearch.value = '';
+  fileTreeEntries.value = [];
+  fileTreeLimitExceeded.value = false;
+  try {
+    const repo = selectedRepo.value;
+    const res = await GitSyncService.getRepoTree({
+      linkId: repo?.gitLinkId,
+      repoOwner: selectedRepoOwner.value,
+      repoName: selectedRepoName.value,
+      branch: form.branch || repo?.default_branch || projectDefaultBranch.value || undefined,
+      path: path || undefined,
+    });
+    fileTreeEntries.value = res.entries || [];
+    fileTreePath.value = res.path || path || '';
+    fileTreeLimitExceeded.value = res.limitExceeded === true;
+  } catch (error) {
+    fileTreeError.value = error?.response?.data?.message || error?.message || '加载文件夹失败';
+  } finally {
+    fileTreeLoading.value = false;
+  }
+};
 
 const openFileTreeDialog = async () => {
   if (!selectedRepoItem.value?.repo || !selectedRepoOwner.value || !selectedRepoName.value) {
@@ -983,24 +1044,23 @@ const openFileTreeDialog = async () => {
   }
 
   fileTreeDialogOpen.value = true;
-  fileTreeError.value = '';
-  fileTreeSearch.value = '';
-  fileTreeLoading.value = true;
+  await loadFileTree('');
+};
 
-  try {
-    const repo = selectedRepo.value;
-    const res = await GitSyncService.getRepoTree({
-      linkId: repo?.gitLinkId,
-      repoOwner: selectedRepoOwner.value,
-      repoName: selectedRepoName.value,
-      branch: form.branch || repo?.default_branch || projectDefaultBranch.value || undefined,
-    });
-    fileTreeEntries.value = res.entries || [];
-  } catch (error) {
-    fileTreeError.value = error?.response?.data?.message || error?.message || '加载文件树失败';
-  } finally {
-    fileTreeLoading.value = false;
+const goFileTreeUp = async () => {
+  if (!fileTreePath.value) return;
+  const parts = fileTreePath.value.split('/').filter(Boolean);
+  parts.pop();
+  await loadFileTree(parts.join('/'));
+};
+
+const handleFileTreeItem = async (item) => {
+  if (!item?.path) return;
+  if (item.type === 'dir') {
+    await loadFileTree(item.path);
+    return;
   }
+  selectFileFromTree(item.path);
 };
 
 const selectFileFromTree = (path) => {
@@ -1367,6 +1427,9 @@ watch(createDialogOpen, (value) => {
 watch(fileTreeDialogOpen, (value) => {
   if (!value) {
     fileTreeSearch.value = '';
+    fileTreeEntries.value = [];
+    fileTreePath.value = '';
+    fileTreeLimitExceeded.value = false;
   }
 });
 </script>
