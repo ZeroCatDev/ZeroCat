@@ -130,7 +130,7 @@ jobs:
         uses: chrnorm/deployment-action@v2
         with:
           token: ${{ github.token }}
-          environment: api-production
+          environment: Production
           environment-url: https://zerocat.dev
 
       - name: Deploy latest containers
