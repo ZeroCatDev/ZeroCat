@@ -87,7 +87,7 @@ jobs:
         with:
           images: |
             sunwuyuan/zerocat
-            ghcr.io/zerocatdev/zerocat
+            ghcr.io/moonrend/zerocat
           tags: |
             type=ref,event=branch
             type=ref,event=pr
