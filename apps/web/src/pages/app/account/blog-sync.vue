@@ -26,6 +26,11 @@
       </div>
     </v-card>
 
+    <BlogSyncStatusCard
+      :settings="settings"
+      :projects="projects"
+    />
+
     <v-card border flat class="pa-5 mb-4">
       <div class="text-subtitle-2 mb-2">GitHub 账号</div>
       <GitAccountPicker
@@ -192,6 +197,7 @@ import BlogSyncService from '@/services/blogSyncService';
 import GitAccountPicker from '@/components/GitAccountPicker.vue';
 import GitRepoPicker from '@/components/GitRepoPicker.vue';
 import GitDirectoryPicker from '@/components/GitDirectoryPicker.vue';
+import BlogSyncStatusCard from '@/components/BlogSyncStatusCard.vue';
 
 useHead({ title: '博客同步' });
 
@@ -205,6 +211,7 @@ const saving = ref(false);
 const resyncing = ref(false);
 const branchOptions = ref([]);
 const branchLoading = ref(false);
+const lastErrorMap = new Map();
 const frameworkDefaults = {
   hexo: 'source/_posts',
   hugo: 'content/posts',
@@ -335,7 +342,26 @@ async function loadBranches() {
 
 async function loadProjects() {
   const res = await BlogSyncService.listProjects();
-  if (res.status === 'success') projects.value = res.projects || [];
+  if (res.status === 'success') {
+    projects.value = res.projects || [];
+    notifySyncFailures(projects.value);
+  }
+}
+
+function notifySyncFailures(list) {
+  if (!Array.isArray(list)) return;
+  for (const project of list) {
+    const error = project?.syncState?.lastError || '';
+    if (!error) {
+      lastErrorMap.delete(project?.id);
+      continue;
+    }
+    const previous = lastErrorMap.get(project?.id);
+    if (previous === error) continue;
+    lastErrorMap.set(project?.id, error);
+    const name = project?.title || project?.name || `#${project?.id || ''}`;
+    notify('error', '博客同步失败', `${name}: ${error}`);
+  }
 }
 
 async function installGitHub() {
