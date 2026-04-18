@@ -402,7 +402,8 @@ async function syncAllArticles({ userId, reason, triggerProjectId } = {}) {
 
 
     const newTree = await createTree(token, settings.repoOwner, settings.repoName, treeEntries, baseTreeSha);
-    const commitMessage = `zerocat.dev blog: sync ${validEntries.length}`;
+    const postLabel = validEntries.length === 1 ? 'post' : 'posts';
+    const commitMessage = `ZeroCat Blog Sync: ${validEntries.length} ${postLabel}`;
     const parents = baseCommitSha ? [baseCommitSha] : [];
     const newCommit = await createCommit(token, settings.repoOwner, settings.repoName, commitMessage, newTree.sha, parents);
 

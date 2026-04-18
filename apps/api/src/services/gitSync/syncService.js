@@ -475,7 +475,10 @@ const gitSyncService = {
             const treeEntries = await createGitBlobs(token, repoOwner, repoName, entries);
             const newTree = await createTree(token, repoOwner, repoName, treeEntries, baseTreeSha);
 
-            const commitMessage = `zerocat.dev: ${commit.commit_message || commitId}`;
+            const projectLabel = buildProjectLabel(project);
+            const commitSummary = normalizeText(commit.commit_message).split('\n')[0].trim();
+            const summary = commitSummary || commitId.slice(0, 8);
+            const commitMessage = `ZeroCat Sync: ${projectLabel} - ${summary}`;
             const parents = baseCommitSha ? [baseCommitSha] : [];
             const newCommit = await createCommit(token, repoOwner, repoName, commitMessage, newTree.sha, parents);
 
