@@ -1310,13 +1310,17 @@ const queueManager = {
             throw new Error(`无效 userId: ${userId}`);
         }
 
-        const jobId = `blog-sync-${sanitize(parsedUserId)}-${sanitize(parsedProjectId)}-${options.reason || 'commit'}`;
+        const commitId = String(options.commitId || '').trim();
+        const reason = options.reason || 'project-commit';
+        const jobKey = commitId ? `commit-${sanitize(commitId)}` : reason;
+        const jobId = `blog-sync-${sanitize(parsedUserId)}-${sanitize(parsedProjectId)}-${jobKey}`;
         try {
             const job = await queue.add('blog-sync-article', {
                 type: 'blog-sync-article',
                 projectId: parsedProjectId,
                 userId: parsedUserId,
-                reason: options.reason || 'project-commit',
+                reason,
+                commitId: commitId || null,
                 requestedAt: new Date().toISOString(),
             }, {
                 jobId,

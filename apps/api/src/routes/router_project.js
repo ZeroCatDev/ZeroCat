@@ -864,6 +864,7 @@ router.put("/commit/id/:id", needLogin, async (req, res, next) => {
       try {
         await queueManager.enqueueBlogSyncArticle(projectid, project.authorid, {
           reason: 'project-commit',
+          commitId,
         });
       } catch (error) {
         logger.warn(`[blog-sync] enqueue failed project=${projectid}: ${error.message}`);

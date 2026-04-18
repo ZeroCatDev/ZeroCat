@@ -100,8 +100,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onBeforeUnmount, defineAsyncComponent, nextTick } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, computed, onBeforeUnmount, defineAsyncComponent, nextTick, onMounted } from 'vue'
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { useHead } from '@unhead/vue'
 import { localuser } from '@/services/localAccount'
 import { getProjectInfoByNamespace } from '@/services/projectService'
@@ -123,8 +123,21 @@ const markdownContent = ref('')
 const loading = ref(true)
 const loadError = ref('')
 const editorReady = ref(false)
+const lastSavedContent = ref('')
+const lastSavedTitle = ref('')
+const isReadyForAutosave = ref(false)
 
 useHead({ title: computed(() => `编辑 · ${article.value.title || slug.value}`) })
+
+const AUTO_SAVE_DELAY_DRAFT = 2500
+const AUTO_SAVE_DELAY_PUBLISHED = 8000
+const getAutoSaveDelay = () => (
+  article.value.state === 'public' ? AUTO_SAVE_DELAY_PUBLISHED : AUTO_SAVE_DELAY_DRAFT
+)
+const hasUnsavedChanges = computed(() => (
+  markdownContent.value !== lastSavedContent.value
+  || (article.value.title || '') !== lastSavedTitle.value
+))
 
 // Auto-save
 const saveStatus = ref('') // 'saving' | 'saved' | 'error' | ''
@@ -152,6 +165,7 @@ const editorOptions = {
 async function loadArticle() {
   loading.value = true
   loadError.value = ''
+  isReadyForAutosave.value = false
   try {
     const info = await getProjectInfoByNamespace(username.value, slug.value)
     if (!info || !info.id || info.id === 0) {
@@ -190,7 +204,11 @@ async function loadArticle() {
       markdownContent.value = ''
     }
 
+    lastSavedContent.value = markdownContent.value
+    lastSavedTitle.value = article.value.title || ''
     editorReady.value = true
+    await nextTick()
+    isReadyForAutosave.value = true
   } catch (e) {
     loadError.value = e?.message || '加载失败'
   } finally {
@@ -206,9 +224,10 @@ function manualSave() {
 
 // ——————— Auto-save ———————
 function onContentChange() {
+  if (!isReadyForAutosave.value) return
   clearTimeout(autoSaveTimer)
   saveStatus.value = ''
-  autoSaveTimer = setTimeout(doSave, 2500)
+  autoSaveTimer = setTimeout(doSave, getAutoSaveDelay())
 }
 
 async function doSave() {
@@ -235,6 +254,7 @@ async function doSave() {
     // Update parent commit for next save
     if (saveRes.data?.commit?.id) currentParentCommit = saveRes.data.commit.id
     currentAccessToken = token
+    lastSavedContent.value = content
     saveStatus.value = 'saved'
     setTimeout(() => { if (saveStatus.value === 'saved') saveStatus.value = '' }, 3000)
   } catch (e) {
@@ -256,6 +276,7 @@ async function saveTitle() {
     await request.put(`/project/id/${article.value.id}`, {
       title: article.value.title,
     })
+    lastSavedTitle.value = article.value.title || ''
   } catch (_) {}
 }
 
@@ -271,9 +292,25 @@ async function toggleVisibility() {
 // ——————— Lifecycle ———————
 loadArticle()
 
+const beforeUnloadHandler = (event) => {
+  if (!hasUnsavedChanges.value) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+onBeforeRouteLeave(() => {
+  if (!hasUnsavedChanges.value) return true
+  return window.confirm('当前内容未保存，确定要离开吗？')
+})
+
+onMounted(() => {
+  window.addEventListener('beforeunload', beforeUnloadHandler)
+})
+
 onBeforeUnmount(() => {
   clearTimeout(autoSaveTimer)
   clearTimeout(titleTimer)
+  window.removeEventListener('beforeunload', beforeUnloadHandler)
 })
 </script>
 
