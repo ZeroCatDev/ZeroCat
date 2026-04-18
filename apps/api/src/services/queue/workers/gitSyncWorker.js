@@ -4,6 +4,7 @@ import { QUEUE_NAMES } from '../queues.js';
 import zcconfig from '../../config/zcconfig.js';
 import logger from '../../logger.js';
 import gitSyncService from '../../gitSync/syncService.js';
+import blogSyncService from '../../gitSync/blogSyncService.js';
 
 let worker = null;
 
@@ -12,6 +13,10 @@ async function processGitSync(job) {
     switch (type) {
         case 'sync-project':
             return gitSyncService.syncProjectCommit(job);
+        case 'blog-sync-article':
+            return blogSyncService.syncArticleProject(job.data || {});
+        case 'blog-sync-remove':
+            return blogSyncService.removeArticleFromBlog(job.data || {});
         default:
             throw new Error(`未知 git-sync 任务类型: ${type}`);
     }

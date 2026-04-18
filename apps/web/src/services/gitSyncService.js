@@ -60,6 +60,15 @@ export const GitSyncService = {
     return unwrap(response);
   },
 
+  async getRepoBranches({ linkId, repoOwner, repoName }) {
+    const params = new URLSearchParams();
+    if (linkId) params.set('linkId', String(linkId));
+    if (repoOwner) params.set('owner', String(repoOwner));
+    if (repoName) params.set('repo', String(repoName));
+    const response = await axios.get(`/git-sync/github/app/repos/branches?${params.toString()}`);
+    return unwrap(response);
+  },
+
   async createRepo(payload) {
     const response = await axios.post('/git-sync/github/app/repos/create', payload);
     return unwrap(response);
@@ -95,6 +104,11 @@ export const GitSyncService = {
 
   async syncProject(projectId) {
     const response = await axios.post(`/git-sync/projects/${projectId}/sync`);
+    return unwrap(response);
+  },
+
+  async provisionProject(projectId, payload) {
+    const response = await axios.post(`/git-sync/projects/${projectId}/provision`, payload);
     return unwrap(response);
   },
 };

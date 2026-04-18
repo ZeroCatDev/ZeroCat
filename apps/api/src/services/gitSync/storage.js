@@ -56,6 +56,27 @@ async function writeTargetConfig({ targetType, targetId, key, value }) {
     });
 }
 
+export async function readUserConfig(userId, key) {
+    if (!userId || !key) return null;
+    const raw = await readTargetConfig({
+        targetType: USER_TARGET_TYPE,
+        targetId: userId,
+        key,
+    });
+    return parseJsonValue(raw, null);
+}
+
+export async function writeUserConfig(userId, key, value) {
+    if (!userId || !key) return null;
+    await writeTargetConfig({
+        targetType: USER_TARGET_TYPE,
+        targetId: userId,
+        key,
+        value: JSON.stringify(value || {}),
+    });
+    return value;
+}
+
 export async function getUserGitLinks(userId) {
     if (!userId) return [];
     const raw = await readTargetConfig({

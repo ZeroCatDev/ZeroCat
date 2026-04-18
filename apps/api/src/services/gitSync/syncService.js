@@ -3,6 +3,7 @@ import logger from '../logger.js';
 import { prisma } from '../prisma.js';
 import zcconfig from '../config/zcconfig.js';
 import { downloadFromS3 } from '../assets.js';
+import { createNotification } from '../../controllers/notifications.js';
 import { createInstallationToken } from './githubApp.js';
 import { createBlob, createCommit, createRef, createTree, getCommit, getContent, getRef, getRepo, getTree, updateRef } from './githubApi.js';
 import { extractScratchAssetMd5ExtList, buildScratchAssetS3Key } from './scratchAssets.js';
@@ -10,6 +11,14 @@ import { findUserGitLink, getProjectGitSyncSettings, getProjectGitSyncState, set
 
 const DEFAULT_PROJECT_FILE = 'project.json';
 const DEFAULT_README_FILE = 'README.md';
+
+const isEmptyRepoError = (error) => {
+    if (!error) return false;
+    if (error.isEmptyRepo) return true;
+    if (error.status === 409) return true;
+    const message = String(error.message || '');
+    return message.includes('Git Repository is empty');
+};
 
 const safeFilename = (value, fallback) => {
     const name = String(value || '').trim();
@@ -57,6 +66,59 @@ const buildReadmeContent = (project) => {
     return description;
 };
 
+const buildProjectLabel = (project) => project?.title || project?.name || String(project?.id || '');
+
+const buildRepoLabel = (settings) => {
+    const owner = String(settings?.repoOwner || '').trim();
+    const repo = String(settings?.repoName || '').trim();
+    if (!owner || !repo) return '';
+    return `${owner}/${repo}`;
+};
+
+const shouldNotifyFinalAttempt = (job) => {
+    if (!job) return true;
+    const maxAttempts = Number(job?.opts?.attempts) || 1;
+    const attemptsMade = Number(job?.attemptsMade) || 0;
+    return attemptsMade + 1 >= maxAttempts;
+};
+
+const notifyGitSyncFailure = async ({ project, settings, commit, error, job, projectId, commitId }) => {
+    if (!project?.authorid) return;
+    if (!shouldNotifyFinalAttempt(job)) return;
+
+    const projectLabel = buildProjectLabel(project);
+    const repoLabel = buildRepoLabel(settings);
+    const commitLabel = commit?.commit_message || commit?.id || commitId || '';
+    const content = repoLabel
+        ? `项目《${projectLabel}》同步到 ${repoLabel} 失败：${error.message}`
+        : `项目《${projectLabel}》Git 同步失败：${error.message}`;
+
+    try {
+        await createNotification({
+            userId: project.authorid,
+            title: 'Git 同步失败',
+            content,
+            notificationRequirement: 'ALL',
+            highPriority: true,
+            targetType: 'project',
+            targetId: project.id,
+            actorId: job?.data?.actorId || null,
+            pushChannels: ['browser', 'email'],
+            data: {
+                repo_owner: settings?.repoOwner || null,
+                repo_name: settings?.repoName || null,
+                branch: settings?.branch || null,
+                commit_id: commit?.id || commitId || null,
+                commit_message: commitLabel,
+                error_message: error.message,
+                type: 'git_sync_failed',
+            },
+        });
+    } catch (notifyError) {
+        logger.warn(`[git-sync] notify failed project=${project?.id || projectId}: ${notifyError.message}`);
+    }
+};
+
 const isScratchLikeType = (type) => String(type || '').toLowerCase().startsWith('scratch');
 const isScratchAssetName = (value) => /^[0-9a-f]{32}\.[A-Za-z0-9]+$/i.test(String(value || ''));
 
@@ -69,7 +131,7 @@ async function getRemoteFileHash(token, owner, repo, path, ref) {
         const buffer = Buffer.from(file.content, encoding);
         return sha256(buffer);
     } catch (error) {
-        if (error?.status === 404) return null;
+        if (error?.status === 404 || isEmptyRepoError(error)) return null;
         throw error;
     }
 }
@@ -89,7 +151,7 @@ async function getRemoteAssetSet(token, owner, repo, treeSha) {
         }
         return assets;
     } catch (error) {
-        if (error?.status === 404) return new Set();
+        if (error?.status === 404 || isEmptyRepoError(error)) return new Set();
         throw error;
     }
 }
@@ -104,7 +166,7 @@ async function resolveBranchBase(token, owner, repo, branch, defaultBranch) {
             baseTreeSha: commit?.tree?.sha || null,
         };
     } catch (error) {
-        if (error?.status !== 404) throw error;
+        if (error?.status !== 404 && !isEmptyRepoError(error)) throw error;
     }
 
     if (defaultBranch && defaultBranch !== branch) {
@@ -117,7 +179,7 @@ async function resolveBranchBase(token, owner, repo, branch, defaultBranch) {
                 baseTreeSha: commit?.tree?.sha || null,
             };
         } catch (error) {
-            if (error?.status !== 404) throw error;
+            if (error?.status !== 404 && !isEmptyRepoError(error)) throw error;
         }
     }
 
@@ -225,8 +287,12 @@ const gitSyncService = {
             throw new Error('Invalid project sync payload');
         }
 
+        let settings = null;
+        let project = null;
+        let commit = null;
+
         try {
-            const settings = await getProjectGitSyncSettings(projectId);
+            settings = await getProjectGitSyncSettings(projectId);
             if (!settings?.enabled) {
                 return { skipped: true, reason: 'sync_disabled' };
             }
@@ -235,7 +301,7 @@ const gitSyncService = {
                 return { skipped: true, reason: 'unsupported_provider' };
             }
 
-            const project = await prisma.ow_projects.findFirst({
+            project = await prisma.ow_projects.findFirst({
                 where: { id: projectId },
                 select: {
                     id: true,
@@ -250,7 +316,7 @@ const gitSyncService = {
                 return { skipped: true, reason: 'project_missing' };
             }
 
-            const commit = await prisma.ow_projects_commits.findFirst({
+            commit = await prisma.ow_projects_commits.findFirst({
                 where: { id: commitId, project_id: projectId },
             });
             if (!commit) {
@@ -409,7 +475,7 @@ const gitSyncService = {
             const treeEntries = await createGitBlobs(token, repoOwner, repoName, entries);
             const newTree = await createTree(token, repoOwner, repoName, treeEntries, baseTreeSha);
 
-            const commitMessage = `ZeroCat: ${commit.commit_message || commitId}`;
+            const commitMessage = `zerocat.dev: ${commit.commit_message || commitId}`;
             const parents = baseCommitSha ? [baseCommitSha] : [];
             const newCommit = await createCommit(token, repoOwner, repoName, commitMessage, newTree.sha, parents);
 
@@ -445,6 +511,41 @@ const gitSyncService = {
                 ...state,
                 lastError: error.message,
                 lastErrorAt: new Date().toISOString(),
+            });
+            if (!project && Number.isInteger(projectId)) {
+                try {
+                    project = await prisma.ow_projects.findFirst({
+                        where: { id: projectId },
+                        select: { id: true, name: true, title: true, authorid: true },
+                    });
+                } catch (loadError) {
+                    logger.debug(`[git-sync] load project failed project=${projectId}: ${loadError.message}`);
+                }
+            }
+            if (!settings && Number.isInteger(projectId)) {
+                try {
+                    settings = await getProjectGitSyncSettings(projectId);
+                } catch (loadError) {
+                    logger.debug(`[git-sync] load settings failed project=${projectId}: ${loadError.message}`);
+                }
+            }
+            if (!commit && commitId) {
+                try {
+                    commit = await prisma.ow_projects_commits.findFirst({
+                        where: { id: commitId, project_id: projectId },
+                    });
+                } catch (loadError) {
+                    logger.debug(`[git-sync] load commit failed project=${projectId} commit=${commitId}: ${loadError.message}`);
+                }
+            }
+            await notifyGitSyncFailure({
+                project,
+                settings,
+                commit,
+                error,
+                job,
+                projectId,
+                commitId,
             });
             throw error;
         }

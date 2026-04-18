@@ -54,6 +54,12 @@ const items = [
     href: 'https://kv.houlang.cloud',
   },
   {
+    icon: 'mdi-github',
+    label: '博客同步',
+    desc: '同步博客到GitHub仓库，hexo/hugo/valaxy',
+    to: '/app/account/blog-sync',
+  },
+  {
     icon: 'mdi-account',
     label: 'OAuth',
     desc: 'ZeroCat OAuth',

@@ -1291,6 +1291,78 @@ const queueManager = {
             return null;
         }
     },
+
+    async enqueueBlogSyncArticle(projectId, userId, options = {}) {
+        const queue = getGitSyncQueue();
+        if (!queue || !initialized) {
+            logger.warn('[queue-manager] Git sync queue not available');
+            return null;
+        }
+        const enabled = await zcconfig.get('git.sync.enabled', false);
+        if (!enabled) return { queued: false, reason: 'feature_disabled' };
+
+        const parsedProjectId = Number(projectId);
+        const parsedUserId = Number(userId);
+        if (!Number.isInteger(parsedProjectId) || parsedProjectId <= 0) {
+            throw new Error(`无效 projectId: ${projectId}`);
+        }
+        if (!Number.isInteger(parsedUserId) || parsedUserId <= 0) {
+            throw new Error(`无效 userId: ${userId}`);
+        }
+
+        const jobId = `blog-sync-${sanitize(parsedUserId)}-${sanitize(parsedProjectId)}-${options.reason || 'commit'}`;
+        try {
+            const job = await queue.add('blog-sync-article', {
+                type: 'blog-sync-article',
+                projectId: parsedProjectId,
+                userId: parsedUserId,
+                reason: options.reason || 'project-commit',
+                requestedAt: new Date().toISOString(),
+            }, {
+                jobId,
+                deduplication: { id: jobId, ttl: 30000 },
+                attempts: 3,
+                backoff: { type: 'exponential', delay: 20000 },
+                removeOnComplete: { age: 86400 },
+                removeOnFail: { age: 604800 },
+            });
+            return { queued: true, jobId: job.id };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue blog sync:', error.message);
+            return null;
+        }
+    },
+
+    async enqueueBlogSyncRemove(projectId, userId, options = {}) {
+        const queue = getGitSyncQueue();
+        if (!queue || !initialized) return null;
+        const enabled = await zcconfig.get('git.sync.enabled', false);
+        if (!enabled) return { queued: false, reason: 'feature_disabled' };
+        const parsedProjectId = Number(projectId);
+        const parsedUserId = Number(userId);
+        if (!Number.isInteger(parsedProjectId) || !Number.isInteger(parsedUserId)) return null;
+
+        const jobId = `blog-remove-${sanitize(parsedUserId)}-${sanitize(parsedProjectId)}-${Date.now()}`;
+        try {
+            const job = await queue.add('blog-sync-remove', {
+                type: 'blog-sync-remove',
+                projectId: parsedProjectId,
+                userId: parsedUserId,
+                reason: options.reason || 'removed',
+                requestedAt: new Date().toISOString(),
+            }, {
+                jobId,
+                attempts: 2,
+                backoff: { type: 'exponential', delay: 15000 },
+                removeOnComplete: { age: 86400 },
+                removeOnFail: { age: 604800 },
+            });
+            return { queued: true, jobId: job.id };
+        } catch (error) {
+            logger.error('[queue-manager] Failed to enqueue blog remove:', error.message);
+            return null;
+        }
+    },
 };
 
 export default queueManager;

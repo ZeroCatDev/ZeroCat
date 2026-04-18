@@ -860,6 +860,16 @@ router.put("/commit/id/:id", needLogin, async (req, res, next) => {
       logger.warn(`[git-sync] enqueue failed project=${projectid} commit=${commitId}: ${error.message}`);
     }
 
+    if (String(project.type || '').toLowerCase() === 'article') {
+      try {
+        await queueManager.enqueueBlogSyncArticle(projectid, project.authorid, {
+          reason: 'project-commit',
+        });
+      } catch (error) {
+        logger.warn(`[blog-sync] enqueue failed project=${projectid}: ${error.message}`);
+      }
+    }
+
     res.status(200).send({
       status: "success",
       message: "保存成功",
@@ -1547,6 +1557,14 @@ router.delete("/:id", needLogin, requireSudo, async (req, res, next) => {
       }).catch((error) => {
         logger.debug(`[gorse] delete project sync enqueue failed project=${req.params.id}: ${error.message}`);
       });
+
+      if (String(project.type || '').toLowerCase() === 'article') {
+        queueManager.enqueueBlogSyncRemove(Number(req.params.id), project.authorid, {
+          reason: 'project-delete',
+        }).catch((error) => {
+          logger.debug(`[blog-sync] delete enqueue failed project=${req.params.id}: ${error.message}`);
+        });
+      }
     }
 
     res.status(200).send({

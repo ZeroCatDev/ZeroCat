@@ -7,8 +7,9 @@ import logger from '../services/logger.js';
 import { prisma } from '../services/prisma.js';
 import zcconfig from '../services/config/zcconfig.js';
 import { buildInstallUrl, buildUserTokenAuthUrl, createInstallationToken, exchangeUserToken, getInstallationInfo } from '../services/gitSync/githubApp.js';
-import { createOrgRepo, createUserRepo, getAuthenticatedUser, getContent, getRepo, listInstallationRepos, searchRepos } from '../services/gitSync/githubApi.js';
+import { createOrgRepo, createUserRepo, getAuthenticatedUser, getContent, getRepo, listBranches, listInstallationRepos, searchRepos } from '../services/gitSync/githubApi.js';
 import { addUserGitLink, findUserGitHubUserToken, findUserGitLink, getProjectGitSyncSettings, getProjectGitSyncState, getUserGitHubUserTokens, getUserGitLinks, removeUserGitHubUserToken, removeUserGitLink, setProjectGitSyncState, updateProjectGitSyncSettings, upsertUserGitHubUserToken } from '../services/gitSync/storage.js';
+import blogSyncService, { getBlogSettings, setBlogSettings, disableBlogSettings, getBlogState } from '../services/gitSync/blogSyncService.js';
 import queueManager from '../services/queue/queueManager.js';
 
 const router = Router();
@@ -97,6 +98,14 @@ const buildExpiresAt = (expiresIn) => {
     return new Date(Date.now() + seconds * 1000).toISOString();
 };
 
+const isEmptyRepoError = (error) => {
+    if (!error) return false;
+    if (error.isEmptyRepo) return true;
+    if (error.status === 409) return true;
+    const message = String(error.message || '');
+    return message.includes('Git Repository is empty');
+};
+
 const handleGitHubAuthError = async (error, res, context = {}) => {
     if (error?.status !== 401) return false;
     const tokenSource = context.tokenSource || '';
@@ -163,6 +172,10 @@ const resolveFrontendRedirect = async (redirectUrl, fallbackPath, fallbackParams
         });
     }
     return fallback.toString();
+};
+
+const buildCompleteRedirect = async (params) => {
+    return resolveFrontendRedirect(null, '/app/oauth/github/complete', params);
 };
 
 const listAllInstallationRepos = async (token) => {
@@ -308,9 +321,7 @@ router.get('/github/app/callback', gitSyncRateLimit, async (req, res, next) => {
         const state = String(req.query.state || '').trim();
 
         if (!installationId || !state) {
-            const redirectUrl = await resolveFrontendRedirect(null, '/app/account/oauth/bind/error', {
-                message: '缺少安装参数',
-            });
+            const redirectUrl = await buildCompleteRedirect({ status: 'error', message: '缺少安装参数' });
             if (redirectUrl) return res.redirect(redirectUrl);
             return res.status(400).send({ status: 'error', message: '缺少安装参数' });
         }
@@ -320,9 +331,7 @@ router.get('/github/app/callback', gitSyncRateLimit, async (req, res, next) => {
         await redisClient.delete(stateKey);
 
         if (!stateData?.userId) {
-            const redirectUrl = await resolveFrontendRedirect(null, '/app/account/oauth/bind/error', {
-                message: '安装状态已过期',
-            });
+            const redirectUrl = await buildCompleteRedirect({ status: 'error', message: '安装状态已过期' });
             if (redirectUrl) return res.redirect(redirectUrl);
             return res.status(400).send({ status: 'error', message: '安装状态已过期' });
         }
@@ -346,7 +355,7 @@ router.get('/github/app/callback', gitSyncRateLimit, async (req, res, next) => {
         });
 
         const accountType = normalizeAccountType(account?.type);
-        const shouldAutoUserToken = parseBooleanInput(stateData?.autoUserToken) === true;
+        const shouldAutoUserToken = parseBooleanInput(stateData?.autoUserToken) !== false;
         if (shouldAutoUserToken && accountType && accountType !== 'organization') {
             const existingToken = await findUserGitHubUserToken(
                 stateData.userId,
@@ -362,6 +371,7 @@ router.get('/github/app/callback', gitSyncRateLimit, async (req, res, next) => {
                     createdAt: new Date().toISOString(),
                     redirectUrl: stateData.redirectUrl || null,
                     linkId: link?.id || null,
+                    installCompleted: true,
                 }, 600);
 
                 if (storedUserToken) {
@@ -377,13 +387,15 @@ router.get('/github/app/callback', gitSyncRateLimit, async (req, res, next) => {
             }
         }
 
-        const redirectUrl = await resolveFrontendRedirect(stateData.redirectUrl, '/app/account/oauth');
+        const redirectUrl = await resolveFrontendRedirect(null, '/app/oauth/github/complete', {
+            status: 'success',
+            step: 'install',
+            redirect: stateData.redirectUrl || '',
+        });
         if (redirectUrl) return res.redirect(redirectUrl);
         res.status(200).send({ status: 'success', link });
     } catch (error) {
-        const redirectUrl = await resolveFrontendRedirect(null, '/app/account/oauth/bind/error', {
-            message: 'GitHub App绑定失败',
-        });
+        const redirectUrl = await buildCompleteRedirect({ status: 'error', message: 'GitHub App绑定失败' });
         if (redirectUrl) return res.redirect(redirectUrl);
         next(error);
     }
@@ -396,17 +408,13 @@ router.get('/github/app/user-token/callback', gitSyncRateLimit, async (req, res,
         const errorReason = String(req.query.error_description || req.query.error || '').trim();
 
         if (errorReason) {
-            const redirectUrl = await resolveFrontendRedirect(null, '/app/account/oauth/bind/error', {
-                message: errorReason,
-            });
+            const redirectUrl = await buildCompleteRedirect({ status: 'error', message: errorReason });
             if (redirectUrl) return res.redirect(redirectUrl);
             return res.status(400).send({ status: 'error', message: errorReason });
         }
 
         if (!authCode || !state) {
-            const redirectUrl = await resolveFrontendRedirect(null, '/app/account/oauth/bind/error', {
-                message: '缺少授权参数',
-            });
+            const redirectUrl = await buildCompleteRedirect({ status: 'error', message: '缺少授权参数' });
             if (redirectUrl) return res.redirect(redirectUrl);
             return res.status(400).send({ status: 'error', message: '缺少授权参数' });
         }
@@ -416,9 +424,7 @@ router.get('/github/app/user-token/callback', gitSyncRateLimit, async (req, res,
         await redisClient.delete(stateKey);
 
         if (!stateData?.userId) {
-            const redirectUrl = await resolveFrontendRedirect(null, '/app/account/oauth/bind/error', {
-                message: '授权状态已过期',
-            });
+            const redirectUrl = await buildCompleteRedirect({ status: 'error', message: '授权状态已过期' });
             if (redirectUrl) return res.redirect(redirectUrl);
             return res.status(400).send({ status: 'error', message: '授权状态已过期' });
         }
@@ -459,13 +465,12 @@ router.get('/github/app/user-token/callback', gitSyncRateLimit, async (req, res,
             expiresAt: buildExpiresAt(tokenData.expires_in),
         });
 
-        const redirectUrl = await resolveFrontendRedirect(stateData.redirectUrl, '/app/account/oauth', {
-            git_sync_user_token: 'success',
-        });
+        const redirectUrl = await buildCompleteRedirect({ status: 'success', step: 'user-token', redirect: stateData.redirectUrl || '' });
         if (redirectUrl) return res.redirect(redirectUrl);
         res.status(200).send({ status: 'success' });
     } catch (error) {
-        const redirectUrl = await resolveFrontendRedirect(null, '/app/account/oauth/bind/error', {
+        const redirectUrl = await buildCompleteRedirect({
+            status: 'error',
             message: `App User Token绑定失败: ${error.message}`,
         });
         if (redirectUrl) return res.redirect(redirectUrl);
@@ -607,14 +612,22 @@ router.get('/github/app/repos/tree', needLogin, gitSyncRateLimit, async (req, re
         try {
             repoInfo = await getRepo(token, repoOwner, repoName);
             targetBranch = branch || repoInfo?.default_branch || 'main';
-            const content = await getContent(token, repoOwner, repoName, repoPath, targetBranch);
-            if (Array.isArray(content)) {
-                limitExceeded = content.length > maxChildren;
-                entries = limitExceeded ? content.slice(0, maxChildren) : content;
-            } else if (content?.type === 'file') {
-                return res.status(400).send({ status: 'error', message: '路径指向文件，请选择文件夹' });
-            } else {
-                entries = [];
+            try {
+                const content = await getContent(token, repoOwner, repoName, repoPath, targetBranch);
+                if (Array.isArray(content)) {
+                    limitExceeded = content.length > maxChildren;
+                    entries = limitExceeded ? content.slice(0, maxChildren) : content;
+                } else if (content?.type === 'file') {
+                    return res.status(400).send({ status: 'error', message: '路径指向文件，请选择文件夹' });
+                } else {
+                    entries = [];
+                }
+            } catch (error) {
+                if (isEmptyRepoError(error) || error?.status === 404) {
+                    entries = [];
+                } else {
+                    throw error;
+                }
             }
         } catch (error) {
             if (await handleGitHubAuthError(error, res, authContext)) return;
@@ -704,6 +717,80 @@ router.get('/github/app/repos/check', needLogin, gitSyncRateLimit, async (req, r
     }
 });
 
+router.get('/github/app/repos/branches', needLogin, gitSyncRateLimit, async (req, res, next) => {
+    try {
+        const linkId = String(req.query.linkId || '').trim();
+        const repoOwner = sanitizeRepoOwnerInput(req.query.owner || req.query.repoOwner);
+        const repoName = sanitizeRepoNameInput(req.query.repo || req.query.repoName);
+
+        if (!linkId || !repoOwner || !repoName) {
+            return res.status(400).send({ status: 'error', message: '缺少仓库参数' });
+        }
+
+        const link = await findUserGitLink(res.locals.userid, linkId);
+        if (!link?.installationId) {
+            return res.status(404).send({ status: 'error', message: '链接不存在' });
+        }
+
+        const accountLogin = normalizeRepoValue(link?.account?.login);
+        if (accountLogin && accountLogin.toLowerCase() !== repoOwner.toLowerCase()) {
+            return res.status(403).send({ status: 'error', message: '只能访问已绑定账号下的仓库' });
+        }
+
+        const accountType = normalizeAccountType(link?.account?.type);
+        const tokenSource = accountType === 'organization' ? 'installation' : 'user';
+        const authContext = {
+            tokenSource,
+            userId: res.locals.userid,
+            accountId: link?.account?.id,
+            accountLogin: link?.account?.login,
+        };
+
+        let token = null;
+        if (accountType === 'organization') {
+            const installationToken = (await createInstallationToken(link.installationId)).token;
+            if (!installationToken) {
+                return res.status(500).send({ status: 'error', message: '无法创建安装令牌' });
+            }
+            token = installationToken;
+        } else {
+            const userToken = await findUserGitHubUserToken(
+                res.locals.userid,
+                link?.account?.id,
+                link?.account?.login
+            );
+            if (!userToken?.accessToken) {
+                return res.status(400).send({
+                    status: 'error',
+                    code: 'user_token_required',
+                    message: '个人仓库查看需要授权 App User Token',
+                });
+            }
+            token = userToken.accessToken;
+        }
+
+        try {
+            const branches = await listBranches(token, repoOwner, repoName, { perPage: 100 });
+            const list = Array.isArray(branches) ? branches : [];
+            return res.status(200).send({
+                status: 'success',
+                branches: list.map((branch) => ({
+                    name: branch?.name || '',
+                    commitSha: branch?.commit?.sha || null,
+                })).filter((item) => item.name),
+            });
+        } catch (error) {
+            if (isEmptyRepoError(error)) {
+                return res.status(200).send({ status: 'success', branches: [] });
+            }
+            if (await handleGitHubAuthError(error, res, authContext)) return;
+            throw error;
+        }
+    } catch (error) {
+        next(error);
+    }
+});
+
 router.get('/github/app/repos/search', needLogin, gitSyncRateLimit, async (req, res, next) => {
     try {
         const query = String(req.query.q || req.query.query || '').trim();
@@ -772,7 +859,7 @@ router.get('/github/app/repos/search', needLogin, gitSyncRateLimit, async (req, 
 
 router.post('/github/app/repos/create', needLogin, gitSyncRateLimit, async (req, res, next) => {
     try {
-        const { linkId, name, description, private: isPrivate, autoInit } = req.body || {};
+        const { linkId, name, description, private: isPrivate } = req.body || {};
         const repoName = sanitizeRepoNameInput(name);
         if (!linkId || !repoName) {
             return res.status(400).send({ status: 'error', message: '缺少仓库名称或账号' });
@@ -792,10 +879,7 @@ router.post('/github/app/repos/create', needLogin, gitSyncRateLimit, async (req,
             payload.private = parsedPrivate;
         }
 
-        const parsedAutoInit = parseBooleanInput(autoInit);
-        if (parsedAutoInit !== null) {
-            payload.auto_init = parsedAutoInit;
-        }
+        payload.auto_init = true;
 
         const normalizedDescription = sanitizeDescriptionInput(description);
         if (normalizedDescription) {
@@ -863,6 +947,123 @@ router.post('/github/app/repos/create', needLogin, gitSyncRateLimit, async (req,
     }
 });
 
+
+router.post('/projects/:projectId/provision', needLogin, gitSyncRateLimit, async (req, res, next) => {
+    try {
+        const project = await ensureProjectOwner(req.params.projectId, res.locals.userid);
+        const { linkId, name, description, private: isPrivate, branch, fileName, includeReadme } = req.body || {};
+
+        const repoName = sanitizeRepoNameInput(name || project.name);
+        if (!linkId || !repoName) {
+            return res.status(400).send({ status: 'error', message: '缺少仓库名称或账号' });
+        }
+
+        const link = await findUserGitLink(res.locals.userid, linkId);
+        if (!link?.installationId) {
+            return res.status(404).send({ status: 'error', message: '链接不存在' });
+        }
+
+        const accountType = normalizeAccountType(link?.account?.type);
+        const accountLogin = link?.account?.login || '';
+        if (!accountLogin) {
+            return res.status(400).send({ status: 'error', message: '缺少账号信息' });
+        }
+
+        const payload = { name: repoName };
+        const parsedPrivate = parseBooleanInput(isPrivate);
+        payload.private = parsedPrivate === null ? (project.state === 'private') : parsedPrivate;
+        payload.auto_init = true;
+        const normalizedDescription = sanitizeDescriptionInput(description || project.description);
+        if (normalizedDescription) payload.description = normalizedDescription;
+
+        const authContext = {
+            tokenSource: accountType === 'organization' ? 'installation' : 'user',
+            userId: res.locals.userid,
+            accountId: link?.account?.id,
+            accountLogin: link?.account?.login,
+        };
+
+        let repository = null;
+        try {
+            if (accountType === 'organization') {
+                const token = (await createInstallationToken(link.installationId)).token;
+                if (!token) {
+                    return res.status(500).send({ status: 'error', message: '无法创建安装令牌' });
+                }
+                repository = await createOrgRepo(token, accountLogin, payload);
+            } else {
+                const userToken = await findUserGitHubUserToken(
+                    res.locals.userid,
+                    link?.account?.id,
+                    link?.account?.login
+                );
+                if (!userToken?.accessToken) {
+                    return res.status(400).send({
+                        status: 'error',
+                        code: 'user_token_required',
+                        message: '个人仓库创建需要授权 App User Token',
+                    });
+                }
+                repository = await createUserRepo(userToken.accessToken, payload);
+            }
+        } catch (error) {
+            if (await handleGitHubAuthError(error, res, authContext)) return;
+            logger.warn(`[git-sync] provision create repo failed: ${error.message}`);
+            return res.status(error?.status || 500).send({
+                status: 'error',
+                code: 'repo_create_failed',
+                message: `仓库创建失败: ${error.message}`,
+            });
+        }
+
+        const normalizedBranch = branch ? sanitizeBranchInput(branch) : '';
+        const resolvedBranch = normalizedBranch || 'main';
+
+        try {
+            const finalSettings = await updateProjectGitSyncSettings(project.id, {
+                enabled: true,
+                provider: 'github',
+                linkKind: 'app',
+                linkId,
+                repoOwner: repository?.owner?.login || accountLogin,
+                repoName: repository?.name || repoName,
+                branch: resolvedBranch,
+                fileName: sanitizeFilenameInput(fileName) || undefined,
+                includeReadme: parseBooleanInput(includeReadme) === false ? false : true,
+                readmeFileName: undefined,
+                disabledReason: null,
+            });
+
+            const currentState = await getProjectGitSyncState(project.id);
+            await setProjectGitSyncState(project.id, {
+                ...(currentState || {}),
+                lastError: null,
+                disabledReason: null,
+            });
+
+            return res.status(200).send({
+                status: 'success',
+                repository: {
+                    ...repository,
+                    gitLinkId: link.id,
+                    gitInstallationId: link.installationId,
+                    gitAccount: link.account || null,
+                },
+                settings: finalSettings,
+            });
+        } catch (error) {
+            logger.error('[git-sync] provision bind failed:', error.message);
+            return res.status(500).send({
+                status: 'error',
+                code: 'bind_failed',
+                message: `仓库已创建，但绑定失败: ${error.message}`,
+                repository,
+            });
+        }
+    } catch (error) {
+        next(error);
+    }
+});
 
 router.get('/projects/:projectId', needLogin, gitSyncRateLimit, async (req, res, next) => {
     try {
@@ -933,7 +1134,7 @@ router.post('/projects/:projectId/bind', needLogin, gitSyncRateLimit, async (req
             linkId,
             repoOwner: normalizedOwner,
             repoName: normalizedRepo,
-            branch: normalizedBranch || project.default_branch || repo?.default_branch || 'main',
+            branch: normalizedBranch || 'main',
             fileName: sanitizeFilenameInput(fileName) || undefined,
             includeReadme: parsedIncludeReadme === null ? true : parsedIncludeReadme,
             readmeFileName: undefined,
@@ -985,6 +1186,175 @@ router.post('/projects/:projectId/sync', needLogin, gitSyncRateLimit, async (req
             actorId: res.locals.userid,
         });
 
+        res.status(200).send({ status: 'success', result });
+    } catch (error) {
+        next(error);
+    }
+});
+
+const blogResyncRateLimit = createRateLimit({
+    windowMs: 60 * 1000,
+    max: 2,
+    prefix: 'rate_limit:blog_sync_resync:',
+    message: { status: 'error', message: '全量同步请求过于频繁，请稍后再试' },
+});
+
+router.get('/blog/settings', needLogin, gitSyncRateLimit, async (req, res, next) => {
+    try {
+        const settings = await getBlogSettings(res.locals.userid);
+        const state = await getBlogState(res.locals.userid);
+        res.status(200).send({ status: 'success', settings: settings || null, state });
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.put('/blog/settings', needLogin, gitSyncRateLimit, async (req, res, next) => {
+    try {
+        const body = req.body || {};
+        const linkId = String(body.linkId || '').trim();
+        const repoOwner = sanitizeRepoOwnerInput(body.repoOwner);
+        const repoName = sanitizeRepoNameInput(body.repoName);
+        const branch = body.branch ? sanitizeBranchInput(body.branch) : 'main';
+        if (!linkId || !repoOwner || !repoName || !branch) {
+            return res.status(400).send({ status: 'error', message: '缺少必要参数' });
+        }
+
+        const link = await findUserGitLink(res.locals.userid, linkId);
+        if (!link?.installationId) {
+            return res.status(404).send({ status: 'error', message: '链接不存在' });
+        }
+        const accountLogin = String(link?.account?.login || '').trim();
+        if (accountLogin && accountLogin.toLowerCase() !== repoOwner.toLowerCase()) {
+            return res.status(403).send({ status: 'error', message: '只能绑定已授权账号下的仓库' });
+        }
+
+        const token = (await createInstallationToken(link.installationId)).token;
+        if (!token) return res.status(500).send({ status: 'error', message: '无法创建安装令牌' });
+
+        let repo;
+        try {
+            repo = await getRepo(token, repoOwner, repoName);
+        } catch (error) {
+            if (error?.status === 404) {
+                return res.status(404).send({ status: 'error', message: '仓库不存在或无权限访问' });
+            }
+            throw error;
+        }
+
+        const directory = typeof body.directory === 'string' ? body.directory.trim() : '';
+        const sanitizedDir = sanitizeRepoPathInput(directory);
+        if (sanitizedDir == null) {
+            return res.status(400).send({ status: 'error', message: '目录不合法' });
+        }
+
+        const fileNameTemplate = String(body.fileNameTemplate || '{slug}.md').trim() || '{slug}.md';
+        if (!/^[0-9A-Za-z._{}-]+$/.test(fileNameTemplate)) {
+            return res.status(400).send({ status: 'error', message: '文件名模板不合法' });
+        }
+
+        const rawFramework = String(body.framework || 'hexo').toLowerCase();
+        const framework = rawFramework === 'hugo'
+            ? 'hugo'
+            : rawFramework === 'valaxy'
+                ? 'valaxy'
+                : 'hexo';
+        const enabled = parseBooleanInput(body.enabled);
+        const excludeReadme = parseBooleanInput(body.excludeReadme);
+        const allowPrivateToPublic = parseBooleanInput(body.allowPrivateToPublic);
+
+        const fm = body.frontMatter || {};
+        const frontMatter = {
+            includeTitle: parseBooleanInput(fm.includeTitle) !== false,
+            includeDate: parseBooleanInput(fm.includeDate) !== false,
+            includeTags: parseBooleanInput(fm.includeTags) !== false,
+            includeDescription: parseBooleanInput(fm.includeDescription) !== false,
+            extra: fm.extra && typeof fm.extra === 'object' && !Array.isArray(fm.extra) ? fm.extra : {},
+        };
+
+        const saved = await setBlogSettings(res.locals.userid, {
+            enabled: enabled === null ? true : enabled,
+            provider: 'github',
+            linkId,
+            repoOwner,
+            repoName,
+            repoIsPublic: !repo.private,
+            branch: branch || 'main',
+            directory: sanitizedDir,
+            framework,
+            fileNameTemplate,
+            excludeReadme: excludeReadme === null ? true : excludeReadme,
+            allowPrivateToPublic: allowPrivateToPublic === true,
+            frontMatter,
+            disabledReason: null,
+        });
+
+        res.status(200).send({ status: 'success', settings: saved });
+    } catch (error) {
+        logger.error('[blog-sync] update settings failed:', error.message);
+        next(error);
+    }
+});
+
+router.delete('/blog/settings', needLogin, gitSyncRateLimit, async (req, res, next) => {
+    try {
+        const saved = await disableBlogSettings(res.locals.userid, 'manual');
+        res.status(200).send({ status: 'success', settings: saved });
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.get('/blog/projects', needLogin, gitSyncRateLimit, async (req, res, next) => {
+    try {
+        const projects = await blogSyncService.listArticleProjects(res.locals.userid);
+        const state = await getBlogState(res.locals.userid);
+        res.status(200).send({
+            status: 'success',
+            projects: projects.map((p) => ({
+                ...p,
+                syncState: state[String(p.id)] || null,
+            })),
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.post('/blog/resync', needLogin, blogResyncRateLimit, async (req, res, next) => {
+    try {
+        const settings = await getBlogSettings(res.locals.userid);
+        if (!settings?.enabled) {
+            return res.status(400).send({ status: 'error', message: '博客同步未启用' });
+        }
+        const projects = await blogSyncService.listArticleProjects(res.locals.userid);
+        const queued = [];
+        if (projects.length) {
+            const project = projects[0];
+            try {
+                const result = await queueManager.enqueueBlogSyncArticle(project.id, res.locals.userid, {
+                    reason: 'manual-resync',
+                });
+                queued.push({ projectId: project.id, queued: Boolean(result?.queued) });
+            } catch (error) {
+                queued.push({ projectId: project.id, queued: false, error: error.message });
+            }
+        }
+        res.status(200).send({ status: 'success', total: projects.length, queued });
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.post('/blog/sync/:projectId', needLogin, gitSyncRateLimit, async (req, res, next) => {
+    try {
+        const project = await ensureProjectOwner(req.params.projectId, res.locals.userid);
+        if (String(project.type || '').toLowerCase() !== 'article') {
+            return res.status(400).send({ status: 'error', message: '仅支持 article 类型项目' });
+        }
+        const result = await queueManager.enqueueBlogSyncArticle(project.id, res.locals.userid, {
+            reason: 'manual',
+        });
         res.status(200).send({ status: 'success', result });
     } catch (error) {
         next(error);

@@ -42,6 +42,9 @@ async function request(token, method, path, data) {
         const err = new Error(message);
         err.status = status;
         err.data = error?.response?.data || null;
+        if (typeof message === 'string' && message.includes('Git Repository is empty')) {
+            err.isEmptyRepo = true;
+        }
         throw err;
     }
 }
@@ -58,6 +61,16 @@ export async function listInstallationRepos(token, options = {}) {
         page: String(page),
     });
     return request(token, 'GET', `/installation/repositories?${params.toString()}`);
+}
+
+export async function listBranches(token, owner, repo, options = {}) {
+    const perPage = Math.min(100, Math.max(1, Number(options.perPage) || 100));
+    const page = Math.max(1, Number(options.page) || 1);
+    const params = new URLSearchParams({
+        per_page: String(perPage),
+        page: String(page),
+    });
+    return request(token, 'GET', `${buildRepoPath(owner, repo)}/branches?${params.toString()}`);
 }
 
 export async function searchRepos(token, query, options = {}) {
@@ -150,5 +163,14 @@ export async function createCommit(token, owner, repo, message, treeSha, parents
         message,
         tree: treeSha,
         parents,
+    });
+}
+
+export async function deleteFile(token, owner, repo, path, { message, sha, branch }) {
+    const safePath = String(path || '').split('/').map((p) => encodeURIComponent(p)).join('/');
+    return request(token, 'DELETE', `${buildRepoPath(owner, repo)}/contents/${safePath}`, {
+        message,
+        sha,
+        branch,
     });
 }
