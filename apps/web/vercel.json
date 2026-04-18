@@ -3,19 +3,19 @@
   "rewrites": [
     {
       "source": "/.well-known/webfinger",
-      "destination": "https://api.zcservice.houlang.cloud/.well-known/webfinger"
+      "destination": "https://api.zerocat.dev/.well-known/webfinger"
     },
     {
       "source": "/.well-known/nodeinfo",
-      "destination": "https://api.zcservice.houlang.cloud/.well-known/nodeinfo"
+      "destination": "https://api.zerocat.dev/.well-known/nodeinfo"
     },
     {
       "source": "/.well-known/host-meta",
-      "destination": "https://api.zcservice.houlang.cloud/.well-known/host-meta"
+      "destination": "https://api.zerocat.dev/.well-known/host-meta"
     },
     {
       "source": "/ap/:path*",
-      "destination": "https://api.zcservice.houlang.cloud/ap/:path*"
+      "destination": "https://api.zerocat.dev/ap/:path*"
     },
     {
       "source": "/scratch/:path*",
