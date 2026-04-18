@@ -122,7 +122,6 @@ export async function createRef(token, owner, repo, branch, sha) {
 export async function updateRef(token, owner, repo, branch, sha) {
     return request(token, 'PATCH', `${buildRepoPath(owner, repo)}/git/refs/heads/${encodeRef(branch)}`, {
         sha,
-        force: true,
     });
 }
 
