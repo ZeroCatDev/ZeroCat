@@ -300,9 +300,9 @@
                 <ul class="ml-4">
                   <li>协议标准：OAuth 2.0</li>
                   <li>支持流程：授权码模式（可选 PKCE 支持）</li>
-                  <li>认证入口：https://api.zerocat.dev/oauth/authorize</li>
-                  <li>令牌交换：https://api.zerocat.dev/oauth/token</li>
-                  <li>用户信息：https://api.zerocat.dev/oauth/userinfo</li>
+                  <li>认证入口：https://api.zcservice.houlang.cloud/oauth/authorize</li>
+                  <li>令牌交换：https://api.zcservice.houlang.cloud/oauth/token</li>
+                  <li>用户信息：https://api.zcservice.houlang.cloud/oauth/userinfo</li>
                 </ul>
               </v-alert>
             </div>
@@ -316,7 +316,7 @@
               <v-card class="pa-4 mb-2" variant="outlined">
                 <div class="d-flex justify-space-between align-center mb-2">
                   <code class="text-body-1">
-                    https://api.zerocat.dev/oauth/authorize?<br>
+                    https://api.zcservice.houlang.cloud/oauth/authorize?<br>
                     client_id={{ application?.client_id }}<br>
                     &redirect_uri={{ form?.redirect_uris?.[0] || "[您的回调URL]" }}<br>
                     &response_type=code<br>
@@ -329,7 +329,7 @@
                     color="primary"
                     icon="mdi-content-copy"
                     variant="text"
-                    @click="copyToClipboard('https://api.zerocat.dev/oauth/authorize?client_id=' + application?.client_id + '&redirect_uri=' + (form?.redirect_uris?.[0] || '[您的回调URL]') + '&response_type=code&scope=user:basic user:email&state=[推荐：随机字符串]')"
+                    @click="copyToClipboard('https://api.zcservice.houlang.cloud/oauth/authorize?client_id=' + application?.client_id + '&redirect_uri=' + (form?.redirect_uris?.[0] || '[您的回调URL]') + '&response_type=code&scope=user:basic user:email&state=[推荐：随机字符串]')"
                   ></v-btn>
                 </div>
                 <div class="mt-3">
@@ -358,7 +358,7 @@
               <v-card class="pa-4 mb-2" variant="outlined">
                 <div class="d-flex justify-space-between align-center mb-2">
                   <code class="text-body-1">
-                    POST https://api.zerocat.dev/oauth/token<br>
+                    POST https://api.zcservice.houlang.cloud/oauth/token<br>
                     Content-Type: application/x-www-form-urlencoded<br><br>
                     grant_type=authorization_code<br>
                     code=[授权码]<br>
@@ -373,7 +373,7 @@
                       color="primary"
                       icon="mdi-content-copy"
                       variant="text"
-                      @click="copyToClipboard(`POST https://api.zerocat.dev/oauth/token\nContent-Type: application/x-www-form-urlencoded\n\ngrant_type=authorization_code\ncode=[授权码]\nclient_id=${application?.client_id}\nclient_secret=${application?.client_secret}\nredirect_uri=[您的回调URL]`)"
+                      @click="copyToClipboard(`POST https://api.zcservice.houlang.cloud/oauth/token\nContent-Type: application/x-www-form-urlencoded\n\ngrant_type=authorization_code\ncode=[授权码]\nclient_id=${application?.client_id}\nclient_secret=${application?.client_secret}\nredirect_uri=[您的回调URL]`)"
                     ></v-btn>
                     <v-btn
                       :icon="showClientSecret ? 'mdi-eye-off' : 'mdi-eye'"
@@ -408,14 +408,14 @@
               <v-card class="pa-4 mb-2" variant="outlined">
                 <div class="d-flex justify-space-between align-center mb-2">
                   <code class="text-body-1">
-                    GET https://api.zerocat.dev/oauth/userinfo<br>
+                    GET https://api.zcservice.houlang.cloud/oauth/userinfo<br>
                     Authorization: Bearer [访问令牌]
                   </code>
                   <v-btn
                     color="primary"
                     icon="mdi-content-copy"
                     variant="text"
-                    @click="copyToClipboard(`GET https://api.zerocat.dev/oauth/userinfo\nAuthorization: Bearer [访问令牌]`)"
+                    @click="copyToClipboard(`GET https://api.zcservice.houlang.cloud/oauth/userinfo\nAuthorization: Bearer [访问令牌]`)"
                   ></v-btn>
                 </div>
                 <div class="mt-3">
@@ -463,7 +463,7 @@
               <h3 class="text-h6 mb-3">刷新令牌（可选）</h3>
               <v-card class="pa-4" variant="outlined">
                 <code class="text-body-1">
-                  POST https://api.zerocat.dev/oauth/token<br>
+                  POST https://api.zcservice.houlang.cloud/oauth/token<br>
                   Content-Type: application/x-www-form-urlencoded<br><br>
                   grant_type=refresh_token<br>
                   client_id={{ application?.client_id }}<br>
