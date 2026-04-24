@@ -75,9 +75,10 @@
 
 <script>
 import {ref} from "vue";
-import {useRouter} from "vue-router";
+import {useRoute, useRouter} from "vue-router";
 import {useHead} from "@unhead/vue";
 import {localuser} from "@/services/localAccount";
+import {useAuthStore} from "@/stores/auth";
 import AuthService from "@/services/authService";
 import LoadingDialog from "@/components/LoadingDialog.vue";
 import Recaptcha from "@/components/Recaptcha.vue";
@@ -87,8 +88,16 @@ export default {
   components: {LoadingDialog, Recaptcha, AuthCard},
 
   setup() {
+    const route = useRoute();
     const router = useRouter();
+    const authStore = useAuthStore();
     const recaptcha = ref(null);
+
+    const redirectFromQuery =
+      typeof route.query.redirect === "string" ? route.query.redirect : null;
+    if (redirectFromQuery) {
+      authStore.setAuthRedirectUrl(redirectFromQuery);
+    }
 
     // State variables
     const email = ref("");
@@ -103,7 +112,7 @@ export default {
 
     // Check if user is already logged in
     if (localuser.isLogin.value === true) {
-      router.push("/");
+      authStore.navigateToAuthRedirect(router);
     }
 
     // Set page title

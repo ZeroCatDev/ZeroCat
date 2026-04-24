@@ -110,6 +110,13 @@ export async function configureMiddleware(app) {
 
     // CORS配置
     const corslist = (await zcconfig.get("cors"));
+    const frontendUrl = await zcconfig.get("urls.frontend");
+    let frontendHostname = null;
+    try {
+        frontendHostname = frontendUrl ? new URL(frontendUrl).hostname.toLowerCase() : null;
+    } catch {
+        frontendHostname = null;
+    }
 
     app.use(
         cors((req, callback) => {
@@ -127,7 +134,15 @@ export async function configureMiddleware(app) {
 
             // 白名单放行
             try {
-                if (corslist.includes(new URL(origin).hostname)) {
+                const originHostname = new URL(origin).hostname.toLowerCase();
+                const hasWildcard = Array.isArray(corslist) && corslist.includes("*");
+                const inCorsList = Array.isArray(corslist) && corslist.includes(originHostname);
+                const isFrontendDomain =
+                    Boolean(frontendHostname) &&
+                    (originHostname === frontendHostname ||
+                        originHostname.endsWith(`.${frontendHostname}`));
+
+                if (hasWildcard || inCorsList || isFrontendDomain) {
                     return callback(null, { origin: true, credentials: true });
                 }
             } catch {}

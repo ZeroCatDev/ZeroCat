@@ -28,6 +28,11 @@ import { getAnalytics } from "../services/analytics.js";
 import redisClient from "../services/redis.js";
 import queueManager from "../services/queue/queueManager.js";
 import gorseService from "../services/gorse.js";
+import {
+  createBranchIfNotExists,
+  getCommitParentId,
+  updateBranchLatestCommit,
+} from "../services/commitService.js";
 
 const router = Router();
 
@@ -226,73 +231,6 @@ async function checkProjectPermission(projectid, userid, permission) {
   }
 }
 
-async function createBranchIfNotExists(projectid, branch, userid) {
-  logger.debug(projectid);
-  logger.debug(branch);
-  logger.debug(userid);
-  let branchRecord = await prisma.ow_projects_branch.findFirst({
-    where: { projectid: Number(projectid), name: branch },
-  });
-  if (!branchRecord) {
-    branchRecord = await prisma.ow_projects_branch.create({
-      data: {
-        name: branch,
-        creator: userid,
-        description: "",
-        latest_commit_hash: "",
-        project: {
-          connect: {
-            id: Number(projectid)
-          }
-        }
-      },
-    });
-  }
-  return branchRecord;
-}
-
-async function getCommitParentId(projectid, userid, parent_commit, branch) {
-  let parent_commit_id = null;
-  if (/^[a-fA-F0-9]{64}$/.test(parent_commit)) {
-    // 如果提供了特定的父提交ID，验证它是否属于同一分支
-    const parentCommit = await prisma.ow_projects_commits.findFirst({
-      where: {
-        project_id: Number(projectid),
-        id: parent_commit,
-        branch: branch
-      },
-    });
-    parent_commit_id = parentCommit ? parentCommit.id : null;
-  } else {
-    logger.debug("获取当前分支的最新提交");
-    // 获取当前分支的最新提交
-    const latestCommit = await prisma.ow_projects_commits.findFirst({
-      where: {
-        project_id: Number(projectid),
-        branch: branch
-      },
-      orderBy: { commit_date: "desc" },
-    });
-    parent_commit_id = latestCommit ? latestCommit.id : null;
-    logger.debug("获取当前分支的最新提交", parent_commit_id);
-  }
-  return parent_commit_id;
-}
-
-async function updateBranchLatestCommit(projectid, branch, commitId) {
-  await prisma.ow_projects_branch.update({
-    where: {
-      projectid_name: {
-        // 使用复合唯一索引
-        projectid: Number(projectid),
-        name: branch,
-      },
-    },
-    data: {
-      latest_commit_hash: commitId,
-    },
-  });
-}
 
 // 获取项目分析数据
 router.get("/analytics/:id", needLogin, async (req, res, next) => {

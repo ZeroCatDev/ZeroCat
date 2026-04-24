@@ -23,7 +23,9 @@
     "dev:frontend": "pnpm --filter ./apps/web dev",
     "dev:all": "turbo run dev",
     "lint:all": "turbo run lint",
-    "typecheck:all": "turbo run typecheck"
+    "typecheck:all": "turbo run typecheck",
+    "dev:blog": "pnpm --filter ./apps/blog dev",
+    "build:blog": "pnpm --filter ./apps/blog build"
   },
   "dependencies": {
     "@atproto/api": "^0.19.8",
@@ -40,6 +42,8 @@
     "@sentry/node": "^10.48.0",
     "@sentry/profiling-node": "^10.48.0",
     "@simplewebauthn/server": "^13.3.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
     "@waline/vercel": "^1.39.3",
     "akismet-api": "^6.0.0",
     "axios": "^1.15.0",

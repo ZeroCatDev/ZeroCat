@@ -59,16 +59,7 @@ export default {
       authStore.hideLoginDialog();
       emit("login-success", response);
 
-      // If there's a redirect URL, navigate to it
-      const redirectUrl = authStore.consumeAuthRedirectUrl();
-      if (redirectUrl=="/app/account/logout") {
-        router.push("/");
-      } else if (redirectUrl) {
-        router.push(redirectUrl);
-      } else {
-        router.push("/");
-      }
-
+      authStore.navigateToAuthRedirect(router, "/");
     };
 
     const handleLoginError = (error) => {

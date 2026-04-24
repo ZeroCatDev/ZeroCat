@@ -121,9 +121,8 @@ export default {
     const recaptcha = ref(null);
 
     // Capture redirect from query or sessionStorage
-    const redirectFromQuery = route.query.redirect
-      ? decodeURIComponent(route.query.redirect)
-      : null;
+    const redirectFromQuery =
+      typeof route.query.redirect === "string" ? route.query.redirect : null;
     if (redirectFromQuery) {
       authStore.setAuthRedirectUrl(redirectFromQuery);
     }
@@ -164,7 +163,7 @@ export default {
     ]);
 
     if (localuser.isLogin.value === true) {
-      router.push(authStore.consumeAuthRedirectUrl());
+      authStore.navigateToAuthRedirect(router);
     }
 
     useHead({

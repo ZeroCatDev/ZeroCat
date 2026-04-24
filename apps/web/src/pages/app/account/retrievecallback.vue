@@ -87,11 +87,11 @@
 
 <script>
 import {localuser} from "@/services/localAccount";
-import request from "../../../axios/axios";
 import LoadingDialog from "@/components/LoadingDialog.vue";
 import Recaptcha from "@/components/Recaptcha.vue";
 import {useHead} from "@unhead/vue";
 import {resetPassword} from "@/services/accountService";
+import {useAuthStore} from "@/stores/auth";
 
 export default {
   components: {LoadingDialog, Recaptcha},
@@ -100,8 +100,8 @@ export default {
       BASE_API: import.meta.env.VITE_APP_BASE_API,
       password: "",
       password2: "",
-      show1: ref(false),
-      show2: ref(false),
+      show1: false,
+      show2: false,
 
       tryinguser: {},
       loading: false,
@@ -138,8 +138,15 @@ export default {
   },
 
   created() {
+    const authStore = useAuthStore();
+    const redirectFromQuery =
+      typeof this.$route.query.redirect === "string" ? this.$route.query.redirect : null;
+    if (redirectFromQuery) {
+      authStore.setAuthRedirectUrl(redirectFromQuery);
+    }
+
     if (localuser.isLogin.value == true) {
-      this.$router.push("/");
+      authStore.navigateToAuthRedirect(this.$router, "/");
     }
   },
 
@@ -150,6 +157,7 @@ export default {
   },
   methods: {
     async login() {
+      const authStore = useAuthStore();
       this.loading = true;
       try {
         const response = await resetPassword({
@@ -159,7 +167,10 @@ export default {
         });
         this.tryinguser = response.data;
         if (this.tryinguser.status === "success") {
-          this.$router.push("/app/account/login");
+          const redirectSuffix = authStore.authRedirectUrl
+            ? `?redirect=${encodeURIComponent(authStore.authRedirectUrl)}`
+            : "";
+          this.$router.push(`/app/account/login${redirectSuffix}`);
         } else {
           this.$toast.add({
             severity: "info",

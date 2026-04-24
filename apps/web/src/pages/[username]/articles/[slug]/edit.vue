@@ -20,12 +20,22 @@
           保存中…
         </span>
         <span v-else-if="saveStatus === 'saved'" class="text-caption text-success mr-3">
-          <v-icon size="14" class="mr-1">mdi-check-circle-outline</v-icon>已保存
+          <v-icon size="14" class="mr-1">mdi-check-circle-outline</v-icon>草稿已保存
         </span>
         <span v-else-if="saveStatus === 'error'" class="text-caption text-error mr-3">
           <v-icon size="14" class="mr-1">mdi-alert-circle-outline</v-icon>保存失败
         </span>
       </transition>
+
+      <v-chip
+        v-if="hasUnpublishedChanges"
+        size="small"
+        color="warning"
+        variant="tonal"
+        class="mr-2"
+      >
+        <v-icon start size="14">mdi-pencil-outline</v-icon>未发布
+      </v-chip>
 
       <!-- Visibility toggle -->
       <v-chip
@@ -48,6 +58,16 @@
         class="mr-2"
         @click="manualSave"
       >保存</v-btn>
+      <v-btn
+        color="primary"
+        variant="elevated"
+        size="small"
+        prepend-icon="mdi-cloud-upload-outline"
+        :loading="publishing"
+        :disabled="publishing || !article.id"
+        class="mr-2"
+        @click="publishArticle"
+      >发布</v-btn>
       <v-btn
         :to="`/${username}/articles/${slug}`"
         variant="tonal"
@@ -126,6 +146,9 @@ const editorReady = ref(false)
 const lastSavedContent = ref('')
 const lastSavedTitle = ref('')
 const isReadyForAutosave = ref(false)
+const publishing = ref(false)
+const hasUnpublishedChanges = ref(false)
+const draftBaseCommitId = ref('')
 
 useHead({ title: computed(() => `编辑 · ${article.value.title || slug.value}`) })
 
@@ -142,8 +165,6 @@ const hasUnsavedChanges = computed(() => (
 // Auto-save
 const saveStatus = ref('') // 'saving' | 'saved' | 'error' | ''
 let autoSaveTimer = null
-let currentAccessToken = ''
-let currentParentCommit = ''
 
 const editorOptions = {
   theme: 'vs-dark',
@@ -180,28 +201,44 @@ async function loadArticle() {
       return
     }
 
-    // Load latest content
+    // 1. 先尝试拉取 KV 草稿
+    let draftHit = false
     try {
-      const commitRes = await request.get(`/project/${info.id}/main/latest`)
-      if (commitRes.data?.status === 'success') {
-        currentAccessToken = commitRes.data.accessFileToken || ''
-        currentParentCommit = commitRes.data.commit?.id || ''
-        const commitFile = commitRes.data.commit?.commit_file
-        if (commitFile) {
-          const fileRes = await request.get(
-            `/project/files/${commitFile}?accessFileToken=${currentAccessToken}&content=true`
-          )
-          let raw = fileRes.data
-          if (typeof raw === 'object') {
-            // Stored as JSON {index: '...'}
-            raw = raw.index ?? JSON.stringify(raw, null, 2)
-          }
-          markdownContent.value = typeof raw === 'string' ? raw : ''
-        }
+      const draftRes = await request.get(`/blog/drafts/${info.id}`)
+      if (draftRes.data?.status === 'success' && draftRes.data.data) {
+        const draft = draftRes.data.data
+        markdownContent.value = typeof draft.content === 'string' ? draft.content : ''
+        if (draft.title) article.value.title = draft.title
+        draftBaseCommitId.value = draft.baseCommitId || ''
+        hasUnpublishedChanges.value = true
+        draftHit = true
       }
     } catch (_) {
-      // No content yet — start fresh
-      markdownContent.value = ''
+      // 无草稿，继续走发布版
+    }
+
+    // 2. 无草稿 → 拉最新提交内容
+    if (!draftHit) {
+      try {
+        const commitRes = await request.get(`/project/${info.id}/main/latest`)
+        if (commitRes.data?.status === 'success') {
+          const accessToken = commitRes.data.accessFileToken || ''
+          draftBaseCommitId.value = commitRes.data.commit?.id || ''
+          const commitFile = commitRes.data.commit?.commit_file
+          if (commitFile) {
+            const fileRes = await request.get(
+              `/project/files/${commitFile}?accessFileToken=${accessToken}&content=true`
+            )
+            let raw = fileRes.data
+            if (typeof raw === 'object') {
+              raw = raw.index ?? JSON.stringify(raw, null, 2)
+            }
+            markdownContent.value = typeof raw === 'string' ? raw : ''
+          }
+        }
+      } catch (_) {
+        markdownContent.value = ''
+      }
     }
 
     lastSavedContent.value = markdownContent.value
@@ -222,7 +259,7 @@ function manualSave() {
   doSave()
 }
 
-// ——————— Auto-save ———————
+// ——————— Auto-save (到 KV 草稿，无历史) ———————
 function onContentChange() {
   if (!isReadyForAutosave.value) return
   clearTimeout(autoSaveTimer)
@@ -234,50 +271,60 @@ async function doSave() {
   if (!article.value.id) return
   saveStatus.value = 'saving'
   try {
-    const content = markdownContent.value
-    const saveRes = await request.post(
-      `/project/savefile?json=false`,
-      content,
-      { headers: { 'Content-Type': 'text/plain; charset=utf-8' } }
-    )
-    const token = saveRes.data?.accessFileToken
-    if (!token) throw new Error('No accessFileToken returned')
-
-    await request.put(`/project/commit/id/${article.value.id}`, {
-      branch: 'main',
-      projectid: article.value.id,
-      accessFileToken: token,
-      message: '自动保存',
-      parent_commit: currentParentCommit,
+    await request.put(`/blog/drafts/${article.value.id}`, {
+      title: article.value.title,
+      content: markdownContent.value,
     })
-
-    // Update parent commit for next save
-    if (saveRes.data?.commit?.id) currentParentCommit = saveRes.data.commit.id
-    currentAccessToken = token
-    lastSavedContent.value = content
+    lastSavedContent.value = markdownContent.value
+    lastSavedTitle.value = article.value.title || ''
+    hasUnpublishedChanges.value = true
     saveStatus.value = 'saved'
     setTimeout(() => { if (saveStatus.value === 'saved') saveStatus.value = '' }, 3000)
   } catch (e) {
-    console.error('Auto-save failed:', e)
+    console.error('Draft save failed:', e)
     saveStatus.value = 'error'
   }
 }
 
-// ——————— Title save ———————
+// ——————— Publish（从 KV 落 commit） ———————
+async function publishArticle() {
+  if (!article.value.id || publishing.value) return
+  // 发布前先同步保存最新草稿
+  clearTimeout(autoSaveTimer)
+  publishing.value = true
+  try {
+    await request.put(`/blog/drafts/${article.value.id}`, {
+      title: article.value.title,
+      content: markdownContent.value,
+    })
+    const res = await request.post(`/blog/drafts/${article.value.id}/publish`, {
+      message: '发布',
+    })
+    if (res.data?.status !== 'success') {
+      throw new Error(res.data?.message || '发布失败')
+    }
+    draftBaseCommitId.value = res.data.data?.commit?.id || draftBaseCommitId.value
+    hasUnpublishedChanges.value = false
+    saveStatus.value = 'saved'
+    setTimeout(() => { if (saveStatus.value === 'saved') saveStatus.value = '' }, 3000)
+  } catch (e) {
+    console.error('Publish failed:', e)
+    saveStatus.value = 'error'
+    window.alert(e?.response?.data?.message || e?.message || '发布失败')
+  } finally {
+    publishing.value = false
+  }
+}
+
+// ——————— Title save (复用草稿保存) ———————
 let titleTimer = null
 function onTitleInput() {
   clearTimeout(titleTimer)
-  titleTimer = setTimeout(saveTitle, 1500)
-}
-
-async function saveTitle() {
-  if (!article.value.id) return
-  try {
-    await request.put(`/project/id/${article.value.id}`, {
-      title: article.value.title,
-    })
-    lastSavedTitle.value = article.value.title || ''
-  } catch (_) {}
+  titleTimer = setTimeout(() => {
+    if (!isReadyForAutosave.value) return
+    clearTimeout(autoSaveTimer)
+    doSave()
+  }, 1500)
 }
 
 // ——————— Visibility ———————

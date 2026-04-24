@@ -36,16 +36,15 @@ export default {
       : "登录你的账户";
 
     // Capture redirect from query or sessionStorage
-    const redirectFromQuery = route.query.redirect
-      ? decodeURIComponent(route.query.redirect)
-      : null;
+    const redirectFromQuery =
+      typeof route.query.redirect === "string" ? route.query.redirect : null;
     if (redirectFromQuery) {
       authStore.setAuthRedirectUrl(redirectFromQuery);
     }
 
     // Check if user is already logged in (skip if session expired)
     if (!reason && localuser.isLogin.value === true) {
-      router.push(authStore.consumeAuthRedirectUrl());
+      authStore.navigateToAuthRedirect(router);
     }
 
     // Set page title
@@ -55,7 +54,7 @@ export default {
 
     const handleLoginSuccess = (response) => {
       console.log("Login success:", response);
-      router.push(authStore.consumeAuthRedirectUrl());
+      authStore.navigateToAuthRedirect(router);
     };
 
     const handleLoginError = (error) => {

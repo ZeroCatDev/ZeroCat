@@ -32,6 +32,156 @@ const REFRESH_THRESHOLD_RATIO = 0.25;
 
 // --- Internal helpers (not exported) ---
 
+const AUTH_REDIRECT_ALLOWLIST_RAW =
+  import.meta.env.VITE_AUTH_REDIRECT_ALLOWED_ORIGINS ||
+  import.meta.env.VITE_AUTH_REDIRECT_ALLOWLIST ||
+  "";
+
+const AUTH_REDIRECT_ALLOWLIST = String(AUTH_REDIRECT_ALLOWLIST_RAW)
+  .split(",")
+  .map((item) => item.trim())
+  .filter(Boolean);
+
+const isPrivateIpv4 = (hostname) => {
+  const match = String(hostname).match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!match) return false;
+
+  const octets = match.slice(1).map((value) => Number.parseInt(value, 10));
+  if (octets.some((value) => !Number.isFinite(value) || value < 0 || value > 255)) {
+    return false;
+  }
+
+  const [first, second] = octets;
+  return (
+    first === 10 ||
+    first === 127 ||
+    first === 0 ||
+    (first === 192 && second === 168) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 169 && second === 254)
+  );
+};
+
+const isLocalHostname = (hostname) => {
+  if (!hostname) return false;
+  const normalized = String(hostname).toLowerCase();
+  if (normalized === "localhost" || normalized.endsWith(".localhost")) {
+    return true;
+  }
+  if (normalized === "::1" || normalized === "::ffff:127.0.0.1") {
+    return true;
+  }
+  return isPrivateIpv4(normalized);
+};
+
+const getRootDomain = (hostname) => {
+  if (!hostname) return null;
+  const normalized = String(hostname).toLowerCase();
+  if (isLocalHostname(normalized) || /^(\d{1,3}\.){3}\d{1,3}$/.test(normalized)) {
+    return null;
+  }
+
+  const parts = normalized.split(".").filter(Boolean);
+  if (parts.length < 2) return null;
+  return parts.slice(-2).join(".");
+};
+
+const safeDecodeURIComponent = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+};
+
+const isAllowedByAllowlist = (targetUrl) => {
+  if (!AUTH_REDIRECT_ALLOWLIST.length) return false;
+
+  const targetHostname = targetUrl.hostname.toLowerCase();
+  const targetOrigin = targetUrl.origin.toLowerCase();
+
+  return AUTH_REDIRECT_ALLOWLIST.some((entry) => {
+    const rule = String(entry).trim().toLowerCase();
+    if (!rule) return false;
+
+    if (rule.startsWith("http://") || rule.startsWith("https://")) {
+      try {
+        return new URL(rule).origin.toLowerCase() === targetOrigin;
+      } catch {
+        return false;
+      }
+    }
+
+    if (rule.startsWith(".")) {
+      const suffix = rule.slice(1);
+      return targetHostname === suffix || targetHostname.endsWith(`.${suffix}`);
+    }
+
+    return targetHostname === rule || targetHostname.endsWith(`.${rule}`);
+  });
+};
+
+const normalizeAuthRedirectUrl = (value) => {
+  if (typeof window === "undefined") return "/";
+
+  const raw = safeDecodeURIComponent(value);
+  if (!raw) return "/";
+
+  if (raw.startsWith("/") && !raw.startsWith("//")) {
+    return raw;
+  }
+
+  let targetUrl;
+  try {
+    targetUrl = new URL(raw);
+  } catch {
+    return "/";
+  }
+
+  const protocol = targetUrl.protocol.toLowerCase();
+  if (protocol !== "http:" && protocol !== "https:") {
+    return "/";
+  }
+
+  const currentUrl = new URL(window.location.href);
+  if (targetUrl.origin === currentUrl.origin) {
+    return `${targetUrl.pathname}${targetUrl.search}${targetUrl.hash}`;
+  }
+
+  const currentHostname = currentUrl.hostname.toLowerCase();
+  const targetHostname = targetUrl.hostname.toLowerCase();
+
+  if (isLocalHostname(currentHostname) && isLocalHostname(targetHostname)) {
+    return targetUrl.toString();
+  }
+
+  if (isAllowedByAllowlist(targetUrl)) {
+    return targetUrl.toString();
+  }
+
+  const currentRoot = getRootDomain(currentHostname);
+  const targetRoot = getRootDomain(targetHostname);
+  if (currentRoot && targetRoot && currentRoot === targetRoot) {
+    return targetUrl.toString();
+  }
+
+  return "/";
+};
+
+const isExternalHttpUrl = (url) => {
+  if (!url || typeof window === "undefined") return false;
+  try {
+    const parsed = new URL(url);
+    const protocol = parsed.protocol.toLowerCase();
+    if (protocol !== "http:" && protocol !== "https:") return false;
+    return parsed.origin !== window.location.origin;
+  } catch {
+    return false;
+  }
+};
+
 const setStorageValue = (key, value) => {
   if (value === undefined || value === null || value === "") {
     localStorage.removeItem(key);
@@ -218,9 +368,14 @@ export const useAuthStore = defineStore("auth", () => {
   // ============================
 
   const setAuthRedirectUrl = (url) => {
-    authRedirectUrl.value = url || "";
-    if (url) sessionStorage.setItem(AUTH_REDIRECT_URL_KEY, url);
-    else sessionStorage.removeItem(AUTH_REDIRECT_URL_KEY);
+    const normalized = normalizeAuthRedirectUrl(url);
+    authRedirectUrl.value = normalized;
+
+    if (normalized && normalized !== "/") {
+      sessionStorage.setItem(AUTH_REDIRECT_URL_KEY, normalized);
+    } else {
+      sessionStorage.removeItem(AUTH_REDIRECT_URL_KEY);
+    }
   };
 
   const consumeAuthRedirectUrl = () => {
@@ -229,14 +384,33 @@ export const useAuthStore = defineStore("auth", () => {
       sessionStorage.getItem(AUTH_REDIRECT_URL_KEY) ||
       "";
 
-    // Security: only allow relative paths starting with '/' but not '//'
-    if (!url || !url.startsWith("/") || url.startsWith("//")) {
-      url = "/";
-    }
+    url = normalizeAuthRedirectUrl(url);
 
     authRedirectUrl.value = "";
     sessionStorage.removeItem(AUTH_REDIRECT_URL_KEY);
     return url;
+  };
+
+  const navigateToAuthRedirect = (router, fallback = "/") => {
+    let target = consumeAuthRedirectUrl();
+
+    // 避免登录成功后再次落在退出页造成体验混乱
+    if (!target || target === "/app/account/logout") {
+      target = fallback;
+    }
+
+    if (isExternalHttpUrl(target)) {
+      window.location.assign(target);
+      return target;
+    }
+
+    if (router?.push) {
+      router.push(target);
+      return target;
+    }
+
+    window.location.assign(target);
+    return target;
   };
 
   // ============================
@@ -930,6 +1104,7 @@ export const useAuthStore = defineStore("auth", () => {
     // Redirect URL
     setAuthRedirectUrl,
     consumeAuthRedirectUrl,
+    navigateToAuthRedirect,
 
     // Constants / debug
     AUTO_REFRESH_ENABLED,

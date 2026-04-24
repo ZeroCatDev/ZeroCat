@@ -22,9 +22,8 @@
 <script>
 import {jwtDecode} from "jwt-decode";
 import {localuser} from "@/services/localAccount";
+import {useAuthStore} from "@/stores/auth";
 import {useHead} from "@unhead/vue";
-
-import request from "../../../axios/axios";
 
 export default {
   data() {
@@ -40,6 +39,13 @@ export default {
     });
   },
   async created() {
+    const authStore = useAuthStore();
+    const redirectFromQuery =
+      typeof this.$route.query.redirect === "string" ? this.$route.query.redirect : null;
+    if (redirectFromQuery) {
+      authStore.setAuthRedirectUrl(redirectFromQuery);
+    }
+
     if (this.$route.query.token) {
       try {
         this.user = jwtDecode(this.token);
@@ -47,7 +53,7 @@ export default {
         this.user = jwtDecode(localStorage.getItem("token")); // 从本地存储中获取并解码JWT令牌
         console.log(this.user);
         await localuser.loadUser();
-        this.$router.push({path: "/"});
+        authStore.navigateToAuthRedirect(this.$router, "/");
       } catch (error) {
         this.user = error;
       }

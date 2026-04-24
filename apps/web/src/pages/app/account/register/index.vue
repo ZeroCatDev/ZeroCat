@@ -231,9 +231,8 @@ export default {
     const registerForm = ref(null);
 
     // Capture redirect from query or sessionStorage
-    const redirectFromQuery = route.query.redirect
-      ? decodeURIComponent(route.query.redirect)
-      : null;
+    const redirectFromQuery =
+      typeof route.query.redirect === "string" ? route.query.redirect : null;
     if (redirectFromQuery) {
       authStore.setAuthRedirectUrl(redirectFromQuery);
     }
@@ -282,7 +281,7 @@ export default {
 
     // Check if user is already logged in
     if (localuser.isLogin.value === true) {
-      router.push(authStore.consumeAuthRedirectUrl());
+      authStore.navigateToAuthRedirect(router);
     }
 
     // Set page title
@@ -349,7 +348,7 @@ export default {
             if (response.needPassword) {
               router.push("/app/account/register/setup-password");
             } else {
-              router.push(authStore.consumeAuthRedirectUrl());
+              authStore.navigateToAuthRedirect(router);
             }
           }
         } else {

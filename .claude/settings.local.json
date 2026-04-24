@@ -1,7 +1,19 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node *)"
+      "Bash(node *)",
+      "mcp__ide__getDiagnostics",
+      "Bash(pnpm add *)",
+      "Bash(xargs grep *)",
+      "Bash(npx shadcn@latest add alert-dialog accordion popover --yes --overwrite)",
+      "Bash(npx shadcn@latest add hover-card empty --yes)",
+      "Bash(npx shadcn@latest add select --yes)",
+      "Bash(npx shadcn@latest add radio-group checkbox --yes)",
+      "Bash(npx tsc *)",
+      "Bash(rm -rf src/app/studio/search src/app/studio/page.tsx)",
+      "Bash(mkdir -p src/app/settings)",
+      "Bash(mv src/app/studio/sync src/app/settings/sync)",
+      "Bash(rmdir src/app/studio)"
     ]
   }
 }

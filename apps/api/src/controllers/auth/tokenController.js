@@ -32,19 +32,25 @@ async function validateOriginForCSRF(req) {
     }
 
     try {
-        const originHostname = new URL(origin).hostname;
+        const originHostname = new URL(origin).hostname.toLowerCase();
 
         // 检查 CORS 白名单
         const corslist = await zcconfig.get("cors");
-        if (Array.isArray(corslist) && corslist.includes(originHostname)) {
+        if (
+            Array.isArray(corslist) &&
+            (corslist.includes("*") || corslist.includes(originHostname))
+        ) {
             return { valid: true };
         }
 
         // 检查 urls.frontend
         const frontendUrl = await zcconfig.get("urls.frontend");
         if (frontendUrl) {
-            const frontendHostname = new URL(frontendUrl).hostname;
-            if (originHostname === frontendHostname) {
+            const frontendHostname = new URL(frontendUrl).hostname.toLowerCase();
+            if (
+                originHostname === frontendHostname ||
+                originHostname.endsWith(`.${frontendHostname}`)
+            ) {
                 return { valid: true };
             }
         }

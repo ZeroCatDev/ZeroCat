@@ -865,6 +865,68 @@ export async function getUserInfoForToken(user, email = null) {
     }
 }
 
+function isLocalHostname(hostname) {
+    if (!hostname) return true;
+    const normalized = String(hostname).toLowerCase();
+    if (normalized === 'localhost' || normalized.endsWith('.localhost')) {
+        return true;
+    }
+    return /^(\d{1,3}\.){3}\d{1,3}$/.test(normalized);
+}
+
+function resolveRefreshCookieDomain(req) {
+    const explicitDomain = process.env.REFRESH_TOKEN_COOKIE_DOMAIN || process.env.COOKIE_DOMAIN;
+    if (explicitDomain && String(explicitDomain).trim()) {
+        const trimmed = String(explicitDomain).trim();
+        return trimmed.startsWith('.') ? trimmed : `.${trimmed}`;
+    }
+
+    const hostFromReq = req?.hostname || req?.headers?.host?.split(':')[0] || '';
+    const hostname = String(hostFromReq).toLowerCase();
+
+    if (isLocalHostname(hostname)) {
+        return undefined;
+    }
+
+    const parts = hostname.split('.').filter(Boolean);
+    if (parts.length < 2) {
+        return undefined;
+    }
+
+    // 兜底使用根域，满足常见 api.example.com / blog.example.com 场景。
+    return `.${parts.slice(-2).join('.')}`;
+}
+
+function resolveRefreshCookieSecure(req) {
+    const hostFromReq = req?.hostname || req?.headers?.host?.split(':')[0] || '';
+    if (isLocalHostname(hostFromReq)) {
+        return false;
+    }
+
+    const forwardedProto = String(req?.headers?.['x-forwarded-proto'] || '')
+        .split(',')[0]
+        .trim()
+        .toLowerCase();
+    if (forwardedProto) {
+        return forwardedProto === 'https';
+    }
+
+    return Boolean(req?.secure) || process.env.NODE_ENV === 'production';
+}
+
+function buildRefreshCookieBaseOptions(res) {
+    const req = res?.req;
+    const domain = resolveRefreshCookieDomain(req);
+
+    return {
+        httpOnly: true,
+        secure: resolveRefreshCookieSecure(req),
+        sameSite: 'lax',
+        path: '/account',
+        ...(domain ? {domain} : {}),
+    };
+}
+
 /**
  * 设置 refresh token cookie
  * @param {object} res Express response 对象
@@ -873,11 +935,9 @@ export async function getUserInfoForToken(user, email = null) {
  */
 export function setRefreshTokenCookie(res, refreshToken, refreshExpiresAt) {
     const maxAge = new Date(refreshExpiresAt).getTime() - Date.now();
+    const baseOptions = buildRefreshCookieBaseOptions(res);
     res.cookie('refresh_token', refreshToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'none',
-        path: '/account',
+        ...baseOptions,
         maxAge: Math.max(0, maxAge),
     });
 }
@@ -887,11 +947,9 @@ export function setRefreshTokenCookie(res, refreshToken, refreshExpiresAt) {
  * @param {object} res Express response 对象
  */
 export function clearRefreshTokenCookie(res) {
+    const baseOptions = buildRefreshCookieBaseOptions(res);
     res.clearCookie('refresh_token', {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'none',
-        path: '/account',
+        ...baseOptions,
     });
 }
 

@@ -1,0 +1,10 @@
+{
+  "name": "@zerocat/api-client",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "type": "module",
+  "dependencies": {
+    "@zerocat/types": "workspace:*",
+    "axios": "^1.6.0"
+  }
+}

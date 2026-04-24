@@ -52,12 +52,13 @@
 
 <script setup>
 import {ref, onMounted} from 'vue';
-import {useRouter} from 'vue-router';
+import {useRoute, useRouter} from 'vue-router';
 import {localuser} from '@/services/localAccount';
 import {useAuthStore} from '@/stores/auth';
 import axios from '@/axios/axios';
 import AuthCard from '@/components/AuthCard.vue';
 
+const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 
@@ -68,6 +69,12 @@ const displayName = ref('');
 
 onMounted(async () => {
   try {
+    const redirectFromQuery =
+      typeof route.query.redirect === 'string' ? route.query.redirect : null;
+    if (redirectFromQuery) {
+      authStore.setAuthRedirectUrl(redirectFromQuery);
+    }
+
     // 从URL中提取临时令牌
     const urlParams = new URLSearchParams(window.location.search);
     const tempToken = urlParams.get('temp_token');
@@ -89,7 +96,7 @@ onMounted(async () => {
       authSuccess.value = true;
 
 
-        router.push(authStore.consumeAuthRedirectUrl());
+  authStore.navigateToAuthRedirect(router);
 
     } else {
       throw new Error(data.message || '令牌验证失败');
@@ -104,7 +111,7 @@ onMounted(async () => {
 });
 
 function goToLogin() {
-  router.push('/account/login');
+  router.push('/app/account/login');
 }
 </script>
 

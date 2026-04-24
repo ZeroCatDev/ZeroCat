@@ -95,7 +95,7 @@ export default {
 
     onMounted(async () => {
       if (localuser.isLogin.value === true) {
-        router.push(authStore.consumeAuthRedirectUrl());
+        authStore.navigateToAuthRedirect(router);
         return;
       }
 
@@ -126,8 +126,10 @@ export default {
 
           // Redirect after delay
           redirectTimer.value = setTimeout(() => {
-            const redirectUrl = response.callback?.redirect || authStore.consumeAuthRedirectUrl();
-            router.push(redirectUrl);
+            if (response.callback?.redirect) {
+              authStore.setAuthRedirectUrl(response.callback.redirect);
+            }
+            authStore.navigateToAuthRedirect(router);
           }, 5000);
         } else {
           loading.value = false;
