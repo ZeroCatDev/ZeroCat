@@ -203,12 +203,115 @@ export async function getRelatedPosts(id: number | string): Promise<BlogPost[]> 
 }
 
 export async function listTags(): Promise<Tag[]> {
+  const perPage = 50;
+  const maxPages = 50;
+  const collected: Tag[] = [];
+
   try {
-    const res = await apiFetch<ApiEnvelope<Tag[]>>(`/blog/tags`, {
-      revalidate: 60,
-      tags: ["blog-tags"],
-    });
-    return res.data ?? [];
+    let page = 1;
+    let totalCount: number | null = null;
+
+    while (page <= maxPages) {
+      const qs = new URLSearchParams();
+      qs.set("scope", "tags");
+      qs.set("type", "article");
+      qs.set("state", "public");
+      qs.set("page", String(page));
+      qs.set("perPage", String(perPage));
+
+      const res = await apiFetch<{
+        tags?: Array<{ name: string; count: number }>;
+        totalCount?: number;
+      }>(`/searchapi?${qs.toString()}`, {
+        revalidate: 60,
+        tags: ["blog-tags"],
+      });
+
+      if (totalCount === null && typeof res.totalCount === "number") {
+        totalCount = res.totalCount;
+      }
+
+      const items = (res.tags ?? [])
+        .map((tag) => {
+          const name = String(tag.name || "").trim();
+          if (!name) return null;
+          const item: Tag = {
+            id: stableTagId(name),
+            name,
+            count: Number(tag.count ?? 0),
+          };
+          return item;
+        })
+        .filter((item): item is Tag => Boolean(item));
+
+      if (items.length === 0) break;
+      collected.push(...items);
+      if (totalCount !== null && collected.length >= totalCount) break;
+      if (items.length < perPage) break;
+      page += 1;
+    }
+
+    const uniq = new Map<string, Tag>();
+    for (const tag of collected) {
+      if (!uniq.has(tag.name)) uniq.set(tag.name, tag);
+    }
+    return Array.from(uniq.values());
+  } catch {
+    return [];
+  }
+}
+
+export async function listTagsByAuthorId(
+  userId: number,
+  limit = 60
+): Promise<Tag[]> {
+  const requested = Math.max(1, Number(limit) || 0);
+  const perPage = Math.min(50, requested);
+  const maxPages = Math.min(50, Math.ceil(requested / perPage));
+  const collected: Tag[] = [];
+
+  try {
+    for (let page = 1; page <= maxPages; page += 1) {
+      const qs = new URLSearchParams();
+      qs.set("scope", "tags");
+      qs.set("type", "article");
+      qs.set("state", "public");
+      qs.set("userId", String(userId));
+      qs.set("page", String(page));
+      qs.set("perPage", String(perPage));
+
+      const res = await apiFetch<{ tags?: Array<{ name: string; count: number }> }>(
+        `/searchapi?${qs.toString()}`,
+        {
+          revalidate: 60,
+          tags: [`blog-tags-user-${userId}`],
+        }
+      );
+
+      const items = (res.tags ?? [])
+        .map((tag) => {
+          const name = String(tag.name || "").trim();
+          if (!name) return null;
+          const item: Tag = {
+            id: stableTagId(name),
+            name,
+            count: Number(tag.count ?? 0),
+          };
+          return item;
+        })
+        .filter((item): item is Tag => Boolean(item));
+
+      if (items.length === 0) break;
+      collected.push(...items);
+      if (collected.length >= requested) break;
+      if (items.length < perPage) break;
+    }
+
+    const uniq = new Map<string, Tag>();
+    for (const tag of collected) {
+      if (!uniq.has(tag.name)) uniq.set(tag.name, tag);
+    }
+    return Array.from(uniq.values()).slice(0, requested);
   } catch {
     return [];
   }
@@ -232,6 +335,14 @@ export async function getProjectNamespace(
   } catch {
     return null;
   }
+}
+
+function stableTagId(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) {
+    hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  }
+  return hash || 1;
 }
 
 export async function getLatestCommit(
@@ -512,6 +623,7 @@ export async function updatePostMeta(
     cover: string | null;
     slug: string;
     seo: { title?: string; description?: string; keywords?: string };
+    tags: string[];
   }>,
   token?: string
 ): Promise<void> {

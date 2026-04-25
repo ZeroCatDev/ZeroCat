@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Eye, Star, Clock3 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { buildPostsHref } from "@/lib/blog-links";
 import {
   formatDate,
   formatNumber,
@@ -38,10 +39,13 @@ export function PostCard({
   const isProminent = variant === "prominent";
 
   return (
-    <Link
-      href={href}
-      className="group flex flex-col h-full overflow-hidden rounded-2xl bg-card ring-border transition-all duration-300 hover:shadow-card-lift hover:-translate-y-0.5"
-    >
+    <article className="group relative flex flex-col h-full overflow-hidden rounded-2xl bg-card ring-border transition-all duration-300 hover:shadow-card-lift hover:-translate-y-0.5">
+      <Link
+        href={href}
+        aria-label={post.title || post.name}
+        className="absolute inset-0 z-10 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      />
+
       <div
         className={`relative w-full overflow-hidden bg-gradient-to-br from-secondary via-accent to-secondary/60 ${
           isProminent ? "aspect-[16/9]" : "aspect-[16/9]"
@@ -62,7 +66,7 @@ export function PostCard({
       </div>
 
       <div
-        className={`flex flex-1 flex-col gap-3 ${
+        className={`relative flex flex-1 flex-col gap-3 ${
           isProminent ? "p-6 md:p-8" : "p-5"
         }`}
       >
@@ -111,13 +115,18 @@ export function PostCard({
           {post.project_tags && post.project_tags.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
               {post.project_tags.slice(0, 2).map((tag) => (
-                <Badge
+                <Link
                   key={tag.id}
-                  variant="secondary"
-                  className="h-6 rounded-full px-2 text-[11px] font-medium"
+                  href={buildPostsHref({ tag: tag.name })}
+                  className="relative z-20"
                 >
-                  #{tag.name}
-                </Badge>
+                  <Badge
+                    variant="secondary"
+                    className="h-6 rounded-full px-2 text-[11px] font-medium hover:bg-accent transition-colors"
+                  >
+                    #{tag.name}
+                  </Badge>
+                </Link>
               ))}
             </div>
           ) : (
@@ -126,7 +135,7 @@ export function PostCard({
           <PostStats post={post} />
         </div>
       </div>
-    </Link>
+    </article>
   );
 }
 

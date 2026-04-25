@@ -18,7 +18,9 @@ import { EmptyState } from "@/components/blog/empty-state";
 import {
   getUserByUsername,
   listPostsByAuthorId,
+  listTagsByAuthorId,
 } from "@/lib/api";
+import { buildPostsHref } from "@/lib/blog-links";
 import { resolveAvatarUrl } from "@/lib/avatar";
 import { formatDate, initials } from "@/lib/utils";
 
@@ -52,8 +54,10 @@ export default async function UserProfilePage({ params }: PageProps) {
   const user = await getUserByUsername(username);
   if (!user) notFound();
 
-  const posts = await listPostsByAuthorId(user.id, { limit: 30 });
-  const allTags = collectTags(posts.posts);
+  const [posts, allTags] = await Promise.all([
+    listPostsByAuthorId(user.id, { limit: 30 }),
+    listTagsByAuthorId(user.id, 80),
+  ]);
   const featured = posts.posts[0];
   const rest = posts.posts.slice(1);
 
@@ -109,8 +113,9 @@ export default async function UserProfilePage({ params }: PageProps) {
                 <div className="flex flex-wrap gap-2">
                   {allTags.map((t) => (
                     <TagChip
-                      key={t.name}
-                      tag={{ id: 0, name: t.name, count: t.count }}
+                      key={t.id}
+                      tag={t}
+                      href={buildPostsHref({ author: user.username, tag: t.name })}
                       size="lg"
                     />
                   ))}
@@ -301,16 +306,4 @@ function InfoRow({
       </div>
     </div>
   );
-}
-
-function collectTags(posts: Awaited<ReturnType<typeof listPostsByAuthorId>>["posts"]) {
-  const map = new Map<string, { name: string; count: number }>();
-  for (const p of posts) {
-    for (const t of p.project_tags ?? []) {
-      const existing = map.get(t.name);
-      if (existing) existing.count += 1;
-      else map.set(t.name, { name: t.name, count: 1 });
-    }
-  }
-  return Array.from(map.values()).sort((a, b) => b.count - a.count);
 }

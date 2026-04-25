@@ -17,6 +17,7 @@ import {
 import { extractMarkdownToc } from "@/lib/markdown";
 import { formatDate, formatNumber, truncate } from "@/lib/utils";
 import { EditPostButton } from "@/components/blog/edit-post-button";
+import { buildPostsHref } from "@/lib/blog-links";
 
 type PageProps = { params: Promise<{ username: string; slug: string }> };
 
@@ -86,9 +87,14 @@ export default async function PostPage({ params }: PageProps) {
             {post.project_tags && post.project_tags.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {post.project_tags.map((tag) => (
-                  <Badge key={tag.id} variant="outline" className="h-6 px-2 text-xs">
-                    #{tag.name}
-                  </Badge>
+                  <Link key={tag.id} href={buildPostsHref({ tag: tag.name })}>
+                    <Badge
+                      variant="outline"
+                      className="h-6 px-2 text-xs hover:bg-accent transition-colors"
+                    >
+                      #{tag.name}
+                    </Badge>
+                  </Link>
                 ))}
               </div>
             )}

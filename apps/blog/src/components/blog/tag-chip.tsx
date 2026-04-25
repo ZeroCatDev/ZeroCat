@@ -1,15 +1,18 @@
 import Link from "next/link";
 import type { Tag } from "@/lib/types";
+import { buildPostsHref } from "@/lib/blog-links";
 import { cn, formatNumber } from "@/lib/utils";
 
 export function TagChip({
   tag,
   active = false,
   size = "default",
+  href,
 }: {
   tag: Tag;
   active?: boolean;
   size?: "default" | "sm" | "lg";
+  href?: string;
 }) {
   const sizeClass =
     size === "sm"
@@ -19,7 +22,7 @@ export function TagChip({
       : "px-2.5 py-1 text-xs";
   return (
     <Link
-      href={`/tags/${encodeURIComponent(tag.name)}`}
+      href={href || buildPostsHref({ tag: tag.name })}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full font-medium transition-all duration-150",
         sizeClass,

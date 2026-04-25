@@ -505,8 +505,12 @@ router.get("/", async (req, res, next) => {
     const listWhere = listAnd.length > 0 ? { AND: listAnd } : {};
 
     const tagWhere = {
-      ...(keyword ? { name: { contains: keyword, mode: "insensitive" } } : {}),
+      name: {
+        not: "",
+        ...(keyword ? { contains: keyword, mode: "insensitive" } : {}),
+      },
       project: {
+        ...(type ? { type: { equals: String(type) } } : {}),
         ...(useridArray.length > 0 ? { authorid: { in: useridArray } } : {}),
         state: { in: state },
       },

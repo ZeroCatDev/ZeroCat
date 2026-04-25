@@ -1,43 +1,53 @@
-import {prisma} from "../../services/prisma.js";
+import { prisma } from "../../services/prisma.js";
+
+const stableTagId = (name) => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) {
+    hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  }
+  return hash || 1;
+};
 
 export const getTags = async (req, res) => {
   try {
-    const tagsAggregation = await prisma.ow_projects_tags.groupBy({
-      by: ['tagId'],
+    const rows = await prisma.ow_projects_tags.groupBy({
+      by: ["name"],
       _count: {
-        projectId: true
+        projectid: true,
+      },
+      _min: {
+        id: true,
+        created_at: true,
       },
       where: {
+        name: { not: "" },
+        projectid: { not: null },
         project: {
           type: "article",
-          state: "public"
-        }
+          state: "public",
+        },
       },
       orderBy: {
         _count: {
-          projectId: 'desc'
-        }
-      }
+          projectid: "desc",
+        },
+      },
     });
 
-    const tagIds = tagsAggregation.map(t => t.tagId);
-    if (tagIds.length === 0) {
-      return res.json({ status: "success", data: [] });
-    }
+    const data = rows
+      .map((row) => {
+        const name = String(row.name || "").trim();
+        if (!name) return null;
+        return {
+          id: row._min?.id ?? stableTagId(name),
+          name,
+          count: row._count?.projectid ?? 0,
+          created_at: row._min?.created_at ?? undefined,
+        };
+      })
+      .filter(Boolean);
 
-    const tags = await prisma.ow_tags.findMany({
-      where: { id: { in: tagIds } }
-    });
-
-    const result = tags.map(tag => {
-      const agg = tagsAggregation.find(ta => ta.tagId === tag.id);
-      return {
-        ...tag,
-        count: agg ? agg._count.projectId : 0
-      };
-    }).sort((a, b) => b.count - a.count);
-
-    res.json({ status: "success", data: result });
+    res.json({ status: "success", data });
   } catch (err) {
     console.error(err);
     res.status(500).json({ status: "error", message: "Failed to get tags" });

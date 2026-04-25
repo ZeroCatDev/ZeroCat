@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { PostCard } from "@/components/blog/post-card";
 import { TagChip } from "@/components/blog/tag-chip";
 import { EmptyState } from "@/components/blog/empty-state";
+import { buildPostsHref, normalizeAuthorParam } from "@/lib/blog-links";
 import { listPosts, listTags } from "@/lib/api";
 
 export const revalidate = 30;
@@ -17,6 +18,7 @@ export default async function PostsPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const q = pick(params.q);
   const tag = pick(params.tag);
+  const author = normalizeAuthorParam(pick(params.author));
   const sort = pick(params.sort) === "popular" ? "popular" : "latest";
   const page = Math.max(Number.parseInt(pick(params.page) || "1", 10) || 1, 1);
   const limit = 18;
@@ -26,6 +28,7 @@ export default async function PostsPage({ searchParams }: PageProps) {
       page,
       limit,
       keyword: q || undefined,
+      author: author || undefined,
       tag: tag || undefined,
       sort,
     }),
@@ -43,11 +46,15 @@ export default async function PostsPage({ searchParams }: PageProps) {
             全部文章
           </h1>
           <p className="text-sm text-muted-foreground">
-            支持标签、关键词与热度排序，快速定位社区内容。
+            支持标签、作者、关键词与热度排序，快速定位社区内容。
           </p>
         </div>
 
-        <form className="flex w-full max-w-xl items-center gap-2" action="/posts" method="GET">
+        <form
+          className="flex w-full max-w-xl flex-col sm:flex-row items-stretch sm:items-center gap-2"
+          action="/posts"
+          method="GET"
+        >
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -59,13 +66,19 @@ export default async function PostsPage({ searchParams }: PageProps) {
             {tag && <input type="hidden" name="tag" value={tag} />}
             <input type="hidden" name="sort" value={sort} />
           </div>
+          <Input
+            name="author"
+            defaultValue={author}
+            placeholder="作者用户名（可填 @xxx）"
+            className="h-9 w-full sm:w-52"
+          />
           <Button type="submit">搜索</Button>
         </form>
       </div>
 
       <div className="mb-6 flex flex-wrap gap-1.5">
         <Link
-          href={buildPostsHref({ q, sort })}
+          href={buildPostsHref({ q, author, sort })}
           className={
             tag
               ? "inline-flex items-center rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground hover:bg-accent transition-colors"
@@ -75,18 +88,24 @@ export default async function PostsPage({ searchParams }: PageProps) {
           全部
         </Link>
         {tags.slice(0, 24).map((item) => (
-          <TagChip key={item.id} tag={item} active={tag === item.name} size="sm" />
+          <TagChip
+            key={item.id}
+            tag={item}
+            active={tag === item.name}
+            size="sm"
+            href={buildPostsHref({ q, author, tag: item.name, sort })}
+          />
         ))}
       </div>
 
       <div className="mb-8 flex flex-wrap items-center gap-2">
         <Button asChild variant={sort === "latest" ? "default" : "outline"} size="sm">
-          <Link href={buildPostsHref({ q, tag, sort: "latest" })}>最新发布</Link>
+          <Link href={buildPostsHref({ q, author, tag, sort: "latest" })}>最新发布</Link>
         </Button>
         <Button asChild variant={sort === "popular" ? "default" : "outline"} size="sm">
-          <Link href={buildPostsHref({ q, tag, sort: "popular" })}>热门阅读</Link>
+          <Link href={buildPostsHref({ q, author, tag, sort: "popular" })}>热门阅读</Link>
         </Button>
-        {(q || tag) && (
+        {(q || tag || author) && (
           <Button asChild variant="ghost" size="sm">
             <Link href="/posts">清除筛选</Link>
           </Button>
@@ -113,12 +132,12 @@ export default async function PostsPage({ searchParams }: PageProps) {
         </p>
         <div className="flex items-center gap-2">
           <Button asChild variant="outline" size="sm" disabled={page <= 1}>
-            <Link href={buildPostsHref({ q, tag, sort, page: page - 1 })}>
+            <Link href={buildPostsHref({ q, author, tag, sort, page: page - 1 })}>
               <ArrowLeft className="h-4 w-4" /> 上一页
             </Link>
           </Button>
           <Button asChild variant="outline" size="sm" disabled={page >= totalPages}>
-            <Link href={buildPostsHref({ q, tag, sort, page: page + 1 })}>
+            <Link href={buildPostsHref({ q, author, tag, sort, page: page + 1 })}>
               下一页 <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>
@@ -131,19 +150,4 @@ export default async function PostsPage({ searchParams }: PageProps) {
 function pick(value?: string | string[]) {
   if (!value) return "";
   return Array.isArray(value) ? value[0] : value;
-}
-
-function buildPostsHref(input: {
-  q?: string;
-  tag?: string;
-  sort?: "latest" | "popular";
-  page?: number;
-}) {
-  const qs = new URLSearchParams();
-  if (input.q) qs.set("q", input.q);
-  if (input.tag) qs.set("tag", input.tag);
-  if (input.sort) qs.set("sort", input.sort);
-  if (input.page && input.page > 1) qs.set("page", String(input.page));
-  const tail = qs.toString();
-  return tail ? `/posts?${tail}` : "/posts";
 }

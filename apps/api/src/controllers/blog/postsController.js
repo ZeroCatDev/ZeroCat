@@ -66,7 +66,9 @@ export const getPosts = async (req, res) => {
     // 简单 LIKE 搜索或依赖后续更优的触发机制
     where.OR = [
       { title: { contains: keyword, mode: "insensitive" } },
-      { description: { contains: keyword, mode: "insensitive" } }
+      { description: { contains: keyword, mode: "insensitive" } },
+      { author: { username: { contains: keyword, mode: "insensitive" } } },
+      { author: { display_name: { contains: keyword, mode: "insensitive" } } },
     ];
   }
 

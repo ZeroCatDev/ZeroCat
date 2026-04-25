@@ -392,6 +392,7 @@ function WritePageInner() {
     try {
       await persistDraft(true);
       const id = await ensureProject();
+      const payloadTags = parseTags(tagsInput);
 
       await updatePostMeta(
         id,
@@ -401,6 +402,7 @@ function WritePageInner() {
           slug: slug.trim() || undefined,
           cover: cover || null,
           state: "public",
+          tags: payloadTags,
           seo: {
             title: seoTitle.trim() || undefined,
             description: seoDescription.trim() || undefined,
@@ -412,6 +414,13 @@ function WritePageInner() {
 
       await publishDraft(id, publishMessage.trim() || "发布文章", token);
       await updateProjectState(id, "public", token);
+
+      void fetch("/api/revalidate", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }).catch(() => null);
 
       toast.success("发布成功 🎉");
       setDirty(false);
@@ -439,6 +448,7 @@ function WritePageInner() {
     seoTitle,
     slug,
     summary,
+    tagsInput,
     title,
     token,
     user,
