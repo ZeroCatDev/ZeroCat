@@ -104,7 +104,7 @@ export function AppSidebar() {
                                 <SidebarMenuItem key={item.title}>
                                     <SidebarMenuButton
                                         asChild
-                                        isActive={pathname === item.url || (item.url !== "/" && pathname.startsWith(item.url))}
+                                        isActive={pathname === item.url || (item.url !== "/" && pathname.startsWith(item.url||""))}
                                         tooltip={item.title}
                                         className="transition-colors"
                                     >
