@@ -3,6 +3,8 @@ import { createHash } from "crypto";
 import { projectSelectionFields } from "../projects.js";
 
 const MAX_PROJECT_NAME_LENGTH = 128;
+const ASSET_HASH_PATTERN = /^[a-f0-9]{32}$/i;
+const ASSET_HASH_WITH_EXTENSION_PATTERN = /^([a-f0-9]{32})\.([a-z0-9]+)$/i;
 
 const normalizeArticleState = (state) =>
   String(state || "").toLowerCase() === "public" ? "public" : "private";
@@ -45,6 +47,21 @@ const ensureUniqueProjectName = async (authorid, preferred) => {
   }
 };
 
+function compactThumbnailRef(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (ASSET_HASH_PATTERN.test(raw) || ASSET_HASH_WITH_EXTENSION_PATTERN.test(raw)) {
+    return raw;
+  }
+
+  const directAssetPathMatch = raw.match(/\/assets\/[a-f0-9]{2}\/[a-f0-9]{2}\/([a-f0-9]{32}\.[a-z0-9]+)$/i);
+  if (directAssetPathMatch) {
+    return directAssetPathMatch[1].toLowerCase();
+  }
+
+  return "";
+}
+
 // 获取所有公开已发表博客
 export const getPosts = async (req, res) => {
   const { author, tag, keyword, sort = "latest", page = 1, limit = 20 } = req.query;
@@ -63,7 +80,6 @@ export const getPosts = async (req, res) => {
     where.project_tags = { some: { name: tag } };
   }
   if (keyword) {
-    // 简单 LIKE 搜索或依赖后续更优的触发机制
     where.OR = [
       { title: { contains: keyword, mode: "insensitive" } },
       { description: { contains: keyword, mode: "insensitive" } },
@@ -86,7 +102,6 @@ export const getPosts = async (req, res) => {
       select: projectSelectionFields()
     });
 
-    // 查询各自的 config (cover, slug, seo) => 可以在前端做或者直接注入
     const projectIds = posts.map(p => String(p.id));
     const configs = await prisma.ow_target_configs.findMany({
       where: {
@@ -128,13 +143,11 @@ export const getPosts = async (req, res) => {
   }
 };
 
-// 某作者已发布文章
 export const getPostsByAuthor = async (req, res) => {
   req.query.author = req.params.username;
   return getPosts(req, res);
 };
 
-// 获取单篇文章及详情
 export const getPostDetail = async (req, res) => {
   const idStr = req.params.id || req.params.slug;
   if (!idStr) return res.status(400).json({ status: "error", message: "缺少ID参数" });
@@ -178,7 +191,6 @@ export const getPostDetail = async (req, res) => {
     }
 
     if (!post) {
-      // 尝试按 slug 查询
       const configs = await prisma.ow_target_configs.findMany({
         where: {
           target_type: "blog_post",
@@ -203,7 +215,6 @@ export const getPostDetail = async (req, res) => {
           where: {
             id,
             type: "article",
-            // 确保 username 匹配（如果提供了 username 参数）
             ...(req.params.username ? {
               author: { username: req.params.username }
             } : {})
@@ -241,7 +252,6 @@ export const getPostDetail = async (req, res) => {
       } catch(e) {}
     }
 
-    // 手动获取文章正文内容
     const defaultBranch = post.default_branch || "main";
     const branch = await prisma.ow_projects_branch.findFirst({
       where: { projectid: id, name: defaultBranch }
@@ -266,7 +276,6 @@ export const getPostDetail = async (req, res) => {
   }
 };
 
-// 改元数据
 export const updatePostMeta = async (req, res) => {
   const { id } = req.params;
   const { title, summary, state, cover, slug, seo, tags } = req.body;
@@ -279,11 +288,11 @@ export const updatePostMeta = async (req, res) => {
     });
     if (!post) return res.status(403).json({ status: "error", message: "无权修改或文章不存在" });
 
-    // Updates base fields
     const toUpdate = {};
     if (title !== undefined) toUpdate.title = title;
     if (summary !== undefined) toUpdate.description = summary;
     if (state !== undefined) toUpdate.state = normalizeArticleState(state);
+    if (cover !== undefined) toUpdate.thumbnail = compactThumbnailRef(cover);
 
     if (Object.keys(toUpdate).length > 0) {
       await prisma.ow_projects.update({
@@ -292,7 +301,6 @@ export const updatePostMeta = async (req, res) => {
       });
     }
 
-    // 同步标签
     if (tags !== undefined && Array.isArray(tags)) {
       const existingTags = await prisma.ow_projects_tags.findMany({
         where: { projectid: projectId },
@@ -316,7 +324,6 @@ export const updatePostMeta = async (req, res) => {
       }
     }
 
-    // Upsert target configs for blog configs
     const newConfig = {
       cover: cover !== undefined ? cover : undefined,
       slug: slug !== undefined ? slug : undefined,
@@ -372,7 +379,6 @@ export const updatePostMeta = async (req, res) => {
   }
 };
 
-// 下架文章
 export const unpublishPost = async (req, res) => {
   const { id } = req.params;
   const projectId = Number(id);
@@ -395,7 +401,6 @@ export const unpublishPost = async (req, res) => {
   }
 };
 
-// 创建文章框架
 export const createPost = async (req, res) => {
   try {
     const { title, summary, state, cover, slug, seo } = req.body || {};
@@ -407,7 +412,7 @@ export const createPost = async (req, res) => {
     const normalizedTitle = String(title || "未命名文章").trim() || "未命名文章";
     const normalizedDescription = typeof summary === "string" ? summary : "";
     const normalizedState = normalizeArticleState(state);
-    const normalizedCover = typeof cover === "string" ? cover : "";
+    const normalizedCover = compactThumbnailRef(cover);
 
     const project = await prisma.$transaction(async (tx) => {
       const created = await tx.ow_projects.create({
@@ -510,7 +515,6 @@ export const createPost = async (req, res) => {
 };
 
 export const getRelatedPosts = async (req, res) => {
-  // basic implementation
   try {
      const post = await prisma.ow_projects.findUnique({where: {id: req.params.id}});
      if (!post) return res.status(404).json({status: "error"});

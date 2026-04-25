@@ -616,7 +616,7 @@ export async function publishDraft(
 }
 
 export async function createPost(
-  payload: Partial<{ title: string; summary: string; state: string }>,
+  payload: Partial<{ title: string; summary: string; state: string; slug: string }>,
   token?: string
 ): Promise<BlogPost> {
   const res = await authedFetch<ApiEnvelope<BlogPost>>(
@@ -638,8 +638,6 @@ export async function updatePostMeta(
     summary: string;
     state: "public" | "private" | "draft";
     cover: string | null;
-    slug: string;
-    seo: { title?: string; description?: string; keywords?: string };
     tags: string[];
   }>,
   token?: string
@@ -669,6 +667,24 @@ export async function updateProjectState(
   );
 }
 
+export async function renameProject(
+  id: number | string,
+  newName: string,
+  token?: string
+): Promise<void> {
+  const res = await authedFetch<ApiEnvelope<null>>(
+    `/project/rename/${id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ newName }),
+    },
+    token
+  );
+
+  if (res.status !== "success") {
+    throw new Error(res.message || "重命名失败");
+  }
+}
 /* =========================
  * cachekv — user-local cache
  * ========================= */

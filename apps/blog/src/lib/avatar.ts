@@ -6,6 +6,7 @@ declare global {
 
 const DEFAULT_API_URL = "http://localhost:3000";
 const ASSET_HASH_PATTERN = /^[a-f0-9]{32}$/i;
+const ASSET_HASH_WITH_EXTENSION_PATTERN = /^([a-f0-9]{32})\.([a-z0-9]+)$/i;
 
 function stripTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
@@ -77,6 +78,11 @@ export function resolveMediaUrl(
     return buildStaticAssetUrl(raw, staticBase);
   }
 
+  const hashWithExtMatch = raw.match(ASSET_HASH_WITH_EXTENSION_PATTERN);
+  if (hashWithExtMatch) {
+    return buildStaticAssetUrl(hashWithExtMatch[1], staticBase, hashWithExtMatch[2]);
+  }
+
   const base = getConfiguredStaticBase(staticBase);
 
   if (raw.startsWith("/assets/")) {
@@ -102,6 +108,11 @@ export function resolveAvatarUrl(
 
   if (ASSET_HASH_PATTERN.test(raw)) {
     return buildStaticAssetUrl(raw, staticBase);
+  }
+
+  const hashWithExtMatch = raw.match(ASSET_HASH_WITH_EXTENSION_PATTERN);
+  if (hashWithExtMatch) {
+    return buildStaticAssetUrl(hashWithExtMatch[1], staticBase, hashWithExtMatch[2]);
   }
 
   return resolveMediaUrl(raw, staticBase);

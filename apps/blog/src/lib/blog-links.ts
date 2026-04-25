@@ -25,13 +25,11 @@ export function buildPostsHref(input: {
   return tail ? `/posts?${tail}` : "/posts";
 }
 
-export function getPostUrlSlug(post: Pick<BlogPost, "name" | "blogConfig">) {
-  const configSlug = String(post.blogConfig?.slug || "").trim();
-  const projectSlug = String(post.name || "").trim();
-  return configSlug || projectSlug;
+export function getPostUrlSlug(post: Pick<BlogPost, "name">) {
+  return String(post.name || "").trim();
 }
 
-export function getPostHref(post: Pick<BlogPost, "name" | "blogConfig" | "author">) {
+export function getPostHref(post: Pick<BlogPost, "name" | "author">) {
   const username = post.author?.username;
   const slug = getPostUrlSlug(post);
   if (!username || !slug) return "/posts";

@@ -209,7 +209,7 @@ function DraftsPageInner() {
                 const title = item.draft.title || item.project.title || `草稿 #${item.projectId}`;
                 const timeRaw = item.savedAt || item.draft.savedAt || item.project.time;
                 const hasPublishedBase = item.project.state === "public";
-                const liveHref = hasPublishedBase && currentUser?.username ? getPostHref({ name: item.project.name, blogConfig: { slug: item.draft.slug || item.project.name }, author: { id: currentUser.id ?? 0, username: currentUser.username, display_name: currentUser.display_name ?? null, avatar: currentUser.avatar ?? null } }) : null;
+                const liveHref = hasPublishedBase && currentUser?.username ? getPostHref({ name: item.draft.slug || item.project.name, author: { id: currentUser.id ?? 0, username: currentUser.username, display_name: currentUser.display_name ?? null, avatar: currentUser.avatar ?? null } }) : null;
                 return (
                   <li key={item.projectId} className="group relative rounded-xl bg-card p-4 ring-border transition-all hover:shadow-card">
                     <Link href={`/write?draft=${item.projectId}`} className="flex flex-col gap-2 pr-10 sm:flex-row sm:items-center sm:gap-4">

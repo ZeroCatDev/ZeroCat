@@ -1,0 +1,39 @@
+ <svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="bg" x1="0" y1="0" x2="1600" y2="900" gradientUnits="userSpaceOnUse">
+        <stop offset="0" stop-color="#352E67"/>
+        <stop offset="0.46" stop-color="#4F73B3"/>
+        <stop offset="0.74" stop-color="#9E6A87"/>
+        <stop offset="1" stop-color="#E1D4E4"/>
+      </linearGradient>
+      <radialGradient id="glowA" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1180 160) rotate(90) scale(320 420)">
+        <stop stop-color="#FFF6FB" stop-opacity="0.38"/>
+        <stop offset="1" stop-color="#FFF6FB" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="glowB" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(180 780) rotate(-28) scale(340 280)">
+        <stop stop-color="#F5ADC9" stop-opacity="0.24"/>
+        <stop offset="1" stop-color="#F5ADC9" stop-opacity="0"/>
+      </radialGradient>
+      <linearGradient id="stripeA" x1="105" y1="0" x2="438" y2="900" gradientUnits="userSpaceOnUse">
+        <stop stop-color="#FFFFFF" stop-opacity="0.10"/>
+        <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.02"/>
+      </linearGradient>
+      <linearGradient id="stripeB" x1="438" y1="0" x2="756" y2="900" gradientUnits="userSpaceOnUse">
+        <stop stop-color="#F26B9A" stop-opacity="0.18"/>
+        <stop offset="1" stop-color="#7F9CFF" stop-opacity="0.18"/>
+      </linearGradient>
+    </defs>
+    <rect width="1600" height="900" fill="url(#bg)"/>
+    <rect x="86" y="-40" width="210" height="1040" transform="rotate(25 86 -40)" fill="url(#stripeA)"/>
+    <rect x="414" y="-60" width="250" height="1060" transform="rotate(25 414 -60)" fill="url(#stripeB)"/>
+    <rect x="1318" y="-200" width="180" height="1280" transform="rotate(25 1318 -200)" fill="#FFFFFF" fill-opacity="0.05"/>
+    <circle cx="1240" cy="150" r="340" fill="url(#glowA)"/>
+    <circle cx="180" cy="760" r="320" fill="url(#glowB)"/>
+    <rect x="112" y="112" width="178" height="40" rx="20" fill="#FFFFFF" fill-opacity="0.10"/>
+    <text x="136" y="138" fill="#FFFFFF" fill-opacity="0.9" font-family="Geist, Arial, sans-serif" font-size="24" font-weight="700">ZeroCat</text>
+    <text x="112" y="272" fill="#FFFFFF" font-family="Geist, Arial, sans-serif" font-size="88" font-weight="800" letter-spacing="-3">${titleTspans}</text>
+    <text x="112" y="548" fill="#F3EDF6" fill-opacity="0.82" font-family="Geist, Arial, sans-serif" font-size="34" font-weight="500">${excerptTspans}</text>
+    <rect x="112" y="704" width="268" height="54" rx="27" fill="#0E0B17" fill-opacity="0.30"/>
+    <text x="142" y="739" fill="#FFFFFF" fill-opacity="0.85" font-family="Geist Mono, monospace" font-size="24" font-weight="600">${escapeXml(slug)}</text>
+    <text x="112" y="828" fill="#FFFFFF" fill-opacity="0.42" font-family="Geist, Arial, sans-serif" font-size="26" font-weight="600">Generated cover</text>
+  </svg>

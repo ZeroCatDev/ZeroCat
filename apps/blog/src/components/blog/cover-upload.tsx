@@ -14,11 +14,13 @@ export function CoverUpload({
   onChange,
   token,
   className,
+  fallbackPreview,
 }: {
   value: string | null;
   onChange: (url: string | null) => void;
   token?: string | null;
   className?: string;
+  fallbackPreview?: string | null;
 }) {
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = React.useState(false);
@@ -71,6 +73,8 @@ export function CoverUpload({
     [handleFile]
   );
 
+  const displayValue = value || fallbackPreview || null;
+
   return (
     <div className={cn("space-y-2", className)}>
       <input
@@ -85,10 +89,13 @@ export function CoverUpload({
         }}
       />
 
-      {value ? (
+      {displayValue ? (
         <div className="group relative aspect-[16/9] overflow-hidden rounded-xl bg-muted ring-border">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={resolveMediaUrl(value) || value} alt="封面" className="h-full w-full object-cover" />
+          <img
+            src={resolveMediaUrl(displayValue) || displayValue}
+            alt="封面"
+            className="h-full w-full object-cover"
+          />
           <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/50 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
             <Button size="sm" variant="secondary" onClick={onPick} disabled={uploading}>
               <ImagePlus className="h-4 w-4" />
@@ -129,11 +136,7 @@ export function CoverUpload({
         </button>
       )}
 
-      {uploading && progress > 0 && (
-        <Progress value={progress} className="h-1" />
-      )}
+      {uploading && progress > 0 && <Progress value={progress} className="h-1" />}
     </div>
   );
 }
-
-

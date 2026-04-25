@@ -1,4 +1,5 @@
 import { API_URL, getStoredToken } from "./api";
+import { resolveMediaUrl } from "./avatar";
 
 export interface UploadedAsset {
   id?: number | string;
@@ -7,7 +8,26 @@ export interface UploadedAsset {
   file_hash?: string;
   file_size?: number;
   file_type?: string;
+  extension?: string;
   [key: string]: unknown;
+}
+
+function normalizeUploadedAsset(asset: UploadedAsset): UploadedAsset {
+  const normalizedUrl = resolveMediaUrl(
+    asset.url ||
+      (asset.md5 && typeof asset.extension === "string"
+        ? `${asset.md5}.${asset.extension}`
+        : asset.md5 || null)
+  );
+
+  if (!normalizedUrl) {
+    throw new Error("上传成功但未返回 URL");
+  }
+
+  return {
+    ...asset,
+    url: normalizedUrl,
+  };
 }
 
 /**
@@ -43,9 +63,19 @@ export async function uploadImage(
     throw new Error(payload?.message || `上传失败 (${res.status})`);
   }
 
-  const asset = payload.data.asset;
-  if (!asset.url) {
-    throw new Error("上传成功但未返回 URL");
-  }
-  return asset;
+  return normalizeUploadedAsset(payload.data.asset);
+}
+
+export async function uploadGeneratedCover(
+  dataUrl: string,
+  filename = "article-cover.png",
+  token?: string | null
+): Promise<UploadedAsset> {
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  const file = new File([blob], filename, {
+    type: blob.type || "image/png",
+  });
+
+  return uploadImage(file, token);
 }

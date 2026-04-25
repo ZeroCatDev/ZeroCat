@@ -31,11 +31,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     };
   }
 
-  const title = post.blogConfig?.seo?.title || post.title || post.name;
-  const description =
-    post.blogConfig?.seo?.description ||
-    post.summary ||
-    truncate(post.description || "", 160);
+  const title = post.title || post.name;
+  const description = post.summary || truncate(post.description || "", 160);
   const postSlug = getPostUrlSlug(post);
   const canonicalPath = `/${encodeURIComponent(username)}/${encodeURIComponent(postSlug)}`;
   const canonicalUrl = buildAbsolutePostUrl(username, postSlug);

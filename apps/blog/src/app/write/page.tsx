@@ -20,7 +20,6 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,12 +45,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -61,20 +54,24 @@ import { MilkdownEditorPane } from "@/components/blog/editor/milkdown-editor-pan
 import { CoverUpload } from "@/components/blog/cover-upload";
 import { PostTagSelector } from "@/components/blog/post-tag-selector";
 import { buildZcLoginUrl, useAuthToken, useCurrentUser } from "@/lib/auth";
+import { generateArticleCoverDataUrl } from "@/lib/article-cover";
 import {
   createPost,
   discardDraft,
   getDraft,
   getPostBody,
   getPostById,
+  getProjectNamespace,
   publishDraft,
+  renameProject,
   saveDraft,
   setCacheKV,
   updatePostMeta,
   updateProjectState,
 } from "@/lib/api";
 import { getPostHref } from "@/lib/blog-links";
-import { formatDate } from "@/lib/utils";
+import { uploadGeneratedCover } from "@/lib/upload";
+import { cn, formatDate } from "@/lib/utils";
 import type { BlogPost } from "@/lib/types";
 
 type EditorPreference = {
@@ -86,6 +83,8 @@ type PublishedSnapshot = {
   body: string;
   liveHref: string | null;
 };
+
+type SlugStatus = "idle" | "checking" | "available" | "taken";
 
 export default function WritePage() {
   return (
@@ -136,12 +135,9 @@ function WritePageInner() {
   const [slug, setSlug] = React.useState("");
   const [urlSlug, setUrlSlug] = React.useState("");
   const [slugTouched, setSlugTouched] = React.useState(false);
+  const [slugStatus, setSlugStatus] = React.useState<SlugStatus>("idle");
   const [tags, setTags] = React.useState<string[]>([]);
   const [cover, setCover] = React.useState<string | null>(null);
-  const [canonicalUrl, setCanonicalUrl] = React.useState("");
-  const [seoTitle, setSeoTitle] = React.useState("");
-  const [seoDescription, setSeoDescription] = React.useState("");
-  const [seoKeywords, setSeoKeywords] = React.useState("");
 
   const cacheKey = React.useMemo(
     () => `usercachekv:blog:${user?.id ?? "anonymous"}:editor-preference`,
@@ -156,20 +152,44 @@ function WritePageInner() {
     return cjk + rest;
   }, [content]);
 
+  const [generatedCover, setGeneratedCover] = React.useState<string | null>(null);
+  const generatedCoverUploadRef = React.useRef<Promise<string> | null>(null);
+
+  const resolvedSlug = React.useMemo(() => {
+    return slugify(slug.trim() || title.trim() || "未命名文章");
+  }, [slug, title]);
+
+  const coverInput = React.useMemo(() => ({
+    title: title.trim() || "未命名文章",
+    summary,
+    content,
+    slug: resolvedSlug,
+  }), [content, resolvedSlug, summary, title]);
+
   const liveHref = publishedSnapshot?.liveHref ?? null;
   const hasPublishedVersion = publishedSnapshot?.post.state === "public";
   const canRestorePublished = Boolean(publishedSnapshot && (hasSavedDraft || dirty));
 
+  const slugStatusText = React.useMemo(() => {
+    if (!resolvedSlug) return "";
+    if (slugStatus === "checking") return "正在检查 slug 是否可用...";
+    if (slugStatus === "taken") return "这个 slug 已被占用";
+    if (slugStatus === "available") return "slug 可用";
+    return "";
+  }, [resolvedSlug, slugStatus]);
+
   const applyDraft = React.useCallback((id: number, draft: Awaited<ReturnType<typeof getDraft>>) => {
     if (!draft) return;
+    const draftSlug = draft.slug || "";
     setProjectId(id);
     setTitle(draft.title || "");
     setSummary(draft.description || "");
-    setSlug(draft.slug || "");
-    setUrlSlug(draft.slug || "");
-    setSlugTouched(Boolean(draft.slug));
+    setSlug(draftSlug);
+    setUrlSlug(draftSlug);
+    setSlugTouched(Boolean(draftSlug));
     setContent(draft.content || "");
     setCover(draft.cover || null);
+    setGeneratedCover(null);
     setTags(draft.tags || []);
     setDirty(false);
     setHasSavedDraft(true);
@@ -182,16 +202,13 @@ function WritePageInner() {
     setProjectId(post.id);
     setTitle(post.title || post.name || "");
     setSummary(post.summary || post.description || "");
-    setSlug(post.blogConfig?.slug || "");
-    setUrlSlug(post.blogConfig?.slug || post.name || "");
-    setSlugTouched(Boolean(post.blogConfig?.slug));
+    setSlug(post.name || "");
+    setUrlSlug(post.name || "");
+    setSlugTouched(Boolean(post.name));
     setContent(body || "");
     setCover(post.blogConfig?.cover || post.thumbnail || null);
+    setGeneratedCover(null);
     setTags((post.project_tags ?? []).map((tag) => tag.name));
-    setCanonicalUrl("");
-    setSeoTitle(post.blogConfig?.seo?.title || "");
-    setSeoDescription(post.blogConfig?.seo?.description || "");
-    setSeoKeywords(post.blogConfig?.seo?.keywords || "");
     setPublishMessage("");
     setDirty(false);
     setHasSavedDraft(false);
@@ -208,18 +225,27 @@ function WritePageInner() {
     setSlug("");
     setUrlSlug("");
     setSlugTouched(false);
+    setSlugStatus("idle");
     setContent("");
     setTags([]);
     setCover(null);
-    setCanonicalUrl("");
-    setSeoTitle("");
-    setSeoDescription("");
-    setSeoKeywords("");
+    setGeneratedCover(null);
+    generatedCoverUploadRef.current = null;
     setPublishMessage("");
     setDirty(false);
     setLastSavedAt(null);
     setEditorSeed((seed) => seed + 1);
   }, []);
+
+  React.useEffect(() => {
+    generatedCoverUploadRef.current = null;
+  }, [generatedCover]);
+
+  React.useEffect(() => {
+    if (cover) {
+      generatedCoverUploadRef.current = null;
+    }
+  }, [cover]);
 
   React.useEffect(() => {
     if (!ready) return;
@@ -256,6 +282,10 @@ function WritePageInner() {
 
         if (draft) {
           applyDraft(requestedDraftId, draft);
+          if (snapshot?.post?.name && !draft.slug) {
+            setUrlSlug(snapshot.post.name);
+            setSlug(snapshot.post.name);
+          }
           return;
         }
 
@@ -299,33 +329,147 @@ function WritePageInner() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [dirty]);
 
-  const ensureProject = React.useCallback(async () => {
-    if (!token) throw new Error("未登录");
-    if (projectId) return projectId;
+  React.useEffect(() => {
+    if (cover) return;
 
-    const created = await createPost({ title: title.trim() || "未命名文章", summary: summary.trim(), state: "draft" }, token);
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void generateArticleCoverDataUrl(coverInput, controller.signal)
+        .then((next) => {
+          if (!controller.signal.aborted) setGeneratedCover(next);
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setGeneratedCover(null);
+        });
+    }, 280);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [cover, coverInput]);
+
+  React.useEffect(() => {
+    const username = user?.username;
+    if (!username || !resolvedSlug) {
+      setSlugStatus("idle");
+      return;
+    }
+
+    let canceled = false;
+    setSlugStatus("checking");
+
+    const timer = window.setTimeout(() => {
+      void getProjectNamespace(username, resolvedSlug)
+        .then((project) => {
+          if (canceled) return;
+          if (project && project.id !== projectId) {
+            setSlugStatus("taken");
+            return;
+          }
+          setSlugStatus("available");
+        })
+        .catch(() => {
+          if (!canceled) setSlugStatus("idle");
+        });
+    }, 260);
+
+    return () => {
+      canceled = true;
+      window.clearTimeout(timer);
+    };
+  }, [projectId, resolvedSlug, user?.username]);
+
+  const ensureGeneratedCover = React.useCallback(async () => {
+    if (cover) return cover;
+    if (!generatedCover) {
+      const next = await generateArticleCoverDataUrl(coverInput);
+      setGeneratedCover(next);
+      return next;
+    }
+    return generatedCover;
+  }, [cover, coverInput, generatedCover]);
+
+  const ensureUploadedCover = React.useCallback(async () => {
+    if (cover) return cover;
+    if (!token) throw new Error("未登录");
+
+    if (!generatedCoverUploadRef.current) {
+      generatedCoverUploadRef.current = (async () => {
+        const dataUrl = await ensureGeneratedCover();
+        if (!dataUrl.startsWith("data:")) {
+          return dataUrl;
+        }
+        const asset = await uploadGeneratedCover(
+          dataUrl,
+          `${resolvedSlug || "article-cover"}.png`,
+          token
+        );
+        setCover(asset.url);
+        return asset.url;
+      })().catch((error) => {
+        generatedCoverUploadRef.current = null;
+        throw error;
+      });
+    }
+
+    return generatedCoverUploadRef.current;
+  }, [cover, ensureGeneratedCover, resolvedSlug, token]);
+
+  const ensureSlugAvailable = React.useCallback(async (desiredSlug: string) => {
+    if (!desiredSlug) throw new Error("请先填写 slug");
+    if (!user?.username) return desiredSlug;
+    const existing = await getProjectNamespace(user.username, desiredSlug);
+    if (existing && existing.id !== projectId) {
+      throw new Error("该 slug 已被占用");
+    }
+    return desiredSlug;
+  }, [projectId, user?.username]);
+
+  const ensureProject = React.useCallback(async (desiredSlug: string) => {
+    if (!token) throw new Error("未登录");
+
+    const safeSlug = await ensureSlugAvailable(desiredSlug);
+    if (projectId) {
+      if (safeSlug !== urlSlug) {
+        await renameProject(projectId, safeSlug, token);
+        setUrlSlug(safeSlug);
+      }
+      return projectId;
+    }
+
+    const created = await createPost(
+      {
+        title: title.trim() || "未命名文章",
+        summary: summary.trim(),
+        state: "draft",
+        slug: safeSlug,
+      },
+      token
+    );
     setProjectId(created.id);
-    setUrlSlug(created.blogConfig?.slug || created.name || "");
+    setUrlSlug(created.name || safeSlug);
     setHasSavedDraft(false);
     router.replace(`/write?draft=${created.id}`);
     return created.id;
-  }, [projectId, router, summary, title, token]);
+  }, [ensureSlugAvailable, projectId, router, summary, title, token, urlSlug]);
 
   const persistDraft = React.useCallback(async (silent = false) => {
     if (!token) throw new Error("未登录");
 
     setSaving(true);
     try {
-      const id = await ensureProject();
       const normalizedTitle = title.trim() || "未命名文章";
-      const normalizedSlug = slug.trim() || urlSlug || slugify(normalizedTitle);
+      const normalizedSlug = resolvedSlug;
+      const id = await ensureProject(normalizedSlug);
+      const resolvedCover = await ensureUploadedCover();
 
       await saveDraft(id, {
         title: normalizedTitle,
         description: summary.trim(),
         content,
-        slug: normalizedSlug || undefined,
-        cover: cover || null,
+        slug: normalizedSlug,
+        cover: resolvedCover,
         tags,
         updatedAt: new Date().toISOString(),
       }, token);
@@ -333,15 +477,13 @@ function WritePageInner() {
       await updatePostMeta(id, {
         title: normalizedTitle,
         summary: summary.trim(),
-        slug: normalizedSlug || undefined,
-        cover: cover || null,        seo: {
-          title: seoTitle.trim() || undefined,
-          description: seoDescription.trim() || undefined,
-          keywords: seoKeywords.trim() || undefined,
-        },
+        cover: resolvedCover,
+        tags,
       }, token);
 
       const now = new Date().toISOString();
+      if (!cover) setCover(resolvedCover);
+      setUrlSlug(normalizedSlug);
       setLastSavedAt(now);
       setDirty(false);
       setHasSavedDraft(true);
@@ -352,7 +494,7 @@ function WritePageInner() {
     } finally {
       setSaving(false);
     }
-  }, [content, cover, ensureProject, seoDescription, seoKeywords, seoTitle, slug, summary, tags, title, token, urlSlug]);
+  }, [content, cover, ensureProject, ensureUploadedCover, resolvedSlug, summary, tags, title, token]);
 
   React.useEffect(() => {
     if (!ready || !isAuthed || !token || !dirty) return;
@@ -389,22 +531,17 @@ function WritePageInner() {
 
     setPublishing(true);
     try {
+      const finalSlug = resolvedSlug;
       await persistDraft(true);
-      const id = await ensureProject();
-      const finalSlug = slug.trim() || urlSlug || slugify(trimmedTitle);
+      const id = await ensureProject(finalSlug);
+      const resolvedCover = await ensureUploadedCover();
 
       await updatePostMeta(id, {
         title: trimmedTitle,
         summary: summary.trim(),
-        slug: finalSlug || undefined,
-        cover: cover || null,
+        cover: resolvedCover,
         state: "public",
         tags,
-        seo: {
-          title: seoTitle.trim() || undefined,
-          description: seoDescription.trim() || undefined,
-          keywords: seoKeywords.trim() || undefined,
-        },
       }, token);
 
       await publishDraft(id, publishMessage.trim() || "发布文章", token);
@@ -412,6 +549,8 @@ function WritePageInner() {
       void fetch("/api/revalidate", { method: "POST", headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
 
       toast.success("发布成功");
+      if (!cover) setCover(resolvedCover);
+      setUrlSlug(finalSlug);
       setDirty(false);
       setHasSavedDraft(false);
       setIsSettingsSheetOpen(false);
@@ -425,7 +564,7 @@ function WritePageInner() {
     } finally {
       setPublishing(false);
     }
-  }, [cover, ensureProject, persistDraft, publishMessage, router, seoDescription, seoKeywords, seoTitle, slug, summary, tags, title, token, urlSlug, user]);
+  }, [cover, ensureProject, ensureUploadedCover, persistDraft, publishMessage, resolvedSlug, router, summary, tags, title, token, user]);
 
   const handleDiscard = React.useCallback(async () => {
     if (!token) {
@@ -515,7 +654,7 @@ function WritePageInner() {
             <span className="flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">{statusIcon}{statusLabel}</span>
           </div>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" onClick={() => void persistDraft(false)} disabled={saving || publishing}><Save className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="sm" onClick={() => void persistDraft(false)} disabled={saving || publishing || slugStatus === "taken"}><Save className="h-4 w-4" /></Button>
             <Button variant="ghost" size="sm" onClick={() => setImmersiveMode(false)}><Minimize2 className="h-4 w-4" />退出</Button>
           </div>
         </header>
@@ -570,7 +709,7 @@ function WritePageInner() {
                 <Button variant="ghost" size="icon" className="h-9 w-9"><MoreHorizontal className="h-4 w-4" /></Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem onClick={() => void persistDraft(false)} disabled={saving}><Save className="h-4 w-4" />立即保存</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void persistDraft(false)} disabled={saving || slugStatus === "taken"}><Save className="h-4 w-4" />立即保存</DropdownMenuItem>
                 {liveHref && <DropdownMenuItem asChild><a href={liveHref} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />查看上线版本</a></DropdownMenuItem>}
                 {publishedSnapshot && <DropdownMenuItem onClick={() => void handleRestorePublished()} disabled={!canRestorePublished}><RotateCcw className="h-4 w-4" />一键恢复为上线版本</DropdownMenuItem>}
                 <DropdownMenuItem onClick={() => setImmersiveMode(true)}><Maximize2 className="h-4 w-4" />沉浸模式</DropdownMenuItem>
@@ -585,7 +724,7 @@ function WritePageInner() {
                 return;
               }
               setIsSettingsSheetOpen(true);
-            }} disabled={saving || publishing} className="gap-1.5">
+            }} disabled={saving || publishing || slugStatus === "taken"} className="gap-1.5">
               {publishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
               <span className="hidden sm:inline">发布</span>
             </Button>
@@ -608,14 +747,11 @@ function WritePageInner() {
           <input type="text" value={title} onChange={(event) => {
             const next = event.target.value;
             setTitle(next);
-            if (!seoTitle.trim() && next.trim()) setSeoTitle(next.trim());
             if (!slugTouched) setSlug(slugify(next));
             markDirty();
           }} placeholder="文章标题" className="w-full bg-transparent text-3xl font-bold leading-tight tracking-[-0.025em] outline-none placeholder:text-muted-foreground/40 md:text-4xl" />
           <input type="text" value={summary} onChange={(event) => {
-            const next = event.target.value;
-            setSummary(next);
-            if (!seoDescription.trim() && next.trim()) setSeoDescription(next.trim());
+            setSummary(event.target.value);
             markDirty();
           }} placeholder="一句话摘要（可选）" className="mt-3 w-full bg-transparent text-lg text-muted-foreground outline-none placeholder:text-muted-foreground/40" />
         </div>
@@ -627,31 +763,24 @@ function WritePageInner() {
         <SheetContent side="right" className="flex w-full flex-col overflow-y-auto sm:max-w-md">
           <SheetHeader>
             <SheetTitle>文章设置</SheetTitle>
-            <SheetDescription>补全基础信息、SEO 和封面，然后一键发布。</SheetDescription>
+            <SheetDescription>补全基础信息和封面，然后一键发布。</SheetDescription>
           </SheetHeader>
-          <div className="flex-1 overflow-y-auto px-4 py-6">
-            <Tabs defaultValue="basic" className="w-full">
-              <TabsList className="grid w-full grid-cols-2"><TabsTrigger value="basic">基础</TabsTrigger><TabsTrigger value="seo">SEO</TabsTrigger></TabsList>
-              <TabsContent value="basic" className="mt-6 space-y-5">
-                <div className="space-y-2"><Label>封面图</Label><CoverUpload value={cover} onChange={(url) => { setCover(url); markDirty(); }} token={token} /></div>
-                <div className="space-y-2"><Label htmlFor="sheet-title">标题</Label><Input id="sheet-title" value={title} onChange={(event) => { const next = event.target.value; setTitle(next); if (!seoTitle.trim() && next.trim()) setSeoTitle(next.trim()); if (!slugTouched) setSlug(slugify(next)); markDirty(); }} placeholder="文章标题" /></div>
-                <div className="space-y-2"><Label htmlFor="sheet-summary">摘要</Label><Textarea id="sheet-summary" value={summary} onChange={(event) => { const next = event.target.value; setSummary(next); if (!seoDescription.trim() && next.trim()) setSeoDescription(next.trim()); markDirty(); }} placeholder="简述文章主题" className="min-h-20" /></div>
-                <div className="space-y-2"><Label htmlFor="sheet-slug">Slug</Label><Input id="sheet-slug" value={slug} onChange={(event) => { setSlugTouched(true); setSlug(slugify(event.target.value)); markDirty(); }} placeholder="modern-web-architecture" /><p className="text-xs text-muted-foreground">地址预览： <span className="font-mono text-foreground">/{user?.username || "username"}/{slug || "your-article-slug"}</span></p></div>
-                <div className="space-y-2"><Label>标签</Label><PostTagSelector value={tags} onChange={(next) => { setTags(next); markDirty(); }} /></div>
-              </TabsContent>
-              <TabsContent value="seo" className="mt-6 space-y-5">
-                <div className="space-y-2"><Label htmlFor="sheet-seo-title">SEO 标题</Label><Input id="sheet-seo-title" value={seoTitle} onChange={(event) => { setSeoTitle(event.target.value); setDirty(true); }} placeholder="用于搜索引擎显示" /><p className="text-xs text-muted-foreground">建议控制在 30 到 60 个字符，通常直接沿用文章标题即可。</p></div>
-                <div className="space-y-2"><Label htmlFor="sheet-seo-description">SEO 描述</Label><Textarea id="sheet-seo-description" value={seoDescription} onChange={(event) => { setSeoDescription(event.target.value); setDirty(true); }} placeholder="搜索结果中的描述文本" className="min-h-20" /><p className="text-xs text-muted-foreground">建议 80 到 160 个字符，避免与摘要完全重复。</p></div>
-                <div className="space-y-2"><Label htmlFor="sheet-canonical-url">Canonical URL</Label><Input id="sheet-canonical-url" value={canonicalUrl} onChange={(event) => { setCanonicalUrl(event.target.value); setDirty(true); }} placeholder="https://example.com/article" /></div>
-                <div className="space-y-2"><Label htmlFor="sheet-seo-keywords">SEO 关键词</Label><Input id="sheet-seo-keywords" value={seoKeywords} onChange={(event) => { setSeoKeywords(event.target.value); markDirty(); }} placeholder="关键词1, 关键词2, 关键词3" /></div>
-                <Separator />
-                <div className="space-y-2"><Label htmlFor="publish-message">发布说明</Label><Textarea id="publish-message" value={publishMessage} onChange={(event) => setPublishMessage(event.target.value)} placeholder="提交说明（可选，用于 Git 历史）" className="min-h-20" /></div>
-              </TabsContent>
-            </Tabs>
+          <div className="flex-1 overflow-y-auto px-4 py-6 space-y-5">
+            <div className="space-y-2"><Label>封面图</Label><CoverUpload value={cover} fallbackPreview={!cover ? generatedCover : null} onChange={(url) => { setCover(url); markDirty(); }} token={token} /><p className="text-xs text-muted-foreground">未上传封面时，会根据标题和正文前几段自动生成一张头图并上传到 assets 后随草稿、发布一起保存。</p></div>
+            <div className="space-y-2"><Label htmlFor="sheet-title">标题</Label><Input id="sheet-title" value={title} onChange={(event) => { const next = event.target.value; setTitle(next); if (!slugTouched) setSlug(slugify(next)); markDirty(); }} placeholder="文章标题" /></div>
+            <div className="space-y-2"><Label htmlFor="sheet-summary">摘要</Label><Textarea id="sheet-summary" value={summary} onChange={(event) => { setSummary(event.target.value); markDirty(); }} placeholder="简述文章主题" className="min-h-20" /></div>
+            <div className="space-y-2">
+              <Label htmlFor="sheet-slug">Slug</Label>
+              <Input id="sheet-slug" value={slug} onChange={(event) => { setSlugTouched(true); setSlug(slugify(event.target.value)); markDirty(); }} placeholder="modern-web-architecture" />
+              <p className="text-xs text-muted-foreground">地址预览： <span className="font-mono text-foreground">/{user?.username || "username"}/{resolvedSlug || "your-project-name"}</span></p>
+              {slugStatusText ? <p className={cn("text-xs", slugStatus === "taken" ? "text-destructive" : slugStatus === "available" ? "text-emerald-600" : "text-muted-foreground")}>{slugStatusText}</p> : null}
+            </div>
+            <div className="space-y-2"><Label>标签</Label><PostTagSelector value={tags} onChange={(next) => { setTags(next); markDirty(); }} /></div>
+            <div className="space-y-2"><Label htmlFor="publish-message">发布说明</Label><Textarea id="publish-message" value={publishMessage} onChange={(event) => setPublishMessage(event.target.value)} placeholder="提交说明（可选，用于 Git 历史）" className="min-h-20" /></div>
           </div>
           <SheetFooter className="gap-2 border-t border-border bg-background px-4 py-3 sm:flex-row">
             <Button variant="outline" onClick={() => setIsSettingsSheetOpen(false)} className="w-full sm:w-auto">返回编辑</Button>
-            <Button onClick={() => void handlePublish()} disabled={saving || publishing} className="w-full sm:flex-1">{publishing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Rocket className="mr-2 h-4 w-4" />}发布文章</Button>
+            <Button onClick={() => void handlePublish()} disabled={saving || publishing || slugStatus === "taken"} className="w-full sm:flex-1">{publishing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Rocket className="mr-2 h-4 w-4" />}发布文章</Button>
           </SheetFooter>
         </SheetContent>
       </Sheet>
@@ -662,4 +791,3 @@ function WritePageInner() {
 function slugify(value: string) {
   return value.toLowerCase().trim().replace(/[^\p{L}\p{N}\s-]/gu, "").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 }
-
