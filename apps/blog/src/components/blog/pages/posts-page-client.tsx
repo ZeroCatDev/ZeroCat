@@ -75,14 +75,14 @@ export function PostsPageClient({
     <section className="mx-auto w-full max-w-6xl px-4 md:px-6 py-10">
       <div className="mb-8 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
         <div className="space-y-2">
-          <p className="text-mono-label text-muted-foreground/70">Discover</p>
+          <p className="text-mono-label text-muted-foreground/70">搜索</p>
           <h1 className="text-3xl md:text-4xl font-semibold tracking-[-0.025em]">
             {q ? "搜索文章与作者" : "全部文章"}
           </h1>
           <p className="text-sm text-muted-foreground">
             {q
               ? `当前关键词“${q}”的全部结果，支持继续按标签、作者与热度收窄。`
-              : "支持标签、作者、关键词与热度排序，快速定位社区内容。"}
+              : "键入以搜索"}
           </p>
         </div>
 
