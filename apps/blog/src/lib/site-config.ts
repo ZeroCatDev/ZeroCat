@@ -1,6 +1,5 @@
 import "server-only";
 
-import { cache } from "react";
 import { API_URL } from "./api";
 
 export type SiteConfig = Record<string, unknown>;
@@ -27,13 +26,13 @@ function getFallbackStaticBase(): string {
   );
 }
 
-export const getServerSiteConfig = cache(async (): Promise<SiteConfig> => {
+export async function getServerSiteConfig(): Promise<SiteConfig> {
   try {
     const res = await fetch(`${API_URL}/api/config`, {
       headers: {
         Accept: "application/json",
       },
-      next: { revalidate: 600 },
+      cache: "no-store",
     });
 
     if (!res.ok) return {};
@@ -47,11 +46,11 @@ export const getServerSiteConfig = cache(async (): Promise<SiteConfig> => {
   } catch {
     return {};
   }
-});
+}
 
-export const getServerStaticBase = cache(async (): Promise<string> => {
+export async function getServerStaticBase(): Promise<string> {
   const config = await getServerSiteConfig();
   const staticUrl = config["s3.staticurl"];
   const configured = typeof staticUrl === "string" ? normalizeUrlBase(staticUrl) : "";
   return configured || getFallbackStaticBase();
-});
+}

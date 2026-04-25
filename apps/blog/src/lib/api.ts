@@ -17,7 +17,7 @@ export const API_URL =
 
 const TOKEN_KEY = "token";
 
-type FetchInit = RequestInit & { revalidate?: number | false; tags?: string[] };
+type FetchInit = RequestInit;
 
 function authHeader(token?: string | null): Record<string, string> {
   if (!token) return {};
@@ -37,13 +37,9 @@ export async function apiFetch<T>(
   path: string,
   init: FetchInit = {}
 ): Promise<T> {
-  const { revalidate, tags, headers, ...rest } = init;
+  const { headers, ...rest } = init;
   const isAbsolute = path.startsWith("http://") || path.startsWith("https://");
   const url = isAbsolute ? path : `${API_URL}${path}`;
-
-  const next: { revalidate?: number | false; tags?: string[] } = {};
-  if (revalidate !== undefined) next.revalidate = revalidate;
-  if (tags) next.tags = tags;
 
   const res = await fetch(url, {
     ...rest,
@@ -52,10 +48,7 @@ export async function apiFetch<T>(
       Accept: "application/json",
       ...(headers as Record<string, string> | undefined),
     },
-    ...(Object.keys(next).length ? { next } : {}),
-    cache:
-      init.cache ??
-      (revalidate !== undefined ? undefined : "no-store"),
+    cache: "no-store",
   });
 
   if (!res.ok) {
@@ -91,8 +84,7 @@ export async function listPosts(params: {
   if (params.sort) qs.set("sort", params.sort);
 
   const res = await apiFetch<ApiEnvelope<PostsResponse>>(
-    `/blog/posts?${qs.toString()}`,
-    { revalidate: 30, tags: ["blog-posts"] }
+    `/blog/posts?${qs.toString()}`
   );
   return res.data ?? { posts: [], total: 0, page: 1, limit: 20 };
 }
@@ -143,10 +135,7 @@ export async function listPostsByAuthorId(
       totalCount?: number;
       page?: number;
       limit?: number;
-    }>(`/searchapi?${qs.toString()}`, {
-      revalidate: 30,
-      tags: [`blog-posts-user-${userId}`],
-    });
+    }>(`/searchapi?${qs.toString()}`);
 
     const posts = (res.projects ?? []).map(normalizeSearchProjectToBlogPost);
     return {
@@ -162,10 +151,7 @@ export async function listPostsByAuthorId(
 
 export async function getPostById(id: number | string): Promise<BlogPost | null> {
   try {
-    const res = await apiFetch<ApiEnvelope<BlogPost>>(`/blog/posts/${id}`, {
-      revalidate: 30,
-      tags: [`blog-post-${id}`],
-    });
+    const res = await apiFetch<ApiEnvelope<BlogPost>>(`/blog/posts/${id}`);
     return res.data ?? null;
   } catch {
     return null;
@@ -178,11 +164,7 @@ export async function getPostByAuthorSlug(
 ): Promise<BlogPost | null> {
   try {
     const res = await apiFetch<ApiEnvelope<BlogPost>>(
-      `/blog/posts/@${encodeURIComponent(username)}/${encodeURIComponent(slug)}`,
-      {
-        revalidate: 30,
-        tags: [`blog-post-${username}-${slug}`],
-      }
+      `/blog/posts/@${encodeURIComponent(username)}/${encodeURIComponent(slug)}`
     );
     return res.data ?? null;
   } catch {
@@ -193,8 +175,7 @@ export async function getPostByAuthorSlug(
 export async function getRelatedPosts(id: number | string): Promise<BlogPost[]> {
   try {
     const res = await apiFetch<ApiEnvelope<BlogPost[]>>(
-      `/blog/posts/${id}/related`,
-      { revalidate: 60 }
+      `/blog/posts/${id}/related`
     );
     return res.data ?? [];
   } catch {
@@ -218,11 +199,7 @@ export async function listTags(limit = 60): Promise<Tag[]> {
       qs.set("perPage", String(perPage));
 
       const res = await apiFetch<{ tags?: Array<{ name: string; count: number }> }>(
-        `/searchapi?${qs.toString()}`,
-        {
-          revalidate: 60,
-          tags: ["blog-tags"],
-        }
+        `/searchapi?${qs.toString()}`
       );
 
       const items = (res.tags ?? [])
@@ -274,10 +251,7 @@ export async function listAllTags(): Promise<Tag[]> {
       const res = await apiFetch<{
         tags?: Array<{ name: string; count: number }>;
         totalCount?: number;
-      }>(`/searchapi?${qs.toString()}`, {
-        revalidate: 60,
-        tags: ["blog-tags"],
-      });
+      }>(`/searchapi?${qs.toString()}`);
 
       if (totalCount === null && typeof res.totalCount === "number") {
         totalCount = res.totalCount;
@@ -333,11 +307,7 @@ export async function listTagsByAuthorId(
       qs.set("perPage", String(perPage));
 
       const res = await apiFetch<{ tags?: Array<{ name: string; count: number }> }>(
-        `/searchapi?${qs.toString()}`,
-        {
-          revalidate: 60,
-          tags: [`blog-tags-user-${userId}`],
-        }
+        `/searchapi?${qs.toString()}`
       );
 
       const items = (res.tags ?? [])
@@ -379,8 +349,7 @@ export async function getProjectNamespace(
 ): Promise<ProjectNamespaceInfo | null> {
   try {
     const data = await apiFetch<ProjectNamespaceInfo>(
-      `/project/namespace/${encodeURIComponent(username)}/${encodeURIComponent(slug)}`,
-      { revalidate: 30 }
+      `/project/namespace/${encodeURIComponent(username)}/${encodeURIComponent(slug)}`
     );
     if (!data || !data.id) return null;
     return data;
@@ -403,8 +372,7 @@ export async function getLatestCommit(
 ): Promise<ProjectLatestResponse | null> {
   try {
     return await apiFetch<ProjectLatestResponse>(
-      `/project/${projectId}/${branch}/latest`,
-      { revalidate: 10 }
+      `/project/${projectId}/${branch}/latest`
     );
   } catch {
     return null;
@@ -452,8 +420,7 @@ export async function getUserByUsername(
 ): Promise<User | null> {
   try {
     const data = await apiFetch<ApiEnvelope<User>>(
-      `/user/username/${encodeURIComponent(username)}`,
-      { revalidate: 30 }
+      `/user/username/${encodeURIComponent(username)}`
     );
     return data.data ?? null;
   } catch {
@@ -491,12 +458,9 @@ export async function search(keyword: string): Promise<SearchResults> {
   try {
     const [projectRes, userRes] = await Promise.all([
       apiFetch<{ projects?: Array<Partial<BlogPost>> }>(
-        `/searchapi?${projectQs.toString()}`,
-        { cache: "no-store" }
+        `/searchapi?${projectQs.toString()}`
       ),
-      apiFetch<{ users?: User[] }>(`/searchapi?${userQs.toString()}`, {
-        cache: "no-store",
-      }),
+      apiFetch<{ users?: User[] }>(`/searchapi?${userQs.toString()}`),
     ]);
 
     return {
@@ -568,6 +532,7 @@ async function authedFetch<T>(
       ...authHeader(useToken),
       ...(init.headers as Record<string, string> | undefined),
     },
+    cache: "no-store",
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");

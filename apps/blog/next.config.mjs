@@ -2,8 +2,17 @@
 const nextConfig = {
   reactStrictMode: true,
   images: {
-    domains: ["assets.zerocat.xxx", "avatars.githubusercontent.com"],
-  }
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "assets.zerocat.xxx",
+      },
+      {
+        protocol: "https",
+        hostname: "avatars.githubusercontent.com",
+      },
+    ],
+  },
 };
 
 export default nextConfig;

@@ -20,8 +20,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export const revalidate = 30;
-
 export default async function TagPostsPage({ params, searchParams }: PageProps) {
   const { tag: rawTag } = await params;
   const query = await searchParams;
@@ -99,3 +97,4 @@ function buildHref(tag: string, input: { page?: number; sort?: "latest" | "popul
     ? `/tags/${encodeURIComponent(tag)}?${tail}`
     : `/tags/${encodeURIComponent(tag)}`;
 }
+

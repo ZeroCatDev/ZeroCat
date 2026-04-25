@@ -9,8 +9,6 @@ import { EmptyState } from "@/components/blog/empty-state";
 import { buildPostsHref, normalizeAuthorParam } from "@/lib/blog-links";
 import { listPosts, search } from "@/lib/api";
 
-export const revalidate = 30;
-
 type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
@@ -140,3 +138,4 @@ function pick(value?: string | string[]) {
   if (!value) return "";
   return Array.isArray(value) ? value[0] : value;
 }
+

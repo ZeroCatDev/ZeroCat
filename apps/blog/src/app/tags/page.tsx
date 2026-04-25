@@ -3,8 +3,6 @@ import { EmptyState } from "@/components/blog/empty-state";
 import { TagChip } from "@/components/blog/tag-chip";
 import { listAllTags } from "@/lib/api";
 
-export const revalidate = 60;
-
 export default async function TagsPage() {
   const tags = await listAllTags();
 
@@ -36,3 +34,4 @@ export default async function TagsPage() {
     </section>
   );
 }
+

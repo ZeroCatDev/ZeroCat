@@ -8,8 +8,6 @@ import { EmptyState } from "@/components/blog/empty-state";
 import { listPosts, listTags } from "@/lib/api";
 import type { BlogPostAuthor } from "@/lib/types";
 
-export const revalidate = 30;
-
 export default async function ExplorePage() {
   const [latest, popular, tags] = await Promise.all([
     listPosts({ limit: 12, sort: "latest" }),
@@ -139,3 +137,4 @@ function dedupeAuthors(posts: Array<{ author?: BlogPostAuthor }>) {
 
   return out;
 }
+

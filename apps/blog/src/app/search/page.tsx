@@ -4,8 +4,6 @@ type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export const revalidate = 30;
-
 export default async function SearchPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const paramsString = new URLSearchParams();
@@ -16,3 +14,4 @@ export default async function SearchPage({ searchParams }: PageProps) {
   const suffix = paramsString.toString();
   redirect(suffix ? `/posts?${suffix}` : "/posts");
 }
+

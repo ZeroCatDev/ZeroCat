@@ -1,4 +1,3 @@
-import { cache } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -23,7 +22,7 @@ import { getServerStaticBase } from "@/lib/site-config";
 
 type PageProps = { params: Promise<{ username: string; slug: string }> };
 
-const getPostPayload = cache(async (username: string, slug: string) => {
+async function getPostPayload(username: string, slug: string) {
   const post = await getPostByAuthorSlug(username, slug);
   if (!post) return null;
 
@@ -33,7 +32,8 @@ const getPostPayload = cache(async (username: string, slug: string) => {
     body,
     toc: extractMarkdownToc(body),
   };
-});
+}
+
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { username, slug } = await params;
@@ -232,6 +232,8 @@ function countWords(source: string) {
     .filter(Boolean).length;
   return cjk + rest;
 }
+
+
 
 
 

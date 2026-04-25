@@ -7,8 +7,6 @@ import { AuthorCard } from "@/components/blog/author-card";
 import { EmptyState } from "@/components/blog/empty-state";
 import { listPosts, listTags } from "@/lib/api";
 
-export const revalidate = 30;
-
 export default async function HomePage() {
   const [latest, popular, tags] = await Promise.all([
     listPosts({ limit: 10, sort: "latest" }),
@@ -233,3 +231,4 @@ function dedupeAuthors(posts: Awaited<ReturnType<typeof listPosts>>["posts"]) {
   }
   return out;
 }
+
