@@ -1,12 +1,12 @@
 import { Hash } from "lucide-react";
 import { EmptyState } from "@/components/blog/empty-state";
 import { TagChip } from "@/components/blog/tag-chip";
-import { listTags } from "@/lib/api";
+import { listAllTags } from "@/lib/api";
 
 export const revalidate = 60;
 
 export default async function TagsPage() {
-  const tags = await listTags();
+  const tags = await listAllTags();
 
   return (
     <section className="mx-auto w-full max-w-[1600px] px-6 py-10">

@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { PostCard } from "@/components/blog/post-card";
-import { TagChip } from "@/components/blog/tag-chip";
+import  PostsFilterBar from "@/components/blog/posts-filter-bar";
 import { EmptyState } from "@/components/blog/empty-state";
 import { buildPostsHref, normalizeAuthorParam } from "@/lib/blog-links";
-import { listPosts, listTags } from "@/lib/api";
+import { listPosts } from "@/lib/api";
 
 export const revalidate = 30;
 
@@ -23,17 +22,14 @@ export default async function PostsPage({ searchParams }: PageProps) {
   const page = Math.max(Number.parseInt(pick(params.page) || "1", 10) || 1, 1);
   const limit = 18;
 
-  const [posts, tags] = await Promise.all([
-    listPosts({
-      page,
-      limit,
-      keyword: q || undefined,
-      author: author || undefined,
-      tag: tag || undefined,
-      sort,
-    }),
-    listTags(),
-  ]);
+  const posts = await listPosts({
+    page,
+    limit,
+    keyword: q || undefined,
+    author: author || undefined,
+    tag: tag || undefined,
+    sort,
+  });
 
   const totalPages = Math.max(Math.ceil(posts.total / limit), 1);
 
@@ -50,52 +46,7 @@ export default async function PostsPage({ searchParams }: PageProps) {
           </p>
         </div>
 
-        <form
-          className="flex w-full max-w-xl flex-col sm:flex-row items-stretch sm:items-center gap-2"
-          action="/posts"
-          method="GET"
-        >
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              name="q"
-              defaultValue={q}
-              placeholder="搜索标题、摘要、作者..."
-              className="pl-9"
-            />
-            {tag && <input type="hidden" name="tag" value={tag} />}
-            <input type="hidden" name="sort" value={sort} />
-          </div>
-          <Input
-            name="author"
-            defaultValue={author}
-            placeholder="作者用户名（可填 @xxx）"
-            className="h-9 w-full sm:w-52"
-          />
-          <Button type="submit">搜索</Button>
-        </form>
-      </div>
-
-      <div className="mb-6 flex flex-wrap gap-1.5">
-        <Link
-          href={buildPostsHref({ q, author, sort })}
-          className={
-            tag
-              ? "inline-flex items-center rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground hover:bg-accent transition-colors"
-              : "inline-flex items-center rounded-full bg-[var(--color-brand)] px-3 py-1 text-xs font-medium text-white shadow-sm"
-          }
-        >
-          全部
-        </Link>
-        {tags.slice(0, 24).map((item) => (
-          <TagChip
-            key={item.id}
-            tag={item}
-            active={tag === item.name}
-            size="sm"
-            href={buildPostsHref({ q, author, tag: item.name, sort })}
-          />
-        ))}
+        <PostsFilterBar q={q} tag={tag} author={author} sort={sort} />
       </div>
 
       <div className="mb-8 flex flex-wrap items-center gap-2">
