@@ -19,6 +19,16 @@ const DEFAULT_ZC_WEB_URL = "http://localhost:3141";
 
 let hydratePromise: Promise<void> | null = null;
 
+function setLocalStorageValue(key: string, value: string | null) {
+  try {
+    if (value === null || value === "") {
+      window.localStorage.removeItem(key);
+      return;
+    }
+    window.localStorage.setItem(key, value);
+  } catch {}
+}
+
 function toStoredUserInfo(source: Record<string, unknown>): StoredUserInfo {
   const rawId = source.id;
   const parsedId =
