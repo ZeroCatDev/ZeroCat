@@ -14,6 +14,7 @@ import {
     Bell,
     GitBranch,
     Sparkles,
+    ExternalLink
 } from "lucide-react"
 
 import {
@@ -33,7 +34,8 @@ import { ThemeToggle } from "./theme-toggle"
 import { CommandMenu } from "./command-menu"
 import { SidebarQuickAccess } from "./sidebar-quick-access"
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications"
-
+const API_URL = process.env.NEXT_PUBLIC_API_URL|| "http://localhost:3000"
+const ZC_WEB_URL = process.env.NEXT_PUBLIC_ZC_WEB_URL || "http://localhost:3141"
 const itemsNav = [
     { title: "首页", url: "/", icon: Home },
     { title: "探索", url: "/explore", icon: Compass },
@@ -43,7 +45,7 @@ const itemsNav = [
 const itemsAuthor = [
     { title: "写作", url: "/write", icon: FilePenLine },
     { title: "草稿", url: "/drafts", icon: Inbox },
-    { title: "GitHub 同步", url: "/settings/sync", icon: GitBranch },
+    { title: "GitHub 同步", href: ZC_WEB_URL+"/app/account/blog-sync", icon: GitBranch ,appendicon: ExternalLink },
 ]
 
 const itemsSecondary = [
@@ -106,9 +108,10 @@ export function AppSidebar() {
                                         tooltip={item.title}
                                         className="transition-colors"
                                     >
-                                        <Link href={item.url}>
+                                        <Link href={item.url|| item.href || "#"} target={item.href ? "_blank" : undefined}>
                                             <item.icon />
                                             <span>{item.title}</span>
+                                            {item.appendicon && <item.appendicon className="ml-1" />}
                                         </Link>
                                     </SidebarMenuButton>
                                 </SidebarMenuItem>

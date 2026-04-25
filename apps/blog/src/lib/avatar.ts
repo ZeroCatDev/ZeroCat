@@ -18,11 +18,6 @@ function normalizeUrlBase(value?: string | null): string {
 
 function getFallbackStaticBase(): string {
   return normalizeUrlBase(
-    process.env.NEXT_PUBLIC_ZC_STATIC_URL ||
-      process.env.NEXT_PUBLIC_STATIC_URL ||
-      process.env.NEXT_PUBLIC_S3_STATICURL ||
-      process.env.S3_STATICURL ||
-      process.env.API_URL ||
       process.env.NEXT_PUBLIC_API_URL ||
       DEFAULT_API_URL
   );
