@@ -1,4 +1,4 @@
-import { API_URL, getStoredToken } from "./api";
+import { API_URL, authedFetchResponse, getFreshAuthToken } from "./api";
 import { resolveMediaUrl } from "./avatar";
 
 export interface UploadedAsset {
@@ -38,7 +38,7 @@ export async function uploadImage(
   file: File | Blob,
   token?: string | null
 ): Promise<UploadedAsset> {
-  const useToken = token ?? getStoredToken();
+  const useToken = await getFreshAuthToken(token);
   if (!useToken) {
     throw new Error("请先登录后再上传图片");
   }
@@ -46,14 +46,14 @@ export async function uploadImage(
   const form = new FormData();
   form.append("file", file);
 
-  const res = await fetch(`${API_URL}/posts/upload-image`, {
-    method: "POST",
-    body: form,
-    credentials: "include",
-    headers: {
-      Authorization: `Bearer ${useToken}`,
+  const res = await authedFetchResponse(
+    `${API_URL}/posts/upload-image`,
+    {
+      method: "POST",
+      body: form,
     },
-  });
+    useToken
+  );
 
   const payload = (await res.json().catch(() => null)) as
     | { status?: string; message?: string; data?: { asset?: UploadedAsset } }

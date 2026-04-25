@@ -1,4 +1,4 @@
-import { API_URL, getStoredToken } from "./api";
+import { authedFetchResponse } from "./api";
 
 export interface GitAccount {
   id: number;
@@ -56,25 +56,8 @@ export interface BlogSyncProject {
   };
 }
 
-function authHeader(token?: string | null): Record<string, string> {
-  if (!token) return {};
-  return { Authorization: `Bearer ${token}` };
-}
-
 async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
-  const useToken = token ?? getStoredToken();
-  const url = `${API_URL}${path}`;
-  const res = await fetch(url, {
-    ...init,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      ...authHeader(useToken),
-      ...(init.headers as Record<string, string> | undefined),
-    },
-    cache: "no-store",
-  });
+  const res = await authedFetchResponse(path, init, token);
 
   const text = await res.text().catch(() => "");
   let json: unknown = null;

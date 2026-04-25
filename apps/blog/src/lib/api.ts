@@ -16,8 +16,22 @@ export const API_URL =
   "http://localhost:3000";
 
 const TOKEN_KEY = "token";
+const TOKEN_EXPIRES_AT_KEY = "tokenExpiresAt";
+const REFRESH_TOKEN_EXPIRES_AT_KEY = "refreshTokenExpiresAt";
+const USER_INFO_KEY = "userInfo";
+const TOKEN_REFRESHED_EVENT = "auth:token-refreshed";
+const USER_REFRESHED_EVENT = "auth:user-refreshed";
+const TOKEN_REFRESH_MARGIN_MS = 60_000;
 
 type FetchInit = RequestInit;
+type RefreshTokenResponse = {
+  status?: string;
+  token?: string;
+  expires_at?: string | number | null;
+  refresh_expires_at?: string | number | null;
+};
+
+let tokenRefreshPromise: Promise<string | null> | null = null;
 
 function authHeader(token?: string | null): Record<string, string> {
   if (!token) return {};
@@ -31,6 +45,177 @@ export function getStoredToken(): string | null {
   } catch {
     return null;
   }
+}
+
+function getLocalStorageValue(key: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function setLocalStorageValue(key: string, value: string | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (value === null || value === "") {
+      window.localStorage.removeItem(key);
+      return;
+    }
+    window.localStorage.setItem(key, value);
+  } catch {}
+}
+
+function normalizeTimestamp(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value < 1e12 ? value * 1000 : value);
+  }
+  if (typeof value === "string" && value.trim()) {
+    return value;
+  }
+  return null;
+}
+
+function parseStoredTimestamp(value: string | null): number | null {
+  if (!value) return null;
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) {
+    return numeric < 1e12 ? numeric * 1000 : numeric;
+  }
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isTimestampExpiring(value: string | null, marginMs = TOKEN_REFRESH_MARGIN_MS): boolean {
+  const expiresAt = parseStoredTimestamp(value);
+  if (!expiresAt) return false;
+  return expiresAt - Date.now() <= marginMs;
+}
+
+function persistToken(payload: RefreshTokenResponse) {
+  if (!payload.token) return;
+  setLocalStorageValue(TOKEN_KEY, payload.token);
+  setLocalStorageValue(TOKEN_EXPIRES_AT_KEY, normalizeTimestamp(payload.expires_at));
+  setLocalStorageValue(
+    REFRESH_TOKEN_EXPIRES_AT_KEY,
+    normalizeTimestamp(payload.refresh_expires_at)
+  );
+}
+
+function emitAuthRefreshEvents() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(TOKEN_REFRESHED_EVENT));
+  window.dispatchEvent(new CustomEvent(USER_REFRESHED_EVENT));
+}
+
+export function clearStoredAuthState() {
+  setLocalStorageValue(TOKEN_KEY, null);
+  setLocalStorageValue(TOKEN_EXPIRES_AT_KEY, null);
+  setLocalStorageValue(REFRESH_TOKEN_EXPIRES_AT_KEY, null);
+  setLocalStorageValue(USER_INFO_KEY, null);
+}
+
+export async function refreshStoredAuthToken(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  if (isTimestampExpiring(getLocalStorageValue(REFRESH_TOKEN_EXPIRES_AT_KEY), 0)) {
+    clearStoredAuthState();
+    emitAuthRefreshEvents();
+    return null;
+  }
+
+  if (!tokenRefreshPromise) {
+    tokenRefreshPromise = fetch(`${API_URL}/account/refresh-token`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: "{}",
+      cache: "no-store",
+    })
+      .then(async (res) => {
+        if (!res.ok) return null;
+        const payload = (await res.json().catch(() => null)) as RefreshTokenResponse | null;
+        if (!payload || payload.status !== "success" || !payload.token) {
+          return null;
+        }
+        persistToken(payload);
+        emitAuthRefreshEvents();
+        return payload.token;
+      })
+      .catch(() => null)
+      .finally(() => {
+        tokenRefreshPromise = null;
+      });
+  }
+
+  return tokenRefreshPromise;
+}
+
+export async function getFreshAuthToken(
+  token?: string | null,
+  options: { force?: boolean } = {}
+): Promise<string | null> {
+  if (typeof window === "undefined") return token ?? null;
+
+  const storedToken = getStoredToken();
+  const currentToken = token && token === storedToken ? token : (storedToken ?? token ?? null);
+
+  if (!options.force && currentToken && !isTimestampExpiring(getLocalStorageValue(TOKEN_EXPIRES_AT_KEY))) {
+    return currentToken;
+  }
+
+  const refreshedToken = await refreshStoredAuthToken();
+  if (options.force) return refreshedToken;
+  return refreshedToken ?? currentToken;
+}
+
+function isFormDataBody(body: BodyInit | null | undefined): boolean {
+  return typeof FormData !== "undefined" && body instanceof FormData;
+}
+
+function buildAuthedHeaders(init: RequestInit, token: string | null): Record<string, string> {
+  return {
+    ...(isFormDataBody(init.body) ? {} : { "Content-Type": "application/json" }),
+    Accept: "application/json",
+    ...authHeader(token),
+    ...(init.headers as Record<string, string> | undefined),
+  };
+}
+
+export async function authedFetchResponse(
+  path: string,
+  init: RequestInit = {},
+  token?: string | null
+): Promise<Response> {
+  const isAbsolute = path.startsWith("http://") || path.startsWith("https://");
+  const url = isAbsolute ? path : `${API_URL}${path}`;
+  let useToken = await getFreshAuthToken(token);
+
+  let res = await fetch(url, {
+    ...init,
+    credentials: "include",
+    headers: buildAuthedHeaders(init, useToken),
+    cache: "no-store",
+  });
+
+  if (res.status === 401) {
+    const refreshedToken = await getFreshAuthToken(useToken, { force: true });
+    if (refreshedToken) {
+      useToken = refreshedToken;
+      res = await fetch(url, {
+        ...init,
+        credentials: "include",
+        headers: buildAuthedHeaders(init, useToken),
+        cache: "no-store",
+      });
+    }
+  }
+
+  return res;
 }
 
 export async function apiFetch<T>(
@@ -90,9 +275,11 @@ export async function listPosts(params: {
 }
 
 export async function listPublishedPosts(token: string): Promise<BlogPost[]> {
-  const res = await apiFetch<ApiEnvelope<BlogPost[]>>(`/blog/posts/mine`, {
-    headers: authHeader(token),
-  });
+  const res = await authedFetch<ApiEnvelope<BlogPost[]>>(
+    `/blog/posts/mine`,
+    { method: "GET" },
+    token
+  );
   return res.data ?? [];
 }
 
@@ -521,19 +708,7 @@ async function authedFetch<T>(
   init: RequestInit = {},
   token?: string
 ): Promise<T> {
-  const useToken = token ?? getStoredToken();
-  const url = `${API_URL}${path}`;
-  const res = await fetch(url, {
-    ...init,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      ...authHeader(useToken),
-      ...(init.headers as Record<string, string> | undefined),
-    },
-    cache: "no-store",
-  });
+  const res = await authedFetchResponse(path, init, token);
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw Object.assign(new Error(text || `HTTP ${res.status}`), {

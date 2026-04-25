@@ -1,4 +1,4 @@
-import { API_URL, getStoredToken } from "./api";
+import { API_URL, authedFetchResponse } from "./api";
 
 export interface NotificationItem {
   id: number;
@@ -24,26 +24,9 @@ export interface NotificationsPage {
   load_more_notifications: string | null;
 }
 
-function authHeader(token?: string | null): Record<string, string> {
-  if (!token) return {};
-  return { Authorization: `Bearer ${token}` };
-}
-
 async function request<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
-  const useToken = token ?? getStoredToken();
   const isAbsolute = path.startsWith("http://") || path.startsWith("https://");
-  const url = isAbsolute ? path : `${API_URL}${path}`;
-  const res = await fetch(url, {
-    ...init,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      ...authHeader(useToken),
-      ...(init.headers as Record<string, string> | undefined),
-    },
-    cache: "no-store",
-  });
+  const res = await authedFetchResponse(isAbsolute ? path : `${API_URL}${path}`, init, token);
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw Object.assign(new Error(text || `HTTP ${res.status}`), {

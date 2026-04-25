@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { API_URL, getStoredToken } from "./api";
+import {
+  API_URL,
+  clearStoredAuthState,
+  getFreshAuthToken,
+  getStoredToken,
+} from "./api";
 import { resolveAvatarUrl } from "./avatar";
 
 const TOKEN_KEY = "token";
-const TOKEN_EXPIRES_AT_KEY = "tokenExpiresAt";
-const REFRESH_TOKEN_EXPIRES_AT_KEY = "refreshTokenExpiresAt";
 const USER_INFO_KEY = "userInfo";
 
 const TOKEN_REFRESHED_EVENT = "auth:token-refreshed";
@@ -15,51 +18,6 @@ const USER_REFRESHED_EVENT = "auth:user-refreshed";
 const DEFAULT_ZC_WEB_URL = "http://localhost:3141";
 
 let hydratePromise: Promise<void> | null = null;
-
-type RefreshTokenResponse = {
-  status?: string;
-  token?: string;
-  expires_at?: string | number | null;
-  refresh_expires_at?: string | number | null;
-};
-
-function normalizeTimestamp(value: unknown): string | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return String(value < 1e12 ? value * 1000 : value);
-  }
-  if (typeof value === "string" && value.trim()) {
-    return value;
-  }
-  return null;
-}
-
-function setLocalStorageValue(key: string, value: string | null) {
-  try {
-    if (value === null || value === "") {
-      window.localStorage.removeItem(key);
-      return;
-    }
-    window.localStorage.setItem(key, value);
-  } catch {}
-}
-
-function clearStoredAuthState() {
-  setLocalStorageValue(TOKEN_KEY, null);
-  setLocalStorageValue(TOKEN_EXPIRES_AT_KEY, null);
-  setLocalStorageValue(REFRESH_TOKEN_EXPIRES_AT_KEY, null);
-  setLocalStorageValue(USER_INFO_KEY, null);
-}
-
-function persistToken(payload: RefreshTokenResponse) {
-  if (!payload.token) return;
-  setLocalStorageValue(TOKEN_KEY, payload.token);
-  setLocalStorageValue(TOKEN_EXPIRES_AT_KEY, normalizeTimestamp(payload.expires_at));
-  setLocalStorageValue(
-    REFRESH_TOKEN_EXPIRES_AT_KEY,
-    normalizeTimestamp(payload.refresh_expires_at)
-  );
-}
 
 function toStoredUserInfo(source: Record<string, unknown>): StoredUserInfo {
   const rawId = source.id;
@@ -132,33 +90,6 @@ async function fetchCurrentUser(token: string): Promise<StoredUserInfo | null> {
   }
 }
 
-async function refreshAuthFromCookie(): Promise<string | null> {
-  try {
-    const res = await fetch(`${API_URL}/account/refresh-token`, {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: "{}",
-      cache: "no-store",
-    });
-
-    if (!res.ok) return null;
-
-    const payload = (await res.json().catch(() => null)) as RefreshTokenResponse | null;
-    if (!payload || payload.status !== "success" || !payload.token) {
-      return null;
-    }
-
-    persistToken(payload);
-    return payload.token;
-  } catch {
-    return null;
-  }
-}
-
 function emitAuthRefreshEvents() {
   window.dispatchEvent(new CustomEvent(TOKEN_REFRESHED_EVENT));
   window.dispatchEvent(new CustomEvent(USER_REFRESHED_EVENT));
@@ -167,8 +98,7 @@ function emitAuthRefreshEvents() {
 async function hydrateAuthState() {
   if (typeof window === "undefined") return;
 
-  const currentToken = getStoredToken();
-  const token = currentToken ?? (await refreshAuthFromCookie());
+  const token = await getFreshAuthToken(getStoredToken());
 
   if (!token) {
     persistUserInfo(null);
