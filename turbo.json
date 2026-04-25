@@ -16,6 +16,7 @@
         "prisma/schema.prisma"
       ],
       "outputs": [
+        ".next/**",
         "dist/**",
         "build/**",
         "generated/prisma/**"
