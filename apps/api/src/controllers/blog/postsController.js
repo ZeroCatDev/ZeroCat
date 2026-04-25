@@ -158,6 +158,25 @@ export const getPostDetail = async (req, res) => {
       });
     }
 
+    if (!post && req.params.username) {
+      post = await prisma.ow_projects.findFirst({
+        where: {
+          name: idStr,
+          type: "article",
+          author: { username: req.params.username }
+        },
+        include: {
+          author: {
+            select: { id: true, username: true, display_name: true, avatar: true }
+          },
+          project_tags: true
+        }
+      });
+      if (post) {
+        id = post.id;
+      }
+    }
+
     if (!post) {
       // 尝试按 slug 查询
       const configs = await prisma.ow_target_configs.findMany({

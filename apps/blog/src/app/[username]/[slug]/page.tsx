@@ -17,7 +17,9 @@ import {
 import { extractMarkdownToc } from "@/lib/markdown";
 import { formatDate, formatNumber, truncate } from "@/lib/utils";
 import { EditPostButton } from "@/components/blog/edit-post-button";
-import { buildPostsHref } from "@/lib/blog-links";
+import { buildPostsHref, getPostUrlSlug } from "@/lib/blog-links";
+import { resolveMediaUrl } from "@/lib/avatar";
+import { getServerStaticBase } from "@/lib/site-config";
 
 type PageProps = { params: Promise<{ username: string; slug: string }> };
 
@@ -35,7 +37,10 @@ const getPostPayload = cache(async (username: string, slug: string) => {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { username, slug } = await params;
-  const payload = await getPostPayload(username, slug);
+  const [payload, staticBase] = await Promise.all([
+    getPostPayload(username, slug),
+    getServerStaticBase(),
+  ]);
 
   if (!payload) {
     return {
@@ -58,7 +63,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       type: "article",
       title,
       description,
-      images: post.blogConfig?.cover ? [{ url: post.blogConfig.cover }] : [],
+      images: resolveMediaUrl(post.blogConfig?.cover, staticBase) ? [{ url: resolveMediaUrl(post.blogConfig?.cover, staticBase) as string }] : [],
     },
   };
 }
@@ -71,6 +76,8 @@ export default async function PostPage({ params }: PageProps) {
   const { post, body, toc } = payload;
   const related = (await getRelatedPosts(post.id)).filter((item) => item.id !== post.id);
   const authorName = post.author?.display_name || post.author?.username || username;
+  const postSlug = getPostUrlSlug(post);
+  const wordCount = countWords(body);
 
   return (
     <>
@@ -139,7 +146,22 @@ export default async function PostPage({ params }: PageProps) {
                   </span>
                 </>
               )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 pt-1">
               <EditPostButton projectId={post.id} authorId={post.author?.id} />
+            </div>
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Badge variant="outline" className="h-7 rounded-full px-3">
+                {wordCount} 字
+              </Badge>
+              <Badge variant="outline" className="h-7 rounded-full px-3">
+                slug: {postSlug}
+              </Badge>
+              <Badge variant="outline" className="h-7 rounded-full px-3">
+                #{post.id}
+              </Badge>
             </div>
           </div>
         </div>
@@ -198,3 +220,18 @@ export default async function PostPage({ params }: PageProps) {
     </>
   );
 }
+
+function countWords(source: string) {
+  const text = source.trim();
+  if (!text) return 0;
+  const cjk = (text.match(/[\u4e00-\u9fff]/g) || []).length;
+  const rest = text
+    .replace(/[\u4e00-\u9fff]/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+  return cjk + rest;
+}
+
+
+

@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { resolveAvatarUrl } from "@/lib/avatar";
+import { getServerStaticBase } from "@/lib/site-config";
 import { initials, truncate } from "@/lib/utils";
 import type { BlogPostAuthor, User } from "@/lib/types";
 
-export function AuthorCard({
+export async function AuthorCard({
   user,
   stats,
   variant = "default",
@@ -13,13 +14,14 @@ export function AuthorCard({
   stats?: { posts?: number; followers?: number };
   variant?: "default" | "compact";
 }) {
-  const avatarSrc = resolveAvatarUrl(user.avatar);
+  const staticBase = await getServerStaticBase();
+  const avatarSrc = resolveAvatarUrl(user.avatar, staticBase);
 
   if (variant === "compact") {
     return (
       <Link
         href={`/${user.username}`}
-        className="flex items-center gap-3 py-2 hover:bg-secondary transition-colors rounded-md px-2 -mx-2"
+        className="flex items-center gap-3 rounded-md px-2 py-2 -mx-2"
       >
         <Avatar className="h-9 w-9">
           {avatarSrc ? <AvatarImage src={avatarSrc} alt="" /> : null}
@@ -42,7 +44,7 @@ export function AuthorCard({
   return (
     <Link
       href={`/${user.username}`}
-      className="flex flex-col items-center text-center gap-3 p-5 rounded-lg ring-border bg-card hover:shadow-card transition-shadow"
+      className="flex flex-col items-center gap-3 rounded-lg bg-card p-5 text-center ring-border shadow-card"
     >
       <Avatar className="h-16 w-16">
         {avatarSrc ? <AvatarImage src={avatarSrc} alt="" /> : null}

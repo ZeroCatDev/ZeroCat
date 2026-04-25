@@ -1,17 +1,35 @@
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Search } from "lucide-react";
+import type { Metadata } from "next";
+import { ArrowLeft, ArrowRight, Search, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AuthorCard } from "@/components/blog/author-card";
 import { PostCard } from "@/components/blog/post-card";
 import  PostsFilterBar from "@/components/blog/posts-filter-bar";
 import { EmptyState } from "@/components/blog/empty-state";
 import { buildPostsHref, normalizeAuthorParam } from "@/lib/blog-links";
-import { listPosts } from "@/lib/api";
+import { listPosts, search } from "@/lib/api";
 
 export const revalidate = 30;
 
 type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
+
+export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
+  const params = await searchParams;
+  const q = pick(params.q).trim();
+  if (!q) {
+    return {
+      title: "全部文章",
+      description: "浏览 ZeroCat Blog 的全部文章，按关键词、作者、标签与热度筛选。",
+    };
+  }
+
+  return {
+    title: `搜索: ${q}`,
+    description: `查看与 ${q} 相关的文章和作者结果。`,
+  };
+}
 
 export default async function PostsPage({ searchParams }: PageProps) {
   const params = await searchParams;
@@ -22,16 +40,20 @@ export default async function PostsPage({ searchParams }: PageProps) {
   const page = Math.max(Number.parseInt(pick(params.page) || "1", 10) || 1, 1);
   const limit = 18;
 
-  const posts = await listPosts({
-    page,
-    limit,
-    keyword: q || undefined,
-    author: author || undefined,
-    tag: tag || undefined,
-    sort,
-  });
+  const [posts, searchResult] = await Promise.all([
+    listPosts({
+      page,
+      limit,
+      keyword: q || undefined,
+      author: author || undefined,
+      tag: tag || undefined,
+      sort,
+    }),
+    q ? search(q) : Promise.resolve({ users: [] }),
+  ]);
 
   const totalPages = Math.max(Math.ceil(posts.total / limit), 1);
+  const users = (searchResult.users ?? []).slice(0, 6);
 
   return (
     <section className="mx-auto w-full max-w-6xl px-4 md:px-6 py-10">
@@ -39,14 +61,16 @@ export default async function PostsPage({ searchParams }: PageProps) {
         <div className="space-y-2">
           <p className="text-mono-label text-muted-foreground/70">Discover</p>
           <h1 className="text-3xl md:text-4xl font-semibold tracking-[-0.025em]">
-            全部文章
+            {q ? "搜索文章与作者" : "全部文章"}
           </h1>
           <p className="text-sm text-muted-foreground">
-            支持标签、作者、关键词与热度排序，快速定位社区内容。
+            {q
+              ? `当前关键词“${q}”的全部结果，支持继续按标签、作者与热度收窄。`
+              : "支持标签、作者、关键词与热度排序，快速定位社区内容。"}
           </p>
         </div>
 
-        <PostsFilterBar q={q} tag={tag} author={author} sort={sort} />
+        <PostsFilterBar initialKeyword={q} tag={tag} author={author} sort={sort} />
       </div>
 
       <div className="mb-8 flex flex-wrap items-center gap-2">
@@ -63,11 +87,25 @@ export default async function PostsPage({ searchParams }: PageProps) {
         )}
       </div>
 
+      {q && users.length > 0 && (
+        <div className="mb-10 space-y-4">
+          <div className="flex items-center gap-2">
+            <UserRound className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-xl font-semibold tracking-[-0.02em]">相关作者</h2>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {users.map((user) => (
+              <AuthorCard key={user.id} user={user} variant="compact" />
+            ))}
+          </div>
+        </div>
+      )}
+
       {posts.posts.length === 0 ? (
         <EmptyState
           icon={Search}
-          title="没有找到匹配文章"
-          description="尝试调整关键词、标签或切换排序方式。"
+          title={q ? "没有找到匹配结果" : "没有找到匹配文章"}
+          description={q ? "尝试调整关键词、标签或作者筛选。" : "尝试调整关键词、标签或切换排序方式。"}
         />
       ) : (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">

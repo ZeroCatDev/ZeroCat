@@ -29,6 +29,15 @@ interface ThemeProviderProps extends React.PropsWithChildren {
   value?: Partial<Record<Theme, string>>;
 }
 
+function getStoredTheme(
+  storageKey: string,
+  enableSystem: boolean,
+  defaultTheme: Theme
+): Theme {
+  if (typeof window === "undefined") return defaultTheme;
+  return normalizeTheme(window.localStorage.getItem(storageKey), enableSystem, defaultTheme);
+}
+
 function getSystemTheme(): SystemTheme {
   if (typeof window === "undefined") return "light";
   return window.matchMedia(MEDIA_QUERY).matches ? "dark" : "light";
@@ -104,21 +113,15 @@ export function ThemeProvider({
   attribute = "class",
   value,
 }: ThemeProviderProps) {
-  const [theme, setThemeState] = React.useState<Theme>(defaultTheme);
-  const [systemTheme, setSystemTheme] = React.useState<SystemTheme>("light");
+  const [theme, setThemeState] = React.useState<Theme>(() =>
+    getStoredTheme(storageKey, enableSystem, defaultTheme)
+  );
+  const [systemTheme, setSystemTheme] = React.useState<SystemTheme>(() => getSystemTheme());
 
   React.useEffect(() => {
     if (typeof window === "undefined") return;
-
-    const timer = window.setTimeout(() => {
-      const stored = normalizeTheme(
-        window.localStorage.getItem(storageKey),
-        enableSystem,
-        defaultTheme
-      );
-      setThemeState(stored);
-      setSystemTheme(getSystemTheme());
-    }, 0);
+    setThemeState(getStoredTheme(storageKey, enableSystem, defaultTheme));
+    setSystemTheme(getSystemTheme());
 
     const onStorage = (event: StorageEvent) => {
       if (event.key !== storageKey) return;
@@ -129,7 +132,6 @@ export function ThemeProvider({
     window.addEventListener("storage", onStorage);
 
     return () => {
-      window.clearTimeout(timer);
       window.removeEventListener("storage", onStorage);
     };
   }, [defaultTheme, enableSystem, storageKey]);

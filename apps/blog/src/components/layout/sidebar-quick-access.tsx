@@ -18,6 +18,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthToken, useCurrentUser } from "@/lib/auth";
 import { listDrafts, listPostsByAuthorId } from "@/lib/api";
+import { getPostHref } from "@/lib/blog-links";
 import type { BlogPost, DraftListItem } from "@/lib/types";
 import { truncate } from "@/lib/utils";
 
@@ -149,10 +150,19 @@ export function SidebarQuickAccess() {
               ) : published.length > 0 ? (
                 <SidebarMenuSub>
                   {published.map((post) => {
-                    const slug = post.blogConfig?.slug || post.id;
-                    const href = username
-                      ? `/${username}/${slug}`
-                      : `/posts/${post.id}`;
+                    const href = getPostHref({
+                      ...post,
+                      author:
+                        post.author ??
+                        (username
+                          ? {
+                              id: currentUser?.id ?? 0,
+                              username,
+                              display_name: currentUser?.display_name ?? null,
+                              avatar: currentUser?.avatar ?? null,
+                            }
+                          : undefined),
+                    });
                     return (
                       <SidebarMenuSubItem key={post.id}>
                         <SidebarMenuSubButton asChild>

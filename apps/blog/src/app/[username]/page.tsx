@@ -22,6 +22,7 @@ import {
 } from "@/lib/api";
 import { buildPostsHref } from "@/lib/blog-links";
 import { resolveAvatarUrl } from "@/lib/avatar";
+import { getServerStaticBase } from "@/lib/site-config";
 import { formatDate, initials } from "@/lib/utils";
 
 type PageProps = { params: Promise<{ username: string }> };
@@ -30,9 +31,13 @@ export async function generateMetadata(
   { params }: PageProps
 ): Promise<Metadata> {
   const { username } = await params;
-  const user = await getUserByUsername(username);
+  const [user, staticBase] = await Promise.all([
+    getUserByUsername(username),
+    getServerStaticBase(),
+  ]);
   if (!user) return { title: "用户不存在" };
-  const avatarUrl = resolveAvatarUrl(user.avatar);
+
+  const avatarUrl = resolveAvatarUrl(user.avatar, staticBase);
   const title = `${user.display_name || user.username} (@${user.username})`;
   return {
     title,
@@ -54,16 +59,22 @@ export default async function UserProfilePage({ params }: PageProps) {
   const user = await getUserByUsername(username);
   if (!user) notFound();
 
-  const [posts, allTags] = await Promise.all([
+  const [posts, allTags, staticBase] = await Promise.all([
     listPostsByAuthorId(user.id, { limit: 30 }),
     listTagsByAuthorId(user.id, 80),
+    getServerStaticBase(),
   ]);
   const featured = posts.posts[0];
   const rest = posts.posts.slice(1);
 
   return (
     <>
-      <ProfileHero user={user} postCount={posts.total} tagCount={allTags.length} />
+      <ProfileHero
+        user={user}
+        postCount={posts.total}
+        tagCount={allTags.length}
+        staticBase={staticBase}
+      />
 
       <section className="mx-auto w-full max-w-6xl px-4 md:px-6 py-10">
         <Tabs defaultValue="posts" className="space-y-8">
@@ -187,16 +198,17 @@ function ProfileHero({
   user,
   postCount,
   tagCount,
+  staticBase,
 }: {
   user: Awaited<ReturnType<typeof getUserByUsername>> & object;
   postCount: number;
   tagCount: number;
+  staticBase: string;
 }) {
-  const avatarUrl = resolveAvatarUrl(user.avatar);
+  const avatarUrl = resolveAvatarUrl(user.avatar, staticBase);
 
   return (
     <section className="relative">
-      {/* Cover banner — gradient adapts to dark mode via color-mix */}
       <div className="relative h-44 md:h-56 w-full overflow-hidden">
         <div
           aria-hidden

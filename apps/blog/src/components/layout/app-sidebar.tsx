@@ -55,10 +55,10 @@ export function AppSidebar() {
     const { unread } = useUnreadNotifications()
 
     return (
-        <Sidebar className="border-r border-sidebar-border">
+        <Sidebar className="app-sidebar border-r border-sidebar-border">
             <SidebarHeader className="px-4 py-4 h-14 flex flex-row items-center">
                 <Link href="/" className="flex flex-row items-center gap-2.5 w-full group">
-                    <span className="relative inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--color-brand)] to-[var(--color-preview)] text-white shadow-sm transition-transform duration-200 group-hover:scale-105">
+                    <span className="relative inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--color-brand)] to-[var(--color-preview)] text-white shadow-sm">
                         <Cat className="h-4.5 w-4.5" strokeWidth={2.25} />
                     </span>
                     <span className="font-semibold font-sans text-[15px] tracking-tight truncate">

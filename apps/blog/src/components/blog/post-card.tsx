@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Eye, Star, Clock3 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { buildPostsHref } from "@/lib/blog-links";
+import { buildPostsHref, getPostHref } from "@/lib/blog-links";
 import {
   formatDate,
   formatNumber,
@@ -10,7 +10,8 @@ import {
   stripMarkdown,
   truncate,
 } from "@/lib/utils";
-import { resolveAvatarUrl } from "@/lib/avatar";
+import { resolveAvatarUrl, resolveMediaUrl } from "@/lib/avatar";
+import { getServerStaticBase } from "@/lib/site-config";
 import type { BlogPost } from "@/lib/types";
 
 /**
@@ -18,28 +19,29 @@ import type { BlogPost } from "@/lib/types";
  * the `prominent` variant simply increases spacing and typography
  * for the top-of-feed featured slot.
  */
-export function PostCard({
+export async function PostCard({
   post,
   variant = "default",
 }: {
   post: BlogPost;
   variant?: "default" | "prominent";
 }) {
+  const staticBase = await getServerStaticBase();
   const author = post.author;
-  const username = author?.username || "";
-  const cover = post.blogConfig?.cover || post.thumbnail || null;
-  const href = username
-    ? `/${username}/${post.blogConfig?.slug || post.id}`
-    : `/posts/${post.id}`;
+  const cover = resolveMediaUrl(
+    post.blogConfig?.cover || post.thumbnail || null,
+    staticBase
+  );
+  const href = getPostHref(post);
   const summary =
     post.summary ||
     (post.description ? truncate(stripMarkdown(post.description), 180) : "");
-  const avatarSrc = resolveAvatarUrl(author?.avatar ?? null);
+  const avatarSrc = resolveAvatarUrl(author?.avatar ?? null, staticBase);
 
   const isProminent = variant === "prominent";
 
   return (
-    <article className="group relative flex flex-col h-full overflow-hidden rounded-2xl bg-card ring-border transition-all duration-300 hover:shadow-card-lift hover:-translate-y-0.5">
+    <article className="group relative flex h-full flex-col overflow-hidden rounded-2xl bg-card ring-border shadow-card">
       <Link
         href={href}
         aria-label={post.title || post.name}
@@ -56,7 +58,7 @@ export function PostCard({
           <img
             src={cover}
             alt=""
-            className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+            className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-mono-label text-muted-foreground/70">
@@ -92,7 +94,7 @@ export function PostCard({
         </div>
 
         <h3
-          className={`font-semibold leading-snug tracking-tight line-clamp-2 transition-colors group-hover:text-[var(--color-brand)] ${
+          className={`font-semibold leading-snug tracking-tight line-clamp-2 ${
             isProminent
               ? "text-2xl md:text-3xl tracking-[-0.025em]"
               : "text-lg"
@@ -122,7 +124,7 @@ export function PostCard({
                 >
                   <Badge
                     variant="secondary"
-                    className="h-6 rounded-full px-2 text-[11px] font-medium hover:bg-accent transition-colors"
+                    className="h-6 rounded-full px-2 text-[11px] font-medium"
                   >
                     #{tag.name}
                   </Badge>

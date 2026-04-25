@@ -1,3 +1,5 @@
+import type { BlogPost } from "./types";
+
 export type PostsSort = "latest" | "popular";
 
 export function normalizeAuthorParam(value?: string) {
@@ -21,4 +23,17 @@ export function buildPostsHref(input: {
   if (input.page && input.page > 1) qs.set("page", String(input.page));
   const tail = qs.toString();
   return tail ? `/posts?${tail}` : "/posts";
+}
+
+export function getPostUrlSlug(post: Pick<BlogPost, "name" | "blogConfig">) {
+  const configSlug = String(post.blogConfig?.slug || "").trim();
+  const projectSlug = String(post.name || "").trim();
+  return configSlug || projectSlug;
+}
+
+export function getPostHref(post: Pick<BlogPost, "name" | "blogConfig" | "author">) {
+  const username = post.author?.username;
+  const slug = getPostUrlSlug(post);
+  if (!username || !slug) return "/posts";
+  return `/${encodeURIComponent(username)}/${encodeURIComponent(slug)}`;
 }

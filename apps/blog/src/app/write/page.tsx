@@ -10,7 +10,6 @@ import {
   ChevronRight,
   CircleCheck,
   Loader2,
-  PanelRight,
   Rocket,
   Save,
   Maximize2,
@@ -23,7 +22,6 @@ import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -55,17 +53,15 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MilkdownEditorPane } from "@/components/blog/editor/milkdown-editor-pane";
-import { ToastEditorPane } from "@/components/blog/editor/toast-editor-pane";
 import { CoverUpload } from "@/components/blog/cover-upload";
+import { PostTagSelector } from "@/components/blog/post-tag-selector";
 import { buildZcLoginUrl, useAuthToken, useCurrentUser } from "@/lib/auth";
 import {
   createPost,
   discardDraft,
-  getCacheKV,
   getDraft,
   getPostBody,
   getPostById,
@@ -77,11 +73,8 @@ import {
 } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 
-type EditorMode = "toast" | "milkdown";
-
 type EditorPreference = {
-  mode?: EditorMode;
-  lastProjectId?: number;
+  lastProjectId?: number | null;
 };
 
 export default function WritePage() {
@@ -120,7 +113,6 @@ function WritePageInner() {
   const [saving, setSaving] = React.useState(false);
   const [publishing, setPublishing] = React.useState(false);
   const [dirty, setDirty] = React.useState(false);
-  const [editorMode, setEditorMode] = React.useState<EditorMode>("milkdown");
   const [editorSeed, setEditorSeed] = React.useState(0);
   const [immersiveMode, setImmersiveMode] = React.useState(false);
   const [isSettingsSheetOpen, setIsSettingsSheetOpen] = React.useState(false);
@@ -131,8 +123,9 @@ function WritePageInner() {
   const [title, setTitle] = React.useState("");
   const [summary, setSummary] = React.useState("");
   const [slug, setSlug] = React.useState("");
+  const [urlSlug, setUrlSlug] = React.useState("");
   const [slugTouched, setSlugTouched] = React.useState(false);
-  const [tagsInput, setTagsInput] = React.useState("");
+  const [tags, setTags] = React.useState<string[]>([]);
   const [cover, setCover] = React.useState<string | null>(null);
   const [canonicalUrl, setCanonicalUrl] = React.useState("");
   const [seoTitle, setSeoTitle] = React.useState("");
@@ -164,10 +157,11 @@ function WritePageInner() {
       setTitle(draft.title || "");
       setSummary(draft.description || "");
       setSlug(draft.slug || "");
+      setUrlSlug(draft.slug || "");
       setSlugTouched(Boolean(draft.slug));
       setContent(draft.content || "");
       setCover(draft.cover || null);
-      setTagsInput((draft.tags || []).join(", "));
+      setTags(draft.tags || []);
       setDirty(false);
       setLastSavedAt(draft.savedAt || draft.updatedAt || new Date().toISOString());
       setEditorSeed((seed) => seed + 1);
@@ -185,10 +179,11 @@ function WritePageInner() {
       setTitle(post.title || post.name || "");
       setSummary(post.summary || post.description || "");
       setSlug(post.blogConfig?.slug || "");
+      setUrlSlug(post.blogConfig?.slug || post.name || "");
       setSlugTouched(Boolean(post.blogConfig?.slug));
       setContent(body || "");
       setCover(post.blogConfig?.cover || post.thumbnail || null);
-      setTagsInput((post.project_tags ?? []).map((tag) => tag.name).join(", "));
+      setTags((post.project_tags ?? []).map((tag) => tag.name));
       setSeoTitle(post.blogConfig?.seo?.title || "");
       setSeoDescription(post.blogConfig?.seo?.description || "");
       setSeoKeywords(post.blogConfig?.seo?.keywords || "");
@@ -200,8 +195,32 @@ function WritePageInner() {
     []
   );
 
+  const resetEditor = React.useCallback(() => {
+    setProjectId(null);
+    setTitle("");
+    setSummary("");
+    setSlug("");
+    setUrlSlug("");
+    setSlugTouched(false);
+    setContent("");
+    setTags([]);
+    setCover(null);
+    setCanonicalUrl("");
+    setSeoTitle("");
+    setSeoDescription("");
+    setSeoKeywords("");
+    setPublishMessage("");
+    setDirty(false);
+    setLastSavedAt(null);
+    setEditorSeed((seed) => seed + 1);
+  }, []);
+
   React.useEffect(() => {
-    if (!ready || !isAuthed || !token) return;
+    if (!ready) return;
+    if (!isAuthed || !token) {
+      setLoading(false);
+      return;
+    }
 
     let canceled = false;
 
@@ -209,30 +228,28 @@ function WritePageInner() {
       const authToken = token ?? undefined;
       setLoading(true);
       try {
-        const preference = await getCacheKV<EditorPreference>(cacheKey, authToken);
-        if (canceled) return;
-
-        if (preference?.mode) {
-          setEditorMode(preference.mode);
+        if (!requestedDraftId) {
+          resetEditor();
+          return;
         }
 
-        const targetId = requestedDraftId || preference?.lastProjectId || null;
-        if (targetId) {
-          const draft = await getDraft(targetId, authToken);
-          if (canceled) return;
-          if (draft) {
-            applyDraft(targetId, draft);
-          } else {
-            const loaded = await applyPublishedPost(targetId);
-            if (canceled) return;
-            if (!loaded && requestedDraftId) {
-              toast.error("文章加载失败");
-            }
-          }
+        const draft = await getDraft(requestedDraftId, authToken);
+        if (canceled) return;
+        if (draft) {
+          applyDraft(requestedDraftId, draft);
+          return;
+        }
+
+        const loaded = await applyPublishedPost(requestedDraftId);
+        if (canceled) return;
+        if (!loaded) {
+          resetEditor();
+          toast.error("文章加载失败");
         }
       } catch {
         if (!canceled) {
           toast.error("初始化编辑器失败");
+          resetEditor();
         }
       } finally {
         if (!canceled) {
@@ -246,18 +263,17 @@ function WritePageInner() {
     return () => {
       canceled = true;
     };
-  }, [applyDraft, applyPublishedPost, cacheKey, isAuthed, ready, requestedDraftId, token]);
+  }, [applyDraft, applyPublishedPost, cacheKey, isAuthed, ready, requestedDraftId, resetEditor, token]);
 
   const isPageLoading = !ready || (isAuthed && loading);
 
   React.useEffect(() => {
     if (!ready || !isAuthed || !token) return;
     const payload: EditorPreference = {
-      mode: editorMode,
-      lastProjectId: projectId ?? undefined,
+      lastProjectId: projectId ?? null,
     };
     void setCacheKV(cacheKey, payload, token);
-  }, [cacheKey, editorMode, isAuthed, projectId, ready, token]);
+  }, [cacheKey, isAuthed, projectId, ready, token]);
 
   React.useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -287,6 +303,7 @@ function WritePageInner() {
     );
 
     setProjectId(created.id);
+    setUrlSlug(created.blogConfig?.slug || created.name || "");
     router.replace(`/write?draft=${created.id}`);
     return created.id;
   }, [projectId, router, summary, title, token]);
@@ -300,8 +317,9 @@ function WritePageInner() {
       setSaving(true);
       try {
         const id = await ensureProject();
-        const payloadTags = parseTags(tagsInput);
+        const payloadTags = tags;
         const normalizedTitle = title.trim() || "未命名文章";
+        const normalizedSlug = slug.trim() || urlSlug || slugify(normalizedTitle);
 
         await saveDraft(
           id,
@@ -309,7 +327,7 @@ function WritePageInner() {
             title: normalizedTitle,
             description: summary.trim(),
             content,
-            slug: slug.trim() || undefined,
+            slug: normalizedSlug || undefined,
             cover: cover || null,
             tags: payloadTags,
             updatedAt: new Date().toISOString(),
@@ -322,7 +340,7 @@ function WritePageInner() {
           {
             title: normalizedTitle,
             summary: summary.trim(),
-            slug: slug.trim() || undefined,
+            slug: normalizedSlug || undefined,
             cover: cover || null,
             state: "draft",
             seo: {
@@ -358,8 +376,9 @@ function WritePageInner() {
       seoKeywords,
       seoTitle,
       slug,
+      urlSlug,
       summary,
-      tagsInput,
+      tags,
       title,
       token,
     ]
@@ -392,14 +411,15 @@ function WritePageInner() {
     try {
       await persistDraft(true);
       const id = await ensureProject();
-      const payloadTags = parseTags(tagsInput);
+      const payloadTags = tags;
+      const finalSlug = slug.trim() || urlSlug || slugify(trimmedTitle);
 
       await updatePostMeta(
         id,
         {
           title: trimmedTitle,
           summary: summary.trim(),
-          slug: slug.trim() || undefined,
+          slug: finalSlug || undefined,
           cover: cover || null,
           state: "public",
           tags: payloadTags,
@@ -427,7 +447,6 @@ function WritePageInner() {
       setIsSettingsSheetOpen(false);
 
       if (user?.username) {
-        const finalSlug = slug.trim() || String(id);
         router.push(`/${user.username}/${encodeURIComponent(finalSlug)}`);
       } else {
         router.push("/posts");
@@ -447,8 +466,9 @@ function WritePageInner() {
     seoKeywords,
     seoTitle,
     slug,
+    urlSlug,
     summary,
-    tagsInput,
+    tags,
     title,
     token,
     user,
@@ -464,7 +484,8 @@ function WritePageInner() {
       setTitle("");
       setSummary("");
       setSlug("");
-      setTagsInput("");
+      setUrlSlug("");
+      setTags([]);
       setCover(null);
       setContent("");
       setDirty(false);
@@ -487,7 +508,8 @@ function WritePageInner() {
       setTitle("");
       setSummary("");
       setSlug("");
-      setTagsInput("");
+      setUrlSlug("");
+      setTags([]);
       setCover(null);
       setContent("");
       setDirty(false);
@@ -501,8 +523,6 @@ function WritePageInner() {
   }, [projectId, router, token]);
 
   const markDirty = React.useCallback(() => setDirty(true), []);
-
-  const tags = parseTags(tagsInput);
 
   if (isPageLoading) {
     return <WriteLoading label="正在加载编辑器" />;
@@ -542,26 +562,15 @@ function WritePageInner() {
   const editorNode = (
     <div className="relative flex-1 min-h-0 animate-in fade-in duration-500">
       <div className="mx-auto w-full max-w-3xl h-full">
-        {editorMode === "milkdown" ? (
-          <MilkdownEditorPane
-            key={`milkdown-${editorSeed}`}
-            token={token}
-            initialValue={content}
-            onChange={(value) => {
-              setContent(value);
-              setDirty(true);
-            }}
-          />
-        ) : (
-          <ToastEditorPane
-            key={`toast-${editorSeed}`}
-            initialValue={content}
-            onChange={(value) => {
-              setContent(value);
-              setDirty(true);
-            }}
-          />
-        )}
+        <MilkdownEditorPane
+          key={`milkdown-${editorSeed}`}
+          token={token}
+          initialValue={content}
+          onChange={(value) => {
+            setContent(value);
+            setDirty(true);
+          }}
+        />
       </div>
     </div>
   );
@@ -663,15 +672,6 @@ function WritePageInner() {
                   <Maximize2 className="h-4 w-4" />
                   沉浸模式
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() =>
-                    setEditorMode(editorMode === "milkdown" ? "toast" : "milkdown")
-                  }
-                >
-                  <PanelRight className="h-4 w-4" />
-                  切换到 {editorMode === "milkdown" ? "Toast UI" : "Milkdown"}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleDiscard} className="text-destructive">
                   丢弃草稿
                 </DropdownMenuItem>
@@ -818,32 +818,24 @@ function WritePageInner() {
                     }}
                     placeholder="modern-web-architecture"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    地址预览：
+                    {" "}
+                    <span className="font-mono text-foreground">
+                      /{user?.username || "username"}/{slug || "your-article-slug"}
+                    </span>
+                  </p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="sheet-tags">标签</Label>
-                  <Input
-                    id="sheet-tags"
-                    value={tagsInput}
-                    onChange={(event) => {
-                      setTagsInput(event.target.value);
+                  <Label>标签</Label>
+                  <PostTagSelector
+                    value={tags}
+                    onChange={(next) => {
+                      setTags(next);
                       markDirty();
                     }}
-                    placeholder="多个标签使用逗号分隔"
                   />
-                  {tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {tags.map((tag) => (
-                        <Badge
-                          key={tag}
-                          variant="secondary"
-                          className="h-6 rounded-full px-2 text-xs"
-                        >
-                          #{tag}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </TabsContent>
 
@@ -859,6 +851,9 @@ function WritePageInner() {
                     }}
                     placeholder="用于搜索引擎显示"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    建议控制在 30 到 60 个字符，通常直接沿用文章标题即可。
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -873,6 +868,9 @@ function WritePageInner() {
                     placeholder="搜索结果中的描述文本"
                     className="min-h-20"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    建议 80 到 160 个字符，避免与摘要完全重复。
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -942,16 +940,6 @@ function WritePageInner() {
       </Sheet>
     </div>
   );
-}
-
-function parseTags(value: string) {
-  const unique = new Set(
-    value
-      .split(/[,，]/)
-      .map((item) => item.trim())
-      .filter(Boolean)
-  );
-  return Array.from(unique);
 }
 
 function slugify(value: string) {

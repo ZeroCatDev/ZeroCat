@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiFetch } from "@/lib/api";
+import { resolveAvatarUrl } from "@/lib/avatar";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -31,7 +32,7 @@ interface PostSearchBarProps {
   initialKeyword?: string;
   tag?: string;
   author?: string;
-  sort?: string;
+  sort?: "latest" | "popular";
 }
 
 /* ------------------------------------------------------------------ */
@@ -51,12 +52,6 @@ function buildPostsHref(params: {
   if (params.sort && params.sort !== "latest") sp.set("sort", params.sort);
   const qs = sp.toString();
   return `/posts${qs ? `?${qs}` : ""}`;
-}
-
-function resolveAvatarUrl(avatar: string | null | undefined): string | null {
-  if (!avatar) return null;
-  if (avatar.startsWith("http")) return avatar;
-  return `/uploads/${avatar}`;
 }
 
 function initials(name: string): string {
@@ -584,3 +579,6 @@ export default function PostSearchBar({
     </div>
   );
 }
+
+
+

@@ -55,6 +55,7 @@ import {
   publishDraft,
 } from "@/lib/api";
 import { cn, formatDate, formatNumber, truncate } from "@/lib/utils";
+import { getPostHref } from "@/lib/blog-links";
 import type { BlogPost, DraftListItem } from "@/lib/types";
 
 type TabValue = "drafts" | "published";
@@ -377,9 +378,19 @@ export default function DraftsPage() {
           ) : (
             <ul className="space-y-2">
               {filteredPublished.map((post) => {
-                const username = post.author?.username || currentUser?.username;
-                const slug = post.blogConfig?.slug || post.id;
-                const href = username ? `/${username}/${slug}` : `/posts/${post.id}`;
+                const href = getPostHref({
+                  ...post,
+                  author:
+                    post.author ??
+                    (currentUser?.username
+                      ? {
+                          id: currentUser.id ?? 0,
+                          username: currentUser.username,
+                          display_name: currentUser.display_name ?? null,
+                          avatar: currentUser.avatar ?? null,
+                        }
+                      : undefined),
+                });
                 return (
                   <li
                     key={post.id}

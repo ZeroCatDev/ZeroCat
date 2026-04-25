@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { resolveMediaUrl } from "@/lib/avatar";
 import { uploadImage } from "@/lib/upload";
 
 export function CoverUpload({
@@ -87,7 +88,7 @@ export function CoverUpload({
       {value ? (
         <div className="group relative aspect-[16/9] overflow-hidden rounded-xl bg-muted ring-border">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={value} alt="封面" className="h-full w-full object-cover" />
+          <img src={resolveMediaUrl(value) || value} alt="封面" className="h-full w-full object-cover" />
           <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/50 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
             <Button size="sm" variant="secondary" onClick={onPick} disabled={uploading}>
               <ImagePlus className="h-4 w-4" />
@@ -134,3 +135,5 @@ export function CoverUpload({
     </div>
   );
 }
+
+

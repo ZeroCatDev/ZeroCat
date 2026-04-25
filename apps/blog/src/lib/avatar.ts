@@ -1,38 +1,108 @@
-const DEFAULT_API_URL = "http://localhost:3000"
-
-const AVATAR_HASH_PATTERN = /^[a-f0-9]{32}$/i
-
-function stripTrailingSlash(value: string): string {
-  return value.replace(/\/+$/, "")
+declare global {
+  interface Window {
+    __ZC_STATIC_URL__?: string;
+  }
 }
 
-const API_BASE_URL = stripTrailingSlash(
-  process.env.NEXT_PUBLIC_API_URL || process.env.API_URL || DEFAULT_API_URL
-)
+const DEFAULT_API_URL = "http://localhost:3000";
+const ASSET_HASH_PATTERN = /^[a-f0-9]{32}$/i;
 
-const STATIC_BASE_URL = stripTrailingSlash(
-  process.env.NEXT_PUBLIC_ZC_STATIC_URL ||
-    process.env.NEXT_PUBLIC_STATIC_URL ||
-    API_BASE_URL
-)
+function stripTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, "");
+}
 
-export function resolveAvatarUrl(avatar?: string | null): string | null {
-  const raw = String(avatar ?? "").trim()
-  if (!raw) return null
+function normalizeUrlBase(value?: string | null): string {
+  return stripTrailingSlash(String(value ?? "").trim());
+}
 
-  if (/^(data:|blob:)/i.test(raw)) return raw
-  if (/^https?:\/\//i.test(raw)) return raw
-  if (raw.startsWith("//")) return `https:${raw}`
+function getFallbackStaticBase(): string {
+  return normalizeUrlBase(
+    process.env.NEXT_PUBLIC_ZC_STATIC_URL ||
+      process.env.NEXT_PUBLIC_STATIC_URL ||
+      process.env.NEXT_PUBLIC_S3_STATICURL ||
+      process.env.S3_STATICURL ||
+      process.env.API_URL ||
+      process.env.NEXT_PUBLIC_API_URL ||
+      DEFAULT_API_URL
+  );
+}
 
-  if (AVATAR_HASH_PATTERN.test(raw)) {
-    const p1 = raw.slice(0, 2)
-    const p2 = raw.slice(2, 4)
-    return `${STATIC_BASE_URL}/assets/${p1}/${p2}/${raw}.webp`
+function getConfiguredStaticBase(staticBase?: string | null): string {
+  const explicit = normalizeUrlBase(staticBase);
+  if (explicit) return explicit;
+
+  if (typeof window !== "undefined") {
+    const fromWindow = normalizeUrlBase(window.__ZC_STATIC_URL__);
+    if (fromWindow) return fromWindow;
+
+    const fromDataset = normalizeUrlBase(
+      document.documentElement.dataset.zcStaticUrl
+    );
+    if (fromDataset) return fromDataset;
   }
 
-  if (raw.startsWith("/")) {
-    return `${STATIC_BASE_URL}${raw}`
+  return getFallbackStaticBase();
+}
+
+function normalizeAbsoluteLikeUrl(raw: string): string | null {
+  if (!raw) return null;
+  if (/^(data:|blob:)/i.test(raw)) return raw;
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith("//")) return `https:${raw}`;
+  return null;
+}
+
+function buildStaticAssetUrl(
+  hash: string,
+  staticBase?: string | null,
+  extension = "webp"
+): string {
+  const base = getConfiguredStaticBase(staticBase);
+  const p1 = hash.slice(0, 2);
+  const p2 = hash.slice(2, 4);
+  return `${base}/assets/${p1}/${p2}/${hash}.${extension}`;
+}
+
+export function resolveMediaUrl(
+  value?: string | null,
+  staticBase?: string | null
+): string | null {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+
+  const absolute = normalizeAbsoluteLikeUrl(raw);
+  if (absolute) return absolute;
+
+  if (ASSET_HASH_PATTERN.test(raw)) {
+    return buildStaticAssetUrl(raw, staticBase);
   }
 
-  return `${STATIC_BASE_URL}/${raw.replace(/^\/+/, "")}`
+  const base = getConfiguredStaticBase(staticBase);
+
+  if (raw.startsWith("/assets/")) {
+    return `${base}${raw}`;
+  }
+
+  if (raw.startsWith("assets/")) {
+    return `${base}/${raw}`;
+  }
+
+  return raw;
+}
+
+export function resolveAvatarUrl(
+  avatar?: string | null,
+  staticBase?: string | null
+): string | null {
+  const raw = String(avatar ?? "").trim();
+  if (!raw) return null;
+
+  const absolute = normalizeAbsoluteLikeUrl(raw);
+  if (absolute) return absolute;
+
+  if (ASSET_HASH_PATTERN.test(raw)) {
+    return buildStaticAssetUrl(raw, staticBase);
+  }
+
+  return resolveMediaUrl(raw, staticBase);
 }

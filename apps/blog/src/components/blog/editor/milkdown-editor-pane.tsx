@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Crepe } from "@milkdown/crepe";
-import { useTheme } from "next-themes";
+import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { uploadImage } from "@/lib/upload";
 

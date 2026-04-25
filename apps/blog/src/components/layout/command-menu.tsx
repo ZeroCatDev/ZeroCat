@@ -23,6 +23,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import { search } from "@/lib/api";
+import { getPostHref } from "@/lib/blog-links";
 import type { BlogPost, User as UserType } from "@/lib/types";
 
 type Result = {
@@ -90,14 +91,11 @@ export function CommandMenu() {
           });
         });
         (projects ?? []).slice(0, 8).forEach((p: BlogPost) => {
-          const postSlug = p.blogConfig?.slug || p.id;
           mapped.push({
             icon: FileText,
             label: p.title || p.name,
             hint: p.author?.display_name || p.author?.username || "",
-            href: p.author?.username
-              ? `/${p.author.username}/${postSlug}`
-              : `/posts/${p.id}`,
+            href: getPostHref(p),
             group: "文章",
           });
         });
@@ -206,7 +204,7 @@ export function CommandMenu() {
               <CommandGroup>
                 <CommandItem
                   value={`在全文搜索页打开 ${query}`}
-                  onSelect={() => go(`/search?q=${encodeURIComponent(query)}`)}
+                  onSelect={() => go(`/posts?q=${encodeURIComponent(query)}`)}
                 >
                   <Search className="h-4 w-4" />
                   <span>

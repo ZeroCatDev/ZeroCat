@@ -1,7 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "highlight.js/styles/github.css";
-@import "@toast-ui/editor/dist/toastui-editor.css";
 @import "@milkdown/crepe/theme/common/style.css";
 @import "@milkdown/crepe/theme/nord.css";
 @import "shadcn/tailwind.css";
@@ -108,6 +107,11 @@
 }
 
 :root {
+  --motion-fast: 180ms;
+  --motion-base: 320ms;
+  --motion-slow: 520ms;
+  --motion-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-soft: cubic-bezier(0.16, 1, 0.3, 1);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -196,11 +200,15 @@
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
     @apply font-sans;
   }
 
   body {
-    background: var(--background);
+    background:
+      radial-gradient(circle at top, color-mix(in oklab, var(--color-brand) 8%, transparent), transparent 34%),
+      radial-gradient(circle at 85% 0%, color-mix(in oklab, var(--color-preview) 7%, transparent), transparent 22%),
+      var(--background);
     color: var(--foreground);
     font-family: var(--font-sans);
     font-feature-settings: "liga";
@@ -242,20 +250,162 @@
   letter-spacing: 0.04em;
 }
 
-/* Page transition animation */
+/* Route and interaction motion */
+.app-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.app-topbar,
+.app-sidebar {
+  animation: chrome-settle 0.45s var(--motion-soft) both;
+}
+
+.route-shell {
+  position: relative;
+  flex: 1;
+  min-height: 100%;
+  overflow: clip;
+}
+
+.route-shell__layer {
+  min-height: 100%;
+  animation: page-enter var(--motion-slow) var(--motion-spring) both;
+  will-change: opacity, transform, filter;
+  position: relative;
+}
+
+.route-shell__layer > * {
+  animation: content-settle calc(var(--motion-slow) + 80ms) var(--motion-soft) both;
+}
+
+.route-shell::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: min(26vw, 320px);
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--color-brand) 16%, transparent),
+    color-mix(in oklab, var(--color-preview) 10%, transparent) 55%,
+    transparent
+  );
+  opacity: 0;
+  filter: blur(28px);
+  transform: translateX(-18%);
+  animation: route-glow calc(var(--motion-slow) + 120ms) var(--motion-soft) both;
+}
+
 .page-transition {
-  animation: page-enter 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: page-enter var(--motion-base) var(--motion-spring) both;
 }
 
 @keyframes page-enter {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    filter: blur(12px);
+    transform: translateY(18px) scale(0.982);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
+@keyframes content-settle {
+  from {
+    opacity: 0.72;
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+@keyframes chrome-settle {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes route-glow {
+  0% {
+    opacity: 0;
+    transform: translateX(-22%);
+  }
+  38% {
+    opacity: 0.75;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(16%);
+  }
+}
+
+a,
+button,
+[role="button"],
+input,
+textarea,
+select,
+[data-slot="card"],
+[data-slot="button"],
+[data-slot="tabs-trigger"] {
+  transition:
+    color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease,
+    border-color var(--motion-fast) ease,
+    box-shadow var(--motion-fast) var(--motion-spring),
+    transform var(--motion-fast) var(--motion-spring),
+    opacity var(--motion-fast) ease;
+}
+
+button:hover,
+[role="button"]:hover,
+[data-slot="button"]:hover {
+  transform: none;
+}
+
+.shadow-card,
+.shadow-card-lift {
+  transition:
+    box-shadow var(--motion-base) var(--motion-spring),
+    transform var(--motion-base) var(--motion-spring),
+    border-color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease;
+}
+
+.shadow-card:hover {
+  transform: none;
+  box-shadow: var(--shadow-card);
+}
+
+.shadow-card-lift:hover {
+  transform: none;
+}
+
+.markdown-body > * {
+  animation: content-settle 0.5s var(--motion-soft) both;
+}
+
+.markdown-body > *:nth-child(2) {
+  animation-delay: 35ms;
+}
+
+.markdown-body > *:nth-child(3) {
+  animation-delay: 70ms;
+}
+
+.markdown-body > *:nth-child(4) {
+  animation-delay: 105ms;
 }
 
 /* Markdown prose container — cleaned up Hashnode-like typography */
@@ -511,23 +661,6 @@
   --crepe-color-primary: var(--color-brand);
 }
 
-/* Toast UI editor dark mode patch */
-.dark .toastui-editor-defaultUI,
-.dark .toastui-editor-defaultUI .toastui-editor-main,
-.dark .toastui-editor-defaultUI .toastui-editor-md-container,
-.dark .toastui-editor-defaultUI .toastui-editor-ww-container,
-.dark .toastui-editor-defaultUI .toastui-editor-mode-switch,
-.dark .toastui-editor-defaultUI .toastui-editor-toolbar {
-  background: var(--card);
-  color: var(--foreground);
-  border-color: var(--border);
-}
-
-.dark .toastui-editor-defaultUI .ProseMirror {
-  background: var(--card);
-  color: var(--foreground);
-}
-
 /* Scrollbar subtle */
 @media (pointer: fine) {
   ::-webkit-scrollbar {
@@ -544,5 +677,20 @@
   }
   ::-webkit-scrollbar-track {
     background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
   }
 }
