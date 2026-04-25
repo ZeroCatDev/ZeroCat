@@ -43,7 +43,7 @@ const itemsNav = [
 const itemsAuthor = [
     { title: "写作", url: "/write", icon: FilePenLine },
     { title: "草稿", url: "/drafts", icon: Inbox },
-    { title: "GitHub 同步", url: "/studio/sync", icon: GitBranch },
+    { title: "GitHub 同步", url: "/settings/sync", icon: GitBranch },
 ]
 
 const itemsSecondary = [
@@ -58,9 +58,7 @@ export function AppSidebar() {
         <Sidebar className="app-sidebar border-r border-sidebar-border">
             <SidebarHeader className="px-4 py-4 h-14 flex flex-row items-center">
                 <Link href="/" className="flex flex-row items-center gap-2.5 w-full group">
-                    <span className="relative inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--color-brand)] to-[var(--color-preview)] text-white shadow-sm">
-                        <Cat className="h-4.5 w-4.5" strokeWidth={2.25} />
-                    </span>
+
                     <span className="font-semibold font-sans text-[15px] tracking-tight truncate">
                         ZeroCat Blog
                     </span>

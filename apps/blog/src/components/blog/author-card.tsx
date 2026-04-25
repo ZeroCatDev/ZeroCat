@@ -1,11 +1,10 @@
 import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { resolveAvatarUrl } from "@/lib/avatar";
-import { getServerStaticBase } from "@/lib/site-config";
 import { initials, truncate } from "@/lib/utils";
 import type { BlogPostAuthor, User } from "@/lib/types";
 
-export async function AuthorCard({
+export function AuthorCard({
   user,
   stats,
   variant = "default",
@@ -14,26 +13,25 @@ export async function AuthorCard({
   stats?: { posts?: number; followers?: number };
   variant?: "default" | "compact";
 }) {
-  const staticBase = await getServerStaticBase();
-  const avatarSrc = resolveAvatarUrl(user.avatar, staticBase);
+  const avatarSrc = resolveAvatarUrl(user.avatar);
 
   if (variant === "compact") {
     return (
       <Link
         href={`/${user.username}`}
-        className="flex items-center gap-3 rounded-md px-2 py-2 -mx-2"
+        className="flex items-center gap-3 rounded-xl border border-transparent bg-transparent px-2.5 py-2.5"
       >
-        <Avatar className="h-9 w-9">
+        <Avatar className="h-9 w-9 border border-white/18">
           {avatarSrc ? <AvatarImage src={avatarSrc} alt="" /> : null}
           <AvatarFallback>
             {initials(user.display_name || user.username)}
           </AvatarFallback>
         </Avatar>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">
             {user.display_name || user.username}
           </p>
-          <p className="text-xs text-muted-foreground truncate">
+          <p className="truncate text-xs text-muted-foreground">
             @{user.username}
           </p>
         </div>
@@ -44,24 +42,24 @@ export async function AuthorCard({
   return (
     <Link
       href={`/${user.username}`}
-      className="flex flex-col items-center gap-3 rounded-lg bg-card p-5 text-center ring-border shadow-card"
+      className="flex flex-col items-center gap-3 rounded-[1.35rem] border border-border/70 bg-card/96 p-5 text-center shadow-card backdrop-blur-sm"
     >
-      <Avatar className="h-16 w-16">
+      <Avatar className="h-16 w-16 border border-border/60">
         {avatarSrc ? <AvatarImage src={avatarSrc} alt="" /> : null}
         <AvatarFallback className="text-base">
           {initials(user.display_name || user.username)}
         </AvatarFallback>
       </Avatar>
       <div className="min-w-0 w-full">
-        <p className="font-semibold truncate">
+        <p className="truncate font-semibold">
           {user.display_name || user.username}
         </p>
-        <p className="text-xs text-muted-foreground truncate">
+        <p className="truncate text-xs text-muted-foreground">
           @{user.username}
         </p>
       </div>
       {user.bio && (
-        <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+        <p className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
           {truncate(user.bio, 80)}
         </p>
       )}

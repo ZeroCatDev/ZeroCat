@@ -10,30 +10,30 @@ import { cn } from "@/lib/utils";
 const markdownComponents: Components = {
   h1: ({ className, ...props }) => (
     <h1
-      className={cn("mt-10 scroll-mt-24 text-4xl font-semibold tracking-tight", className)}
+      className={cn("mt-12 scroll-mt-24 text-4xl font-semibold tracking-[-0.03em] text-foreground", className)}
       {...props}
     />
   ),
   h2: ({ className, ...props }) => (
     <h2
-      className={cn("mt-10 border-b border-border pb-2 scroll-mt-24 text-3xl font-semibold tracking-tight", className)}
+      className={cn("mt-14 border-b border-border/70 pb-3 scroll-mt-24 text-3xl font-semibold tracking-[-0.025em] text-foreground", className)}
       {...props}
     />
   ),
   h3: ({ className, ...props }) => (
     <h3
-      className={cn("mt-8 scroll-mt-24 text-2xl font-semibold tracking-tight", className)}
+      className={cn("mt-10 scroll-mt-24 text-2xl font-semibold tracking-[-0.02em] text-foreground", className)}
       {...props}
     />
   ),
   h4: ({ className, ...props }) => (
     <h4
-      className={cn("mt-6 scroll-mt-24 text-xl font-semibold tracking-tight", className)}
+      className={cn("mt-8 scroll-mt-24 text-xl font-semibold tracking-tight text-foreground", className)}
       {...props}
     />
   ),
   p: ({ className, ...props }) => (
-    <p className={cn("my-5 text-[17px] leading-8 text-foreground/90", className)} {...props} />
+    <p className={cn("my-6 text-[17px] leading-8 text-foreground/88 md:text-[18px]", className)} {...props} />
   ),
   a: ({ className, ...props }) => (
     <a
@@ -46,45 +46,44 @@ const markdownComponents: Components = {
   ),
   blockquote: ({ className, ...props }) => (
     <blockquote
-      className={cn("my-6 border-l-2 border-foreground pl-4 text-muted-foreground", className)}
+      className={cn("my-8 rounded-r-2xl border-l-[3px] border-[var(--color-brand)] bg-[var(--color-brand-soft)]/55 px-5 py-4 text-foreground/76 dark:bg-[color-mix(in_oklab,var(--color-brand)_10%,transparent)]", className)}
       {...props}
     />
   ),
   ul: ({ className, ...props }) => (
-    <ul className={cn("my-5 list-disc space-y-1 pl-6", className)} {...props} />
+    <ul className={cn("my-6 list-disc space-y-2 pl-6 text-foreground/88", className)} {...props} />
   ),
   ol: ({ className, ...props }) => (
-    <ol className={cn("my-5 list-decimal space-y-1 pl-6", className)} {...props} />
+    <ol className={cn("my-6 list-decimal space-y-2 pl-6 text-foreground/88", className)} {...props} />
   ),
   li: ({ className, ...props }) => (
     <li className={cn("text-[16px] leading-7", className)} {...props} />
   ),
   hr: ({ className, ...props }) => (
-    <hr className={cn("my-10 border-border", className)} {...props} />
+    <hr className={cn("my-12 border-border/70", className)} {...props} />
   ),
   table: ({ className, ...props }) => (
-    <div className="my-6 overflow-x-auto rounded-lg ring-border">
+    <div className="my-8 overflow-x-auto rounded-2xl border border-border/70 bg-card/80 shadow-sm">
       <table className={cn("w-full border-collapse text-sm", className)} {...props} />
     </div>
   ),
   th: ({ className, ...props }) => (
     <th
-      className={cn("bg-muted px-4 py-2 text-left text-sm font-semibold", className)}
+      className={cn("bg-muted/70 px-4 py-3 text-left text-sm font-semibold text-foreground", className)}
       {...props}
     />
   ),
   td: ({ className, ...props }) => (
-    <td className={cn("border-t border-border px-4 py-2 align-top", className)} {...props} />
+    <td className={cn("border-t border-border/60 px-4 py-3 align-top", className)} {...props} />
   ),
   img: ({ className, ...props }) => (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img className={cn("my-6 rounded-xl ring-border", className)} {...props} alt={props.alt ?? ""} />
+    <img className={cn("my-8 rounded-2xl border border-border/60 shadow-card", className)} {...props} alt={props.alt ?? ""} />
   ),
   code: ({ className, ...props }) => {
     const inline = !String(className ?? "").includes("language-");
     return inline ? (
       <code
-        className={cn("rounded bg-muted px-1.5 py-0.5 font-mono text-[0.875em]", className)}
+        className={cn("rounded-md bg-muted px-1.5 py-0.5 font-mono text-[0.875em] text-foreground", className)}
         {...props}
       />
     ) : (
@@ -93,7 +92,7 @@ const markdownComponents: Components = {
   },
   pre: ({ className, ...props }) => (
     <pre
-      className={cn("my-6 overflow-x-auto rounded-lg bg-[#fafafa] p-4 text-sm ring-border dark:bg-[#111111]", className)}
+      className={cn("my-8 overflow-x-auto rounded-2xl border border-border/70 bg-[#fafafa] p-5 text-sm shadow-sm dark:bg-[#111111]", className)}
       {...props}
     />
   ),

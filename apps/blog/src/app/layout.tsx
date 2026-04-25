@@ -8,7 +8,6 @@ import { TopNav } from "@/components/layout/top-nav";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
-import { getServerStaticBase } from "@/lib/site-config";
 
 function ThemeScript() {
   const script = `
@@ -32,13 +31,20 @@ function ThemeScript() {
 }
 
 function RuntimeConfigScript({ staticBase }: { staticBase: string }) {
-  const script = `window.__ZC_STATIC_URL__ = ${JSON.stringify(staticBase)};`;
-  return <script dangerouslySetInnerHTML={{ __html: script }} />;
+  const script = staticBase
+    ? `window.__ZC_STATIC_URL__ = ${JSON.stringify(staticBase)};document.documentElement.dataset.zcStaticUrl=${JSON.stringify(staticBase)};`
+    : "";
+  return script ? <script dangerouslySetInnerHTML={{ __html: script }} /> : null;
 }
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
-export const dynamic = "force-dynamic";
+const initialStaticBase = (
+  process.env.NEXT_PUBLIC_ZC_STATIC_URL ||
+  process.env.NEXT_PUBLIC_STATIC_URL ||
+  process.env.NEXT_PUBLIC_S3_STATICURL ||
+  ""
+).replace(/\/+$/, "");
 
 export const metadata: Metadata = {
   title: {
@@ -56,16 +62,14 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const staticBase = await getServerStaticBase();
-
   return (
     <html
       lang="zh-CN"
       suppressHydrationWarning
-      data-zc-static-url={staticBase || undefined}
+      data-zc-static-url={initialStaticBase || undefined}
       className={cn(
         GeistSans.variable,
         GeistMono.variable,
@@ -75,7 +79,7 @@ export default async function RootLayout({
     >
       <head>
         <ThemeScript />
-        <RuntimeConfigScript staticBase={staticBase} />
+        <RuntimeConfigScript staticBase={initialStaticBase} />
       </head>
       <body className="font-sans antialiased min-h-screen bg-background flex flex-col">
         <Providers>
@@ -93,4 +97,3 @@ export default async function RootLayout({
     </html>
   );
 }
-
