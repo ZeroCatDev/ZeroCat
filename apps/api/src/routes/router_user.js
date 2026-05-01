@@ -9,6 +9,7 @@ import jwt from "jsonwebtoken";
 import * as bcrypt from "bcrypt";
 import {PasswordHash} from "phpass";
 import { changeUsername, getRecommendedUsersForUser } from "../controllers/users.js";
+import { buildAvatarURL } from "../utils/avatarUrl.js";
 
  // PHPass hasher for legacy password validation
  const passwordHash = new PasswordHash();
@@ -60,6 +61,7 @@ router.get("/id/:id", async function (req, res, next) {
         // 格式化用户信息
         const formattedUser = {
             ...user[0],
+            avatarURL: await buildAvatarURL(user[0].avatar),
             isActive: user[0].status === "active",
             isAdmin: user[0].type === "administrator",
         };
@@ -113,6 +115,7 @@ logger.debug(user);
         // 格式化用户信息
         const formattedUser = {
             ...user,
+            avatarURL: await buildAvatarURL(user.avatar),
             isActive: user.status === "active",
             isAdmin: user.type === "administrator",
         };
@@ -193,11 +196,12 @@ router.post("/batch/:type", async function (req, res, next) {
         });
 
         // 格式化用户信息
-        const formattedUsers = usersinfo.map((user) => ({
+        const formattedUsers = await Promise.all(usersinfo.map(async (user) => ({
             ...user,
+            avatarURL: await buildAvatarURL(user.avatar),
             isActive: user.status === "active",
             isAdmin: user.type === "administrator",
-        }));
+        })));
 
         res.send({
             status: "success",
@@ -246,6 +250,7 @@ router.get("/me", needLogin, async function (req, res, next) {
         // 格式化用户信息
         const formattedUser = {
             ...user,
+            avatarURL: await buildAvatarURL(user.avatar),
             isActive: user.status === "active",
             isAdmin: user.type === "administrator",
         };
@@ -571,6 +576,7 @@ router.post("/change-username", needLogin, requireSudo, changeUsername);
         // 格式化用户信息
         const formattedUser = {
             ...updatedUser,
+            avatarURL: await buildAvatarURL(updatedUser.avatar),
             isActive: updatedUser.status === "active",
             isAdmin: updatedUser.type === "administrator",
         };
