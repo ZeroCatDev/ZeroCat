@@ -9,6 +9,7 @@ import gorseService from "../services/gorse.js";
 import * as embeddingService from "../services/embedding.js";
 import { getAnalytics } from "../services/analytics.js";
 import { getPostUrlPreview } from "../services/postPreview.js";
+import { toAvatarURL } from "../utils/avatarUrl.js";
 
 const POST_CHAR_LIMIT = 280;
 const MAX_MEDIA_COUNT = 4;
@@ -34,10 +35,7 @@ function buildMediaUrl(md5, extension) {
 }
 
 function buildAuthorAvatarUrl(avatar) {
-  if (!avatar) return null;
-  if (avatar.startsWith("http://") || avatar.startsWith("https://")) return avatar;
-  if (!staticUrl) return null;
-  return `${staticUrl}/assets/${avatar.substring(0, 2)}/${avatar.substring(2, 4)}/${avatar}.webp`;
+  return toAvatarURL(avatar, staticUrl);
 }
 
 function dedupeMediaIds(mediaIds) {

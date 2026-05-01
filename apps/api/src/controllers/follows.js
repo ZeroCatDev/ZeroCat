@@ -397,11 +397,11 @@ export async function getUserFollowers(userId, limit = 20, offset = 0) {
         }));
 
         // Add avatarURL to each user
-        for (const f of followers) {
+        await Promise.all(followers.map(async (f) => {
             if (f.user) {
                 f.user = { ...f.user, avatarURL: await buildAvatarURL(f.user.avatar) };
             }
-        }
+        }));
 
         // Get total count
         const totalCount = await prisma.ow_user_relationships.count({
@@ -487,11 +487,11 @@ export async function getUserFollowing(userId, limit = 20, offset = 0) {
         }));
 
         // Add avatarURL to each user
-        for (const f of following) {
+        await Promise.all(following.map(async (f) => {
             if (f.user) {
                 f.user = { ...f.user, avatarURL: await buildAvatarURL(f.user.avatar) };
             }
-        }
+        }));
 
         // Get total count
         const totalCount = await prisma.ow_user_relationships.count({
@@ -578,11 +578,11 @@ export async function getUserBlocked(userId, limit = 20, offset = 0) {
         }));
 
         // Add avatarURL to each user
-        for (const b of blocked) {
+        await Promise.all(blocked.map(async (b) => {
             if (b.user) {
                 b.user = { ...b.user, avatarURL: await buildAvatarURL(b.user.avatar) };
             }
-        }
+        }));
 
         // Get total count
         const totalCount = await prisma.ow_user_relationships.count({
