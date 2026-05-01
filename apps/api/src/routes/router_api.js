@@ -8,6 +8,7 @@ import {needAdmin} from "../middleware/auth.js";
 import followsRoutes from "./router_follows.js";
 import {CONFIG_TYPES} from "../services/config/configTypes.js";
 import sitemapService from '../services/sitemap.js';
+import { buildAvatarURL } from "../utils/avatarUrl.js";
 
 var router = Router();
 
@@ -84,7 +85,10 @@ router.get("/getuserinfo", async function (req, res, next) {
         }
         res.send({
             status: "success",
-            info: {user: user[0], count: {pythoncount, scratchcount}},
+            info: {
+                user: { ...user[0], avatarURL: await buildAvatarURL(user[0]?.avatar) },
+                count: {pythoncount, scratchcount},
+            },
         });
     } catch (err) {
         next(err);
@@ -157,6 +161,7 @@ router.get("/projectinfo", async function (req, res, next) {
             ...project,
             author_display_name: author.display_name,
             author_avatar: author.avatar,
+            author_avatarURL: await buildAvatarURL(author.avatar),
             author_bio: author.bio,
         });
     } catch (err) {

@@ -2,6 +2,7 @@ import {prisma} from "../services/prisma.js";
 import logger from "../services/logger.js";
 import {createEvent} from "./events.js";
 import gorseService from "../services/gorse.js";
+import { buildAvatarURL } from "../utils/avatarUrl.js";
 
 // 延迟导入 AP 关注同步模块，避免循环依赖
 let _apFollowSync = null;
@@ -395,6 +396,13 @@ export async function getUserFollowers(userId, limit = 20, offset = 0) {
             user: userMap[rel.source_user_id],
         }));
 
+        // Add avatarURL to each user
+        for (const f of followers) {
+            if (f.user) {
+                f.user = { ...f.user, avatarURL: await buildAvatarURL(f.user.avatar) };
+            }
+        }
+
         // Get total count
         const totalCount = await prisma.ow_user_relationships.count({
             where: {
@@ -477,6 +485,13 @@ export async function getUserFollowing(userId, limit = 20, offset = 0) {
             ...rel,
             user: userMap[rel.target_user_id],
         }));
+
+        // Add avatarURL to each user
+        for (const f of following) {
+            if (f.user) {
+                f.user = { ...f.user, avatarURL: await buildAvatarURL(f.user.avatar) };
+            }
+        }
 
         // Get total count
         const totalCount = await prisma.ow_user_relationships.count({
@@ -561,6 +576,13 @@ export async function getUserBlocked(userId, limit = 20, offset = 0) {
             ...rel,
             user: userMap[rel.target_user_id],
         }));
+
+        // Add avatarURL to each user
+        for (const b of blocked) {
+            if (b.user) {
+                b.user = { ...b.user, avatarURL: await buildAvatarURL(b.user.avatar) };
+            }
+        }
 
         // Get total count
         const totalCount = await prisma.ow_user_relationships.count({

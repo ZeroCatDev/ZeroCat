@@ -33,6 +33,13 @@ function buildMediaUrl(md5, extension) {
   return `${staticUrl}/assets/${prefix1}/${prefix2}/${md5}.${extension}`;
 }
 
+function buildAuthorAvatarUrl(avatar) {
+  if (!avatar) return null;
+  if (avatar.startsWith("http://") || avatar.startsWith("https://")) return avatar;
+  if (!staticUrl) return null;
+  return `${staticUrl}/assets/${avatar.substring(0, 2)}/${avatar.substring(2, 4)}/${avatar}.webp`;
+}
+
 function dedupeMediaIds(mediaIds) {
   // 去重并保持顺序
   return [...new Set(mediaIds.map((id) => Number(id)))];
@@ -226,7 +233,10 @@ function formatPost(raw) {
     content: raw.is_deleted ? null : raw.content,
     created_at: raw.created_at,
     is_deleted: raw.is_deleted,
-    author: raw.author,
+    author: raw.author ? {
+      ...raw.author,
+      avatarURL: buildAuthorAvatarUrl(raw.author.avatar),
+    } : raw.author,
     stats: {
       replies: raw.reply_count,
       retweets: raw.retweet_count,
