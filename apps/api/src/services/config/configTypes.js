@@ -201,8 +201,15 @@ export const CONFIG_TYPES = {
         type: "boolean",
         required: false,
         default: true,
-        description: "是否使用SSL/TLS加密连接",
+        description: "是否使用SSL/TLS加密连接（已废弃，建议使用 mail.tls_mode）",
         transform: typeTransformers.boolean,
+    },
+    "mail.tls_mode": {
+        type: "enum",
+        required: false,
+        default: "starttls",
+        description: "SMTP加密方式：ssl=直接SSL（端口465），starttls=STARTTLS升级（端口587），none=不加密（端口25）",
+        options: ["ssl", "starttls", "none"],
     },
     "mail.auth.user": {
         type: "string",

@@ -3,6 +3,7 @@ import zcconfig from '../../../config/zcconfig.js';
 import emailTemplateService from '../../../email/emailTemplateService.js';
 import { renderTemplate } from '../templateRenderer.js';
 import logger from '../../../logger.js';
+import { buildTransportOptions } from '../../../email/emailService.js';
 
 /**
  * 邮件通知 Provider
@@ -50,13 +51,9 @@ async function createTransporterForSpace(spaceConfig) {
     // 空间自定义 SMTP
     if (spaceConfig.smtpHost && spaceConfig.smtpUser && spaceConfig.smtpPass) {
         const port = parseInt(spaceConfig.smtpPort) || 587;
-        const secure = spaceConfig.smtpSecure === 'true';
-        const opts = {
-            host: spaceConfig.smtpHost,
-            port,
-            secure,
-            auth: { user: spaceConfig.smtpUser, pass: spaceConfig.smtpPass },
-        };
+        const tlsMode = spaceConfig.smtpTlsMode || null;
+        const secureFlag = spaceConfig.smtpSecure === 'true';
+        const opts = buildTransportOptions(spaceConfig.smtpHost, port, tlsMode, secureFlag, spaceConfig.smtpUser, spaceConfig.smtpPass);
         if (spaceConfig.smtpService) opts.service = spaceConfig.smtpService;
         return {
             transporter: createTransport(opts),
@@ -69,7 +66,8 @@ async function createTransporterForSpace(spaceConfig) {
     // 全局 SMTP
     const host = await zcconfig.get('mail.host');
     const port = await zcconfig.get('mail.port');
-    const secure = await zcconfig.get('mail.secure');
+    const tlsMode = await zcconfig.get('mail.tls_mode');
+    const secureFlag = await zcconfig.get('mail.secure');
     const user = await zcconfig.get('mail.auth.user');
     const pass = await zcconfig.get('mail.auth.pass');
     const fromName = await zcconfig.get('mail.from_name');
@@ -77,8 +75,9 @@ async function createTransporterForSpace(spaceConfig) {
 
     if (!host || !user || !pass) return null;
 
+    const transportOpts = buildTransportOptions(host, port, tlsMode, secureFlag, user, pass);
     return {
-        transporter: createTransport({ host, port, secure, auth: { user, pass } }),
+        transporter: createTransport(transportOpts),
         from: fromName ? `${fromName} <${fromAddress}>` : fromAddress,
     };
 }

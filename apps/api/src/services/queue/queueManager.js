@@ -13,6 +13,7 @@ import { closeAll as closeAllConnections } from './redisConnectionFactory.js';
 import zcconfig from '../config/zcconfig.js';
 import logger from '../logger.js';
 import { getProjectGitSyncSettings } from '../gitSync/storage.js';
+import { buildTransportOptions } from '../email/emailService.js';
 
 let initialized = false;
 
@@ -633,7 +634,8 @@ const queueManager = {
     async _sendEmailDirect(to, subject, html) {
         const host = await zcconfig.get('mail.host');
         const port = await zcconfig.get('mail.port');
-        const secure = await zcconfig.get('mail.secure');
+        const tlsMode = await zcconfig.get('mail.tls_mode');
+        const secureFlag = await zcconfig.get('mail.secure');
         const user = await zcconfig.get('mail.auth.user');
         const pass = await zcconfig.get('mail.auth.pass');
         const fromName = await zcconfig.get('mail.from_name');
@@ -643,7 +645,8 @@ const queueManager = {
             throw new Error('Email service is not available or not properly configured');
         }
 
-        const transporter = createTransport({ host, port, secure, auth: { user, pass } });
+        const transportOpts = buildTransportOptions(host, port, tlsMode, secureFlag, user, pass);
+        const transporter = createTransport(transportOpts);
         const from = fromName ? `${fromName} <${fromAddress}>` : fromAddress;
 
         await transporter.sendMail({ from, to, subject, html });

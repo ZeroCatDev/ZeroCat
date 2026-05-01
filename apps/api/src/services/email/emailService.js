@@ -4,6 +4,44 @@ import logger from "../logger.js";
 
 let transporter;
 
+/**
+ * 根据 tls_mode 构建 nodemailer transport 选项。
+ * - ssl      : secure=true，直接 SSL 连接（通常端口 465）
+ * - starttls : secure=false + requireTLS=true，STARTTLS 升级（通常端口 587）
+ * - none     : secure=false，无加密（通常端口 25）
+ *
+ * 若未配置 tls_mode，则回退到旧的 mail.secure 布尔值以保持向后兼容。
+ */
+export const buildTransportOptions = (host, port, tlsMode, secureFlag, user, pass) => {
+    let secure = false;
+    let requireTLS = false;
+
+    if (tlsMode === "ssl") {
+        secure = true;
+    } else if (tlsMode === "starttls") {
+        secure = false;
+        requireTLS = true;
+    } else if (tlsMode === "none") {
+        secure = false;
+    } else {
+        // 向后兼容：使用旧的 mail.secure 布尔值
+        secure = !!secureFlag;
+    }
+
+    const opts = {
+        host,
+        port,
+        secure,
+        auth: { user, pass },
+    };
+
+    if (requireTLS) {
+        opts.requireTLS = true;
+    }
+
+    return opts;
+};
+
 const getMailConfig = async () => {
     const enabled = await zcconfig.get("mail.enabled");
     if (!enabled) {
@@ -12,7 +50,8 @@ const getMailConfig = async () => {
 
     const host = await zcconfig.get("mail.host");
     const port = await zcconfig.get("mail.port");
-    const secure = await zcconfig.get("mail.secure");
+    const tlsMode = await zcconfig.get("mail.tls_mode");
+    const secureFlag = await zcconfig.get("mail.secure");
     const user = await zcconfig.get("mail.auth.user");
     const pass = await zcconfig.get("mail.auth.pass");
     const fromName = await zcconfig.get("mail.from_name");
@@ -23,21 +62,12 @@ const getMailConfig = async () => {
         return null;
     }
 
-    const config = {
-        host,
-        port,
-        secure,
-        auth: {
-            user,
-            pass,
-        }
-    };
+    const config = buildTransportOptions(host, port, tlsMode, secureFlag, user, pass);
 
     return {
         config,
         from: fromName ? `${fromName} <${fromAddress}>` : fromAddress,
         tls: {
-            maxVersion: 'TLSv1.2',
             rejectUnauthorized: false
         }
     };
