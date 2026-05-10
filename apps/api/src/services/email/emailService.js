@@ -37,7 +37,7 @@ const getMailConfig = async () => {
         config,
         from: fromName ? `${fromName} <${fromAddress}>` : fromAddress,
         tls: {
-            maxVersion: 'TLSv1.2',
+            minVersion: 'TLSv1.2',
             rejectUnauthorized: false
         }
     };
