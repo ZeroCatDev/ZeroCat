@@ -178,7 +178,24 @@ router.get('/nodeinfo/2.0', async (req, res) => {
 
         const apBaseUrl = await getApEndpointBaseUrl();
 
-        const metadata = {};
+        const metadata = {
+            "nodeName": "ZeroCat 零猫社区",
+            "nodeDescription": "新一代开源编程社区。https://zerocat.dev",
+            "nodeAdmins": [
+                {
+                    "name": adminUser.username,
+                    "email": adminUser.email
+                }
+            ],
+            "maintainer": {
+                "name": adminUser.username,
+                "email": adminUser.email
+            },
+            "tosUrl": "",
+            "privacyPolicyUrl": "",
+            "inquiryUrl": "https://flarum.imikufans.cn",
+        },
+
         if (adminUser) {
             metadata.admin = adminUser.username;
             metadata.adminContact = adminUser.email || null;
@@ -192,7 +209,8 @@ router.get('/nodeinfo/2.0', async (req, res) => {
                 email: adminUser.email || null,
             };
         }
-
+        metadata.repositoryUrl = "https://github.com/Moonrend/ZeroCat"
+        metadata.feedbackUrl = "https://github.com/Moonrend/ZeroCat/issues/new"
         res.set('Content-Type', 'application/json; charset=utf-8');
         res.set('Access-Control-Allow-Origin', '*');
         return res.json({
@@ -200,6 +218,8 @@ router.get('/nodeinfo/2.0', async (req, res) => {
             software: {
                 name: 'zerocat',
                 version: '1.0.0',
+                "homepage": "https://github.com/Moonrend/ZeroCat",
+
             },
             protocols: ['activitypub'],
             usage: {
