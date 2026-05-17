@@ -1,7 +1,8 @@
 {
   "name": "@zerocat/auth-core",
   "version": "1.0.0",
-  "main": "index.ts",
+  "main": "index.js",
+  "types": "index.d.ts",
   "type": "module",
   "dependencies": {
     "@zerocat/types": "workspace:*"

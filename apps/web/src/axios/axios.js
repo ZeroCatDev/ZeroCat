@@ -1,4 +1,5 @@
 import axios from "axios";
+import { AUTH_EVENTS, createBrowserAuthClient } from "@zerocat/auth-core";
 
 // 基本配置
 const BASE_URL = import.meta.env.VITE_APP_BASE_API;
@@ -9,10 +10,7 @@ const axiosInstance = axios.create({
   withCredentials: true, // 携带 HttpOnly refresh cookie
 });
 
-const TOKEN_KEY = "token";
-const TOKEN_EXPIRES_AT_KEY = "tokenExpiresAt";
-const REFRESH_TOKEN_EXPIRES_AT_KEY = "refreshTokenExpiresAt";
-const USER_INFO_KEY = "userInfo";
+export const authClient = createBrowserAuthClient({ apiUrl: BASE_URL });
 
 // 后端统一错误码
 const ZC_ERROR = {
@@ -21,15 +19,7 @@ const ZC_ERROR = {
   FORBIDDEN: "ZC_ERROR_FORBIDDEN",     // 已登录但无权限
 };
 
-export const TOKEN_REFRESHED_EVENT_NAME = "auth:token-refreshed";
-
-// 用独立 refresh client，避免走 axiosInstance 的响应拦截器（防递归）
-const refreshClient = axios.create({
-  baseURL: BASE_URL,
-  withCredentials: true,
-});
-
-let refreshPromise = null;
+export const TOKEN_REFRESHED_EVENT_NAME = AUTH_EVENTS.tokenRefreshed;
 
 // 防止并发请求触发重复跳转
 let isRedirecting = false;
@@ -40,10 +30,7 @@ const getErrorCode = (error) => error?.response?.data?.code || error?.code;
  * 清除本地所有认证相关状态
  */
 const clearLocalAuth = () => {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(TOKEN_EXPIRES_AT_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_EXPIRES_AT_KEY);
-  localStorage.removeItem(USER_INFO_KEY);
+  authClient.clearStoredAuthState();
   localStorage.removeItem("sudo_token");
   localStorage.removeItem("sudo_token_expires_at");
   localStorage.removeItem("sudo_token_duration");
@@ -75,64 +62,16 @@ export const handleNeedLogin = () => {
   window.location.href = "/";
 };
 
-const emitTokenRefreshed = (refreshData) => {
-  if (typeof window === "undefined") return;
-
-  window.dispatchEvent(
-    new CustomEvent(TOKEN_REFRESHED_EVENT_NAME, {
-      detail: {
-        token: refreshData.token,
-        expires_at: refreshData.expires_at || null,
-        refresh_expires_at: refreshData.refresh_expires_at || null,
-      },
-    })
-  );
-};
-
-const saveRefreshedToken = (refreshData) => {
-  localStorage.setItem(TOKEN_KEY, refreshData.token);
-
-  if (refreshData.expires_at) {
-    localStorage.setItem(TOKEN_EXPIRES_AT_KEY, refreshData.expires_at);
-  }
-
-  if (refreshData.refresh_expires_at) {
-    localStorage.setItem(REFRESH_TOKEN_EXPIRES_AT_KEY, refreshData.refresh_expires_at);
-  }
-
-  emitTokenRefreshed(refreshData);
-};
-
-const performRefreshRequest = async () => {
-  const resp = await refreshClient.post("/account/refresh-token", {});
-  const data = resp?.data || {};
-
-  if (data.status !== "success" || !data.token) {
-    const err = new Error(data.message || "Refresh token failed");
-    err.code = data.code || "REFRESH_FAILED";
-    err.response = resp;
-    throw err;
-  }
-
-  saveRefreshedToken(data);
-  return data.token;
-};
-
 export const requestTokenRefresh = async () => {
-  if (!refreshPromise) {
-    refreshPromise = performRefreshRequest().finally(() => {
-      refreshPromise = null;
-    });
-  }
-  return refreshPromise;
+  return authClient.refreshStoredAuthToken();
 };
 
-export const isTokenRefreshInFlight = () => refreshPromise !== null;
+export const isTokenRefreshInFlight = () => authClient.isRefreshInFlight();
 
 // 请求拦截器：附加 access token
 axiosInstance.interceptors.request.use(
   (config) => {
-    const t = localStorage.getItem(TOKEN_KEY);
+    const t = authClient.getStoredToken();
 
     config.headers = config.headers || {};
 
@@ -173,6 +112,7 @@ axiosInstance.interceptors.response.use(
 
       try {
         const newToken = await requestTokenRefresh();
+        if (!newToken) throw new Error("Refresh token failed");
         originalRequest.headers = originalRequest.headers || {};
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
         return axiosInstance(originalRequest);

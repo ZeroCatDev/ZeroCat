@@ -551,6 +551,9 @@ importers:
       '@xterm/xterm':
         specifier: ^6.0.0
         version: 6.0.0
+      '@zerocat/auth-core':
+        specifier: workspace:^
+        version: link:../../packages/auth-core
       axios:
         specifier: ^1.13.5
         version: 1.14.0

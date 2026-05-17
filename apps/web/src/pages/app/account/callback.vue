@@ -49,8 +49,8 @@ export default {
     if (this.$route.query.token) {
       try {
         this.user = jwtDecode(this.token);
-        localStorage.setItem("token", this.token); // 将JWT令牌存储到本地存储中
-        this.user = jwtDecode(localStorage.getItem("token")); // 从本地存储中获取并解码JWT令牌
+        authStore.updateToken(this.token);
+        this.user = jwtDecode(authStore.getToken());
         console.log(this.user);
         await localuser.loadUser();
         authStore.navigateToAuthRedirect(this.$router, "/");

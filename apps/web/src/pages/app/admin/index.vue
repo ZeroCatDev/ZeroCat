@@ -50,6 +50,7 @@
 
 <script>
 import { get, fetchConfig } from "@/services/serverConfig";
+import { localuser } from "@/services/localAccount";
 
 export default {
   name: "AdminIndex",
@@ -72,8 +73,9 @@ export default {
     };
   },
   methods: {
-    openAdminQueues() {
-      const token = localStorage.getItem("token")
+    async openAdminQueues() {
+      await localuser.checkAndRefreshToken();
+      const token = localuser.getToken();
       const backendUrl = get("urls.backend");
       window.open(`${backendUrl}/admin/queues/auth?token=${token}`);
     }

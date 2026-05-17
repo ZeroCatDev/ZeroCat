@@ -1,6 +1,7 @@
 import { ref } from "vue";
 import { defineStore } from "pinia";
 import axiosInstance, {
+  authClient,
   requestTokenRefresh,
   handleNeedLogout,
   TOKEN_REFRESHED_EVENT_NAME,
@@ -291,7 +292,7 @@ export const useAuthStore = defineStore("auth", () => {
   const s3BucketUrl = get("s3.staticurl") || "";
 
   // --- Reactive state ---
-  const token = ref(localStorage.getItem(TOKEN_KEY));
+  const token = ref(authClient.getStoredToken());
   const tokenExpiresAt = ref(localStorage.getItem(TOKEN_EXPIRES_AT_KEY));
   const refreshTokenExpiresAt = ref(
     localStorage.getItem(REFRESH_TOKEN_EXPIRES_AT_KEY)
@@ -417,10 +418,10 @@ export const useAuthStore = defineStore("auth", () => {
   // Token helpers
   // ============================
 
-  const getToken = () => localStorage.getItem(TOKEN_KEY);
+  const getToken = () => authClient.getStoredToken();
 
   const syncTokenStateFromStorage = () => {
-    token.value = localStorage.getItem(TOKEN_KEY);
+    token.value = authClient.getStoredToken();
     tokenExpiresAt.value = localStorage.getItem(TOKEN_EXPIRES_AT_KEY);
     refreshTokenExpiresAt.value = localStorage.getItem(
       REFRESH_TOKEN_EXPIRES_AT_KEY
@@ -544,7 +545,7 @@ export const useAuthStore = defineStore("auth", () => {
   const updateToken = (newToken, expiresAt) => {
     if (!newToken) return false;
 
-    setStorageValue(TOKEN_KEY, newToken);
+    authClient.persistToken({ token: newToken, expires_at: expiresAt });
     token.value = newToken;
 
     const expSec = getJwtExpSeconds(newToken);
@@ -564,9 +565,18 @@ export const useAuthStore = defineStore("auth", () => {
   };
 
   const setUser = async (data) => {
-    updateToken(data.token, data.expires_at);
+    authClient.persistToken({
+      token: data.token,
+      expires_at: data.expires_at,
+      refresh_expires_at: data.refresh_expires_at,
+    });
 
+    // Store timestamps as hints for startup session recovery (refresh-cookie bootstrap)
+    setStorageValue(TOKEN_EXPIRES_AT_KEY, data.expires_at);
     setStorageValue(REFRESH_TOKEN_EXPIRES_AT_KEY, data.refresh_expires_at);
+
+    token.value = authClient.getStoredToken();
+    tokenExpiresAt.value = data.expires_at || null;
     refreshTokenExpiresAt.value = data.refresh_expires_at || null;
 
     await loadUser(true);
@@ -801,11 +811,7 @@ export const useAuthStore = defineStore("auth", () => {
       // ignore
     }
 
-    // Clear localStorage
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(TOKEN_EXPIRES_AT_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_EXPIRES_AT_KEY);
-    localStorage.removeItem(USER_INFO_KEY);
+    authClient.clearStoredAuthState();
     localStorage.removeItem("sudo_token");
     localStorage.removeItem("sudo_token_expires_at");
     localStorage.removeItem("sudo_token_duration");
@@ -1030,11 +1036,45 @@ export const useAuthStore = defineStore("auth", () => {
 
   installListenersOnce();
 
-  // Sequential initialization: load user first, then start refresh cycle.
-  // This avoids the race condition of both calling refreshAccessToken concurrently.
-  loadUser()
-    .then(() => initializeTokenRefresh())
-    .catch((err) => console.error("[Auth] Initialization failed:", err));
+  const hasBootstrapHint = () => {
+    try {
+      return (
+        !!localStorage.getItem(USER_INFO_KEY) ||
+        !!localStorage.getItem(REFRESH_TOKEN_EXPIRES_AT_KEY) ||
+        !!localStorage.getItem(TOKEN_EXPIRES_AT_KEY)
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  // Sequential initialization: attempt startup recovery first, then start refresh cycle.
+  // Goal: after a hard refresh, recover login state via HttpOnly refresh cookie.
+  const bootstrapAuth = async () => {
+    const t = getToken();
+    if (t) {
+      await loadUser();
+      await initializeTokenRefresh();
+      return;
+    }
+
+    // Only attempt refresh if we have a hint that the user previously logged in.
+    if (hasBootstrapHint()) {
+      console.log("[Auth] No access token on init, attempting cookie refresh...");
+      const ok = await refreshAccessToken();
+      if (ok) {
+        await loadUser(true);
+        await initializeTokenRefresh();
+        return;
+      }
+    }
+
+    await loadUser();
+  };
+
+  void bootstrapAuth().catch((err) =>
+    console.error("[Auth] Initialization failed:", err)
+  );
 
   // --- Return public API ---
   return {

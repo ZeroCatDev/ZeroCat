@@ -3,7 +3,6 @@
 @import "highlight.js/styles/github.css";
 @import "@milkdown/crepe/theme/common/style.css";
 @import "@milkdown/crepe/theme/nord.css";
-@import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
 

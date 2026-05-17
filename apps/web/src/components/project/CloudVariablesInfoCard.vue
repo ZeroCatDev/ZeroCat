@@ -30,6 +30,7 @@
 </template>
 
 <script>
+import { localuser } from "@/services/localAccount";
 
 export default {
   name: "CloudVariablesInfoCard",
@@ -78,7 +79,8 @@ export default {
         const url = new URL(`/scratch/cloud/${this.projectId}/updates`, apiBase);
         url.searchParams.set("since", "0");
         url.searchParams.set("limit", "1");
-        const token = localStorage.getItem("token");
+        await localuser.checkAndRefreshToken();
+        const token = localuser.getToken();
         const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
         const res = await fetch(url.toString(), { headers });
         const payload = await res.json();
