@@ -193,7 +193,7 @@ router.get('/nodeinfo/2.0', async (req, res) => {
             },
             "tosUrl": "",
             "privacyPolicyUrl": "",
-            "inquiryUrl": "https://flarum.imikufans.cn",
+            "inquiryUrl": "https://zerocat.dev",
         };
 
         if (adminUser) {
