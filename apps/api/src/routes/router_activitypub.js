@@ -194,7 +194,7 @@ router.get('/nodeinfo/2.0', async (req, res) => {
             "tosUrl": "",
             "privacyPolicyUrl": "",
             "inquiryUrl": "https://flarum.imikufans.cn",
-        },
+        };
 
         if (adminUser) {
             metadata.admin = adminUser.username;
