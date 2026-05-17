@@ -9,6 +9,7 @@ import gorseService from "../services/gorse.js";
 import * as embeddingService from "../services/embedding.js";
 import { getAnalytics } from "../services/analytics.js";
 import { getPostUrlPreview } from "../services/postPreview.js";
+import { toAvatarURL } from "../utils/avatarUrl.js";
 
 const POST_CHAR_LIMIT = 280;
 const MAX_MEDIA_COUNT = 4;
@@ -31,6 +32,10 @@ function buildMediaUrl(md5, extension) {
   const prefix1 = md5.substring(0, 2);
   const prefix2 = md5.substring(2, 4);
   return `${staticUrl}/assets/${prefix1}/${prefix2}/${md5}.${extension}`;
+}
+
+function buildAuthorAvatarUrl(avatar) {
+  return toAvatarURL(avatar, staticUrl);
 }
 
 function dedupeMediaIds(mediaIds) {
@@ -226,7 +231,10 @@ function formatPost(raw) {
     content: raw.is_deleted ? null : raw.content,
     created_at: raw.created_at,
     is_deleted: raw.is_deleted,
-    author: raw.author,
+    author: raw.author ? {
+      ...raw.author,
+      avatarURL: buildAuthorAvatarUrl(raw.author.avatar),
+    } : raw.author,
     stats: {
       replies: raw.reply_count,
       retweets: raw.retweet_count,

@@ -1,6 +1,7 @@
 import logger from "../services/logger.js";
 import {prisma} from "../services/prisma.js";
 import gorseService from "../services/gorse.js";
+import { buildAvatarURL } from "../utils/avatarUrl.js";
 
 /**
  * Get users by list of IDs
@@ -27,7 +28,10 @@ async function getUsersByList(userIds) {
         select,
     });
 
-    return users;
+    return await Promise.all(users.map(async (u) => ({
+        ...u,
+        avatarURL: await buildAvatarURL(u.avatar),
+    })));
 }
 
 // 获取用户信息通过用户名
@@ -45,7 +49,8 @@ export async function getUserByUsername(username) {
                 avatar: true,
             }
         });
-        return user;
+        if (!user) return user;
+        return { ...user, avatarURL: await buildAvatarURL(user.avatar) };
     } catch (err) {
         logger.error("Error fetching user by username:", err);
         throw err;
@@ -131,7 +136,7 @@ export async function getRecommendedUsersForUser({ userId, limit = 20, offset = 
         // 如果 Gorse 没有推荐结果，但需要推荐管理员用户
         if (needToInsertAdmin && adminUser) {
             return {
-                users: [adminUser],
+                users: [{ ...adminUser, avatarURL: await buildAvatarURL(adminUser.avatar) }],
                 total_candidates: 1,
                 offset: safeOffset,
                 limit: safeLimit,
@@ -177,9 +182,14 @@ export async function getRecommendedUsersForUser({ userId, limit = 20, offset = 
     // 限制返回数量
     const pagedUsers = ordered.slice(0, safeLimit);
 
+    const pagedUsersWithAvatarURL = await Promise.all(pagedUsers.map(async (u) => ({
+        ...u,
+        avatarURL: await buildAvatarURL(u.avatar),
+    })));
+
     return {
-        users: pagedUsers,
-        total_candidates: pagedUsers.length,
+        users: pagedUsersWithAvatarURL,
+        total_candidates: pagedUsersWithAvatarURL.length,
         offset: safeOffset,
         limit: safeLimit,
         has_more: ordered.length > safeLimit,
