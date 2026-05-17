@@ -10,7 +10,7 @@ const axiosInstance = axios.create({
   withCredentials: true, // 携带 HttpOnly refresh cookie
 });
 
-export const authClient = createBrowserAuthClient({ apiUrl: BASE_URL });
+export const authClient = createBrowserAuthClient({ apiUrl: BASE_URL, persistTokenToStorage: true });
 
 // 后端统一错误码
 const ZC_ERROR = {

@@ -17,7 +17,7 @@ export const API_URL =
   "http://localhost:3000";
 
 type FetchInit = RequestInit;
-const authClient = createBrowserAuthClient({ apiUrl: API_URL });
+const authClient = createBrowserAuthClient({ apiUrl: API_URL, persistTokenToStorage: true });
 
 export const getStoredToken = authClient.getStoredToken;
 export const clearStoredAuthState = authClient.clearStoredAuthState;
