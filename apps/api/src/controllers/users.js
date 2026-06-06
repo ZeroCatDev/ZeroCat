@@ -2,6 +2,7 @@ import logger from "../services/logger.js";
 import {prisma} from "../services/prisma.js";
 import gorseService from "../services/gorse.js";
 import { buildAvatarURL } from "../utils/avatarUrl.js";
+import {validateUsername} from "../services/global.js";
 
 /**
  * Get users by list of IDs
@@ -214,7 +215,17 @@ export const changeUsername = async (req, res) => {
             });
         }
 
-        const trimmedUsername = newUsername.trim();
+        const trimmedUsername = newUsername.trim().toLowerCase();
+
+        // 验证用户名格式
+        const validation = validateUsername(trimmedUsername);
+        if (!validation.valid) {
+            return res.status(400).json({
+                status: "error",
+                message: validation.message,
+                code: "INVALID_USERNAME"
+            });
+        }
 
         // 检查用户名是否已被使用
         const existingUser = await prisma.ow_users.findFirst({

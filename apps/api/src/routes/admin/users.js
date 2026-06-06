@@ -1,5 +1,6 @@
 import {Router} from "express";
 import {prisma} from "../../services/prisma.js";
+import {validateUsername} from "../../services/global.js";
 
 const router = Router();
 
@@ -396,6 +397,12 @@ router.post("/", async (req, res) => {
             return res.status(400).json({error: "Missing required fields"});
         }
 
+        // Validate username format
+        const validation = validateUsername(username);
+        if (!validation.valid) {
+            return res.status(400).json({error: validation.message});
+        }
+
         // Check for existing username/email
         const existing = await prisma.ow_users.findFirst({
             where: {
@@ -476,6 +483,11 @@ router.put("/:id", async (req, res) => {
 
         // Check username uniqueness if it's being updated
         if (updates.username && updates.username !== existingUser.username) {
+            const validation = validateUsername(updates.username);
+            if (!validation.valid) {
+                return res.status(400).json({error: validation.message});
+            }
+
             const usernameExists = await prisma.ow_users.findFirst({
                 where: {
                     username: updates.username,

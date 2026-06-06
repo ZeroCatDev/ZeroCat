@@ -4,14 +4,14 @@
       <v-col cols="12" md="8">
         <v-text-field
           v-model="username"
-          :counter="10"
+          :counter="20"
           :rules="usernameRules"
           density="comfortable"
           label="用户名"
           required
           variant="outlined"
         ></v-text-field>
-        <div class="text-caption text-medium-emphasis">用户名只能包含小写字母</div>
+        <div class="text-caption text-medium-emphasis">2-20位，只能包含小写字母、数字和下划线，必须以字母开头</div>
       </v-col>
       <v-col cols="12">
         <v-btn
@@ -49,6 +49,10 @@ export default {
       username: this.userData.username || '',
       usernameRules: [
         v => !!v || "用户名是必填项",
+        v => (v && v.length >= 2) || "用户名至少需要2个字符",
+        v => (v && v.length <= 20) || "用户名不能超过20个字符",
+        v => /^[a-z]/.test(v) || "用户名必须以字母开头",
+        v => /^[a-z0-9]+(_[a-z0-9]+)*$/.test(v) || "用户名只能包含小写字母、数字，且不能有连续下划线",
       ]
     };
   },

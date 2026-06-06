@@ -6,7 +6,7 @@ import {Router} from "express";
 import {createHash} from "crypto";
 //功能函数集
 import {prisma} from "../services/prisma.js";
-import {checkhash, hash, S3update} from "../services/global.js";
+import {checkhash, hash, S3update, validateUsername} from "../services/global.js";
 //数据库
 import multer from "multer";
 import {createEvent} from "../controllers/events.js";
@@ -211,15 +211,35 @@ router.post("/set/userinfo", async (req, res) => {
 import { requireSudo } from "../middleware/sudo.js"; // 确保已导入
 
 router.post("/set/username", requireSudo, async (req, res) => {
+    const username = req.body.username;
+    const validation = validateUsername(username);
+    if (!validation.valid) {
+        return res.status(400).json({
+            status: "error",
+            message: validation.message,
+        });
+    }
+
+    // 检查用户名是否已被使用
+    const existing = await prisma.ow_users.findFirst({
+        where: { username, id: { not: res.locals.userid } },
+    });
+    if (existing) {
+        return res.status(409).json({
+            status: "error",
+            message: "用户名已被使用",
+        });
+    }
+
     await prisma.ow_users.update({
         where: {id: res.locals.userid},
         data: {
-            username: req.body.username,
+            username,
         },
     });
-    res.locals.username = req.body.username;
+    res.locals.username = username;
 
-    res.status(200).send({status: "success", message: "用户名修成成功"});
+    res.status(200).send({status: "success", message: "用户名修改成功"});
 });
 
 //修改密码：动作

@@ -1,6 +1,7 @@
 import {prisma} from "../services/prisma.js";
 import logger from '../services/logger.js';
 import zcconfig from "../services/config/zcconfig.js";
+import {sanitizeUsername} from "../services/global.js";
 import crypto from 'crypto';
 import { Agent } from '@atproto/api';
 import {
@@ -1212,19 +1213,31 @@ async function getUserInfo(provider, accessToken, options = {}, tokenData = null
 
 // 生成唯一用户名
 async function generateUniqueUsername(baseName) {
-    // 清理用户名，只保留字母数字和下划线
-    const cleanName = baseName.replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
-    let username = cleanName;
-    let counter = 1;
+    // 清理用户名，合并连续下划线，只保留小写字母数字和单个下划线
+    let cleanName = sanitizeUsername(baseName);
+    if (!cleanName) cleanName = 'user';
+    // 限制长度
+    if (cleanName.length > 20) cleanName = cleanName.substring(0, 20).replace(/_+$/g, '');
 
-    // 检查用户名是否已存在，如果存在则添加数字
+    // 检查清理后的用户名是否可用
+    const existing = await prisma.ow_users.findUnique({
+        where: {username: cleanName}
+    });
+
+    if (!existing) return cleanName;
+
+    // 有重复则直接生成16位随机大小写字母数字
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let username;
     while (true) {
-        const existingUser = await prisma.ow_users.findUnique({
+        username = Array.from({length: 16}, () =>
+            chars.charAt(Math.floor(Math.random() * chars.length))
+        ).join('');
+
+        const conflict = await prisma.ow_users.findUnique({
             where: {username}
         });
-
-        if (!existingUser) break;
-        username = `${cleanName}_${counter++}`;
+        if (!conflict) break;
     }
 
     return username;

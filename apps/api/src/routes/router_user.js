@@ -2,6 +2,7 @@ import logger from "../services/logger.js";
 import zcconfig from "../services/config/zcconfig.js";
 import {Router} from "express";
 import {prisma} from "../services/prisma.js";
+import {validateUsername} from "../services/global.js";
 import {needAdmin, needLogin} from "../middleware/auth.js";
 import { requireSudo } from "../middleware/sudo.js";
 import {createEvent} from "../controllers/events.js";
@@ -275,6 +276,16 @@ router.post("/register", async function (req, res, next) {
                 status: "error",
                 code: "validation_error",
                 message: "用户名、邮箱和密码为必填项",
+            });
+        }
+
+        // 验证用户名格式
+        const usernameValidation = validateUsername(username);
+        if (!usernameValidation.valid) {
+            return res.status(400).json({
+                status: "error",
+                code: "validation_error",
+                message: usernameValidation.message,
             });
         }
 

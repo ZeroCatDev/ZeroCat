@@ -1,5 +1,5 @@
 import logger from "../../services/logger.js";
-import {emailTest, hash, userpwTest} from "../../services/global.js";
+import {emailTest, hash, userpwTest, sanitizeUsername, validateUsername} from "../../services/global.js";
 import { prisma } from "../../services/prisma.js";
 import crypto from "crypto";
 import {
@@ -49,8 +49,8 @@ export const registerUser = async (req, res) => {
         // 生成用户名（如果未提供）
         let finalUsername = username;
         if (!username) {
-            // 从邮箱生成用户名，取@前的部分
-            const emailPrefix = email.split('@')[0];
+            // 从邮箱生成用户名，取@前的部分并清理
+            const emailPrefix = sanitizeUsername(email.split('@')[0]) || 'user';
             finalUsername = `user_${emailPrefix}_${Date.now().toString().substring(8)}`;
 
             // 确保用户名唯一
@@ -62,6 +62,15 @@ export const registerUser = async (req, res) => {
                 finalUsername = `user_${emailPrefix}_${Date.now()}`;
             }
         } else {
+            // 验证用户名格式
+            const validation = validateUsername(username);
+            if (!validation.valid) {
+                return res.status(200).json({
+                    status: "error",
+                    message: validation.message,
+                });
+            }
+
             // 检查用户名是否已存在
             const existingUser = await prisma.ow_users.findUnique({
                 where: {username},
