@@ -90,8 +90,22 @@
           <!-- Divider -->
           <div class="feed-divider" />
 
-          <!-- Post List -->
+          <!-- Mixed Feed (推荐 tab) -->
+          <MixedFeedList
+            v-if="feedType === 'recommend'"
+            :items="mixedItems"
+            :includes="includes"
+            :loading="loading"
+            :loading-more="loadingMore"
+            :has-more="hasMore"
+            empty-title="欢迎来到社区"
+            empty-text="当有新的推荐时，它们将显示在这里。"
+            @load-more="loadMore"
+          />
+
+          <!-- Post List (other tabs) -->
           <PostList
+            v-else
             :items="posts"
             :includes="includes"
             :loading="loading"
@@ -120,6 +134,7 @@ import PostsService from '@/services/postsService';
 import { showSnackbar } from '@/composables/useNotifications';
 import PostComposer from '@/components/posts/PostComposer.vue';
 import PostList from '@/components/posts/PostList.vue';
+import MixedFeedList from '@/components/feed/MixedFeedList.vue';
 import UnifiedSidebar from '@/components/sidebar/UnifiedSidebar.vue';
 import HomeRightSidebar from '@/components/home/HomeRightSidebar.vue';
 import PageAnalytics from '@/components/analytics/PageAnalytics.vue';
@@ -135,6 +150,7 @@ const composerRef = ref(null);
 
 // State
 const posts = ref([]);
+const mixedItems = ref([]);
 const includes = ref({ posts: {} });
 const loading = ref(false);
 const loadingMore = ref(false);
@@ -160,6 +176,7 @@ const loadFeed = async (isInitial = false) => {
     cursor.value = null;
     recommendOffset.value = 0;
     posts.value = [];
+    mixedItems.value = [];
     includes.value = { posts: {} };
   } else {
     loadingMore.value = true;
@@ -168,16 +185,25 @@ const loadFeed = async (isInitial = false) => {
   try {
     let res;
     if (feedType.value === 'recommend') {
-      // Gorse 个性化推荐，offset 分页
-      res = await PostsService.getRecommendFeed({
+      // 混合推荐（帖子 + 作品 + 用户），offset 分页
+      res = await PostsService.getMixedRecommendFeed({
         offset: isInitial ? 0 : recommendOffset.value,
         limit: 20,
       });
       if (res.nextOffset !== null && res.nextOffset !== undefined) {
         recommendOffset.value = res.nextOffset;
-      } else if (res.nextCursor) {
-        cursor.value = res.nextCursor;
       }
+
+      if (isInitial) {
+        mixedItems.value = res.items;
+      } else {
+        mixedItems.value.push(...res.items);
+      }
+      includes.value = res.includes;
+      hasMore.value = res.hasMore;
+      loading.value = false;
+      loadingMore.value = false;
+      return;
     } else if (feedType.value === 'global') {
       res = await PostsService.getGlobalFeed({
         cursor: isInitial ? undefined : cursor.value,

@@ -32,6 +32,7 @@ import {
   getUserLikedPosts,
   getUserBookmarks,
   getRecommendedFeed,
+  getMixedRecommendFeed,
   getSimilarPosts,
   getEmbeddingInfo,
   getUrlPreview,
@@ -358,6 +359,26 @@ router.get("/recommend", async (req, res) => {
   } catch (error) {
     logger.error("获取推荐帖子失败:", error);
     res.status(500).json({ status: "error", message: "获取推荐帖子失败" });
+  }
+});
+
+/**
+ * 获取混合推荐信息流（帖子 + 作品 + 用户）
+ * 已登录用户获取个性化混合推荐，未登录用户降级为帖子推荐
+ */
+router.get("/recommend/mixed", async (req, res) => {
+  try {
+    const { limit = 20, offset = 0 } = req.query;
+    const viewerId = res.locals.userid || null;
+    const data = await getMixedRecommendFeed({
+      userId: viewerId,
+      limit: Math.min(Math.max(Number(limit) || 20, 1), 50),
+      offset: Math.max(Number(offset) || 0, 0),
+    });
+    res.status(200).json({ status: "success", data });
+  } catch (error) {
+    logger.error("获取混合推荐失败:", error);
+    res.status(500).json({ status: "error", message: "获取混合推荐失败" });
   }
 });
 

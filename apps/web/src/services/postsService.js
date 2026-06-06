@@ -458,6 +458,30 @@ export const PostsService = {
   },
 
   /**
+   * 获取混合推荐信息流（帖子 + 作品 + 用户）
+   * 使用 offset 分页，交错排列不同类型的推荐内容
+   * @param {Object} options
+   * @param {number} options.offset - 分页偏移量
+   * @param {number} options.limit - 每页数量（1-50）
+   */
+  async getMixedRecommendFeed({ offset = 0, limit = 20 } = {}) {
+    try {
+      const params = { limit, offset };
+      const response = await axios.get('/posts/recommend/mixed', { params });
+      const data = response.data?.data ?? response.data ?? response;
+
+      const items = Array.isArray(data?.items) ? data.items : [];
+      const includes = data?.includes ?? { posts: {} };
+      const nextOffset = data?.next_offset ?? null;
+      const hasMore = data?.has_more ?? data?.hasMore ?? items.length > 0;
+
+      return { items, includes, nextOffset, hasMore };
+    } catch (error) {
+      throw new Error(getErrorMessage(error, '获取混合推荐失败'));
+    }
+  },
+
+  /**
    * 获取提及列表
    * @param {Object} options
    * @param {string} options.cursor - 分页游标

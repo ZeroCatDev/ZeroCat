@@ -2403,6 +2403,156 @@ export async function getRecommendedFeed({
   };
 }
 
+// ======================== 混合推荐（帖子 + 作品 + 用户） ========================
+
+/**
+ * 获取混合推荐信息流：帖子、作品、用户交错排列
+ * 已登录用户使用 Gorse 个性化推荐，未登录用户仅返回最新帖子
+ */
+export async function getMixedRecommendFeed({
+  userId = null,
+  limit = 20,
+  offset = 0,
+}) {
+  await initStaticUrl();
+
+  if (!userId) {
+    // 未登录用户降级为普通帖子推荐
+    return getRecommendedFeed({ userId, limit, offset });
+  }
+
+  // 并行获取三类推荐 ID
+  const [postIds, projectIds, userIds] = await Promise.all([
+    gorseService.getRecommendedPostIds(userId, { limit: limit + 5, offset }),
+    gorseService.getRecommendedProjectIds(userId, { limit: 8, offset: Math.floor(offset / 3) }),
+    gorseService.getRecommendedUserIds(userId, { limit: 5, offset: Math.floor(offset / 4) }),
+  ]);
+
+  // 如果全部为空，降级为时间线
+  if ((!postIds || postIds.length === 0) && (!projectIds || projectIds.length === 0)) {
+    return getRecommendedFeed({ userId, limit, offset });
+  }
+
+  // 并行获取实际数据
+  const [rawPosts, rawProjects, rawUsers] = await Promise.all([
+    postIds && postIds.length > 0
+      ? prisma.ow_posts.findMany({
+          where: { id: { in: postIds }, is_deleted: false },
+          select: buildLeanSelect(),
+        })
+      : Promise.resolve([]),
+    projectIds && projectIds.length > 0
+      ? prisma.ow_projects.findMany({
+          where: {
+            id: { in: projectIds },
+            state: 'public',
+            authorid: { not: userId },
+          },
+          select: {
+            id: true, name: true, title: true, description: true,
+            type: true, thumbnail: true, authorid: true,
+            view_count: true, star_count: true, like_count: true,
+            time: true,
+            author: {
+              select: { id: true, username: true, display_name: true, avatar: true },
+            },
+          },
+        })
+      : Promise.resolve([]),
+    userIds && userIds.length > 0
+      ? prisma.ow_users.findMany({
+          where: { id: { in: userIds }, status: 'active', NOT: { id: userId } },
+          select: {
+            id: true, username: true, display_name: true,
+            bio: true, avatar: true, motto: true,
+          },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  // 按 Gorse 顺序排列
+  const postMap = new Map(rawPosts.map(p => [p.id, p]));
+  const orderedPosts = postIds.map(id => postMap.get(id)).filter(Boolean);
+
+  const projectMap = new Map(rawProjects.map(p => [Number(p.id), p]));
+  const orderedProjects = projectIds.map(id => projectMap.get(Number(id))).filter(Boolean);
+
+  const userMap = new Map(rawUsers.map(u => [Number(u.id), u]));
+  const orderedUsers = userIds.map(id => userMap.get(Number(id))).filter(Boolean);
+
+  // 格式化帖子
+  let posts = orderedPosts.map(formatPost);
+  posts = await addViewerContext(posts, userId);
+  posts = await attachPostViewCounts(posts);
+
+  // 为作品附加头像 URL
+  const projectsWithAvatar = await Promise.all(orderedProjects.map(async (p) => ({
+    ...p,
+    author: p.author ? {
+      ...p.author,
+      avatarURL: buildAuthorAvatarUrl(p.author.avatar),
+    } : null,
+  })));
+
+  // 为用户附加头像 URL
+  const usersWithAvatar = await Promise.all(orderedUsers.map(async (u) => ({
+    ...u,
+    avatarURL: buildAuthorAvatarUrl(u.avatar),
+  })));
+
+  // 交错排列：帖子为主，每隔 3-4 个帖子插入一个作品或用户
+  const items = [];
+  let postIdx = 0;
+  let projectIdx = 0;
+  let userIdx = 0;
+  let postCount = 0;
+
+  while (postIdx < posts.length || projectIdx < projectsWithAvatar.length || userIdx < usersWithAvatar.length) {
+    // 每 3 个帖子后插入一个非帖子内容
+    if (postCount > 0 && postCount % 3 === 0 && (projectIdx < projectsWithAvatar.length || userIdx < usersWithAvatar.length)) {
+      if (projectIdx < projectsWithAvatar.length && (userIdx >= usersWithAvatar.length || projectIdx <= userIdx)) {
+        items.push({ type: 'project', data: projectsWithAvatar[projectIdx++] });
+      } else if (userIdx < usersWithAvatar.length) {
+        items.push({ type: 'user', data: usersWithAvatar[userIdx++] });
+      }
+    }
+
+    if (postIdx < posts.length) {
+      items.push({ type: 'post', data: posts[postIdx++] });
+      postCount++;
+    } else if (projectIdx < projectsWithAvatar.length) {
+      items.push({ type: 'project', data: projectsWithAvatar[projectIdx++] });
+    } else if (userIdx < usersWithAvatar.length) {
+      items.push({ type: 'user', data: usersWithAvatar[userIdx++] });
+    } else {
+      break;
+    }
+  }
+
+  // 截取到请求的 limit
+  const pagedItems = items.slice(0, limit);
+  const hasMore = items.length > limit || postIds.length === limit + 5;
+
+  // 收集引用帖子
+  const refIds = collectReferencedIds(posts);
+  let referencedPosts = await fetchReferencedPosts(refIds);
+  if (Object.keys(referencedPosts).length > 0) {
+    const refPostsArray = Object.values(referencedPosts);
+    const enriched = await addViewerContext(refPostsArray, userId);
+    referencedPosts = {};
+    for (const p of enriched) {
+      referencedPosts[p.id] = p;
+    }
+  }
+
+  return {
+    items: pagedItems,
+    includes: { posts: referencedPosts },
+    next_offset: hasMore ? offset + limit : null,
+    has_more: hasMore,
+  };
+}
+
 // ======================== 向量相似帖子 ========================
 
 /**
