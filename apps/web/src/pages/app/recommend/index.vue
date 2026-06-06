@@ -29,7 +29,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, watch, onMounted } from 'vue';
 import { useHead } from '@unhead/vue';
 import ProjectRecommendationService from '@/services/projectRecommendationService';
 import ProjectFeedCard from '@/components/project/ProjectFeedCard.vue';
@@ -62,6 +62,11 @@ const fetchProjects = async () => {
 
     projects.value.push(...uniqueNew);
 
+    // 首次加载时标记第一个项目为已读
+    if (projects.value.length > 0 && readReportedIds.size === 0) {
+      handleProjectPlay(projects.value[0].id);
+    }
+
     offset.value += limit;
     hasMore.value = res.data?.has_more ?? (newList.length >= limit);
 
@@ -93,6 +98,14 @@ const handleProjectPlay = async (projectId) => {
   readReportedIds.add(projectId);
   await ProjectRecommendationService.markProjectRead(projectId);
 };
+
+// 只要显示了就视为已读
+watch(activeIndex, (idx) => {
+  const project = projects.value[idx];
+  if (project) {
+    handleProjectPlay(project.id);
+  }
+});
 
 onMounted(() => {
   fetchProjects();

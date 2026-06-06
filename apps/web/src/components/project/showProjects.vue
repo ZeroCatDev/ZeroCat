@@ -10,6 +10,7 @@
       xl="2"
       xs="12"
       xxl="2"
+      :data-project-id="project.id"
     >
       <project-card
         :author="project.author"

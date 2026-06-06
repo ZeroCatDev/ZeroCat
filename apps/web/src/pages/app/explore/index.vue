@@ -12,10 +12,29 @@
             </v-card-item>
 
             <v-card-text class="pt-0">
+              <div
+                class="recommend-toggle d-flex align-center justify-space-between pa-3 mb-3"
+                :class="{ 'recommend-toggle--active': recommendMode }"
+              >
+                <div class="d-flex align-center ga-2">
+                  <v-icon icon="mdi-robot-outline" size="20" />
+                  <span class="text-body-2 font-weight-medium">AI 猜你喜欢</span>
+                </div>
+                <v-switch
+                  v-model="recommendMode"
+                  color="primary"
+                  density="compact"
+                  hide-details
+                  inset
+                  @update:model-value="toggleRecommendMode"
+                />
+              </div>
+
               <v-text-field
                 v-model="search.keyword"
                 clearable
                 density="comfortable"
+                :disabled="recommendMode"
                 hide-details
                 label="搜索项目"
                 prepend-inner-icon="mdi-magnify"
@@ -26,6 +45,7 @@
                 <v-btn
                   block
                   color="primary"
+                  :disabled="recommendMode"
                   prepend-icon="mdi-magnify"
                   @click="handleSearch"
                 >
@@ -33,6 +53,7 @@
                 </v-btn>
                 <v-btn
                   block
+                  :disabled="recommendMode"
                   prepend-icon="mdi-refresh"
                   variant="tonal"
                   @click="resetSearch"
@@ -49,6 +70,7 @@
                 v-model="activeTag"
                 class="mt-2"
                 column
+                :disabled="recommendMode"
                 mandatory
                 selected-class="selected-chip"
                 @update:model-value="applyTag"
@@ -76,6 +98,7 @@
                   block
                   class="mb-2 justify-start"
                   :color="search.orderBy === item.type ? 'primary' : undefined"
+                  :disabled="recommendMode"
                   :prepend-icon="item.icon"
                   :variant="search.orderBy === item.type ? 'flat' : 'text'"
                   @click="changeOrder(item.type)"
@@ -92,6 +115,7 @@
                 v-model="activeType"
                 class="mt-2"
                 column
+                :disabled="recommendMode"
                 mandatory
                 selected-class="selected-chip"
                 @update:model-value="applyType"
@@ -112,19 +136,19 @@
           </v-card>
         </v-col>
         <v-col cols="12" md="9" lg="10">
-          <v-card
-            title="查看 猜你喜欢"
-            to="/app/recommend"
-            border
-            rounded="xl"
-            hover
-            subtitle="基于AI的智能推荐"
+          <v-alert
+            v-if="recommendMode"
             class="mb-2"
-            append-icon="mdi-arrow-right"
-          ></v-card>
+            color="primary"
+            variant="tonal"
+            density="compact"
+            icon="mdi-robot-outline"
+          >
+            正在展示 AI 推荐 · 点击项目即标记为已读
+          </v-alert>
 
           <div class="result-topbar">
-            <div class="text-h6 mb-2">项目探索</div>
+            <div class="text-h6 mb-2">{{ recommendMode ? 'AI 猜你喜欢' : '项目探索' }}</div>
             <div class="d-flex flex-wrap ga-2">
               <v-chip prepend-icon="mdi-counter">
                 {{ projects.length }} / {{ totalCount || "?" }}
@@ -151,6 +175,7 @@
             :projects="projects"
             :show-author="false"
             class="mt-4"
+            @click="onProjectClick"
           />
 
           <v-alert
@@ -208,6 +233,7 @@
   import languages from "@/constants/programming_languages.js";
   import specialTypes from "@/constants/special_languages.js";
   import { performSearch } from "@/services/searchService";
+  import ProjectRecommendationService from "@/services/projectRecommendationService";
 
   const DEFAULT_PER_PAGE = 12;
   const DEFAULT_ORDER = "view_down";
@@ -264,6 +290,8 @@
         showError: false,
         errorMessage: "",
         infiniteObserver: null,
+        recommendMode: false,
+        readReportedIds: new Set(),
       };
     },
     computed: {
@@ -301,6 +329,10 @@
         };
       },
       async fetchProjects({ reset = false } = {}) {
+        if (this.recommendMode) {
+          return this.fetchRecommendations({ reset });
+        }
+
         if (this.isLoading || this.isLoadingMore) return;
         if (!reset && !this.hasMore) return;
 
@@ -370,6 +402,68 @@
         if (!orderType || this.search.orderBy === orderType) return;
         this.search.orderBy = orderType;
         await this.handleSearch();
+      },
+      async toggleRecommendMode(val) {
+        if (val) {
+          this.projects = [];
+          this.hasMore = true;
+          this.totalCount = 0;
+          await this.fetchRecommendations({ reset: true });
+        } else {
+          await this.fetchProjects({ reset: true });
+        }
+      },
+      async fetchRecommendations({ reset = false } = {}) {
+        if (this.isLoading || this.isLoadingMore) return;
+        if (!reset && !this.hasMore) return;
+
+        if (reset) {
+          this.page = 1;
+          this.projects = [];
+          this.totalCount = 0;
+          this.hasMore = true;
+        }
+
+        const startTime = performance.now();
+        if (reset || !this.projects.length) {
+          this.isLoading = true;
+        } else {
+          this.isLoadingMore = true;
+        }
+
+        try {
+          const offset = (this.page - 1) * DEFAULT_PER_PAGE;
+          const res = await ProjectRecommendationService.getMyRecommendations({
+            limit: DEFAULT_PER_PAGE,
+            offset,
+          });
+          const incoming = res.data?.projects || [];
+          this.mergeProjects(incoming, reset);
+          this.hasMore = res.data?.has_more ?? (incoming.length >= DEFAULT_PER_PAGE);
+          this.totalCount = this.hasMore ? -1 : this.projects.length;
+        } catch (error) {
+          this.errorMessage = error?.message || "获取推荐失败";
+          this.showError = true;
+          if (!reset && this.page > 1) {
+            this.page -= 1;
+          }
+        } finally {
+          this.lastLoadTime = Math.round(performance.now() - startTime);
+          this.isLoading = false;
+          this.isLoadingMore = false;
+          this.$nextTick(() => {
+            this.setupInfiniteScroll();
+          });
+        }
+      },
+      onProjectClick(e) {
+        if (!this.recommendMode) return;
+        const col = e.target?.closest?.("[data-project-id]");
+        if (!col) return;
+        const projectId = col.dataset.projectId;
+        if (!projectId || this.readReportedIds.has(projectId)) return;
+        this.readReportedIds.add(projectId);
+        ProjectRecommendationService.markProjectRead(projectId);
       },
       buildTypeOptions() {
         const options = [
@@ -461,6 +555,18 @@
 
 .order-list :deep(.v-btn) {
   border-radius: 10px;
+}
+
+.recommend-toggle {
+  border-radius: 12px;
+  background: rgba(var(--v-theme-primary), 0.06);
+  border: 1px solid rgba(var(--v-theme-primary), 0.12);
+  transition: all 0.2s ease;
+}
+
+.recommend-toggle--active {
+  background: rgba(var(--v-theme-primary), 0.14);
+  border-color: rgba(var(--v-theme-primary), 0.3);
 }
 
 .result-topbar {
