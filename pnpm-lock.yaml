@@ -59,6 +59,9 @@ importers:
       '@waline/vercel':
         specifier: ^1.39.3
         version: 1.39.3(@types/node@24.12.2)(chokidar@5.0.0)
+      '@wydev/amail':
+        specifier: ^1.0.0
+        version: 1.1.8
       akismet-api:
         specifier: ^6.0.0
         version: 6.0.0
@@ -5155,6 +5158,10 @@ packages:
   '@waline/vercel@1.39.3':
     resolution: {integrity: sha512-7GCjtg783MrnubJzGCngFOHt/NgTn62/Q2MzOoSNL9U4JQ7NbiLpR0NRYqOwv/hleKm2fakYOHgmj2Z4/Fox4A==}
     engines: {node: '>=20'}
+
+  '@wydev/amail@1.1.8':
+    resolution: {integrity: sha512-oNcIHxTnDgx+RaIsKixo+PcgVfcspIUrHQNYCXOqcwHLI57JLMckymt2rRMSQgnvycxuPl6CkzFTuOkxugaDTA==}
+    engines: {node: '>=18'}
 
   '@xmldom/xmldom@0.9.8':
     resolution: {integrity: sha512-p96FSY54r+WJ50FIOsCOjyj/wavs8921hG5+kVMmZgKcvIKxMXHTrjNJvRgWa/zuX3B6t2lijLNFaOyuxUH+2A==}
@@ -11409,6 +11416,10 @@ packages:
 
   think-helper@1.1.4:
     resolution: {integrity: sha512-JRAgo8CuevJ9rXazGKR91EQMbTA2xxe5w0f8/P8yeyQkaen0ZcJv4laurisg/n1gjE/xuy4zyevhCTWKVgxf8g==}
+    engines: {node: '>=6.0.0'}
+
+  think-helper@1.1.5:
+    resolution: {integrity: sha512-xsNcHWvEC6L0X9tXhIBsP+LcHvuB8pGxcjwy7mtE+KSgZcPWc0A36oUbxZXJgO6w6CpeSZWdkaRTbIpEvV05Hg==}
     engines: {node: '>=6.0.0'}
 
   think-instance@1.0.2:
@@ -18312,6 +18323,8 @@ snapshots:
       - snappy
       - supports-color
       - utf-8-validate
+
+  '@wydev/amail@1.1.8': {}
 
   '@xmldom/xmldom@0.9.8': {}
 
@@ -25978,6 +25991,13 @@ snapshots:
       ms: 1.0.0
       uuid: 7.0.3
 
+  think-helper@1.1.5:
+    dependencies:
+      core-util-is: 1.0.3
+      lodash.merge: 4.6.2
+      ms: 1.0.0
+      uuid: 7.0.3
+
   think-instance@1.0.2:
     dependencies:
       think-helper: 1.1.4
@@ -26120,7 +26140,7 @@ snapshots:
     dependencies:
       debug: 2.6.9
       koa-send: 3.3.0
-      think-helper: 1.1.4
+      think-helper: 1.1.5
     transitivePeerDependencies:
       - supports-color
 

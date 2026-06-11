@@ -2,7 +2,8 @@ import {createLogger, format, transports} from "winston";
 import DailyRotateFile from "winston-daily-rotate-file";
 import {join} from "path";
 
-const {combine, timestamp, printf, errors, colorize} = format;
+const {combine, timestamp, printf, errors, colorize, splat} = format;
+const splatSymbol = Symbol.for("splat");
 
 // 获取环境变量中的日志级别和日志目录
 const logLevel = process.env.LOG_LEVEL || "info";
@@ -12,9 +13,25 @@ const logDirectory = process.env.LOG_DIR || "logs";
 let loggerInstance = null;
 
 // 自定义日志格式化方式
-const logFormat = printf(({level, message, timestamp, stack}) => {
+const logFormat = printf(({level, message, timestamp, stack, [splatSymbol]: splatArgs}) => {
     // 确保 message 是一个字符串类型，如果是对象，则使用 JSON.stringify()
     let logMessage = `${timestamp} ${level.padEnd(7)}: ${typeof message === 'object' ? JSON.stringify(message) : message}`;
+
+    // 处理 logger.info('msg', obj) 这类逗号分隔的附加参数
+    if (Array.isArray(splatArgs) && splatArgs.length > 0) {
+        const extra = splatArgs
+            .map((item) => {
+                if (item instanceof Error) {
+                    return item.stack || item.message;
+                }
+                return typeof item === "object" ? JSON.stringify(item) : String(item);
+            })
+            .join(" ");
+
+        if (extra) {
+            logMessage += ` ${extra}`;
+        }
+    }
 
     // 如果存在 stack（通常是错误对象的堆栈），确保它是字符串
     if (stack) {
@@ -38,6 +55,7 @@ const createLoggerInstance = () => {
         format: combine(
             timestamp({format: "YYYY-MM-DD HH:mm:ss"}), // 自定义时间格式
             errors({stack: true}), // 捕获错误堆栈信息
+            splat(), // 解析 logger.info('x %s', 'y') 与逗号附加参数
             logFormat // 自定义日志格式
         ),
         transports: [
@@ -46,6 +64,7 @@ const createLoggerInstance = () => {
                 level: consoleLogLevel,
                 format: combine(
                     colorize(), // 控制台输出颜色
+                    splat(), // 确保控制台也支持多参数日志
                     logFormat // 输出格式
                 ),
             }),
