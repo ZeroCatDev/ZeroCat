@@ -147,3 +147,7 @@ apps/api/cache
 # Sentry Config File
 .sentryclirc
 .env*.local
+
+.claude
+.codex
+.copilot
