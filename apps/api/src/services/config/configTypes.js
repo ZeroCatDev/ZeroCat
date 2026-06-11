@@ -228,6 +228,25 @@ export const CONFIG_TYPES = {
         description: "发件人地址",
         validate: (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
     },
+    "mail.provider": {
+        type: "string",
+        required: false,
+        default: "smtp",
+        description: "邮件发送方式: smtp 或 amail",
+        validate: (value) => ["smtp", "amail"].includes(value),
+    },
+    "amail.api_key": {
+        type: "string",
+        required: false,
+        description: "Amail API Key (以 am_ 开头)",
+        validate: (value) => value && value.startsWith("am_"),
+    },
+    "amail.base_url": {
+        type: "string",
+        required: false,
+        default: "http://localhost:4000",
+        description: "Amail 服务器地址",
+    },
     "site.name": {
         type: "string",
         required: true,

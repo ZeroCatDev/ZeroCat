@@ -1,12 +1,13 @@
 import { createTransport } from 'nodemailer';
 import zcconfig from '../../../config/zcconfig.js';
 import emailTemplateService from '../../../email/emailTemplateService.js';
+import { sendMail, getMailProvider, getFromAddress } from '../../../email/emailSender.js';
 import { renderTemplate } from '../templateRenderer.js';
 import logger from '../../../logger.js';
 
 /**
  * 邮件通知 Provider
- * 支持空间自定义 SMTP 或全局 SMTP 回退
+ * 支持空间自定义 SMTP、全局 SMTP 和 Amail
  */
 export default {
     name: 'email',
@@ -24,7 +25,7 @@ export default {
             return { success: false, error: 'notifyEmailReply disabled' };
         }
 
-        const mailCtx = await createTransporterForSpace(spaceConfig);
+        const mailCtx = await createMailContextForSpace(spaceConfig);
         if (!mailCtx) {
             return { success: false, error: 'no_transport' };
         }
@@ -37,17 +38,18 @@ export default {
             }
             return { success: false, error: 'unknown_type' };
         } catch (err) {
-            logger.error('[notify:email] Send failed:'+ err.message);
+            logger.error('[notify:email] Send failed:' + err.message);
             return { success: false, error: err.message };
         }
     },
 };
 
 /**
- * 为空间创建 SMTP transporter
+ * 为空间创建邮件发送上下文
+ * 优先使用空间自定义 SMTP，否则根据全局配置选择 SMTP 或 Amail
  */
-async function createTransporterForSpace(spaceConfig) {
-    // 空间自定义 SMTP
+async function createMailContextForSpace(spaceConfig) {
+    // 空间自定义 SMTP（始终使用 nodemailer）
     if (spaceConfig.smtpHost && spaceConfig.smtpUser && spaceConfig.smtpPass) {
         const port = parseInt(spaceConfig.smtpPort) || 587;
         const secure = spaceConfig.smtpSecure === 'true';
@@ -59,11 +61,21 @@ async function createTransporterForSpace(spaceConfig) {
         };
         if (spaceConfig.smtpService) opts.service = spaceConfig.smtpService;
         return {
+            provider: 'smtp',
             transporter: createTransport(opts),
             from: spaceConfig.senderName
                 ? `${spaceConfig.senderName} <${spaceConfig.senderEmail || spaceConfig.smtpUser}>`
                 : (spaceConfig.senderEmail || spaceConfig.smtpUser),
         };
+    }
+
+    // 全局配置
+    const provider = await getMailProvider();
+
+    if (provider === 'amail') {
+        const from = await getFromAddress();
+        if (!from) return null;
+        return { provider: 'amail', from };
     }
 
     // 全局 SMTP
@@ -78,9 +90,20 @@ async function createTransporterForSpace(spaceConfig) {
     if (!host || !user || !pass) return null;
 
     return {
+        provider: 'smtp',
         transporter: createTransport({ host, port, secure, auth: { user, pass } }),
         from: fromName ? `${fromName} <${fromAddress}>` : fromAddress,
     };
+}
+
+/**
+ * 通过邮件上下文发送邮件
+ */
+async function sendWithMailCtx(mailCtx, { to, subject, html }) {
+    if (mailCtx.provider === 'amail') {
+        return sendMail({ to, subject, html, from: mailCtx.from });
+    }
+    await mailCtx.transporter.sendMail({ from: mailCtx.from, to, subject, html });
 }
 
 /**
@@ -99,7 +122,7 @@ async function sendAdminMail(context, spaceConfig, mailCtx) {
             ? renderTemplate(spaceConfig.mailSubjectAdmin, context)
             : `${self.nick} 在 ${site.spaceName} 发表了新评论`;
         const html = renderTemplate(spaceConfig.mailTemplateAdmin, context);
-        await mailCtx.transporter.sendMail({ from: mailCtx.from, to: adminEmail, subject, html });
+        await sendWithMailCtx(mailCtx, { to: adminEmail, subject, html });
         return { success: true, to: adminEmail };
     }
 
@@ -128,7 +151,7 @@ async function sendAdminMail(context, spaceConfig, mailCtx) {
         buttons,
     });
 
-    await mailCtx.transporter.sendMail({ from: mailCtx.from, to: adminEmail, subject: rendered.subject, html: rendered.html });
+    await sendWithMailCtx(mailCtx, { to: adminEmail, subject: rendered.subject, html: rendered.html });
     return { success: true, to: adminEmail };
 }
 
@@ -145,7 +168,7 @@ async function sendReplyMail(context, spaceConfig, mailCtx) {
             ? renderTemplate(spaceConfig.mailSubject, context)
             : `${self.nick} 回复了您在 ${site.spaceName} 的评论`;
         const html = renderTemplate(spaceConfig.mailTemplate, context);
-        await mailCtx.transporter.sendMail({ from: mailCtx.from, to: parent.mail, subject, html });
+        await sendWithMailCtx(mailCtx, { to: parent.mail, subject, html });
         return { success: true, to: parent.mail };
     }
 
@@ -163,6 +186,6 @@ async function sendReplyMail(context, spaceConfig, mailCtx) {
         link: site.postUrl,
     });
 
-    await mailCtx.transporter.sendMail({ from: mailCtx.from, to: parent.mail, subject: rendered.subject, html: rendered.html });
+    await sendWithMailCtx(mailCtx, { to: parent.mail, subject: rendered.subject, html: rendered.html });
     return { success: true, to: parent.mail };
 }

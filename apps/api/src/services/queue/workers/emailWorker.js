@@ -1,7 +1,8 @@
 import { Worker } from 'bullmq';
-import { createTransport } from 'nodemailer';
 import { createConnection } from '../redisConnectionFactory.js';
 import { QUEUE_NAMES } from '../queues.js';
+import { sendMail, getMailProvider } from '../../email/emailSender.js';
+import { createTransport } from 'nodemailer';
 import zcconfig from '../../config/zcconfig.js';
 import logger from '../../logger.js';
 
@@ -17,6 +18,16 @@ async function createEmailWorker() {
             const { to, subject, html } = job.data;
             await job.log(`Processing email to ${to}, subject: "${subject}"`);
 
+            const provider = await getMailProvider();
+            await job.log(`Using mail provider: ${provider}`);
+
+            if (provider === 'amail') {
+                const result = await sendMail({ to, subject, html });
+                await job.log(`Amail email sent, id: ${result?.id}`);
+                return { to, subject, sentAt: new Date().toISOString(), provider: 'amail', id: result?.id };
+            }
+
+            // SMTP 模式
             const host = await zcconfig.get('mail.host');
             const port = await zcconfig.get('mail.port');
             const secure = await zcconfig.get('mail.secure');
@@ -26,8 +37,8 @@ async function createEmailWorker() {
             const fromAddress = await zcconfig.get('mail.from_address');
 
             if (!host || !port || !user || !pass) {
-                await job.log('ERROR: Missing required email configuration');
-                throw new Error('Missing required email configuration');
+                await job.log('ERROR: Missing required SMTP configuration');
+                throw new Error('Missing required SMTP configuration');
             }
 
             await job.log(`Connecting to SMTP ${host}:${port} (secure: ${secure})`);
@@ -44,7 +55,7 @@ async function createEmailWorker() {
             await transporter.sendMail({ from, to, subject, html });
 
             await job.log(`Email sent successfully to ${to}`);
-            return { to, subject, sentAt: new Date().toISOString() };
+            return { to, subject, sentAt: new Date().toISOString(), provider: 'smtp' };
         },
         {
             connection,

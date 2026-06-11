@@ -1,75 +1,66 @@
-import {createTransport} from "nodemailer";
-import zcconfig from "../config/zcconfig.js";
-import logger from "../logger.js";
+import { sendMail, getMailProvider, getFromAddress } from './emailSender.js';
+import { createTransport } from 'nodemailer';
+import zcconfig from '../config/zcconfig.js';
+import logger from '../logger.js';
 
 let transporter;
 
-const getMailConfig = async () => {
-    const enabled = await zcconfig.get("mail.enabled");
-    if (!enabled) {
-        return null;
-    }
-
-    const host = await zcconfig.get("mail.host");
-    const port = await zcconfig.get("mail.port");
-    const secure = await zcconfig.get("mail.secure");
-    const user = await zcconfig.get("mail.auth.user");
-    const pass = await zcconfig.get("mail.auth.pass");
-    const fromName = await zcconfig.get("mail.from_name");
-    const fromAddress = await zcconfig.get("mail.from_address");
-
-    if (!host || !port || !user || !pass) {
-        logger.error("[email] 缺少必要的邮件配置");
-        return null;
-    }
-
-    const config = {
-        host,
-        port,
-        secure,
-        auth: {
-            user,
-            pass,
-        }
-    };
-
-    return {
-        config,
-        from: fromName ? `${fromName} <${fromAddress}>` : fromAddress,
-        tls: {
-            minVersion: 'TLSv1.2',
-            rejectUnauthorized: false
-        }
-    };
-};
 const initializeTransporter = async () => {
     try {
-        const mailConfig = await getMailConfig();
-        logger.debug("[email] 邮件配置:", mailConfig);
-        if (!mailConfig) {
-            logger.info("[email] 邮件服务已禁用或未正确配置");
+        const provider = await getMailProvider();
+        if (provider === 'amail') {
+            logger.info('[email] 使用 Amail 作为邮件发送方式，跳过 SMTP 初始化');
+            return true;
+        }
+
+        const enabled = await zcconfig.get('mail.enabled');
+        if (!enabled) {
+            logger.info('[email] 邮件服务已禁用');
+            return false;
+        }
+
+        const host = await zcconfig.get('mail.host');
+        const port = await zcconfig.get('mail.port');
+        const secure = await zcconfig.get('mail.secure');
+        const user = await zcconfig.get('mail.auth.user');
+        const pass = await zcconfig.get('mail.auth.pass');
+
+        if (!host || !port || !user || !pass) {
+            logger.error('[email] 缺少必要的 SMTP 配置');
             return false;
         }
 
         const transportOptions = {
-            ...mailConfig.config,
-            tls: mailConfig.tls,
+            host,
+            port,
+            secure,
+            auth: { user, pass },
+            tls: {
+                minVersion: 'TLSv1.2',
+                rejectUnauthorized: false,
+            },
         };
-        logger.debug("[email] 初始化邮件传输器:", transportOptions);
+        logger.debug('[email] 初始化 SMTP 传输器:', transportOptions);
         transporter = createTransport(transportOptions);
 
-        // Test the connection
         await transporter.verify();
-        logger.info("[email] 邮件服务初始化成功");
+        logger.info('[email] SMTP 邮件服务初始化成功');
         return true;
     } catch (error) {
-        logger.error("[email] 邮件服务初始化失败:", error);
+        logger.error('[email] 邮件服务初始化失败:', error);
         return false;
     }
 };
 
 const sendEmailDirect = async (to, subject, html) => {
     try {
+        const provider = await getMailProvider();
+
+        if (provider === 'amail') {
+            return await sendMail({ to, subject, html });
+        }
+
+        // SMTP 模式
         if (!transporter) {
             const initialized = await initializeTransporter();
             if (!initialized) {
@@ -77,16 +68,16 @@ const sendEmailDirect = async (to, subject, html) => {
             }
         }
 
-        const mailConfig = await getMailConfig();
-        if (!mailConfig) {
-            throw new Error("Email service is disabled or not properly configured");
+        const from = await getFromAddress();
+        if (!from) {
+            throw new Error("No from address configured");
         }
 
         await transporter.sendMail({
-            from: mailConfig.from,
-            to: to,
-            subject: subject,
-            html: html,
+            from,
+            to,
+            subject,
+            html,
         });
 
         return true;
@@ -114,4 +105,4 @@ initializeTransporter().catch(error => {
     logger.error("[email] 模块加载时初始化邮件服务失败:", error);
 });
 
-export {sendEmail, sendEmailDirect};
+export { sendEmail, sendEmailDirect };
