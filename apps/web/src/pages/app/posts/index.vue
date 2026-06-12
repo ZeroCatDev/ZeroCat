@@ -59,7 +59,7 @@
     <div v-else class="posts-login-prompt">
       <div class="login-prompt-content">
         <h2 class="login-prompt-title">加入对话</h2>
-        <p class="login-prompt-text">登录后即可发帖、点赞、转推和回复。</p>
+        <p class="login-prompt-text">现在就注册账户以参与社区。</p>
         <div class="login-prompt-actions">
           <v-btn
             color="primary"
