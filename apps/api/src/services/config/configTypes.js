@@ -247,6 +247,12 @@ export const CONFIG_TYPES = {
         default: "http://localhost:4000",
         description: "Amail 服务器地址",
     },
+    "amail.provider_id": {
+        type: "string",
+        required: false,
+        default: "auto",
+        description: "Amail SMTP Provider ID，默认 auto 自动选择",
+    },
     "site.name": {
         type: "string",
         required: true,

@@ -45,6 +45,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@waline/vercel": "^1.39.3",
+    "@wydev/amail": "^1.2.5",
     "akismet-api": "^6.0.0",
     "axios": "^1.15.0",
     "base32-encode": "^2.0.0",
@@ -59,7 +60,6 @@
     "crypto-js": "^4.1.1",
     "disposable-domains": "^2.0.0",
     "ejs": "^3.1.10",
-    "email-templates": "^12.0.3",
     "express": "^5.2.1",
     "express-jwt": "^8.5.1",
     "express-rate-limit": "^8.3.2",
@@ -117,8 +117,7 @@
     "web-push": "^3.6.7",
     "winston": "^3.19.0",
     "winston-daily-rotate-file": "^5.0.0",
-    "ws": "^8.20.0",
-    "@wydev/amail": "^1.0.0"
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "cross-env": "^7.0.3",

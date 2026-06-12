@@ -416,23 +416,23 @@ export class UnifiedAuthService {
 
         const templates = {
             login: {
-                title: `${siteName} - 登录验证码`,
+                title: `登录验证码`,
                 description: '您正在登录账户'
             },
             sudo: {
-                title: `${siteName} - sudo模式验证码`,
+                title: `Sudo模式验证码`,
                 description: '您正在尝试进入sudo模式'
             },
             reset_password: {
-                title: `${siteName} - 重置密码验证码`,
+                title: `重置密码验证码`,
                 description: '您正在重置账户密码'
             },
             change_email: {
-                title: `${siteName} - 更改邮箱验证码`,
+                title: `更改邮箱验证码`,
                 description: '您正在更改账户邮箱地址'
             },
             delete_account: {
-                title: `${siteName} - 删除账户验证码`,
+                title: `删除账户验证码`,
                 description: '您正在删除账户'
             }
         };

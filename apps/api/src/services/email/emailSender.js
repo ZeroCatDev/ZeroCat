@@ -31,13 +31,14 @@ async function getAmailClient() {
 
     const apiKey = await zcconfig.get('amail.api_key');
     const baseUrl = await zcconfig.get('amail.base_url') || 'http://localhost:4000';
+    const providerId = await zcconfig.get('amail.provider_id') || 'auto';
 
     if (!apiKey) {
         throw new Error('Amail API key is not configured (amail.api_key)');
     }
 
     const { Amail } = await import('@wydev/amail');
-    amailClient = new Amail(apiKey, { baseUrl });
+    amailClient = new Amail(apiKey, { baseUrl, providerId });
     return amailClient;
 }
 

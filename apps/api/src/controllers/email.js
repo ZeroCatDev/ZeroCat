@@ -82,86 +82,8 @@ const rateLimitEmailVerification = async (email) => {
     memoryCache.set(key, count + 1, 3600); // 1小时过期
 };
 
-// 定义不同场景的邮件模板
-const EMAIL_TEMPLATES = {
-    // 验证邮箱模板
-    VERIFY: (code, verifyUrl) => `
-验证您的邮箱
-
-您的验证码是: ${code}
-此验证码将在5分钟内有效。
-
-您也可以点击以下链接完成验证：
-${verifyUrl}
-
-如果这不是您的操作，请忽略此邮件。
-  `,
-
-    // 重置密码模板
-    RESET_PASSWORD: (code, verifyUrl) => `
-重置密码验证
-
-您正在重置密码，验证码是: ${code}
-此验证码将在5分钟内有效。
-
-如果这不是您的操作，请忽略此邮件并考虑修改您的密码。
-  `,
-
-    // 添加邮箱模板
-    ADD_EMAIL: (code, verifyUrl) => `
-验证新邮箱
-
-您正在添加新的邮箱地址，验证码是: ${code}
-此验证码将在5分钟内有效。
-
-您也可以点击以下链接完成验证：
-${verifyUrl}
-
-如果这不是您的操作，请忽略此邮件。
-  `,
-
-    // 默认模板
-    DEFAULT: (code, verifyUrl) => `
-验证码
-
-您的验证码是: ${code}
-此验证码将在5分钟内有效。
-
-如果这不是您的操作，请忽略此邮件。
-  `,
-
-    // 登录验证模板
-    LOGIN: (code) => `
-登录验证
-
-您正在使用邮箱验证码登录，验证码是: ${code}
-此验证码将在5分钟内有效。
-
-如果这不是您的操作，请忽略此邮件并考虑修改您的密码。
-  `,
-
-    // 解绑 OAuth 验证模板
-    UNLINK_OAUTH: (code) => `
-解绑 OAuth 验证
-
-您正在请求解绑 OAuth 账号，验证码是: ${code}
-此验证码将在5分钟内有效。
-
-如果这不是您的操作，请忽略此邮件并考虑修改您的密码。
-  `
-};
-
-// 邮件主题映射
-const EMAIL_SUBJECTS = {
-    VERIFY: '验证您的邮箱',
-    RESET_PASSWORD: '重置密码验证',
-    ADD_EMAIL: '验证新邮箱',
-    DEFAULT: '验证码',
-    LOGIN: '登录验证码'
-};
-
 // Send verification email
-const sendVerificationEmail = async (contactValue, contactHash, template = 'DEFAULT') => {
+const sendVerificationEmail = async (contactValue, contactHash) => {
     await rateLimitEmailVerification(contactValue);
 
     const token = generateEmailToken(contactHash);

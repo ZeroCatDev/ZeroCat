@@ -1,20 +1,10 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import React from 'react';
+import { render } from '@react-email/render';
 import logger from '../logger.js';
 import zcconfig from '../config/zcconfig.js';
-import ejs from 'ejs';
-import fs from 'fs';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import templateRegistry from '../../emails/index.js';
 
 class EmailTemplateService {
-    constructor() {
-        this.templateCache = new Map();
-        this.templatesPath = path.join(__dirname, '../../templates/emails');
-    }
-
     /**
      * 获取站点配置信息
      */
@@ -65,14 +55,16 @@ class EmailTemplateService {
                 loginUrl: `${siteConfig.frontendUrl}/login`,
             };
 
-            // 直接使用EJS渲染
-            const templatePath = path.join(this.templatesPath, `${templateName}.ejs`);
-
-            if (!fs.existsSync(templatePath)) {
-                throw new Error(`模板文件不存在: ${templatePath}`);
+            // 从注册表中获取React组件
+            const Component = templateRegistry[templateName];
+            if (!Component) {
+                throw new Error(`未知的邮件模板: ${templateName}`);
             }
 
-            const html = await ejs.renderFile(templatePath, templateData);
+            // 使用React Email渲染
+            const element = React.createElement(Component, templateData);
+            const html = await render(element);
+
             // 改进的文本提取，更好地处理HTML标签和空白字符
             const text = html
                 .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '') // 移除style标签及其内容
