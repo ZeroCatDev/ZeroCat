@@ -17,7 +17,7 @@ async function getMailProvider() {
  * @returns {Promise<string|null>}
  */
 async function getFromAddress() {
-    const fromName = await zcconfig.get('mail.from_name');
+    const fromName = await zcconfig.get('mail.from_name') || await zcconfig.get('site.name');
     const fromAddress = await zcconfig.get('mail.from_address');
     if (!fromAddress) return null;
     return fromName ? `${fromName} <${fromAddress}>` : fromAddress;
