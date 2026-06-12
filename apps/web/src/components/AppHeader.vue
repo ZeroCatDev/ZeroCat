@@ -49,7 +49,7 @@
           </v-btn>
         </div>
       </template>
-      <template v-else><strong>Zero</strong>Cat</template>
+      <template v-else><strong>Moon</strong>land</template>
     </v-app-bar-title>
     <template #append>
       <SearchDialog />
