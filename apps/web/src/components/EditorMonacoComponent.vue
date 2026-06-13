@@ -279,6 +279,17 @@ watch(() => props.projectType, (newType) => {
   }
 });
 
+// 暴露方法给父组件
+defineExpose({
+  destroyEditor: disposeAll,
+  initEditor: createEditor,
+  getValue: () => editor?.getValue() || '',
+  setValue: (val) => editor?.setValue(val || ''),
+  layout: () => editor?.layout(),
+  focus: () => editor?.focus(),
+  getEditor: () => editor,
+});
+
 // 组件挂载时创建编辑器
 onMounted(() => {
   createEditor();
@@ -304,8 +315,8 @@ onBeforeUnmount(() => {
 <style scoped>
 .editor-monaco-container {
   width: 100%;
-  min-height: 100px;
-  border-radius: 4px;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
   position: relative;
 }

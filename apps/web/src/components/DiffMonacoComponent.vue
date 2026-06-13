@@ -245,6 +245,10 @@ export default {
       }
     },
 
+    destroyEditor() {
+      this.destroyDiffEditor();
+    },
+
     updateDiff(originalValue, modifiedValue) {
       if (!this.isDestroyed && this.originalModel && this.modifiedModel) {
         try {

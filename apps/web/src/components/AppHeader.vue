@@ -556,6 +556,9 @@ export default {
           this.subNavItems = this.getUserSubNavItems(pathSegments[0]);
           this.activeTab = 'articles';
         }
+      } else if (pathSegments[2] === 'edit') {
+        this.subNavItems = [];
+        this.activeTab = null;
       } else {
         this.subNavItems = this.getProjectSubNavItems(
           pathSegments[1],
