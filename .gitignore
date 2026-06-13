@@ -151,3 +151,5 @@ apps/api/cache
 .claude
 .codex
 .copilot
+.mimocode
+.opencode

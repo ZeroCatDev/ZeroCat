@@ -742,6 +742,11 @@ export default {
         }
       },
     },
+    fileContent(newContent) {
+      if (newContent !== null && this.project) {
+        this.openMainEditor();
+      }
+    },
     showLanguageDialog(val) {
       if (val) {
         // 当对话框打开时，等待 DOM 更新后聚焦搜索框
@@ -1365,8 +1370,6 @@ export default {
 
         // 显示错误提示
         this.showSnackbarMessage("加载分支失败: " + errorMsg, "error");
-      } finally {
-        this.loading = false;
       }
     },
 
