@@ -1,451 +1,503 @@
 <template>
-  <div>
-    <AuthCard subtitle="创建你的账户">
-      <v-form ref="registerForm">
-        <v-row>
-          <v-col cols="12">
-            <v-text-field
-              v-model="email"
-              :rules="emailRules"
-              label="邮箱"
-              required
-              type="email"
-              variant="outlined"
-            ></v-text-field>
-            <v-text-field
-              v-model="username"
-              :rules="usernameRules"
-              label="用户名"
-              required
-              type="text"
-              variant="outlined"
-            ></v-text-field>
-            <v-text-field
-              v-model="password"
-              :append-icon="showPassword ? 'mdi-eye' : 'mdi-eye-off'"
-              :rules="passwordRules"
-              :type="showPassword ? 'text' : 'password'"
-              label="密码"
-              required
-              variant="outlined"
-              @click:append="showPassword = !showPassword"
-            ></v-text-field>
-          </v-col>
+  <v-container class="d-flex align-center justify-center fill-height pa-4">
+    <v-card border rounded="xl" max-width="448" width="100%" class="mx-auto pa-5 pa-sm-8">
+      <!-- 头部 -->
+      <div class="text-center mb-4">
+        <v-avatar size="56" color="primary" variant="tonal" class="mb-3">
+          <v-icon size="32">{{ headerIcon }}</v-icon>
+        </v-avatar>
+        <h2 class="text-h5 font-weight-medium">创建账户</h2>
+        <p class="text-body-2 text-medium-emphasis mt-1">{{ subtitle }}</p>
+      </div>
 
-          <v-col cols="12">
-            <Recaptcha ref="recaptcha" recaptchaId="recaptcha-div" />
-          </v-col>
+      <v-expand-transition>
+        <v-alert
+          v-if="error"
+          type="error"
+          variant="tonal"
+          density="comfortable"
+          class="mb-4"
+          :text="error"
+        />
+      </v-expand-transition>
 
-          <v-col cols="12">
-            <v-dialog persistent>
-              <template v-slot:activator="{ props: activatorProps }">
-                <v-btn
-                  :loading="loading"
-                  append-icon="mdi-arrow-right"
-                  class="text-none"
-                  color="primary"
-                  rounded="xl"
-                  size="large"
-                  text="注册"
-                  v-bind="activatorProps"
-                  variant="flat"
-                ></v-btn>
+      <!-- 校验注册令牌中 -->
+      <div v-if="view === 'loading'" class="text-center py-8">
+        <v-progress-circular indeterminate color="primary" size="40" />
+      </div>
+
+      <!-- 令牌无效 -->
+      <template v-else-if="view === 'invalid'">
+        <v-alert
+          type="warning"
+          variant="tonal"
+          density="comfortable"
+          class="mb-4"
+          text="注册链接无效或已过期，请重新开始。"
+        />
+        <v-btn
+          block
+          size="large"
+          rounded="lg"
+          color="primary"
+          variant="flat"
+          class="text-none"
+          to="/app/account/register"
+        >
+          重新开始注册
+        </v-btn>
+      </template>
+
+      <!-- 模式 A：录入邮箱 -->
+      <template v-else-if="view === 'email'">
+        <v-form @submit.prevent="submitEmail">
+          <v-text-field
+            v-model="email"
+            label="邮箱"
+            type="email"
+            variant="outlined"
+            autocomplete="email"
+            inputmode="email"
+            autofocus
+            prepend-inner-icon="mdi-email-outline"
+            :rules="emailRules"
+          />
+          <Recaptcha
+            ref="recaptchaRef"
+            :showNormal="true"
+            recaptchaId="register-recaptcha"
+            class="mb-2"
+          />
+          <v-btn
+            type="submit"
+            block
+            size="large"
+            rounded="lg"
+            color="primary"
+            variant="flat"
+            class="text-none"
+            append-icon="mdi-arrow-right"
+            :loading="loading"
+          >
+            继续
+          </v-btn>
+        </v-form>
+        <OAuthButtons mode="register" divider-text="或使用以下方式注册" />
+        <div class="d-flex justify-center mt-4">
+          <v-btn variant="text" size="small" class="text-none" :to="loginLink">
+            已有账户？登录
+          </v-btn>
+        </div>
+      </template>
+
+      <!-- 模式 A：邮件已发送 -->
+      <template v-else-if="view === 'sent'">
+        <div class="text-center py-2">
+          <v-icon size="56" color="success" class="mb-3">mdi-email-fast-outline</v-icon>
+          <p class="text-body-1 mb-1">请查收邮件</p>
+          <p class="text-body-2 text-medium-emphasis">
+            我们已向 <strong>{{ email }}</strong> 发送了一封邮件。
+          </p>
+        </div>
+        <v-btn
+          block
+          variant="text"
+          class="text-none mt-2"
+          :disabled="countdown > 0"
+          @click="submitEmail"
+        >
+          {{ countdown > 0 ? `${countdown}秒后可重新发送` : "重新发送" }}
+        </v-btn>
+        <v-btn block variant="text" class="text-none" @click="view = 'email'">
+          使用其他邮箱
+        </v-btn>
+      </template>
+
+      <!-- 模式 B：注册继续（邮箱已验证） -->
+      <template v-else-if="view === 'continue'">
+        <div class="d-flex justify-center mb-4">
+          <v-chip variant="tonal" color="success" prepend-icon="mdi-check-circle">
+            <span class="text-truncate" style="max-width: 240px">{{ verifiedEmail }}</span>
+            &nbsp;已验证
+          </v-chip>
+        </div>
+
+        <v-progress-linear
+          :model-value="(step / 3) * 100"
+          color="primary"
+          height="4"
+          rounded
+          class="mb-5"
+        />
+
+        <v-window v-model="step" :touch="false">
+          <!-- 用户名（实时校验格式与占用） -->
+          <v-window-item :value="1">
+            <v-form @submit.prevent="next">
+              <v-text-field
+                v-model="username"
+                label="用户名"
+                type="text"
+                variant="outlined"
+                autocomplete="username"
+                autofocus
+                prepend-inner-icon="mdi-account-outline"
+                :hint="usernameCheck.status === 'idle' ? '2-20 位，小写字母开头，仅含小写字母、数字与单个下划线' : ''"
+                persistent-hint
+                :loading="usernameCheck.status === 'checking'"
+                :error="usernameCheck.status === 'error'"
+                :error-messages="usernameCheck.status === 'error' ? [usernameCheck.message] : []"
+                :messages="usernameCheck.status === 'ok' ? [usernameCheck.message] : []"
+              >
+                <template #append-inner>
+                  <v-icon v-if="usernameCheck.status === 'ok'" color="success">mdi-check-circle</v-icon>
+                  <v-icon v-else-if="usernameCheck.status === 'error'" color="error">mdi-alert-circle</v-icon>
+                </template>
+              </v-text-field>
+              <v-btn
+                type="submit"
+                block
+                size="large"
+                rounded="lg"
+                color="primary"
+                variant="flat"
+                class="text-none mt-1"
+                append-icon="mdi-arrow-right"
+                :disabled="!canProceed"
+              >
+                继续
+              </v-btn>
+            </v-form>
+          </v-window-item>
+
+          <!-- 密码（实时强度） -->
+          <v-window-item :value="2">
+            <v-form @submit.prevent="next">
+              <v-text-field
+                v-model="password"
+                label="设置密码"
+                variant="outlined"
+                autocomplete="new-password"
+                autofocus
+                :type="showPassword ? 'text' : 'password'"
+                prepend-inner-icon="mdi-lock-outline"
+                :error="password.length > 0 && !passwordValid"
+                :error-messages="password.length > 0 && !passwordValid ? ['密码至少 8 位，且需包含字母和数字'] : []"
+              >
+                <template #append-inner>
+                  <v-icon style="cursor: pointer" @click="showPassword = !showPassword">
+                    {{ showPassword ? "mdi-eye" : "mdi-eye-off" }}
+                  </v-icon>
+                </template>
+              </v-text-field>
+              <div v-if="password" class="mb-4">
+                <v-progress-linear
+                  :model-value="passwordStrength.percent"
+                  :color="passwordStrength.color"
+                  height="6"
+                  rounded
+                  class="mb-1"
+                />
+                <span class="text-caption" :class="`text-${passwordStrength.color}`">
+                  密码强度：{{ passwordStrength.label }}
+                </span>
+              </div>
+              <v-btn
+                type="submit"
+                block
+                size="large"
+                rounded="lg"
+                color="primary"
+                variant="flat"
+                class="text-none"
+                append-icon="mdi-arrow-right"
+                :disabled="!canProceed"
+              >
+                继续
+              </v-btn>
+            </v-form>
+          </v-window-item>
+
+          <!-- 条款并完成 -->
+          <v-window-item :value="3">
+            <p class="text-body-2 text-medium-emphasis mb-2">
+              请阅读并同意以下条款以完成注册：
+            </p>
+            <v-checkbox v-model="agreement.privacy" density="compact" hide-details>
+              <template #label>
+                <span class="text-body-2">我已阅读并同意
+                  <a href="/app/legal/privacy" target="_blank" @click.stop>隐私政策</a>
+                </span>
               </template>
-
-              <template v-slot:default="{ isActive }">
-                <v-card title="您正在使用由ZeroCat零猫社区提供的服务">
-                  <v-card-text>
-                    <div class="mb-2">
-                      你需要同意
-                      <v-tooltip location="bottom">
-                        <template v-slot:activator="{ props }">
-                          <a
-                            href="/app/legal/privacy"
-                            target="_blank"
-                            v-bind="props"
-                            @click.stop
-                          >
-                            ZeroCat零猫社区隐私政策
-                          </a>
-                        </template>
-                        ZeroCat零猫社区隐私政策
-                      </v-tooltip>
-                    </div>
-
-                    <v-checkbox v-model="agreement.privacy">
-                      <template v-slot:label>
-                        <div>我已阅读并同意隐私政策</div>
-                      </template>
-                    </v-checkbox>
-
-                    <div class="mb-2">
-                      我们将在中国大陆安全的存储您的数据，我们暂不提供自助删除您的个人数据，如果您希望删除您的数据，您需要优先选择联系我们
-                    </div>
-
-                    <v-checkbox v-model="agreement.datadelete">
-                      <template v-slot:label>
-                        <div>
-                          我理解并同意我无法自助删除我的个人数据，在需要时我会主动联系管理员删除
-                        </div>
-                      </template>
-                    </v-checkbox>
-
-                    <div class="mb-2">
-                      在 ZeroCat 上，你需要遵守
-                      <v-tooltip location="bottom">
-                        <template v-slot:activator="{ props }">
-                          <a
-                            href="/legal/community-guidelines"
-                            target="_blank"
-                            v-bind="props"
-                            @click.stop
-                          >
-                            社区行为准则
-                          </a>
-                        </template>
-                        社区行为准则
-                      </v-tooltip>
-                    </div>
-
-                    <v-checkbox v-model="agreement.rules">
-                      <template v-slot:label>
-                        <div>我已阅读并同意将会遵守社区行为准则</div>
-                      </template>
-                    </v-checkbox>
-
-                    <div class="mb-2">
-                      你需要同意
-                      <v-tooltip location="bottom">
-                        <template v-slot:activator="{ props }">
-                          <a
-                            href="/app/legal/terms"
-                            target="_blank"
-                            v-bind="props"
-                            @click.stop
-                          >
-                            ZeroCat零猫社区用户协议
-                          </a>
-                        </template>
-                        ZeroCat零猫社区用户协议
-                      </v-tooltip>
-                    </div>
-
-                    <v-checkbox v-model="agreement.terms">
-                      <template v-slot:label>
-                        <div>我已阅读并同意用户协议</div>
-                      </template>
-                    </v-checkbox>
-
-                    <v-btn
-                      :loading="loading"
-                      append-icon="mdi-arrow-right"
-                      class="text-none mt-4"
-                      color="primary"
-                      rounded="xl"
-                      size="large"
-                      text="注册"
-                      variant="flat"
-                      @click="register"
-                    ></v-btn>
-
-                    <v-alert
-                      border="start"
-                      class="mt-4"
-                      density="comfortable"
-                      type="warning"
-                      variant="tonal"
-                    >
-                      对于技术手段绕过此页面的行为视为对 ZeroCat
-                      的基础设施进行攻击，涉嫌非法入侵计算机系统，我们将保留追究法律责任的权利，违规获得的账户不被授权访问网站，账户将不受保护，如果您同意以上内容，请点击"复选框"以完成注册流程。
-                    </v-alert>
-                  </v-card-text>
-
-                  <v-card-actions>
-                    <v-spacer></v-spacer>
-                    <v-btn
-                      text="取消"
-                      @click="
-                        isActive.value = false;
-                        resetAgreement();
-                      "
-                    ></v-btn>
-                  </v-card-actions>
-                </v-card>
+            </v-checkbox>
+            <v-checkbox v-model="agreement.terms" density="compact" hide-details>
+              <template #label>
+                <span class="text-body-2">我已阅读并同意
+                  <a href="/app/legal/terms" target="_blank" @click.stop>用户协议</a>
+                </span>
               </template>
-            </v-dialog>
-          </v-col>
+            </v-checkbox>
+            <v-checkbox v-model="agreement.rules" density="compact" hide-details>
+              <template #label>
+                <span class="text-body-2">我将遵守
+                  <a href="/legal/community-guidelines" target="_blank" @click.stop>社区行为准则</a>
+                </span>
+              </template>
+            </v-checkbox>
+            <v-checkbox v-model="agreement.datadelete" density="compact" hide-details>
+              <template #label>
+                <span class="text-body-2">我理解数据存储于中国大陆且需联系管理员删除</span>
+              </template>
+            </v-checkbox>
 
-          <v-col cols="12">
             <v-btn
-              append-icon="mdi-arrow-right"
-              class="text-none"
-              color="white"
-              rounded="xl"
+              block
               size="large"
-              text="登录"
-              :to="loginLink"
-              variant="text"
-            ></v-btn>
-            <v-btn
-              append-icon="mdi-arrow-right"
-              class="text-none"
-              color="white"
-              rounded="xl"
-              size="large"
-              text="找回密码"
-              :to="retrieveLink"
-              variant="text"
-            ></v-btn>
-          </v-col>
+              rounded="lg"
+              color="primary"
+              variant="flat"
+              class="text-none mt-4"
+              :loading="loading"
+              :disabled="!canProceed"
+              @click="complete"
+            >
+              完成注册
+            </v-btn>
+          </v-window-item>
+        </v-window>
 
-          <v-col cols="12">
-            <OAuthButtons mode="register" />
-          </v-col>
-        </v-row>
-      </v-form>
-    </AuthCard>
-    <LoadingDialog :show="loading" text="正在注册" />
-  </div>
+        <div v-if="step > 1" class="mt-4">
+          <v-btn
+            variant="text"
+            size="small"
+            class="text-none"
+            prepend-icon="mdi-arrow-left"
+            @click="step -= 1"
+          >
+            上一步
+          </v-btn>
+        </div>
+      </template>
+    </v-card>
+  </v-container>
 </template>
 
-<script>
-import { ref, computed } from "vue";
+<script setup>
+import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { useHead } from "@unhead/vue";
 import { localuser } from "@/services/localAccount";
 import { useAuthStore } from "@/stores/auth";
 import AuthService from "@/services/authService";
-import LoadingDialog from "@/components/LoadingDialog.vue";
 import Recaptcha from "@/components/Recaptcha.vue";
-import AuthCard from "@/components/AuthCard.vue";
-import { useHead } from "@unhead/vue";
-import oauthProviders from "@/constants/oauth_providers.json";
 import OAuthButtons from "@/components/account/OAuthButtons.vue";
 
-export default {
-  components: { LoadingDialog, Recaptcha, AuthCard, OAuthButtons },
+useHead({ title: "注册" });
 
-  setup() {
-    const route = useRoute();
-    const router = useRouter();
-    const authStore = useAuthStore();
-    const registerForm = ref(null);
+const route = useRoute();
+const router = useRouter();
+const authStore = useAuthStore();
+const recaptchaRef = ref(null);
 
-    // Capture redirect from query or sessionStorage
-    const redirectFromQuery =
-      typeof route.query.redirect === "string" ? route.query.redirect : null;
-    if (redirectFromQuery) {
-      authStore.setAuthRedirectUrl(redirectFromQuery);
+const token = ref(typeof route.query.token === "string" ? route.query.token : "");
+const view = ref(token.value ? "loading" : "email"); // loading | invalid | email | sent | continue
+const step = ref(1);
+const loading = ref(false);
+const error = ref("");
+const countdown = ref(0);
+
+const email = ref("");
+const verifiedEmail = ref("");
+const username = ref("");
+const password = ref("");
+const showPassword = ref(false);
+const usernameCheck = ref({ status: "idle", message: "" });
+const agreement = ref({ privacy: false, terms: false, rules: false, datadelete: false });
+
+// 捕获 redirect 参数
+const redirectFromQuery =
+  typeof route.query.redirect === "string" ? route.query.redirect : null;
+if (redirectFromQuery) authStore.setAuthRedirectUrl(redirectFromQuery);
+// 未携带令牌且已登录 → 直接跳转
+if (!token.value && localuser.isLogin.value === true) {
+  authStore.navigateToAuthRedirect(router);
+}
+
+const headerIcon = computed(() =>
+  view.value === "continue" ? "mdi-account-check-outline" : "mdi-account-plus-outline"
+);
+const subtitle = computed(() => {
+  if (view.value === "continue") {
+    return { 1: "为你的账户取一个用户名", 2: "设置一个安全的密码", 3: "最后一步：同意条款" }[step.value] || "";
+  }
+  if (view.value === "sent") return "邮件已发送";
+  return "输入你的邮箱";
+});
+
+const emailRules = [
+  (v) => !!v || "请输入邮箱",
+  (v) => /.+@.+\..+/.test(v) || "邮箱格式不正确",
+];
+
+// —— 密码强度 ——
+const passwordValid = computed(
+  () =>
+    password.value.length >= 8 &&
+    /[A-Za-z]/.test(password.value) &&
+    /[0-9]/.test(password.value)
+);
+const passwordStrength = computed(() => {
+  const v = password.value;
+  if (!v) return { percent: 0, label: "", color: "error" };
+  let score = 0;
+  if (v.length >= 8) score += 1;
+  if (v.length >= 12) score += 1;
+  if (/[a-z]/.test(v) && /[A-Z]/.test(v)) score += 1;
+  if (/[0-9]/.test(v)) score += 1;
+  if (/[^A-Za-z0-9]/.test(v)) score += 1;
+  if (score <= 2) return { percent: 33, label: "弱", color: "error" };
+  if (score === 3) return { percent: 66, label: "中", color: "warning" };
+  return { percent: 100, label: "强", color: "success" };
+});
+
+const allAgreed = computed(() => Object.values(agreement.value).every(Boolean));
+
+const canProceed = computed(() => {
+  if (step.value === 1) return usernameCheck.value.status === "ok";
+  if (step.value === 2) return passwordValid.value;
+  if (step.value === 3) return allAgreed.value;
+  return false;
+});
+
+const redirectQuery = computed(() =>
+  authStore.authRedirectUrl
+    ? `?redirect=${encodeURIComponent(authStore.authRedirectUrl)}`
+    : ""
+);
+const loginLink = computed(() => `/app/account/login${redirectQuery.value}`);
+
+// —— 用户名实时占用校验（带防抖）——
+const usernameFormatError = (v) => {
+  if (v.length < 2) return "用户名至少需要 2 个字符";
+  if (v.length > 20) return "用户名不能超过 20 个字符";
+  if (!/^[a-z]/.test(v)) return "用户名必须以小写字母开头";
+  if (!/^[a-z0-9]+(_[a-z0-9]+)*$/.test(v))
+    return "只能含小写字母、数字，下划线不能连续或位于首尾";
+  return null;
+};
+let usernameTimer = null;
+watch(username, (v) => {
+  clearTimeout(usernameTimer);
+  const val = (v || "").trim();
+  if (!val) {
+    usernameCheck.value = { status: "idle", message: "" };
+    return;
+  }
+  const fmt = usernameFormatError(val);
+  if (fmt) {
+    usernameCheck.value = { status: "error", message: fmt };
+    return;
+  }
+  usernameCheck.value = { status: "checking", message: "" };
+  usernameTimer = setTimeout(async () => {
+    const result = await AuthService.checkRegisterAvailability({ username: val });
+    if (username.value.trim() !== val) return;
+    const r = result.username;
+    usernameCheck.value = r
+      ? { status: r.valid && r.available ? "ok" : "error", message: r.message }
+      : { status: "error", message: "检查失败，请重试" };
+  }, 500);
+});
+
+let countdownTimer = null;
+const startCountdown = (seconds = 60) => {
+  clearInterval(countdownTimer);
+  countdown.value = seconds;
+  countdownTimer = setInterval(() => {
+    countdown.value -= 1;
+    if (countdown.value <= 0) clearInterval(countdownTimer);
+  }, 1000);
+};
+
+onBeforeUnmount(() => {
+  clearTimeout(usernameTimer);
+  clearInterval(countdownTimer);
+});
+
+// 携带令牌 → 校验并进入注册继续
+onMounted(async () => {
+  if (!token.value) return;
+  const result = await AuthService.validateRegisterToken(token.value);
+  if (result?.status === "success" && result.data?.email) {
+    verifiedEmail.value = result.data.email;
+    view.value = "continue";
+  } else {
+    view.value = "invalid";
+    error.value = result?.message || "注册链接无效或已过期";
+  }
+});
+
+// 模式 A：提交邮箱
+const submitEmail = async () => {
+  if (countdown.value > 0) return;
+  error.value = "";
+  if (!/.+@.+\..+/.test(email.value)) {
+    error.value = "请输入有效的邮箱地址";
+    return;
+  }
+  loading.value = true;
+  try {
+    const captcha = recaptchaRef.value?.getResponse() || null;
+    const resp = await AuthService.beginRegister(email.value.trim(), captcha);
+    if (resp?.status === "success") {
+      view.value = "sent";
+      startCountdown(60);
+    } else {
+      error.value = resp?.message || "发送失败，请重试";
     }
+  } catch (e) {
+    error.value = e?.response?.data?.message || e?.message || "发送失败，请重试";
+  } finally {
+    loading.value = false;
+    recaptchaRef.value?.resetCaptcha?.();
+  }
+};
 
-    // State variables
-    const email = ref("");
-    const username = ref("");
-    const password = ref("");
-    const loading = ref(false);
-    const showPassword = ref(false);
-    const recaptcha = ref(null);
+// 模式 B：步骤导航
+const next = () => {
+  error.value = "";
+  if (!canProceed.value) return;
+  if (step.value < 3) step.value += 1;
+};
 
-    const agreement = ref({
-      privacy: false,
-      terms: false,
-      rules: false,
-      datadelete: false,
-    });
-
-    // Validation rules
-    const emailRules = [
-      (v) => !!v || "必须填写邮箱",
-      (v) => /.+@.+\..+/.test(v) || "不符合格式",
-    ];
-
-    const usernameRules = [
-      (v) => !!v || "必须填写用户名",
-      (v) => v.length >= 3 || "用户名至少需要3个字符",
-      (v) => v.length <= 20 || "用户名最多20个字符",
-    ];
-
-    const passwordRules = [
-      (v) => !!v || "必须填写密码",
-      (v) => v.length >= 8 || "密码至少需要8个字符",
-      (v) =>
-        (/[A-Za-z]/.test(v) && /[0-9]/.test(v)) || "密码必须包含字母和数字",
-    ];
-
-    // OAuth providers
-    const providers = Object.entries(oauthProviders)
-      .filter(([key]) => key !== "default")
-      .map(([key, value]) => ({
-        id: key,
-        ...value,
-      }));
-
-    // Check if user is already logged in
-    if (localuser.isLogin.value === true) {
+// 模式 B：完成注册
+const complete = async () => {
+  if (!allAgreed.value) {
+    error.value = "请先阅读并同意相关条款";
+    return;
+  }
+  error.value = "";
+  loading.value = true;
+  try {
+    const resp = await AuthService.completeRegister(
+      token.value,
+      username.value.trim(),
+      password.value
+    );
+    if (resp?.status === "success" && !resp.needLogin) {
+      // 已自动登录
       authStore.navigateToAuthRedirect(router);
+    } else if (resp?.status === "success") {
+      router.push("/app/account/login");
+    } else {
+      error.value = resp?.message || "注册失败";
+      // 用户名/邮箱可能被占用，回到用户名步骤
+      if (resp?.message && resp.message.includes("用户名")) step.value = 1;
     }
-
-    // Set page title
-    useHead({
-      title: "注册",
-    });
-
-    const resetAgreement = () => {
-      agreement.value = {
-        privacy: false,
-        terms: false,
-        rules: false,
-        datadelete: false,
-      };
-    };
-
-    const validateAgreement = () => {
-      for (const key in agreement.value) {
-        if (agreement.value[key] === false) {
-          showErrorToast("请先阅读并同意相关协议");
-          return false;
-        }
-      }
-      return true;
-    };
-
-    const register = async () => {
-      try {
-        if (!validateAgreement()) return;
-
-        loading.value = true;
-
-        // Get the recaptcha token using the correct method
-        const recaptchaToken = recaptcha.value?.getResponse() || null;
-
-        // Create registration data
-        const data = {
-          email: email.value,
-          username: username.value,
-          password: password.value,
-          captcha: recaptchaToken,
-          skipPassword: false,
-        };
-
-        // Call the register API
-        const response = await AuthService.register(data);
-
-        if (response.status === "success") {
-          if (response.needVerify) {
-            // Store email and temporary token for verification
-            localStorage.setItem("verificationEmail", email.value);
-            if (response.temporaryToken) {
-              localStorage.setItem(
-                "verificationToken",
-                response.temporaryToken
-              );
-            }
-
-            // Redirect to verification page
-            router.push("/app/account/register/verify");
-          } else {
-            showSuccessToast(response.message || "注册成功");
-
-            if (response.needPassword) {
-              router.push("/app/account/register/setup-password");
-            } else {
-              authStore.navigateToAuthRedirect(router);
-            }
-          }
-        } else {
-          showErrorToast(response.message || "注册失败");
-        }
-      } catch (error) {
-        console.error(error);
-        const errorMessage =
-          error.response?.data?.message || "注册失败，请稍后再试";
-        showErrorToast(errorMessage);
-      } finally {
-        loading.value = false;
-      }
-    };
-
-    const registerWithOAuth = (provider) => {
-      window.location.href = AuthService.oauthRedirect(provider, true);
-    };
-
-    const showSuccessToast = (message) => {
-      // Try different toast systems
-      if (window.$toast) {
-        window.$toast.add({
-          severity: "success",
-          summary: "成功",
-          detail: message,
-          life: 3000,
-        });
-      } else if (window.$notify) {
-        window.$notify({
-          title: "成功",
-          message: message,
-          type: "success",
-        });
-      } else {
-        console.log("Success:", message);
-        alert(message);
-      }
-    };
-
-    const showErrorToast = (message) => {
-      // Try different toast systems
-      if (window.$toast) {
-        window.$toast.add({
-          severity: "error",
-          summary: "错误",
-          detail: message,
-          life: 3000,
-        });
-      } else if (window.$notify) {
-        window.$notify({
-          title: "错误",
-          message: message,
-          type: "error",
-        });
-      } else {
-        console.error("Error:", message);
-        alert(message);
-      }
-    };
-
-    // Redirect-preserving links
-    const redirectQuery = computed(() => {
-      const url = authStore.authRedirectUrl;
-      return url ? `?redirect=${encodeURIComponent(url)}` : '';
-    });
-    const loginLink = computed(() => `/app/account/login${redirectQuery.value}`);
-    const retrieveLink = computed(() => `/app/account/retrieve${redirectQuery.value}`);
-
-    return {
-      email,
-      username,
-      password,
-      loading,
-      showPassword,
-      agreement,
-      emailRules,
-      usernameRules,
-      passwordRules,
-      recaptcha,
-      registerForm,
-      register,
-      resetAgreement,
-      registerWithOAuth,
-      showSuccessToast,
-      showErrorToast,
-      providers,
-      loginLink,
-      retrieveLink,
-    };
-  },
+  } catch (e) {
+    error.value = e?.response?.data?.message || e?.message || "注册失败，请稍后再试";
+  } finally {
+    loading.value = false;
+  }
 };
 </script>
-
-<style scoped>
-.v-divider {
-  margin: 24px 0;
-  border-color: rgba(var(--v-border-color), var(--v-border-opacity));
-}
-</style>

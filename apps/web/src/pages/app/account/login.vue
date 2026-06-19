@@ -1,16 +1,17 @@
 <template>
-  <div>
-    <AuthCard :subtitle="subtitle">
+  <v-container class="d-flex align-center justify-center fill-height pa-4">
+    <div class="mx-auto" style="width: 100%; max-width: 448px">
       <v-alert
         v-if="reason === 'session_expired'"
         type="warning"
         variant="tonal"
+        rounded="lg"
         class="mb-4"
         text="您的登录状态已失效，请重新登录"
       />
-      <LoginForm @login-success="handleLoginSuccess" @login-error="handleLoginError"/>
-    </AuthCard>
-  </div>
+      <SignInFlow @login-success="handleLoginSuccess" />
+    </div>
+  </v-container>
 </template>
 
 <script>
@@ -20,11 +21,10 @@ import { authClient, TOKEN_REFRESHED_EVENT_NAME } from "@/axios/axios";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { onUnmounted } from "vue";
-import AuthCard from "@/components/AuthCard.vue";
-import LoginForm from "@/components/account/LoginForm.vue";
+import SignInFlow from "@/components/account/SignInFlow.vue";
 
 export default {
-  components: {AuthCard, LoginForm},
+  components: { SignInFlow },
 
   setup() {
     const route = useRoute();
@@ -32,10 +32,6 @@ export default {
     const authStore = useAuthStore();
 
     const reason = route.query.reason || null;
-
-    const subtitle = reason === "session_expired"
-      ? "会话已过期，请重新登录"
-      : "登录你的账户";
 
     // Capture redirect from query or sessionStorage
     const redirectFromQuery =
@@ -97,15 +93,9 @@ export default {
       authStore.navigateToAuthRedirect(router);
     };
 
-    const handleLoginError = (error) => {
-      console.error("Login error:", error);
-    };
-
     return {
       reason,
-      subtitle,
       handleLoginSuccess,
-      handleLoginError,
     };
   },
 };

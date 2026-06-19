@@ -303,33 +303,74 @@
           <v-btn icon="mdi-close" size="small" variant="text" @click="showCommitDetailsDialog = false" />
         </v-card-title>
         <v-divider />
-        <v-card-text>
-          <div class="d-flex align-center mb-3">
-            <v-avatar size="28" class="mr-2">
-              <v-img v-if="selectedCommit.author?.avatar" :src="getAvatarUrl(selectedCommit.author.avatar)" />
-              <v-icon v-else icon="mdi-account" size="16" />
-            </v-avatar>
-            <span class="text-body-2">
-              {{ selectedCommit.author?.display_name || selectedCommit.author?.username || '未知' }}
-            </span>
-            <span class="text-caption text-medium-emphasis ml-2">
-              {{ formatCommitDate(selectedCommit.commit_date) }}
-            </span>
+        <v-card-text class="pa-0">
+          <div class="pa-4">
+            <v-row>
+              <v-col cols="12" md="8">
+                <div class="d-flex align-center mb-3">
+                  <v-avatar size="32" class="mr-3">
+                    <v-img v-if="selectedCommit.author?.avatar" :src="getAvatarUrl(selectedCommit.author.avatar)" />
+                    <v-icon v-else icon="mdi-account" />
+                  </v-avatar>
+                  <div>
+                    <div class="text-subtitle-2">
+                      {{ selectedCommit.author?.display_name || selectedCommit.author?.username || '未知' }}
+                    </div>
+                    <div class="text-caption text-medium-emphasis">@{{ selectedCommit.author?.username }}</div>
+                  </div>
+                </div>
+                <div class="text-body-2 mb-2">{{ selectedCommit.commit_message || '无提交信息' }}</div>
+                <div v-if="selectedCommit.commit_description" class="text-body-2 text-medium-emphasis">
+                  {{ selectedCommit.commit_description }}
+                </div>
+              </v-col>
+              <v-col cols="12" md="4">
+                <div class="text-caption text-medium-emphasis mb-2">提交信息</div>
+                <div class="d-flex align-center mb-2">
+                  <v-icon icon="mdi-source-commit" size="16" class="mr-2" />
+                  <span class="text-body-2">{{ selectedCommit.id?.substring(0, 7) }}</span>
+                </div>
+                <div class="d-flex align-center mb-2">
+                  <v-icon icon="mdi-clock-outline" size="16" class="mr-2" />
+                  <span class="text-body-2">{{ formatCommitDate(selectedCommit.commit_date) }}</span>
+                </div>
+                <div v-if="selectedCommit.parent_commit_id" class="d-flex align-center mb-2">
+                  <v-icon icon="mdi-source-branch" size="16" class="mr-2" />
+                  <span class="text-body-2">{{ selectedCommit.parent_commit_id.substring(0, 7) }}</span>
+                </div>
+                <div v-if="selectedCommit.commit_file" class="d-flex align-center">
+                  <v-icon icon="mdi-file-document" size="16" class="mr-2" />
+                  <span class="text-body-2">{{ selectedCommit.commit_file.substring(0, 7) }}</span>
+                </div>
+              </v-col>
+            </v-row>
           </div>
-          <div v-if="selectedCommit.commit_description" class="text-body-2 text-medium-emphasis mb-3">
-            {{ selectedCommit.commit_description }}
+
+          <v-divider />
+
+          <div class="pa-4">
+            <div class="d-flex ga-2">
+              <v-btn size="small" variant="outlined" prepend-icon="mdi-eye" @click="viewCommitFromDetails(selectedCommit)">
+                查看代码
+              </v-btn>
+              <v-btn size="small" variant="outlined" prepend-icon="mdi-restore" @click="restoreCommitFromDetails(selectedCommit)">
+                恢复到此提交
+              </v-btn>
+              <v-btn size="small" variant="outlined" prepend-icon="mdi-content-copy" @click="copyCommitId(selectedCommit.id)">
+                复制ID
+              </v-btn>
+            </div>
           </div>
-          <div class="d-flex ga-2">
-            <v-btn size="small" variant="outlined" prepend-icon="mdi-eye" @click="viewCommitFromDetails(selectedCommit)">
-              查看代码
-            </v-btn>
-            <v-btn size="small" variant="outlined" prepend-icon="mdi-restore" @click="restoreCommitFromDetails(selectedCommit)">
-              恢复
-            </v-btn>
-            <v-btn size="small" variant="outlined" prepend-icon="mdi-content-copy" @click="copyCommitId(selectedCommit.id)">
-              复制ID
-            </v-btn>
-          </div>
+
+          <v-divider />
+
+          <v-expansion-panels variant="accordion">
+            <v-expansion-panel title="详细信息">
+              <v-expansion-panel-text>
+                <pre class="text-body-2" style="white-space: pre-wrap; font-size: 12px; font-family: monospace">{{ formatCommitDetailsJson(selectedCommit) }}</pre>
+              </v-expansion-panel-text>
+            </v-expansion-panel>
+          </v-expansion-panels>
         </v-card-text>
       </v-card>
     </v-dialog>
@@ -999,6 +1040,20 @@ export default {
     },
 
     getAvatarUrl(avatar) { return localuser.getUserAvatar(avatar); },
+
+    formatCommitDetailsJson(commit) {
+      if (!commit) return "无提交信息";
+      return JSON.stringify({
+        id: commit.id,
+        commit_message: commit.commit_message,
+        commit_description: commit.commit_description,
+        commit_date: commit.commit_date,
+        commit_file: commit.commit_file,
+        parent_commit_id: commit.parent_commit_id,
+        depth: commit.depth,
+        author: commit.author,
+      }, null, 2);
+    },
 
     showSnackbarMessage(message, color = "info", timeout = 5000) {
       this.snackbarMessage = message; this.snackbarColor = color;

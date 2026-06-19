@@ -1,293 +1,237 @@
 import logger from "../../services/logger.js";
-import {emailTest, hash, userpwTest, sanitizeUsername, validateUsername} from "../../services/global.js";
+import {emailTest, hash, userpwTest, validateUsername} from "../../services/global.js";
 import { prisma } from "../../services/prisma.js";
-import crypto from "crypto";
 import {
     checkRateLimit,
     createTemporaryToken,
     invalidateTemporaryToken,
     validateTemporaryToken,
-    VerificationType,
-    verifyCode
+    createRegistrationToken,
+    validateRegistrationToken,
+    invalidateRegistrationToken,
+    VerificationType
 } from "../../services/auth/verification.js";
 import {generateMagicLinkForLogin, sendMagicLinkEmail} from "../../services/auth/magiclink.js";
-import {sendVerificationCode, verifyEmailCode} from "../../services/auth/unifiedAuth.js";
+import {sendEmail} from "../../services/email/emailService.js";
+import tokenUtils from "../../services/auth/tokenUtils.js";
+import zcconfig from "../../services/config/zcconfig.js";
+import {createNotification} from "../notifications.js";
 import {createEvent} from "../events.js";
 import gorseService from "../../services/gorse.js";
 
 /**
- * 初始用户注册 - 只需要邮箱或用户名
+ * 开始注册 / 登录：用户仅输入邮箱
+ * - 邮箱已是激活账户 → 发送登录魔术链接
+ * - 邮箱未注册 → 发送注册链接（点击后继续注册，邮箱视为已验证）
+ * 两种情况返回相同响应，避免邮箱枚举（扫号）
  */
-export const registerUser = async (req, res) => {
+export const beginRegister = async (req, res) => {
     try {
-        const {email, username, password, skipPassword} = req.body;
+        const {email} = req.body;
+        const responseMessage = "我们已向该邮箱发送了一封邮件，请查收以继续";
 
-        // 至少需要邮箱或用户名
-        if (!email && !username) {
-            return res.status(200).json({
-                status: "error",
-                message: "至少需要提供邮箱或用户名",
-            });
+        if (!email || !emailTest(email)) {
+            return res.status(200).json({status: "error", message: "请输入有效的邮箱地址"});
         }
 
-        // 如果提供了邮箱，检查格式
-        if (email && !emailTest(email)) {
-            return res.status(200).json({
-                status: "error",
-                message: "邮箱格式不正确",
-            });
+        // 频率限制（仍返回统一成功响应，避免枚举）
+        const rateCheck = await checkRateLimit(email, VerificationType.REGISTER);
+        if (!rateCheck.success) {
+            logger.warn(`[beginRegister] 触发频率限制: ${email}`);
+            return res.status(200).json({status: "success", message: responseMessage});
         }
 
-        // 如果提供了密码，检查格式
-        if (password && !userpwTest(password)) {
-            return res.status(200).json({
-                status: "error",
-                message: "密码格式不正确，密码至少需要8位，包含数字和字母",
-            });
-        }
+        const contact = await prisma.ow_users_contacts.findFirst({
+            where: {contact_value: email, contact_type: "email"},
+        });
+        const existingUser = contact
+            ? await prisma.ow_users.findUnique({where: {id: contact.user_id}})
+            : null;
 
-        // 生成用户名（如果未提供）
-        let finalUsername = username;
-        if (!username) {
-            // 从邮箱生成用户名，取@前的部分并清理
-            const emailPrefix = sanitizeUsername(email.split('@')[0]) || 'user';
-            finalUsername = `user_${emailPrefix}_${Date.now().toString().substring(8)}`;
+        const frontendUrl = await zcconfig.get("urls.frontend");
 
-            // 确保用户名唯一
-            const existingUsername = await prisma.ow_users.findUnique({
-                where: {username: finalUsername},
-            });
-
-            if (existingUsername) {
-                finalUsername = `user_${emailPrefix}_${Date.now()}`;
+        if (existingUser && existingUser.status === "active" && contact.verified) {
+            // 已注册激活账户 → 发送登录魔术链接
+            const magicLinkResult = await generateMagicLinkForLogin(existingUser.id, email, {templateType: "login"});
+            if (magicLinkResult.success) {
+                await sendMagicLinkEmail(email, magicLinkResult.magicLink, {templateType: "login", userId: existingUser.id});
             }
         } else {
-            // 验证用户名格式
-            const validation = validateUsername(username);
-            if (!validation.valid) {
-                return res.status(200).json({
-                    status: "error",
-                    message: validation.message,
-                });
-            }
-
-            // 检查用户名是否已存在
-            const existingUser = await prisma.ow_users.findUnique({
-                where: {username},
-            });
-
-            if (existingUser) {
-                return res.status(200).json({
-                    status: "error",
-                    message: "用户名已被使用",
-                });
+            // 未注册 → 发送注册链接（尚无用户，直接发送到该邮箱）
+            const tokenResult = await createRegistrationToken(email, 3600); // 1小时有效
+            if (tokenResult.success) {
+                const registerLink = `${frontendUrl}/app/account/register?token=${tokenResult.token}`;
+                await sendEmail(email, "完成 ZeroCat 账户注册", buildRegisterEmailHtml(registerLink));
             }
         }
 
-        // 如果提供了邮箱，检查是否已存在
-        if (email) {
-            const existingContact = await prisma.ow_users_contacts.findFirst({
-                where: {
-                    contact_value: email,
-                    contact_type: "email"
-                },
-            });
-
-            if (existingContact) {
-                return res.status(200).json({
-                    status: "error",
-                    message: "邮箱已被使用",
-                });
-            }
-        }
-
-        // 创建用户
-        const newUser = await prisma.ow_users.create({
-            data: {
-                username: finalUsername,
-                display_name: finalUsername,
-                password: password && !skipPassword ? hash(password) : null,
-                status: email ? "pending" : "active", // 如果有邮箱，状态为pending，否则为active
-            },
-        });
-
-        // 同步新用户到 Gorse 推荐系统
-        gorseService.upsertUser(newUser.id, { username: finalUsername }).catch(e => {
-            logger.debug('[gorse] register user sync failed:', e.message);
-        });
-
-        try {
-            // 如果提供了邮箱，添加联系方式
-            if (email) {
-                // 添加邮箱联系方式
-                const contact = await prisma.ow_users_contacts.create({
-                    data: {
-                        user_id: newUser.id,
-                        contact_value: email,
-                        contact_type: "email",
-                        is_primary: true,
-                        verified: false
-                    }
-                });
-
-                // 检查发送频率限制
-                const rateCheck = await checkRateLimit(email, VerificationType.REGISTER);
-                if (!rateCheck.success) {
-                    return res.status(200).json({
-                        status: "error",
-                        message: rateCheck.message || "发送过于频繁，请稍后再试"
-                    });
-                }
-
-                // 使用魔术链接发送验证邮件
-                const options = {
-                    templateType: 'register',
-                    expiresIn: 7200, // 2小时有效
-                    redirect: '/app/account/setup'
-                };
-
-                const magicLinkResult = await generateMagicLinkForLogin(newUser.id, email, options);
-
-                if (magicLinkResult.success) {
-                    await sendMagicLinkEmail(email, magicLinkResult.magicLink, options);
-                } else {
-                    logger.error('生成注册验证链接失败:', magicLinkResult.message);
-                }
-            }
-
-            // 记录用户注册事件
-            await createEvent("user_register", newUser.id, "user", newUser.id, {
-                event_type: "user_register",
-                actor_id: newUser.id,
-                target_type: "user",
-                target_id: newUser.id
-            });
-
-            // 如果用户尚未设置密码，返回设置密码的指引
-            const needPassword = !password && !skipPassword;
-
-            // 如果提供了邮箱，创建临时令牌用于重发验证邮件或更改邮箱
-            let tempToken = null;
-            if (email) {
-                const tokenResult = await createTemporaryToken(newUser.id, 'account_setup');
-                if (tokenResult.success) {
-                    tempToken = tokenResult.token;
-                }
-            }
-
-            return res.status(200).json({
-                status: "success",
-                message: email
-                    ? "注册成功，请查收验证邮件完成注册"
-                    : "注册成功",
-                userId: newUser.id,
-                username: newUser.username,
-                needVerify: !!email,
-                needPassword: needPassword,
-                setupUrl: needPassword ? `/app/account/setup?user=${newUser.id}` : null,
-                temporaryToken: tempToken
-            });
-        } catch (error) {
-            // 如果添加联系方式失败，删除刚创建的用户
-            await prisma.ow_users.delete({
-                where: {id: newUser.id},
-            });
-            throw error;
-        }
+        return res.status(200).json({status: "success", message: responseMessage});
     } catch (error) {
-        logger.error("注册用户时出错:", error);
-        return res.status(200).json({
-            status: "error",
-            message: "注册失败",
-        });
+        logger.error("开始注册失败:", error);
+        return res.status(200).json({status: "error", message: "操作失败，请稍后再试"});
     }
 };
 
 /**
- * 验证邮箱
+ * 校验注册令牌并返回其邮箱（用于注册继续页展示已验证邮箱）
  */
-export const verifyEmail = async (req, res) => {
-    try {
-        const {email, code} = req.body;
+export const checkRegisterToken = async (req, res) => {
+    const {token} = req.query;
+    const result = await validateRegistrationToken(token);
+    if (!result.success) {
+        return res.status(200).json({status: "error", message: result.message});
+    }
+    return res.status(200).json({status: "success", data: {email: result.email}});
+};
 
-        if (!email || !code) {
-            return res.status(200).json({
-                status: "error",
-                message: "邮箱和验证码都是必需的",
-            });
+/**
+ * 完成注册：凭注册令牌设置用户名与密码，邮箱视为已验证并激活账户，完成后自动登录
+ */
+export const completeRegister = async (req, res) => {
+    try {
+        const {token, username, password} = req.body;
+
+        if (!token || !username || !password) {
+            return res.status(200).json({status: "error", message: "缺少必要参数"});
         }
 
-        // 查找邮箱联系方式
-        const contact = await prisma.ow_users_contacts.findFirst({
-            where: {
-                contact_value: email,
-                contact_type: "email",
+        // 校验注册令牌 → 邮箱
+        const tokenResult = await validateRegistrationToken(token);
+        if (!tokenResult.success) {
+            return res.status(200).json({status: "error", message: tokenResult.message});
+        }
+        const email = tokenResult.email;
+
+        // 校验用户名格式
+        const validation = validateUsername(username);
+        if (!validation.valid) {
+            return res.status(200).json({status: "error", message: validation.message});
+        }
+
+        // 校验密码
+        if (!userpwTest(password)) {
+            return res.status(200).json({status: "error", message: "密码格式不正确，密码至少需要8位，包含数字和字母"});
+        }
+
+        // 用户名占用检查
+        const existingUser = await prisma.ow_users.findUnique({where: {username}});
+        if (existingUser) {
+            return res.status(200).json({status: "error", message: "用户名已被使用"});
+        }
+
+        // 邮箱占用检查（竞态安全）
+        const existingContact = await prisma.ow_users_contacts.findFirst({
+            where: {contact_value: email, contact_type: "email"},
+        });
+        if (existingContact) {
+            return res.status(200).json({status: "error", message: "该邮箱已被注册，请直接登录"});
+        }
+
+        // 创建用户（邮箱已验证、账户激活）
+        const newUser = await prisma.ow_users.create({
+            data: {
+                username,
+                display_name: username,
+                password: hash(password),
+                status: "active",
             },
         });
-
-        if (!contact) {
-            return res.status(200).json({
-                status: "error",
-                message: "未找到此邮箱",
-            });
-        }
-
-        // 验证验证码
-        const verifyResult = await verifyCode(email, code, VerificationType.VERIFY_EMAIL);
-
-        if (!verifyResult.success) {
-            return res.status(200).json({
-                status: "error",
-                message: verifyResult.message,
-                attemptsLeft: verifyResult.attemptsLeft,
-            });
-        }
-
-        // 更新邮箱为已验证
-        await prisma.ow_users_contacts.update({
-            where: {
-                contact_id: contact.contact_id,
-            },
+        await prisma.ow_users_contacts.create({
             data: {
+                user_id: newUser.id,
+                contact_value: email,
+                contact_type: "email",
+                is_primary: true,
                 verified: true,
             },
         });
 
-        // 如果用户状态为pending，则更新为active
-        const user = await prisma.ow_users.findUnique({
-            where: {id: contact.user_id},
+        // 同步推荐系统 + 注册事件
+        gorseService.upsertUser(newUser.id, {username}).catch((e) => {
+            logger.debug("[gorse] register user sync failed:", e.message);
+        });
+        await createEvent("user_register", newUser.id, "user", newUser.id, {
+            event_type: "user_register",
+            actor_id: newUser.id,
+            target_type: "user",
+            target_id: newUser.id,
         });
 
-        if (user && user.status === "pending") {
-            await prisma.ow_users.update({
-                where: {id: user.id},
-                data: {
-                    status: "active",
-                },
-            });
+        // 注册令牌一次性使用
+        await invalidateRegistrationToken(token);
+
+        // 自动登录
+        const userInfo = await tokenUtils.getUserInfoForToken(newUser, email);
+        const tokenGen = await tokenUtils.createUserLoginTokens(
+            newUser.id,
+            userInfo,
+            req.ipInfo?.clientIP || req.ip,
+            req.headers["user-agent"],
+            {recordLoginEvent: true, loginMethod: "register"}
+        );
+
+        if (!tokenGen.success) {
+            return res.status(200).json({status: "success", message: "注册成功，请登录", needLogin: true});
         }
 
-        return res.status(200).json({
-            status: "success",
-            message: "邮箱验证成功",
-        });
+        const response = tokenUtils.generateLoginResponse(newUser, tokenGen, email);
+        tokenUtils.setRefreshTokenCookie(res, tokenGen.refreshToken, tokenGen.refreshExpiresAt);
+        return res.status(200).json(response);
     } catch (error) {
-        logger.error("验证邮箱时出错:", error);
-        return res.status(200).json({
-            status: "error",
-            message: "验证邮箱失败",
-        });
+        logger.error("完成注册失败:", error);
+        return res.status(200).json({status: "error", message: "注册失败"});
     }
 };
 
 /**
- * 发送找回密码验证码
+ * 构造注册邮件 HTML
+ */
+function buildRegisterEmailHtml(registerLink) {
+    return `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#1f2328;">
+  <h2 style="margin:0 0 16px;">完成你的 ZeroCat 账户注册</h2>
+  <p style="margin:0 0 16px;line-height:1.6;">点击下方按钮继续注册，你的邮箱将自动完成验证：</p>
+  <p style="margin:0 0 16px;"><a href="${registerLink}" style="display:inline-block;padding:12px 28px;background:#0098ff;color:#fff;border-radius:10px;text-decoration:none;font-weight:600;">继续注册</a></p>
+  <p style="margin:0 0 8px;color:#6b7280;font-size:13px;line-height:1.6;">如果按钮无法点击，请复制此链接到浏览器打开：<br>${registerLink}</p>
+  <p style="margin:16px 0 0;color:#9ca3af;font-size:12px;">链接 1 小时内有效。如果这不是你的操作，请忽略此邮件。</p>
+</div>`;
+}
+
+/**
+ * 注册可用性检查：用户名是否合法且未被占用
+ * 注意：邮箱存在性不在此暴露（防扫号），由 register/begin 以统一响应处理
+ */
+export const checkAvailability = async (req, res) => {
+    try {
+        const {username} = req.query;
+        const data = {};
+
+        if (typeof username === "string" && username.trim()) {
+            const value = username.trim();
+            const validation = validateUsername(value);
+            if (!validation.valid) {
+                data.username = {valid: false, available: false, message: validation.message};
+            } else {
+                const existing = await prisma.ow_users.findUnique({where: {username: value}});
+                data.username = existing
+                    ? {valid: true, available: false, message: "用户名已被使用"}
+                    : {valid: true, available: true, message: "用户名可用"};
+            }
+        }
+
+        return res.status(200).json({status: "success", data});
+    } catch (error) {
+        logger.error("注册可用性检查失败:", error);
+        return res.status(500).json({status: "error", message: "检查失败"});
+    }
+};
+
+/**
+ * 发送找回密码链接（点击链接打开设置新密码页面）
  */
 export const retrievePassword = async (req, res) => {
     try {
         const {email} = req.body;
-        const responseMessage = "如果此邮箱已注册，验证码将发送到您的邮箱";
-        let codeId = crypto.randomUUID();
+        const responseMessage = "如果此邮箱已注册，我们已向其发送密码重置链接";
 
         if (!email || !emailTest(email)) {
             return res.status(200).json({
@@ -296,7 +240,7 @@ export const retrievePassword = async (req, res) => {
             });
         }
 
-        // 查找邮箱联系方式
+        // 查找已验证的邮箱联系方式
         const contact = await prisma.ow_users_contacts.findFirst({
             where: {
                 contact_value: email,
@@ -305,89 +249,78 @@ export const retrievePassword = async (req, res) => {
             },
         });
 
+        // 安全起见：无论邮箱是否存在，都返回相同的成功响应，避免账号枚举
         if (!contact) {
-            // 安全起见，不告诉用户邮箱是否存在
-            return res.status(200).json({
-                status: "success",
-                message: responseMessage,
-                data: {
-                    code_id: codeId,
-                    expires_in: 300
-                }
-            });
+            return res.status(200).json({status: "success", message: responseMessage});
         }
 
-        // 获取用户信息
         const user = await prisma.ow_users.findUnique({
             where: {id: contact.user_id},
         });
 
         if (!user || user.status !== "active") {
-            // 安全起见，不告诉用户邮箱是否存在
-            return res.status(200).json({
-                status: "success",
-                message: responseMessage,
-                data: {
-                    code_id: codeId,
-                    expires_in: 300
-                }
-            });
+            return res.status(200).json({status: "success", message: responseMessage});
         }
 
-        // 检查发送频率限制
+        // 检查发送频率限制（仍返回统一成功响应以避免枚举）
         const rateCheck = await checkRateLimit(email, VerificationType.PASSWORD_RESET);
         if (!rateCheck.success) {
-            return res.status(200).json({
-                status: "error",
-                message: rateCheck.message || "发送过于频繁，请稍后再试"
-            });
+            logger.warn(`[retrievePassword] 触发发送频率限制: ${email}`);
+            return res.status(200).json({status: "success", message: responseMessage});
         }
 
-        const sendCodeResult = await sendVerificationCode(user.id, email, "reset_password");
-        if (!sendCodeResult.success) {
-            return res.status(200).json({
-                status: "error",
-                message: sendCodeResult.message || "发送验证码失败",
-            });
+        // 生成强随机重置令牌（存储于 Redis），仅通过邮件投递链接
+        const tokenResult = await createTemporaryToken(user.id, "reset_password", {email}, 1800); // 30分钟有效
+        if (!tokenResult.success) {
+            logger.error(`[retrievePassword] 创建重置令牌失败: ${tokenResult.message}`);
+            return res.status(200).json({status: "success", message: responseMessage});
         }
-        codeId = sendCodeResult.codeId;
+        const frontendUrl = await zcconfig.get("urls.frontend");
+        const resetLink = `${frontendUrl}/app/account/reset-password?token=${tokenResult.token}`;
 
-        return res.status(200).json({
-            status: "success",
-            message: "重置密码验证码已发送到您的邮箱",
+        await createNotification({
+            userId: user.id,
+            title: "重置密码",
+            content: `您正在重置账户密码。请点击下方链接设置新密码：\n\n${resetLink}\n\n链接将在 30 分钟后失效。如果这不是您的操作，请忽略此邮件。`,
+            notificationType: "password_reset_email",
+            notificationRequirement: "BASIC",
+            hidden: true,
+            pushChannels: ["email"],
             data: {
-                code_id: codeId,
-                expires_in: 300
+                email_to: email,
+                email_username: email.split("@")[0],
+                email_link: resetLink,
+                email_buttons: null,
+                type: "password_reset"
             }
         });
+
+        return res.status(200).json({status: "success", message: responseMessage});
     } catch (error) {
-        logger.error("发送找回密码验证码时出错:", error);
+        logger.error("发送找回密码链接时出错:", error);
         return res.status(200).json({
             status: "error",
-            message: "发送找回密码验证码失败",
+            message: "发送找回密码链接失败",
         });
     }
 };
 
 /**
- * 重置密码
+ * 重置密码（凭邮件中的强随机令牌）
  */
 export const resetPassword = async (req, res) => {
     try {
         const {
-            code_id: snakeCaseCodeId,
-            codeId: camelCaseCodeId,
-            code,
+            token,
             new_password: snakeCaseNewPassword,
             newPassword: camelCaseNewPassword
         } = req.body;
-        const codeId = snakeCaseCodeId || camelCaseCodeId;
         const newPassword = snakeCaseNewPassword || camelCaseNewPassword;
 
-        if (!codeId || !code || !newPassword) {
+        if (!token || !newPassword) {
             return res.status(200).json({
                 status: "error",
-                message: "验证码ID、验证码和新密码都是必需的",
+                message: "重置令牌和新密码都是必需的",
             });
         }
 
@@ -398,31 +331,17 @@ export const resetPassword = async (req, res) => {
             });
         }
 
-        const verifyResult = await verifyEmailCode(codeId, code);
-        if (!verifyResult.valid) {
+        // 校验强随机重置令牌（Redis 存储，限定用途 reset_password）
+        const tokenResult = await validateTemporaryToken(token, "reset_password");
+        if (!tokenResult.success) {
             return res.status(200).json({
                 status: "error",
-                message: verifyResult.message || "验证码无效或已过期",
-            });
-        }
-
-        if (verifyResult.data?.purpose !== "reset_password") {
-            return res.status(200).json({
-                status: "error",
-                message: "验证码用途不正确",
-            });
-        }
-
-        const userId = verifyResult.data?.userId;
-        if (!userId) {
-            return res.status(200).json({
-                status: "error",
-                message: "无效的验证码数据",
+                message: tokenResult.message || "重置链接无效或已过期",
             });
         }
 
         const user = await prisma.ow_users.findUnique({
-            where: {id: userId},
+            where: {id: tokenResult.userId},
         });
 
         if (!user) {
@@ -440,7 +359,7 @@ export const resetPassword = async (req, res) => {
             },
         });
 
-        // 撤销所有其他登录令牌（可选）
+        // 撤销所有现有登录令牌
         await prisma.ow_auth_tokens.updateMany({
             where: {
                 user_id: user.id,
@@ -451,6 +370,9 @@ export const resetPassword = async (req, res) => {
                 revoked_at: new Date(),
             },
         });
+
+        // 令牌一次性使用，立即失效
+        await invalidateTemporaryToken(token);
 
         return res.status(200).json({
             status: "success",
@@ -515,267 +437,6 @@ export const setPassword = async (req, res) => {
         return res.status(200).json({
             status: "error",
             message: "设置密码失败",
-        });
-    }
-};
-
-/**
- * 重发验证邮件
- */
-export const resendVerificationEmail = async (req, res) => {
-    try {
-        const {token} = req.body;
-
-        if (!token) {
-            return res.status(200).json({
-                status: "error",
-                message: "无效的请求"
-            });
-        }
-
-        // 验证临时令牌
-        const tokenResult = await validateTemporaryToken(token, 'account_setup');
-        if (!tokenResult.success) {
-            return res.status(200).json({
-                status: "error",
-                message: tokenResult.message || "无效的临时令牌"
-            });
-        }
-
-        const userId = tokenResult.userId;
-
-        // 获取用户信息和主邮箱
-        const user = await prisma.ow_users.findUnique({
-            where: {id: userId}
-        });
-
-        if (!user) {
-            return res.status(200).json({
-                status: "error",
-                message: "用户不存在"
-            });
-        }
-
-        // 获取用户的主邮箱
-        const contact = await prisma.ow_users_contacts.findFirst({
-            where: {
-                user_id: userId,
-                contact_type: "email",
-                is_primary: true
-            }
-        });
-
-        if (!contact) {
-            return res.status(200).json({
-                status: "error",
-                message: "未找到用户邮箱"
-            });
-        }
-
-        // 检查邮箱是否已验证
-        if (contact.verified) {
-            return res.status(200).json({
-                status: "error",
-                message: "该邮箱已经验证过"
-            });
-        }
-
-        // 检查发送频率限制
-        const rateCheck = await checkRateLimit(contact.contact_value, VerificationType.VERIFY_EMAIL);
-        if (!rateCheck.success) {
-            return res.status(200).json({
-                status: "error",
-                message: rateCheck.message || "发送过于频繁，请稍后再试"
-            });
-        }
-
-        // 发送验证邮件
-        const options = {
-            templateType: 'register',
-            expiresIn: 7200, // 2小时有效
-            redirect: '/app/account/setup'
-        };
-
-        const magicLinkResult = await generateMagicLinkForLogin(userId, contact.contact_value, options);
-
-        if (!magicLinkResult.success) {
-            return res.status(200).json({
-                status: "error",
-                message: "生成验证链接失败"
-            });
-        }
-
-        await sendMagicLinkEmail(contact.contact_value, magicLinkResult.magicLink, options);
-
-        // 重新创建临时令牌并延长有效期
-        const newTokenResult = await createTemporaryToken(userId, 'account_setup');
-
-        // 废弃旧的临时令牌
-        await invalidateTemporaryToken(token);
-
-        return res.status(200).json({
-            status: "success",
-            message: "验证邮件已重新发送",
-            expiresIn: magicLinkResult.expiresIn,
-            temporaryToken: newTokenResult.success ? newTokenResult.token : null
-        });
-    } catch (error) {
-        logger.error("重发验证邮件时出错:", error);
-        return res.status(200).json({
-            status: "error",
-            message: "重发验证邮件失败"
-        });
-    }
-};
-
-/**
- * 更改注册邮箱
- */
-export const changeRegisterEmail = async (req, res) => {
-    try {
-        const {token, email} = req.body;
-
-        if (!token || !email) {
-            return res.status(200).json({
-                status: "error",
-                message: "无效的请求"
-            });
-        }
-
-        if (!emailTest(email)) {
-            return res.status(200).json({
-                status: "error",
-                message: "邮箱格式不正确"
-            });
-        }
-
-        // 验证临时令牌
-        const tokenResult = await validateTemporaryToken(token, 'account_setup');
-        if (!tokenResult.success) {
-            return res.status(200).json({
-                status: "error",
-                message: tokenResult.message || "无效的临时令牌"
-            });
-        }
-
-        const userId = tokenResult.userId;
-
-        // 获取用户信息
-        const user = await prisma.ow_users.findUnique({
-            where: {id: userId}
-        });
-
-        if (!user) {
-            return res.status(200).json({
-                status: "error",
-                message: "用户不存在"
-            });
-        }
-
-        // 检查邮箱是否已被其他用户使用
-        const existingContact = await prisma.ow_users_contacts.findFirst({
-            where: {
-                contact_value: email,
-                contact_type: "email"
-            }
-        });
-
-        if (existingContact && existingContact.user_id !== userId) {
-            return res.status(200).json({
-                status: "error",
-                message: "该邮箱已被使用"
-            });
-        }
-
-        // 检查用户是否已有该邮箱
-        const userExistingEmail = await prisma.ow_users_contacts.findFirst({
-            where: {
-                user_id: userId,
-                contact_value: email,
-                contact_type: "email"
-            }
-        });
-
-        // 获取用户当前的主邮箱
-        const currentPrimaryEmail = await prisma.ow_users_contacts.findFirst({
-            where: {
-                user_id: userId,
-                contact_type: "email",
-                is_primary: true
-            }
-        });
-
-        // 使用事务处理
-        await prisma.$transaction(async (tx) => {
-            // 如果用户已有主邮箱且不是当前要设置的邮箱，将其设为非主要
-            if (currentPrimaryEmail && currentPrimaryEmail.contact_value !== email) {
-                await tx.ow_users_contacts.update({
-                    where: {contact_id: currentPrimaryEmail.contact_id},
-                    data: {is_primary: false}
-                });
-            }
-
-            // 如果用户已有该邮箱，则更新它；否则创建新的
-            if (userExistingEmail) {
-                await tx.ow_users_contacts.update({
-                    where: {contact_id: userExistingEmail.contact_id},
-                    data: {
-                        is_primary: true,
-                        verified: false
-                    }
-                });
-            } else {
-                await tx.ow_users_contacts.create({
-                    data: {
-                        user_id: userId,
-                        contact_value: email,
-                        contact_type: "email",
-                        is_primary: true,
-                        verified: false
-                    }
-                });
-            }
-        });
-
-        // 检查发送频率限制
-        const rateCheck = await checkRateLimit(email, VerificationType.CHANGE_EMAIL);
-        if (!rateCheck.success) {
-            return res.status(200).json({
-                status: "error",
-                message: rateCheck.message || "发送过于频繁，请稍后再试"
-            });
-        }
-
-        // 发送验证邮件
-        const options = {
-            templateType: 'register',
-            expiresIn: 7200, // 2小时有效
-            redirect: '/app/account/setup'
-        };
-
-        const magicLinkResult = await generateMagicLinkForLogin(userId, email, options);
-
-        if (magicLinkResult.success) {
-            await sendMagicLinkEmail(email, magicLinkResult.magicLink, options);
-        }
-
-        // 重新创建临时令牌并延长有效期
-        const newTokenResult = await createTemporaryToken(userId, 'account_setup');
-
-        // 废弃旧的临时令牌
-        await invalidateTemporaryToken(token);
-
-        return res.status(200).json({
-            status: "success",
-            message: "邮箱已更改，请查收验证邮件",
-            email: email,
-            temporaryToken: newTokenResult.success ? newTokenResult.token : null
-        });
-    } catch (error) {
-        logger.error("更改注册邮箱时出错:", error);
-        return res.status(200).json({
-            status: "error",
-            message: "更改注册邮箱失败"
         });
     }
 };

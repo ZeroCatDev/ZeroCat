@@ -1,30 +1,21 @@
 <template>
-  <v-dialog v-model="dialogVisible" width="400">
+  <v-dialog v-model="dialogVisible" width="420">
+    <v-card rounded="xl" class="position-relative pa-2">
+      <v-btn
+        class="position-absolute"
+        style="top: 8px; right: 8px; z-index: 1"
+        icon="mdi-open-in-new"
+        size="small"
+        variant="text"
+        to="/app/account/login"
+        @click="dialogVisible = false"
+      ></v-btn>
 
-
-    <v-card rounded="xl">
-      <v-card-title></v-card-title>
-      <v-card-text>
-        <v-btn
-          class="float-right"
-          icon="mdi-open-in-new"
-          size="small"
-          to="/app/account/login"
-          variant="text"
-          @click="dialogVisible = false"
-        ></v-btn>
-
-        <h5 class="text-h5 font-weight-semibold mb-1">欢迎来到ZeroCat！ 👋🏻</h5>
-        <p class="mb-0">登录你的账户</p>
-
-        <LoginForm
-          :showLinks="true"
-          :showOAuth="true"
-          @close="dialogVisible = false"
-          @login-success="handleLoginSuccess"
-          @login-error="handleLoginError"
-        />
-      </v-card-text>
+      <SignInFlow
+        embedded
+        @close="dialogVisible = false"
+        @login-success="handleLoginSuccess"
+      />
     </v-card>
   </v-dialog>
 </template>
@@ -33,11 +24,11 @@
 import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
-import LoginForm from "./LoginForm.vue";
+import SignInFlow from "./SignInFlow.vue";
 
 export default {
   name: "LoginDialog",
-  components: { LoginForm },
+  components: { SignInFlow },
   emits: ["login-success", "login-error"],
 
   setup(props, { emit }) {
@@ -62,14 +53,9 @@ export default {
       authStore.navigateToAuthRedirect(router, "/");
     };
 
-    const handleLoginError = (error) => {
-      emit("login-error", error);
-    };
-
     return {
       dialogVisible,
       handleLoginSuccess,
-      handleLoginError,
     };
   },
 };

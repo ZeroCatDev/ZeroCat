@@ -174,8 +174,8 @@ export async function checkRateLimit(identifier, type = 'default') {
     }
 }
 
-// 为用户创建临时令牌
-export async function createTemporaryToken(userId, purpose = 'resend_email', additionalData = {}) {
+// 为用户创建临时令牌（Redis 中存储的强随机令牌）
+export async function createTemporaryToken(userId, purpose = 'resend_email', additionalData = {}, expiresInSeconds = 86400) {
     try {
         if (!userId) {
             logger.error('创建临时令牌失败: 未提供用户ID');
@@ -185,11 +185,11 @@ export async function createTemporaryToken(userId, purpose = 'resend_email', add
             };
         }
 
-        // 使用统一的令牌生成函数
+        // 使用统一的令牌生成函数（crypto.randomBytes 强随机）
         const token = generateToken(32);
 
-        // 令牌有效期为24小时
-        const expiresIn = 86400; // 24小时 = 86400秒
+        // 令牌有效期（秒），默认 24 小时
+        const expiresIn = expiresInSeconds;
         const expiry = Date.now() + expiresIn * 1000;
         const createdAt = Date.now();
 
@@ -332,5 +332,47 @@ export async function invalidateTemporaryToken(token) {
             success: false,
             message: '标记临时令牌为已使用失败'
         };
+    }
+}
+
+// ============================
+// 注册流程令牌（邮箱已验证，凭此完成注册）
+// 强随机令牌，存储于 Redis，尚无用户故不绑定 userId
+// ============================
+export async function createRegistrationToken(email, expiresInSeconds = 3600) {
+    try {
+        const token = generateToken(32);
+        const key = `register_token:${token}`;
+        await redisClient.set(key, {email, createdAt: Date.now()}, expiresInSeconds);
+        return {success: true, token, expiresIn: expiresInSeconds};
+    } catch (error) {
+        logger.error('创建注册令牌失败:', error);
+        return {success: false, message: '创建注册令牌失败'};
+    }
+}
+
+export async function validateRegistrationToken(token) {
+    if (!token) {
+        return {success: false, message: '无效的注册令牌'};
+    }
+    try {
+        const data = await redisClient.get(`register_token:${token}`);
+        if (!data || !data.email) {
+            return {success: false, message: '注册链接无效或已过期'};
+        }
+        return {success: true, email: data.email};
+    } catch (error) {
+        logger.error('验证注册令牌失败:', error);
+        return {success: false, message: '验证注册令牌失败'};
+    }
+}
+
+export async function invalidateRegistrationToken(token) {
+    try {
+        await redisClient.delete(`register_token:${token}`);
+        return {success: true};
+    } catch (error) {
+        logger.error('使注册令牌失效失败:', error);
+        return {success: false};
     }
 }

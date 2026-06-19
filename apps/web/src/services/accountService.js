@@ -58,14 +58,6 @@ export function retrievePassword(data) {
   });
 }
 
-export function registerUser(data) {
-  return request({
-    url: "/account/register",
-    method: "post",
-    data,
-  });
-}
-
 export function validateMagicLink(token) {
   return request({
     url: `/account/magiclink/validate?token=${token}`,
@@ -84,14 +76,6 @@ export function generateMagicLink(data) {
 export function loginUser(data) {
   return request({
     url: "/account/login",
-    method: "post",
-    data,
-  });
-}
-
-export function resetPassword(data) {
-  return request({
-    url: "/account/reset-password",
     method: "post",
     data,
   });
@@ -140,39 +124,6 @@ export function revokeToken(tokenId) {
     method: "post",
     data: {
       token_id: tokenId
-    },
-  });
-}
-
-// Email verification and management methods
-export function resendVerificationEmail(token) {
-  return request({
-    url: "/account/register/resend-verification-email",
-    method: "post",
-    data: {
-      token
-    },
-  });
-}
-
-export function changeRegisterEmail(token, email) {
-  return request({
-    url: "/account/register/change-register-email",
-    method: "post",
-    data: {
-      token,
-      email
-    },
-  });
-}
-
-export function verifyEmail(email, code) {
-  return request({
-    url: "/account/register/verify-email",
-    method: "post",
-    data: {
-      email,
-      code
     },
   });
 }

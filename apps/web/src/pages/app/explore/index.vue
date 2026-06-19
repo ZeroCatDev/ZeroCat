@@ -144,7 +144,7 @@
             density="compact"
             icon="mdi-robot-outline"
           >
-            正在展示 AI 推荐 · 点击项目即标记为已读
+            发帖与修改个人简介有助于优化推荐准确性
           </v-alert>
 
           <div class="result-topbar">

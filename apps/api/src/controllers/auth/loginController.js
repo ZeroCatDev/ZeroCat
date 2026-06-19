@@ -21,6 +21,44 @@ import tokenUtils from "../../services/auth/tokenUtils.js";
 import twoFactor from "../../services/auth/twoFactor.js";
 
 /**
+ * 通过用户名或邮箱解析用户（邮箱优先匹配已验证/主邮箱联系方式，其次按用户名）
+ */
+const resolveUserByIdentifier = async (identifier) => {
+    if (!identifier) return null;
+    let user = null;
+    if (emailTest(identifier)) {
+        const contact = await prisma.ow_users_contacts.findFirst({
+            where: {
+                contact_value: identifier,
+                contact_type: "email",
+                OR: [{is_primary: true}, {verified: true}],
+            },
+        });
+        if (contact) {
+            user = await prisma.ow_users.findUnique({where: {id: contact.user_id}});
+        }
+    }
+    if (!user) {
+        user = await prisma.ow_users.findFirst({where: {username: identifier}});
+    }
+    return user;
+};
+
+/**
+ * 获取用户用于接收验证码/链接的邮箱（主邮箱优先，其次任一已验证邮箱）
+ */
+const getUserDeliveryEmail = async (userId) => {
+    const primary = await prisma.ow_users_contacts.findFirst({
+        where: {user_id: userId, contact_type: "email", is_primary: true, verified: true},
+    });
+    if (primary?.contact_value) return primary.contact_value;
+    const verified = await prisma.ow_users_contacts.findFirst({
+        where: {user_id: userId, contact_type: "email", verified: true},
+    });
+    return verified?.contact_value || null;
+};
+
+/**
  * 处理用户密码登录
  */
 export const loginWithPassword = async (req, res, next) => {
@@ -200,52 +238,35 @@ export const loginWithPassword = async (req, res, next) => {
 };
 
 /**
- * 发送登录验证码
+ * 发送登录验证码（支持用户名或邮箱，带防枚举）
  */
 export const sendLoginCode = async (req, res) => {
     try {
-        const {email} = req.body;
+        const identifier = req.body.identifier || req.body.email;
+        const responseMessage = "如果该账户存在，验证码已发送到其绑定邮箱";
 
-        if (!email) {
+        if (!identifier) {
             return res.status(200).json({
                 status: "error",
-                message: "邮箱是必需的",
+                message: "请输入邮箱或用户名",
             });
         }
 
-        // 检查发送频率限制
+        const user = await resolveUserByIdentifier(identifier);
+        const email = user && user.status === "active"
+            ? await getUserDeliveryEmail(user.id)
+            : null;
+
+        // 账户不存在 / 未绑定邮箱：返回统一成功响应，避免账号枚举
+        if (!email) {
+            return res.status(200).json({status: "success", message: responseMessage, expiresIn: 300});
+        }
+
+        // 检查发送频率限制（仍返回统一成功响应）
         const rateCheck = await checkRateLimit(email, VerificationType.LOGIN);
         if (!rateCheck.success) {
-            return res.status(200).json({
-                status: "error",
-                message: rateCheck.message,
-            });
-        }
-
-        if (!email || !emailTest(email)) {
-            return res.status(200).json({
-                status: "error",
-                message: "请提供有效的邮箱地址",
-            });
-        }
-
-        // 查找邮箱联系方式
-        const contact = await prisma.ow_users_contacts.findFirst({
-            where: {
-                contact_value: email,
-                contact_type: "email",
-                OR: [
-                    {is_primary: true}, // 主邮箱
-                    {verified: true}, // 或已验证的邮箱
-                ],
-            },
-        });
-
-        if (!contact) {
-            return res.status(200).json({
-                status: "error",
-                message: "未找到此邮箱",
-            });
+            logger.warn(`[sendLoginCode] 触发发送频率限制: ${email}`);
+            return res.status(200).json({status: "success", message: responseMessage, expiresIn: 300});
         }
 
         // 生成验证码
@@ -255,18 +276,14 @@ export const sendLoginCode = async (req, res) => {
         );
 
         if (!verificationResult.success) {
-            return res.status(200).json({
-                status: "error",
-                message: verificationResult.message || "生成验证码失败",
-            });
+            logger.error(`[sendLoginCode] 生成验证码失败: ${verificationResult.message}`);
+            return res.status(200).json({status: "success", message: responseMessage, expiresIn: 300});
         }
 
-        // 使用createNotification发送登录验证码通知
-        const code = verificationResult.code;
-
         // 发送登录验证码邮件通知
+        const code = verificationResult.code;
         await createNotification({
-            userId: contact.user_id,
+            userId: user.id,
             title: '登录验证码',
             content: `您的登录验证码：${code}\n\n请在登录页面输入此验证码完成登录。\n\n验证码5分钟内有效，请及时使用。`,
             notificationType: 'login_code_email',
@@ -285,8 +302,7 @@ export const sendLoginCode = async (req, res) => {
 
         return res.status(200).json({
             status: "success",
-            message: "验证码已发送",
-            email: email,
+            message: responseMessage,
             expiresIn: 300, // 5分钟过期
         });
     } catch (error) {
@@ -299,35 +315,28 @@ export const sendLoginCode = async (req, res) => {
 };
 
 /**
- * 使用验证码登录
+ * 使用验证码登录（支持用户名或邮箱，带防枚举）
  */
 export const loginWithCode = async (req, res) => {
     try {
-        const {email, code} = req.body;
+        const identifier = req.body.identifier || req.body.email;
+        const {code} = req.body;
 
-        if (!email || !code) {
+        if (!identifier || !code) {
             return res.status(200).json({
                 status: "error",
-                message: "邮箱和验证码都是必需的",
+                message: "邮箱/用户名和验证码都是必需的",
             });
         }
 
-        // 查找邮箱联系方式
-        const contact = await prisma.ow_users_contacts.findFirst({
-            where: {
-                contact_value: email,
-                contact_type: "email",
-                OR: [
-                    {is_primary: true}, // 主邮箱
-                    {verified: true}, // 或已验证的邮箱
-                ],
-            },
-        });
+        const user = await resolveUserByIdentifier(identifier);
+        const email = user ? await getUserDeliveryEmail(user.id) : null;
 
-        if (!contact) {
+        // 账户不存在 / 无邮箱：返回与验证码错误一致的提示，避免账号枚举
+        if (!user || !email) {
             return res.status(200).json({
                 status: "error",
-                message: "未找到此邮箱",
+                message: "验证码无效或已过期",
             });
         }
 
@@ -339,18 +348,6 @@ export const loginWithCode = async (req, res) => {
                 status: "error",
                 message: verifyResult.message,
                 attemptsLeft: verifyResult.attemptsLeft,
-            });
-        }
-
-        // 获取用户信息
-        const user = await prisma.ow_users.findUnique({
-            where: {id: contact.user_id},
-        });
-
-        if (!user) {
-            return res.status(200).json({
-                status: "error",
-                message: "用户不存在",
             });
         }
 
@@ -416,56 +413,36 @@ export const loginWithCode = async (req, res) => {
 };
 
 /**
- * 生成魔术链接
+ * 生成魔术链接（支持用户名或邮箱，带防枚举）
  */
 export const sendMagicLinkForLogin = async (req, res) => {
     try {
-        const {email, redirect} = req.body;
+        const identifier = req.body.identifier || req.body.email;
+        const {redirect} = req.body;
+        const responseMessage = "如果该账户存在，登录链接已发送到其绑定邮箱";
 
-        if (!email || !emailTest(email)) {
+        if (!identifier) {
             return res.status(200).json({
                 status: "error",
-                message: "无效的邮箱地址",
+                message: "请输入邮箱或用户名",
             });
         }
 
-        // 查找邮箱联系方式
-        const contact = await prisma.ow_users_contacts.findFirst({
-            where: {
-                contact_value: email,
-                contact_type: "email",
-                OR: [
-                    {is_primary: true}, // 主邮箱
-                    {verified: true}, // 或已验证的邮箱
-                ],
-            },
-        });
+        const user = await resolveUserByIdentifier(identifier);
+        const email = user && user.status === "active"
+            ? await getUserDeliveryEmail(user.id)
+            : null;
 
-        if (!contact) {
-            return res.status(200).json({
-                status: "error",
-                message: "未找到此邮箱地址",
-            });
+        // 账户不存在 / 未绑定邮箱：返回统一成功响应，避免账号枚举
+        if (!email) {
+            return res.status(200).json({status: "success", message: responseMessage});
         }
 
-        const user = await prisma.ow_users.findUnique({
-            where: {id: contact.user_id},
-        });
-
-        if (!user) {
-            return res.status(200).json({
-                status: "error",
-                message: "用户不存在",
-            });
-        }
-
-        // 检查速率限制
+        // 检查速率限制（仍返回统一成功响应）
         const rateCheck = await checkRateLimit(email, VerificationType.LOGIN);
         if (!rateCheck.success) {
-            return res.status(200).json({
-                status: "error",
-                message: rateCheck.message,
-            });
+            logger.warn(`[sendMagicLink] 触发发送频率限制: ${email}`);
+            return res.status(200).json({status: "success", message: responseMessage});
         }
 
         // 生成魔术链接
@@ -478,17 +455,11 @@ export const sendMagicLinkForLogin = async (req, res) => {
             redirect,
         };
 
-        const magicLinkResult = await generateMagicLinkForLogin(
-            user.id,
-            email,
-            options
-        );
+        const magicLinkResult = await generateMagicLinkForLogin(user.id, email, options);
 
         if (!magicLinkResult.success) {
-            return res.status(200).json({
-                status: "error",
-                message: magicLinkResult.message || "生成魔术链接失败",
-            });
+            logger.error(`[sendMagicLink] 生成失败: ${magicLinkResult.message}`);
+            return res.status(200).json({status: "success", message: responseMessage});
         }
 
         // 发送魔术链接邮件
@@ -497,11 +468,7 @@ export const sendMagicLinkForLogin = async (req, res) => {
             userId: user.id
         });
 
-        return res.status(200).json({
-            status: "success",
-            message: "魔术链接已发送到您的邮箱",
-            expiresIn: magicLinkResult.expiresIn,
-        });
+        return res.status(200).json({status: "success", message: responseMessage});
     } catch (error) {
         logger.error("生成魔术链接时出错:", error);
         return res.status(200).json({

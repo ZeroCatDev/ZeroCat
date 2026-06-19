@@ -34,9 +34,8 @@ export const authRequiredRoutes = [
     excludes: [
       '/app/account/login',
       '/app/account/register',
-      '/app/account/register/verify',
       '/app/account/retrieve',
-      '/app/account/retrievecallback',
+      '/app/account/reset-password',
       '/app/account/magiclink',
       '/app/account/magiclink/validate',
       '/app/account/email/verify',

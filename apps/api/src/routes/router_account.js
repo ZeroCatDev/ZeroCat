@@ -40,12 +40,11 @@ router.get("/logout", (req, res) => {
 });
 
 // 注册和密码管理相关路由
-router.post("/register", geetestMiddleware, registerController.registerUser);
-router.post("/register/verify-email", registerController.verifyEmail);
-router.post("/register/resend-verification-email", registerController.resendVerificationEmail);
-router.post("/register/change-register-email", registerController.changeRegisterEmail);
+router.get("/register/check", registerController.checkAvailability);
+router.post("/register/begin", geetestMiddleware, registerController.beginRegister);
+router.get("/register/validate-token", registerController.checkRegisterToken);
+router.post("/register/complete", registerController.completeRegister);
 router.post("/send-code", geetestMiddleware, registerController.retrievePassword);
-router.post("/retrievePassword", geetestMiddleware, registerController.retrievePassword);
 router.post("/reset-password", registerController.resetPassword);
 router.post("/set-password", registerController.setPassword);
 

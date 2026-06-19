@@ -259,48 +259,95 @@ export async function getAuthMethods(req, res) {
         };
 
         let availableMethods = baseMethods[purpose] || ['password', 'email'];
+        const isEmailIdentifier = !!identifier && /\S+@\S+\.\S+/.test(identifier);
+        // 账户是否存在：true=存在；false=明确不存在（仅用户名）；null=不透露（邮箱，防扫号）
+        let accountExists = null;
 
         // 识别用户：优先使用已登录用户，其次使用查询参数中的identifier（用户名或邮箱）
         let userId = res.locals.userid;
 
-        if (!userId && identifier) {
-            const user = await prisma.ow_users.findFirst({
-                where: { OR: [{ username: identifier }, { email: identifier }] },
-                select: { id: true }
+        // 解析用户记录（含 password 字段，用于判断该账户是否设置了密码）
+        let userRecord = null;
+        if (userId) {
+            userRecord = await prisma.ow_users.findFirst({
+                where: { id: Number(userId) },
+                select: { id: true, password: true }
             });
-            if (user) {
-                userId = user.id;
+        } else if (identifier) {
+            // 先按用户名 / 用户表邮箱查找
+            userRecord = await prisma.ow_users.findFirst({
+                where: { OR: [{ username: identifier }, { email: identifier }] },
+                select: { id: true, password: true }
+            });
+            // 查不到再按已验证 / 主邮箱联系方式回查（邮箱主要存于联系方式表）
+            if (!userRecord) {
+                const emailContact = await prisma.ow_users_contacts.findFirst({
+                    where: {
+                        contact_type: 'email',
+                        contact_value: identifier,
+                        OR: [{ is_primary: true }, { verified: true }]
+                    },
+                    select: { user_id: true }
+                });
+                if (emailContact?.user_id) {
+                    userRecord = await prisma.ow_users.findFirst({
+                        where: { id: emailContact.user_id },
+                        select: { id: true, password: true }
+                    });
+                }
             }
+            if (userRecord) userId = userRecord.id;
         }
 
-        // 如果能够识别用户，则依据其是否已注册 TOTP / Passkey 过滤方法
+        // 如果能够识别用户，则依据其真实拥有的认证方式过滤（防枚举：未识别用户保留基础集合）
         if (userId) {
-            const [totpContact, passkeyContact] = await Promise.all([
+            const [totpContact, passkeyContact, emailContact] = await Promise.all([
                 prisma.ow_users_contacts.findFirst({
                     where: { user_id: Number(userId), contact_type: 'totp' }
                 }),
                 prisma.ow_users_contacts.findFirst({
                     where: { user_id: Number(userId), contact_type: 'passkey', verified: true }
+                }),
+                prisma.ow_users_contacts.findFirst({
+                    where: {
+                        user_id: Number(userId),
+                        contact_type: 'email',
+                        OR: [{ is_primary: true }, { verified: true }]
+                    }
                 })
             ]);
 
             const hasTotp = !!totpContact && !!totpContact.verified && totpContact.metadata?.enabled === true;
             const hasPasskey = !!passkeyContact && Array.isArray(passkeyContact.metadata?.credentials) && passkeyContact.metadata.credentials.length > 0;
+            const hasPassword = !!(userRecord && userRecord.password);
+            const hasEmail = !!emailContact;
 
-            // 在可用方法中移除未注册的方式
+            // 在可用方法中移除该账户未拥有的方式
             if (!hasTotp) {
                 availableMethods = availableMethods.filter(m => m !== 'totp');
             }
             if (!hasPasskey) {
                 availableMethods = availableMethods.filter(m => m !== 'passkey');
             }
+            if (!hasPassword) {
+                availableMethods = availableMethods.filter(m => m !== 'password');
+            }
+            if (!hasEmail) {
+                availableMethods = availableMethods.filter(m => m !== 'email');
+            }
+            accountExists = true;
+        } else if (identifier && !isEmailIdentifier) {
+            // 用户名（非邮箱）未找到：用户名属公开信息，可明确提示不存在
+            accountExists = false;
+            availableMethods = [];
         }
 
         res.json({
             status: 'success',
             data: {
                 purpose,
-                available_methods: availableMethods
+                available_methods: availableMethods,
+                account_exists: accountExists
             }
         });
     } catch (error) {

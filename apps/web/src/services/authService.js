@@ -1,29 +1,18 @@
 import axios from '@/axios/axios';
 import {localuser} from './localAccount';
-import TwoFAService from './twofaService';
 
 export const AuthService = {
-  // User registration
-  register: async (userData) => {
+  // Check email/username availability for registration (interactive validation)
+  checkRegisterAvailability: async ({email, username} = {}) => {
     try {
-      const response = await axios.post('/account/register', userData);
-      // Ensure we have the correct data format for our components
-      return {
-        status: response.data.status,
-        message: response.data.message,
-        userId: response.data.userId,
-        username: response.data.username,
-        needVerify: response.data.needVerify || false,
-        needPassword: response.data.needPassword || false,
-        setupUrl: response.data.setupUrl,
-        temporaryToken: response.data.temporaryToken
-      };
+      const params = {};
+      if (email) params.email = email;
+      if (username) params.username = username;
+      const response = await axios.get('/account/register/check', {params});
+      return response.data?.data || {};
     } catch (error) {
-      console.error('Registration error:', error);
-      return {
-        status: 'error',
-        message: error.response?.data?.message || 'Registration failed, please try again.'
-      };
+      console.error('Failed to check registration availability:', error);
+      return {};
     }
   },
 
@@ -64,6 +53,61 @@ export const AuthService = {
     return response.data;
   },
 
+  // Query which authentication methods an account supports (adaptive sign-in)
+  getAuthMethods: async (identifier, purpose = 'login') => {
+    try {
+      const response = await axios.get('/auth/methods', {
+        params: { purpose, identifier },
+      });
+      const data = response.data?.data || {};
+      return {
+        status: response.data?.status || 'success',
+        purpose: data.purpose || purpose,
+        availableMethods: Array.isArray(data.available_methods) ? data.available_methods : [],
+        accountExists: data.account_exists ?? null,
+      };
+    } catch (error) {
+      console.error('Failed to fetch auth methods:', error);
+      return {
+        status: 'error',
+        purpose,
+        availableMethods: [],
+        accountExists: null,
+        message: error.response?.data?.message || 'Failed to fetch auth methods',
+      };
+    }
+  },
+
+  // Email-first registration: begin (email -> login link if exists, else register link; anti-enumeration)
+  beginRegister: async (email, captcha = null) => {
+    const data = {email};
+    if (captcha) data.captcha = captcha;
+    const response = await axios.post('/account/register/begin', data);
+    return response.data;
+  },
+
+  // Validate a registration continuation token -> returns the (already-verified) email
+  validateRegisterToken: async (token) => {
+    try {
+      const response = await axios.get('/account/register/validate-token', {params: {token}});
+      return response.data;
+    } catch (error) {
+      return {
+        status: 'error',
+        message: error.response?.data?.message || '注册链接无效或已过期',
+      };
+    }
+  },
+
+  // Complete registration with the token + chosen username/password (auto-login on success)
+  completeRegister: async (token, username, password) => {
+    const response = await axios.post('/account/register/complete', {token, username, password});
+    if (response.data.status === 'success' && response.data.token) {
+      await storeAuthData(response.data);
+    }
+    return response.data;
+  },
+
   // Generate magic link
   generateMagicLink: async (email, redirect = null, captcha = null) => {
     const data = {email};
@@ -83,11 +127,10 @@ export const AuthService = {
     return response.data;
   },
 
-  // Password reset - submit new password with code
-  resetPasswordWithCode: async (codeId, code, newPassword) => {
+  // Password reset - submit new password with the strong-random token from the email link
+  resetPasswordWithToken: async (token, newPassword) => {
     const response = await axios.post('/account/reset-password', {
-      code_id: codeId,
-      code,
+      token,
       new_password: newPassword
     });
     return response.data;
@@ -126,63 +169,10 @@ export const AuthService = {
       }
 
       return response.data;
-    } catch (error) {
+    } catch {
       return {status: 'error', message: 'Failed to refresh token'};
     }
   },
-
-  // Add new registration and verification methods
-  resendVerificationEmail: async (token) => {
-    try {
-      const response = await axios.post('/account/register/resend-verification-email', {token});
-      return {
-        status: response.data.status,
-        message: response.data.message,
-        expiresIn: response.data.expiresIn,
-        temporaryToken: response.data.temporaryToken
-      };
-    } catch (error) {
-      console.error('Error resending verification email:', error);
-      return {
-        status: 'error',
-        message: error.response?.data?.message || 'Failed to resend verification email, please try again.'
-      };
-    }
-  },
-
-  changeRegisterEmail: async (token, email) => {
-    try {
-      const response = await axios.post('/account/register/change-register-email', {token, email});
-      return {
-        status: response.data.status,
-        message: response.data.message,
-        email: response.data.email,
-        temporaryToken: response.data.temporaryToken
-      };
-    } catch (error) {
-      console.error('Error changing email:', error);
-      return {
-        status: 'error',
-        message: error.response?.data?.message || 'Failed to change email, please try again.'
-      };
-    }
-  },
-
-  verifyEmail: async (email, code) => {
-    try {
-      const response = await axios.post('/account/verify-email', {email, code});
-      return {
-        status: response.data.status,
-        message: response.data.message
-      };
-    } catch (error) {
-      console.error('Error verifying email:', error);
-      return {
-        status: 'error',
-        message: error.response?.data?.message || 'Failed to verify email, please try again.'
-      };
-    }
-  }
 };
 
 // Helper function to store authentication data

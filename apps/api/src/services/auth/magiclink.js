@@ -1,10 +1,9 @@
 import crypto from 'crypto';
-import jsonwebtoken from 'jsonwebtoken';
 import zcconfig from '../config/zcconfig.js';
 import redisClient from '../redis.js';
 import logger from '../logger.js';
 import {checkRateLimit, VerificationType} from './verification.js';
-import {createJWT} from './tokenUtils.js';
+import {generateToken} from './tokenUtils.js';
 import { createNotification } from '../../controllers/notifications.js';
 
 // 生成魔术链接
@@ -16,13 +15,8 @@ export async function generateMagicLinkForLogin(userId, email, options = {}) {
         // 客户端ID用于区分不同客户端的魔术链接
         const clientId = options.clientId || crypto.randomBytes(16).toString('hex');
 
-        // 使用统一的JWT创建函数
-        const token = await createJWT({
-            id: userId,
-            email,
-            type: 'magic_link',
-            clientId
-        }, expiresIn);
+        // 生成强随机令牌（存储于 Redis，不再使用 JWT）
+        const token = generateToken(32);
 
         // 存储到Redis
         const redisKey = `magic_link:${token}`;
@@ -142,24 +136,12 @@ export async function validateMagicLinkAndLogin(token) {
             };
         }
 
-        // 验证JWT
-        const jwtSecret = await zcconfig.get('security.jwttoken');
-        let decoded;
-
-        try {
-            decoded = jsonwebtoken.verify(token, jwtSecret);
-        } catch (err) {
-            return {
-                success: false,
-                message: '魔术链接已过期或无效'
-            };
-        }
-
+        // 令牌为 Redis 中存储的强随机字段，其关联数据即权威来源（过期由 Redis TTL 保证）
         return {
             success: true,
-            userId: decoded.id,
-            email: decoded.email,
-            clientId: decoded.clientId,
+            userId: magicLinkData.userId,
+            email: magicLinkData.email,
+            clientId: magicLinkData.clientId,
             data: magicLinkData
         };
     } catch (error) {
@@ -216,16 +198,4 @@ export async function markMagicLinkAsUsed(token) {
 // 检查魔术链接速率限制
 export async function checkMagicLinkRateLimit(email) {
     return checkRateLimit(email, VerificationType.LOGIN);
-}
-
-// 向后兼容
-export async function generateMagicLink(userId, email, options = {}) {
-    logger.warn('generateMagicLink is deprecated, use generateMagicLinkForLogin instead');
-    return await generateMagicLinkForLogin(userId, email, options);
-}
-
-// 向后兼容
-export async function validateMagicLink(token) {
-    logger.warn('validateMagicLink is deprecated, use validateMagicLinkAndLogin instead');
-    return await validateMagicLinkAndLogin(token);
 }
