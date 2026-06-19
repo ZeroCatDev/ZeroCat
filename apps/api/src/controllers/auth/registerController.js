@@ -388,16 +388,25 @@ export const resetPassword = async (req, res) => {
 };
 
 /**
- * 设置用户密码
+ * 设置用户密码（仅限当前登录用户为自己设置初始密码）
+ * 需登录中间件保护：使用 res.locals.userid，忽略请求体中的用户ID，避免越权。
  */
 export const setPassword = async (req, res) => {
     try {
-        const {userId, password} = req.body;
+        const {password} = req.body;
+        const userId = res.locals.userid;
 
-        if (!userId || !password) {
+        if (!userId) {
+            return res.status(401).json({
+                status: "error",
+                message: "请先登录",
+            });
+        }
+
+        if (!password) {
             return res.status(200).json({
                 status: "error",
-                message: "用户ID和密码都是必需的",
+                message: "密码是必需的",
             });
         }
 
@@ -417,6 +426,14 @@ export const setPassword = async (req, res) => {
             return res.status(200).json({
                 status: "error",
                 message: "用户不存在",
+            });
+        }
+
+        // 仅允许为「尚未设置密码」的账户设置初始密码；已有密码请走需 sudo 的修改密码流程
+        if (user.password) {
+            return res.status(200).json({
+                status: "error",
+                message: "账户已设置密码，请通过修改密码功能更改",
             });
         }
 

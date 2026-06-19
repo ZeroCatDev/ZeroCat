@@ -46,7 +46,7 @@ router.get("/register/validate-token", registerController.checkRegisterToken);
 router.post("/register/complete", registerController.completeRegister);
 router.post("/send-code", geetestMiddleware, registerController.retrievePassword);
 router.post("/reset-password", registerController.resetPassword);
-router.post("/set-password", registerController.setPassword);
+router.post("/set-password", needLogin, registerController.setPassword);
 
 // 邮箱管理相关路由
 router.post("/send-verification-code", needLogin, emailController.sendVerificationCode);
