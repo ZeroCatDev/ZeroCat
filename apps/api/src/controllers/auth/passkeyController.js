@@ -23,7 +23,8 @@ async function getRpConfig() {
 
 function mapStoredCredentials(metadata) {
   const creds = metadata?.credentials || [];
-  return creds.map(c => ({ id: c.credentialID, transports: c.transports }));
+  // 仅映射含有效 credentialID 的凭据，避免历史损坏数据破坏选项生成
+  return creds.filter(c => c && c.credentialID).map(c => ({ id: c.credentialID, transports: c.transports }));
 }
 
 export async function beginRegistration(req, res) {
@@ -72,16 +73,18 @@ export async function finishRegistration(req, res) {
       return res.status(400).json({ status: 'error', message: '注册验证失败' });
     }
 
-    const { credentialPublicKey, credentialID, counter } = verification.registrationInfo;
+    // @simplewebauthn/server v13: 凭据信息位于 registrationInfo.credential
+    const { credential } = verification.registrationInfo;
 
     const contact = await prisma.ow_users_contacts.findFirst({ where: { user_id: Number(userId), contact_type: 'passkey' } });
     const baseMeta = contact?.metadata || {};
-    const credentials = baseMeta.credentials || [];
+    // 过滤掉历史上因旧版 API 写入的损坏凭据（缺少 credentialID / publicKey），避免无法删除的脏数据
+    const credentials = (baseMeta.credentials || []).filter(c => c && c.credentialID && c.publicKey);
     credentials.push({
-      credentialID,
-      publicKey: Buffer.isBuffer(credentialPublicKey) ? credentialPublicKey.toString('base64') : credentialPublicKey,
-      counter,
-      transports: body.response?.transports || [],
+      credentialID: credential.id, // base64url 字符串，与登录时 response.id 保持一致
+      publicKey: Buffer.from(credential.publicKey).toString('base64'),
+      counter: credential.counter ?? 0,
+      transports: credential.transports || body.response?.transports || [],
       registered_at: Date.now(),
     });
 
@@ -182,9 +185,10 @@ export async function finishLogin(req, res) {
       expectedChallenge,
       expectedOrigin: origins,
       expectedRPID: rpId,
-      authenticator: {
-        credentialID: matched.credentialID,
-        credentialPublicKey: Buffer.from(matched.publicKey, 'base64'),
+      // v13: 使用 credential 参数（取代旧版 authenticator）
+      credential: {
+        id: matched.credentialID,
+        publicKey: Buffer.from(matched.publicKey, 'base64'),
         counter: matched.counter || 0,
         transports: matched.transports || [],
       },
@@ -249,13 +253,14 @@ export async function finalizeSudoWithPasskey(req, res) {
       expectedChallenge: challengeData.challenge,
       expectedOrigin: origins,
       expectedRPID: rpId,
-      authenticator: (() => {
+      // v13: 使用 credential 参数（取代旧版 authenticator）
+      credential: (() => {
         const credId = response.id;
         const matched = creds.find(c => c.credentialID === credId);
         if (!matched) return null;
         return {
-          credentialID: matched.credentialID,
-          credentialPublicKey: Buffer.from(matched.publicKey, 'base64'),
+          id: matched.credentialID,
+          publicKey: Buffer.from(matched.publicKey, 'base64'),
           counter: matched.counter || 0,
           transports: matched.transports || [],
         };
