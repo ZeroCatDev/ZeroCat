@@ -372,15 +372,12 @@ export async function refreshAccessToken(rawRefreshToken, ipAddress = null, user
         const rawAccess = generateRawToken();
         const accessHash = hashToken(rawAccess);
         const accessExpiresAt = new Date(now + accessTokenExpiry * 1000);
-        const rawRefresh = generateRawToken();
-        const newRefreshHash = hashToken(rawRefresh);
 
         await prisma.ow_tokens.update({
             where: { id: record.id },
             data: {
                 token_hash: accessHash,
                 token_prefix: tokenDisplayPrefix(rawAccess),
-                refresh_token_hash: newRefreshHash,
                 expires_at: accessExpiresAt,
                 last_used_at: new Date(now),
                 last_used_ip: ipAddress,
@@ -393,7 +390,7 @@ export async function refreshAccessToken(rawRefreshToken, ipAddress = null, user
         return {
             success: true,
             accessToken: rawAccess,
-            refreshToken: rawRefresh,
+            refreshToken: rawRefreshToken,
             expiresAt: accessExpiresAt,
             refreshExpiresAt: record.refresh_expires_at,
             tokenId: record.id,
