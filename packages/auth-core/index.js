@@ -2,6 +2,7 @@ export const AUTH_STORAGE_KEYS = {
   token: "token",
   tokenExpiresAt: "tokenExpiresAt",
   refreshTokenExpiresAt: "refreshTokenExpiresAt",
+  tokenLifetimeSec: "tokenLifetimeSec",
   userInfo: "userInfo",
   refreshLock: "authRefreshLock",
   refreshResult: "authRefreshResult",
@@ -16,6 +17,7 @@ export const AUTH_EVENTS = {
 const DEFAULT_REFRESH_MARGIN_MS = 60_000;
 const DEFAULT_LOCK_TTL_MS = 12_000;
 const DEFAULT_WAIT_TIMEOUT_MS = 15_000;
+const MIN_REFRESH_INTERVAL_MS = 5_000;
 const WAIT_POLL_MS = 50;
 
 function getDefaultStorage() {
@@ -123,6 +125,7 @@ export function createBrowserAuthClient(options = {}) {
   const ownerId = options.ownerId || makeOwnerId();
 
   let refreshPromise = null;
+  let lastRefreshAttemptAt = 0;
   let memoryToken = getStorageValue(AUTH_STORAGE_KEYS.token);
   let memoryTokenExpiresAt = getStorageValue(AUTH_STORAGE_KEYS.tokenExpiresAt);
   let memoryRefreshTokenExpiresAt = getStorageValue(AUTH_STORAGE_KEYS.refreshTokenExpiresAt);
@@ -160,6 +163,11 @@ export function createBrowserAuthClient(options = {}) {
     if (!payload?.token) return;
     const tokenExpiresAt = normalizeTimestamp(payload.expires_at);
     const refreshTokenExpiresAt = normalizeTimestamp(payload.refresh_expires_at);
+    const expiresAtMs = parseStoredTimestamp(tokenExpiresAt);
+    const lifetimeSec =
+      expiresAtMs && expiresAtMs > now()
+        ? Math.max(1, Math.floor((expiresAtMs - now()) / 1000))
+        : null;
 
     memoryToken = payload.token;
     memoryTokenExpiresAt = tokenExpiresAt;
@@ -169,6 +177,9 @@ export function createBrowserAuthClient(options = {}) {
       setStorageValue(AUTH_STORAGE_KEYS.token, payload.token);
       setStorageValue(AUTH_STORAGE_KEYS.tokenExpiresAt, tokenExpiresAt);
       setStorageValue(AUTH_STORAGE_KEYS.refreshTokenExpiresAt, refreshTokenExpiresAt);
+      if (lifetimeSec) {
+        setStorageValue(AUTH_STORAGE_KEYS.tokenLifetimeSec, String(lifetimeSec));
+      }
     }
 
     setStorageValue(
@@ -177,6 +188,7 @@ export function createBrowserAuthClient(options = {}) {
         token: payload.token,
         expires_at: tokenExpiresAt,
         refresh_expires_at: refreshTokenExpiresAt,
+        token_lifetime_sec: lifetimeSec,
         written_at: now(),
       })
     );
@@ -190,6 +202,7 @@ export function createBrowserAuthClient(options = {}) {
     setStorageValue(AUTH_STORAGE_KEYS.token, null);
     setStorageValue(AUTH_STORAGE_KEYS.tokenExpiresAt, null);
     setStorageValue(AUTH_STORAGE_KEYS.refreshTokenExpiresAt, null);
+    setStorageValue(AUTH_STORAGE_KEYS.tokenLifetimeSec, null);
     setStorageValue(AUTH_STORAGE_KEYS.userInfo, null);
     emitAuthEvents({ token: null });
   }
@@ -276,6 +289,9 @@ export function createBrowserAuthClient(options = {}) {
 
     if (!response?.ok) {
       if ([400, 401, 403].includes(Number(response?.status))) {
+        const previousToken = getStoredToken();
+        const peerToken = await waitForPeerRefresh(previousToken);
+        if (peerToken) return peerToken;
         clearStoredAuthState();
       }
       return null;
@@ -296,7 +312,16 @@ export function createBrowserAuthClient(options = {}) {
 
     if (refreshPromise) return refreshPromise;
 
+    const elapsed = now() - lastRefreshAttemptAt;
+    if (elapsed < MIN_REFRESH_INTERVAL_MS) {
+      const current = getStoredToken();
+      if (current && !isAccessTokenExpiring()) {
+        return current;
+      }
+    }
+
     refreshPromise = (async () => {
+      lastRefreshAttemptAt = now();
       const previousToken = getStoredToken();
 
       if (!acquireRefreshLock()) {

@@ -70,7 +70,7 @@ async function validateOriginForCSRF(req) {
 export const refreshToken = async (req, res) => {
     try {
         // 优先从 cookie 读取 refresh token，回退到 body（兼容非浏览器客户端）
-        const { fromCookie, refresh_token } = extractRefreshTokenFromRequest(req);
+        const { fromCookie, refresh_token, duplicateCount } = extractRefreshTokenFromRequest(req);
 
         if (!refresh_token) {
             return res.status(400).json({
@@ -97,6 +97,10 @@ export const refreshToken = async (req, res) => {
         );
 
         if (result.success) {
+            // #region agent log
+            fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9c6b7d'},body:JSON.stringify({sessionId:'9c6b7d',location:'tokenController.js:refreshToken',message:'refresh ok',data:{fromCookie,duplicateCount,fromGrace:!!result.fromGrace,tokenId:result.tokenId},timestamp:Date.now(),runId:'token-fix',hypothesisId:'D'})}).catch(()=>{});
+            // #endregion
+
             // 如果是 Cookie 方式，重新设置 cookie（更新 maxAge）
             if (fromCookie) {
                 setRefreshTokenCookie(res, result.refreshToken, result.refreshExpiresAt);

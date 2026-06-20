@@ -4,6 +4,7 @@ import axiosInstance, {
   authClient,
   requestTokenRefresh,
   handleNeedLogout,
+  isTokenRefreshInFlight,
   TOKEN_REFRESHED_EVENT_NAME,
 } from "@/axios/axios";
 import { get } from "@/services/serverConfig";
@@ -14,6 +15,7 @@ const USER_INFO_KEY = "userInfo";
 const TOKEN_KEY = "token";
 const TOKEN_EXPIRES_AT_KEY = "tokenExpiresAt";
 const REFRESH_TOKEN_EXPIRES_AT_KEY = "refreshTokenExpiresAt";
+const TOKEN_LIFETIME_SEC_KEY = "tokenLifetimeSec";
 const AUTH_REDIRECT_URL_KEY = "auth_redirect_url";
 
 // Token refresh configuration
@@ -24,6 +26,7 @@ const UNKNOWN_EXP_CHECK_INTERVAL_MS = 5 * 60 * 1000; // Check every 5 min if exp
 const RETRY_BACKOFF_BASE_MS = 10_000; // 10 seconds base for retry backoff
 const RETRY_BACKOFF_CAP_MS = 30_000; // 30 seconds max retry delay
 const FALLBACK_RETRY_INTERVAL_MS = 60_000; // 60 seconds fallback after max retries
+const MIN_PROACTIVE_REFRESH_INTERVAL_MS = 30_000; // 防止刷新成功后立即再次触发
 
 // Adaptive threshold: refresh at 25% of token lifetime remaining,
 // clamped between 30s and 5min.  For a 5-min token → 75s before expiry.
@@ -355,6 +358,7 @@ export const useAuthStore = defineStore("auth", () => {
   let _refreshRetryCount = 0;
   // Flag to suppress event-listener rescheduling during proactive refresh
   let _inProactiveRefresh = false;
+  let _lastRefreshCompletedAt = 0;
 
   /**
    * Compute the effective refresh threshold based on the current token's
@@ -366,6 +370,18 @@ export const useAuthStore = defineStore("auth", () => {
    *   Unknown lifetime   → falls back to MAX_REFRESH_THRESHOLD_SEC (5 min)
    */
   const getEffectiveThreshold = () => {
+    const storedLifetime = parseInt(
+      localStorage.getItem(TOKEN_LIFETIME_SEC_KEY) || "",
+      10
+    );
+    if (Number.isFinite(storedLifetime) && storedLifetime > 0) {
+      const threshold = Math.floor(storedLifetime * REFRESH_THRESHOLD_RATIO);
+      return Math.max(
+        MIN_REFRESH_THRESHOLD_SEC,
+        Math.min(threshold, MAX_REFRESH_THRESHOLD_SEC)
+      );
+    }
+
     const t = getToken();
     if (!t) return MAX_REFRESH_THRESHOLD_SEC;
     try {
@@ -692,19 +708,21 @@ export const useAuthStore = defineStore("auth", () => {
     let delayMs;
 
     if (remainingSec < 0) {
-      // Unknown expiration - periodic check
       delayMs = UNKNOWN_EXP_CHECK_INTERVAL_MS;
     } else if (remainingSec === 0) {
-      // Already expired - refresh now
       delayMs = 0;
     } else if (remainingSec <= threshold) {
-      // Within threshold - refresh now
       delayMs = 0;
     } else {
-      // Not yet in threshold - schedule for threshold entry
       delayMs = (remainingSec - threshold) * 1000;
-      // Cap to avoid very long timers (setTimeout drift / overflow)
       delayMs = Math.min(delayMs, MAX_SCHEDULE_INTERVAL_MS);
+    }
+
+    if (delayMs === 0 && _lastRefreshCompletedAt > 0) {
+      const elapsed = Date.now() - _lastRefreshCompletedAt;
+      if (elapsed < MIN_PROACTIVE_REFRESH_INTERVAL_MS) {
+        delayMs = MIN_PROACTIVE_REFRESH_INTERVAL_MS - elapsed;
+      }
     }
 
     if (delayMs > 0) {
@@ -715,6 +733,10 @@ export const useAuthStore = defineStore("auth", () => {
             : " (unknown expiration, periodic check)")
       );
     }
+
+    // #region agent log
+    fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9c6b7d'},body:JSON.stringify({sessionId:'9c6b7d',location:'auth.js:scheduleTokenRefresh',message:'schedule refresh',data:{remainingSec,threshold,delayMs,lastRefreshAgo:_lastRefreshCompletedAt?Date.now()-_lastRefreshCompletedAt:null},timestamp:Date.now(),runId:'token-fix',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
 
     TokenRefreshScheduler.schedule(() => doRefreshCycle(), delayMs);
   };
@@ -746,6 +768,10 @@ export const useAuthStore = defineStore("auth", () => {
 
     if (ok) {
       _refreshRetryCount = 0;
+      _lastRefreshCompletedAt = Date.now();
+      // #region agent log
+      fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9c6b7d'},body:JSON.stringify({sessionId:'9c6b7d',location:'auth.js:doRefreshCycle:ok',message:'refresh cycle success',data:{remainingSec:getTokenExpirationTime()},timestamp:Date.now(),runId:'token-fix',hypothesisId:'C'})}).catch(()=>{});
+      // #endregion
       scheduleTokenRefresh();
     } else {
       _refreshRetryCount++;
@@ -797,8 +823,9 @@ export const useAuthStore = defineStore("auth", () => {
     if (isTokenValid()) return false;
 
     if (isRefreshTokenValid()) {
-      // Don't block UI: async refresh attempt
-      void refreshAccessToken();
+      if (!isTokenRefreshInFlight()) {
+        void refreshAccessToken();
+      }
       return false;
     }
 
@@ -824,6 +851,7 @@ export const useAuthStore = defineStore("auth", () => {
     loginDialogVisible.value = false;
     authRedirectUrl.value = "";
     refreshPromise = null;
+    _lastRefreshCompletedAt = 0;
   };
 
   const logout = async (logoutFromServer = true) => {
@@ -1037,7 +1065,13 @@ export const useAuthStore = defineStore("auth", () => {
       syncTokenStateFromStorage();
       if (!_inProactiveRefresh) {
         _refreshRetryCount = 0;
-        scheduleTokenRefresh();
+        _lastRefreshCompletedAt = Date.now();
+        if (
+          !TokenRefreshScheduler.isActive() ||
+          TokenRefreshScheduler.isOverdue()
+        ) {
+          scheduleTokenRefresh();
+        }
       }
     });
 

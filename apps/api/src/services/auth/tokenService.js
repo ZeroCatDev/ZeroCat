@@ -20,6 +20,8 @@ import { normalizeScopes, validateUserGrantableScopes } from "./scopes.js";
 
 const TOKEN_PREFIX = "zc_";
 const CACHE_PREFIX = "token:cache:";
+const REFRESH_GRACE_PREFIX = "refresh:grace:";
+const REFRESH_GRACE_TTL_SEC = 120;
 const TOKEN_CACHE_MAX_TTL = 5 * 60;
 
 // 默认有效期 (秒)
@@ -329,9 +331,56 @@ export async function updateTokenActivity(tokenId, ipAddress) {
     }
 }
 
+function serializeGracePayload(payload) {
+    return {
+        accessToken: payload.accessToken,
+        refreshToken: payload.refreshToken,
+        expiresAt: payload.expiresAt instanceof Date
+            ? payload.expiresAt.toISOString()
+            : payload.expiresAt,
+        refreshExpiresAt: payload.refreshExpiresAt instanceof Date
+            ? payload.refreshExpiresAt.toISOString()
+            : payload.refreshExpiresAt,
+        tokenId: payload.tokenId,
+        scopes: payload.scopes,
+    };
+}
+
+async function readGraceRefreshResult(refreshHash) {
+    try {
+        const cached = await redisClient.get(REFRESH_GRACE_PREFIX + refreshHash);
+        if (!cached?.accessToken) return null;
+        return {
+            success: true,
+            accessToken: cached.accessToken,
+            refreshToken: cached.refreshToken,
+            expiresAt: cached.expiresAt ? new Date(cached.expiresAt) : null,
+            refreshExpiresAt: cached.refreshExpiresAt ? new Date(cached.refreshExpiresAt) : null,
+            tokenId: cached.tokenId,
+            scopes: normalizeScopes(cached.scopes),
+            fromGrace: true,
+        };
+    } catch {
+        return null;
+    }
+}
+
+async function storeGraceRefreshResult(refreshHash, payload) {
+    if (!refreshHash) return;
+    try {
+        await redisClient.set(
+            REFRESH_GRACE_PREFIX + refreshHash,
+            serializeGracePayload(payload),
+            REFRESH_GRACE_TTL_SEC
+        );
+    } catch (error) {
+        logger.warn(`[token] 写入刷新宽限期缓存失败: ${error.message}`);
+    }
+}
+
 /**
  * 使用刷新令牌换取新的访问令牌 (会话 / OAuth)
- * 轮换访问令牌, 保留同一刷新令牌。
+ * 轮换访问令牌与刷新令牌；旧刷新令牌在宽限期内仍可换取同一组最新令牌（并发/多标签页安全）。
  * @param {string} rawRefreshToken 刷新令牌明文
  * @param {string} [ipAddress]
  * @param {string} [userAgent]
@@ -343,6 +392,12 @@ export async function refreshAccessToken(rawRefreshToken, ipAddress = null, user
             return { success: false, message: "缺少刷新令牌" };
         }
         const refreshHash = hashToken(rawRefreshToken);
+
+        const graceResult = await readGraceRefreshResult(refreshHash);
+        if (graceResult) {
+            return graceResult;
+        }
+
         const record = await prisma.ow_tokens.findFirst({
             where: { refresh_token_hash: refreshHash, revoked: false },
             include: {
@@ -362,15 +417,19 @@ export async function refreshAccessToken(rawRefreshToken, ipAddress = null, user
             return { success: false, message: "刷新令牌已过期" };
         }
 
-        // 失效旧访问令牌缓存
-        await redisClient.delete(CACHE_PREFIX + record.token_hash);
+        const previousAccessHash = record.token_hash;
+        const previousRefreshHash = refreshHash;
 
-        // 生成新访问令牌
+        // 失效旧访问令牌缓存
+        await redisClient.delete(CACHE_PREFIX + previousAccessHash);
+
         const accessTokenExpiry =
             record.type === "oauth" ? DEFAULT_OAUTH_ACCESS_EXPIRY : await getSessionAccessExpiry();
         const now = Date.now();
         const rawAccess = generateRawToken();
+        const rawRefresh = generateRawToken();
         const accessHash = hashToken(rawAccess);
+        const newRefreshHash = hashToken(rawRefresh);
         const accessExpiresAt = new Date(now + accessTokenExpiry * 1000);
 
         await prisma.ow_tokens.update({
@@ -378,6 +437,7 @@ export async function refreshAccessToken(rawRefreshToken, ipAddress = null, user
             data: {
                 token_hash: accessHash,
                 token_prefix: tokenDisplayPrefix(rawAccess),
+                refresh_token_hash: newRefreshHash,
                 expires_at: accessExpiresAt,
                 last_used_at: new Date(now),
                 last_used_ip: ipAddress,
@@ -387,15 +447,20 @@ export async function refreshAccessToken(rawRefreshToken, ipAddress = null, user
             },
         });
 
-        return {
+        const result = {
             success: true,
             accessToken: rawAccess,
-            refreshToken: rawRefreshToken,
+            refreshToken: rawRefresh,
             expiresAt: accessExpiresAt,
             refreshExpiresAt: record.refresh_expires_at,
             tokenId: record.id,
             scopes: normalizeScopes(record.scopes),
         };
+
+        // 旧刷新令牌宽限期：并发请求仍可拿到同一组最新令牌
+        await storeGraceRefreshResult(previousRefreshHash, result);
+
+        return result;
     } catch (error) {
         logger.error(`刷新令牌时出错: ${error.message}`);
         return { success: false, message: "刷新令牌时出错" };
