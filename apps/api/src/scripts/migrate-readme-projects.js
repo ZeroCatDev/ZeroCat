@@ -12,14 +12,21 @@ import {prisma} from "../services/prisma.js";
 async function main() {
   console.log("=== 迁移：标记 readme 项目 ===\n");
 
-  // 使用原始 SQL 进行大小写不敏感的匹配
-  // 查找 project.name (lower) = author.username (lower) 的项目
-  const candidates = await prisma.$queryRaw`
-    SELECT p.id, p.name, p.type, p.authorid, u.username
-    FROM ow_projects p
-    INNER JOIN ow_users u ON p.authorid = u.id
-    WHERE LOWER(p.name) = LOWER(u.username)
-  `;
+  // 查找所有有作者的项目，包含作者信息用于比较
+  const projects = await prisma.ow_projects.findMany({
+    where: { authorid: { not: null } },
+    select: {
+      id: true,
+      name: true,
+      type: true,
+      author: { select: { username: true } },
+    },
+  });
+
+  // 在 JS 中进行大小写不敏感的匹配
+  const candidates = projects.filter(
+    (p) => p.author?.username && p.name.toLowerCase() === p.author.username.toLowerCase()
+  );
 
   if (candidates.length === 0) {
     console.log("没有找到与用户名同名的项目，无需迁移。");
@@ -28,7 +35,7 @@ async function main() {
 
   console.log(`找到 ${candidates.length} 个与用户名同名的项目：\n`);
   for (const p of candidates) {
-    console.log(`  - 项目 #${p.id} "${p.name}" (当前类型: ${p.type || "null"}, 作者: ${p.username})`);
+    console.log(`  - 项目 #${p.id} "${p.name}" (当前类型: ${p.type || "null"}, 作者: ${p.author.username})`);
   }
 
   // 将这些项目的 type 更新为 "readme"
