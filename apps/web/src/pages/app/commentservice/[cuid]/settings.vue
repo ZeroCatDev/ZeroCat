@@ -1449,8 +1449,7 @@ const configBool = reactive({
 
 const gravatarPresets = [
   "https://192625.xyz/gravatar/{{mail|md5}}",
-  "https://all.hlmirror.com/{{mail|md5}}",
-  "https://gravatar.com/avatar/{{mail|md5}}",
+  "https://all.hlmirror.com/https://gravatar.com/avatar/{{mail|md5}}"
 ];
 
 function gravatarPresetLabel(preset) {
