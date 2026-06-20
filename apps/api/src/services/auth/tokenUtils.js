@@ -299,11 +299,32 @@ function resolveRefreshCookieSecure(req) {
     return Boolean(req?.secure) || process.env.NODE_ENV === 'production';
 }
 
+function resolveRefreshCookieSameSite(req) {
+    const origin = req?.headers?.origin;
+    if (!origin) return 'lax';
+
+    try {
+        const originUrl = new URL(origin);
+        const host = req?.hostname || String(req?.headers?.host || '').split(':')[0] || '';
+        const forwardedProto = String(req?.headers?.['x-forwarded-proto'] || '')
+            .split(',')[0]
+            .trim()
+            .toLowerCase();
+        const protocol = forwardedProto || (req?.secure ? 'https' : 'http');
+        const apiOrigin = new URL(`${protocol}://${host}`).origin;
+        if (originUrl.origin === apiOrigin) return 'lax';
+        return resolveRefreshCookieSecure(req) ? 'none' : 'lax';
+    } catch {
+        return 'lax';
+    }
+}
+
 function buildRefreshCookieSharedOptions(res) {
+    const req = res?.req;
     return {
         httpOnly: true,
-        secure: resolveRefreshCookieSecure(res?.req),
-        sameSite: 'lax',
+        secure: resolveRefreshCookieSecure(req),
+        sameSite: resolveRefreshCookieSameSite(req),
         path: '/account',
     };
 }
@@ -344,6 +365,11 @@ export function clearAllRefreshTokenCookies(res) {
  * @returns {{ fromCookie: boolean, refresh_token: string | undefined, duplicateCount: number }}
  */
 export function extractRefreshTokenFromRequest(req) {
+    const bodyToken = req.body?.refresh_token;
+    if (bodyToken) {
+        return { fromCookie: false, refresh_token: bodyToken, duplicateCount: 0 };
+    }
+
     const raw = req.headers?.cookie || '';
     const values = [];
     for (const part of raw.split(';')) {
@@ -371,20 +397,40 @@ export function extractRefreshTokenFromRequest(req) {
 }
 
 /**
- * 设置 refresh token cookie
+ * 清除浏览器端遗留的认证 Cookie（令牌改由 localStorage 管理）
  * @param {object} res Express response 对象
- * @param {string} refreshToken 刷新令牌
- * @param {Date} refreshExpiresAt 刷新令牌过期时间
  */
-export function setRefreshTokenCookie(res, refreshToken, refreshExpiresAt) {
-    const maxAge = new Date(refreshExpiresAt).getTime() - Date.now();
-    const baseOptions = buildRefreshCookieBaseOptions(res);
-    // 清除 host-only / 根域遗留 cookie，避免浏览器携带两个 refresh_token
+export function clearLegacyAuthCookies(res) {
     clearAllRefreshTokenCookies(res);
-    res.cookie('refresh_token', refreshToken, {
-        ...baseOptions,
-        maxAge: Math.max(0, maxAge),
-    });
+    if (!res?.clearCookie) return;
+
+    const variants = buildRefreshCookieClearVariants(res);
+    for (const options of variants) {
+        res.clearCookie('token', { ...options, path: '/' });
+    }
+}
+
+/**
+ * @deprecated 浏览器认证已改用 localStorage，此函数仅清除遗留 Cookie
+ */
+export function setRefreshTokenCookie(res) {
+    clearLegacyAuthCookies(res);
+}
+
+/**
+ * 返回浏览器登录/刷新令牌响应，并清除遗留 Cookie
+ * @param {object} res Express response
+ * @param {object} payload 响应体
+ * @param {number} [statusCode=200]
+ */
+export function respondWithBrowserAuthTokens(res, payload, statusCode = 200) {
+    clearLegacyAuthCookies(res);
+
+    // #region agent log
+    fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1167d'},body:JSON.stringify({sessionId:'f1167d',location:'tokenUtils.js:respondWithBrowserAuthTokens',message:'auth tokens in json body',data:{hasToken:!!payload?.token,hasRefreshToken:!!payload?.refresh_token,statusCode},timestamp:Date.now(),runId:'localStorage-v2',hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
+
+    return res.status(statusCode).json(payload);
 }
 
 /**
@@ -392,17 +438,9 @@ export function setRefreshTokenCookie(res, refreshToken, refreshExpiresAt) {
  * @param {object} res Express response 对象
  */
 export function clearRefreshTokenCookie(res) {
-    clearAllRefreshTokenCookies(res);
+    clearLegacyAuthCookies(res);
 }
 
-/**
- * 生成登录响应对象
- * @param {object} user 用户对象
- * @param {object} tokenResult 令牌结果
- * @param {string} email 用户邮箱
- * @param {object} additionalData 附加数据
- * @returns {object} 登录响应对象
- */
 export function generateLoginResponse(user, tokenResult, email, additionalData = {}) {
     return {
         status: "success",
@@ -412,10 +450,11 @@ export function generateLoginResponse(user, tokenResult, email, additionalData =
         display_name: user.display_name,
         avatar: user.avatar,
         email: email,
+        ...additionalData,
         token: tokenResult.accessToken,
         expires_at: tokenResult.expiresAt,
         refresh_expires_at: tokenResult.refreshExpiresAt,
-        ...additionalData
+        refresh_token: tokenResult.refreshToken,
     };
 }
 
@@ -423,6 +462,8 @@ export default {
     createUserLoginTokens,
     getUserInfoForToken,
     generateLoginResponse,
+    clearLegacyAuthCookies,
+    respondWithBrowserAuthTokens,
     setRefreshTokenCookie,
     clearRefreshTokenCookie,
     clearAllRefreshTokenCookies,

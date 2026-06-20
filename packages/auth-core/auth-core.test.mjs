@@ -22,6 +22,7 @@ test("coalesces forced refresh across two page clients sharing storage", async (
   const storage = createMemoryStorage({
     token: "old-token",
     tokenExpiresAt: String(Date.now() - 1000),
+    refreshToken: "zc_refresh_old",
     refreshTokenExpiresAt: String(Date.now() + 60_000),
   });
 
@@ -34,6 +35,7 @@ test("coalesces forced refresh across two page clients sharing storage", async (
         JSON.stringify({
           status: "success",
           token: "new-token",
+          refresh_token: "zc_refresh_new",
           expires_at: Date.now() + 60_000,
           refresh_expires_at: Date.now() + 120_000,
         }),
@@ -53,14 +55,54 @@ test("coalesces forced refresh across two page clients sharing storage", async (
 
   assert.equal(firstToken, "new-token");
   assert.equal(secondToken, "new-token");
-  assert.equal(storage.getItem("token"), "old-token");
+  assert.equal(storage.getItem("token"), "new-token");
+  assert.equal(storage.getItem("refreshToken"), "zc_refresh_new");
   assert.equal(refreshCalls, 1);
+});
+
+test("always sends refresh token from localStorage in request body", async () => {
+  const storage = createMemoryStorage({
+    token: "old-token",
+    tokenExpiresAt: String(Date.now() - 1000),
+    refreshToken: "zc_refresh_old",
+    refreshTokenExpiresAt: String(Date.now() + 60_000),
+  });
+
+  let refreshBody = null;
+  const fetchImpl = async (url, init = {}) => {
+    if (String(url).endsWith("/account/refresh-token")) {
+      refreshBody = init.body;
+      return new Response(
+        JSON.stringify({
+          status: "success",
+          token: "new-token",
+          refresh_token: "zc_refresh_new",
+          expires_at: Date.now() + 60_000,
+          refresh_expires_at: Date.now() + 120_000,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  };
+
+  const client = createBrowserAuthClient({
+    apiUrl: "https://api.example.test",
+    storage,
+    fetch: fetchImpl,
+  });
+
+  const token = await client.refreshStoredAuthToken();
+  assert.equal(token, "new-token");
+  assert.equal(refreshBody, JSON.stringify({ refresh_token: "zc_refresh_old" }));
+  assert.equal(storage.getItem("refreshToken"), "zc_refresh_new");
 });
 
 test("authedFetch retries once with a refreshed token after 401", async () => {
   const storage = createMemoryStorage({
     token: "stale-token",
     tokenExpiresAt: String(Date.now() + 180_000),
+    refreshToken: "zc_refresh_old",
     refreshTokenExpiresAt: String(Date.now() + 120_000),
   });
 

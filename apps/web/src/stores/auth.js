@@ -261,6 +261,7 @@ const hasStoredAuthHintSync = () => {
   try {
     return (
       !!authClient.getStoredToken() ||
+      !!authClient.getStoredRefreshToken() ||
       !!localStorage.getItem(USER_INFO_KEY) ||
       !!localStorage.getItem(REFRESH_TOKEN_EXPIRES_AT_KEY) ||
       !!localStorage.getItem(TOKEN_EXPIRES_AT_KEY)
@@ -523,8 +524,7 @@ export const useAuthStore = defineStore("auth", () => {
     const refreshExpiresAt = parseDateTime(
       localStorage.getItem(REFRESH_TOKEN_EXPIRES_AT_KEY)
     );
-    // HttpOnly cookie refresh - can't check expiry, assume valid
-    if (!refreshExpiresAt) return true;
+    if (!refreshExpiresAt) return !!authClient.getStoredRefreshToken();
     return refreshExpiresAt > new Date();
   };
 
@@ -625,9 +625,10 @@ export const useAuthStore = defineStore("auth", () => {
       token: data.token,
       expires_at: data.expires_at,
       refresh_expires_at: data.refresh_expires_at,
+      refresh_token: data.refresh_token,
     });
 
-    // Store timestamps as hints for startup session recovery (refresh-cookie bootstrap)
+    // Store timestamps as hints for startup session recovery (localStorage bootstrap)
     setStorageValue(TOKEN_EXPIRES_AT_KEY, data.expires_at);
     setStorageValue(REFRESH_TOKEN_EXPIRES_AT_KEY, data.refresh_expires_at);
 
@@ -863,7 +864,6 @@ export const useAuthStore = defineStore("auth", () => {
           `${import.meta.env.VITE_APP_BASE_API}/account/logout`,
           {
             method: "POST",
-            credentials: "include",
             headers: {
               Authorization: `Bearer ${token.value}`,
               "Content-Type": "application/json",
@@ -1115,10 +1115,10 @@ export const useAuthStore = defineStore("auth", () => {
   const hasBootstrapHint = () => hasStoredAuthHintSync();
 
   // Sequential initialization: attempt startup recovery first, then start refresh cycle.
-  // Goal: after a hard refresh, recover login state via HttpOnly refresh cookie.
+    // Goal: after a hard refresh, recover login state via stored refresh token.
   const bootstrapAuth = async () => {
     // #region agent log
-    fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9c6b7d'},body:JSON.stringify({sessionId:'9c6b7d',location:'auth.js:bootstrapAuth:start',message:'auth bootstrap start',data:{optimisticLogin:isLogin.value,hasHint:hasAuthHint.value,hasToken:!!getToken()},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1167d'},body:JSON.stringify({sessionId:'f1167d',location:'auth.js:bootstrapAuth:start',message:'auth bootstrap start',data:{optimisticLogin:isLogin.value,hasHint:hasAuthHint.value,hasToken:!!getToken(),pageOrigin:typeof window!=='undefined'?window.location.origin:null,apiUrl:import.meta.env.VITE_APP_BASE_API||null},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
     // #endregion
 
     try {
@@ -1131,7 +1131,7 @@ export const useAuthStore = defineStore("auth", () => {
 
       // Only attempt refresh if we have a hint that the user previously logged in.
       if (hasBootstrapHint()) {
-        console.log("[Auth] No access token on init, attempting cookie refresh...");
+        console.log("[Auth] No access token on init, attempting refresh from localStorage...");
         const ok = await refreshAccessToken();
         if (ok) {
           await loadUser(true);
@@ -1146,7 +1146,7 @@ export const useAuthStore = defineStore("auth", () => {
       authReady.value = true;
 
       // #region agent log
-      fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9c6b7d'},body:JSON.stringify({sessionId:'9c6b7d',location:'auth.js:bootstrapAuth:done',message:'auth bootstrap done',data:{isLogin:isLogin.value,authReady:authReady.value,hasHint:hasAuthHint.value,username:user.value?.username},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1167d'},body:JSON.stringify({sessionId:'f1167d',location:'auth.js:bootstrapAuth:done',message:'auth bootstrap done',data:{isLogin:isLogin.value,authReady:authReady.value,hasHint:hasAuthHint.value,username:user.value?.username},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
       // #endregion
     }
   };

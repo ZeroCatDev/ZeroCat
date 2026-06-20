@@ -213,8 +213,7 @@ export async function finishLogin(req, res) {
     );
     if (!tokenResult.success) return res.status(500).json({ status: 'error', message: '创建登录令牌失败' });
     const responseData = tokenUtils.generateLoginResponse(user, tokenResult, userInfo.email || null);
-    tokenUtils.setRefreshTokenCookie(res, tokenResult.refreshToken, tokenResult.refreshExpiresAt);
-    return res.json(responseData);
+    return tokenUtils.respondWithBrowserAuthTokens(res, responseData);
   } catch (e) {
     logger.error('[passkey] finishLogin error', e);
     return res.status(400).json({ status: 'error', message: '登录验证异常' });

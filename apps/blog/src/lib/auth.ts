@@ -24,6 +24,7 @@ function hasStoredAuthHint(): boolean {
   try {
     return (
       !!getStoredToken() ||
+      !!window.localStorage.getItem("refreshToken") ||
       !!window.localStorage.getItem(USER_INFO_KEY) ||
       !!window.localStorage.getItem("refreshTokenExpiresAt") ||
       !!window.localStorage.getItem("tokenExpiresAt")
@@ -92,7 +93,6 @@ async function fetchCurrentUser(token: string): Promise<StoredUserInfo | null> {
   try {
     const res = await fetch(`${API_URL}/user/me`, {
       method: "GET",
-      credentials: "include",
       headers: {
         Accept: "application/json",
         Authorization: `Bearer ${token}`,
@@ -199,7 +199,6 @@ export function useAuthToken() {
       try {
         await fetch(`${API_URL}/account/logout`, {
           method: "POST",
-          credentials: "include",
           headers: {
             "Content-Type": "application/json",
             Accept: "application/json",

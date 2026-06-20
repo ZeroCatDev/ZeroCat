@@ -35,6 +35,7 @@ const TwoFAService = {
         token: data.token,
         expires_at: data.expires_at,
         refresh_expires_at: data.refresh_expires_at,
+        refresh_token: data.refresh_token,
       });
     }
     return data;

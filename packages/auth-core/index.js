@@ -1,6 +1,7 @@
 export const AUTH_STORAGE_KEYS = {
   token: "token",
   tokenExpiresAt: "tokenExpiresAt",
+  refreshToken: "refreshToken",
   refreshTokenExpiresAt: "refreshTokenExpiresAt",
   tokenLifetimeSec: "tokenLifetimeSec",
   userInfo: "userInfo",
@@ -113,6 +114,24 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function getPageOrigin() {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.location?.origin || null;
+  } catch {
+    return null;
+  }
+}
+
+export function isCrossOriginAuth(apiUrl, pageOrigin = getPageOrigin()) {
+  if (!pageOrigin || !apiUrl) return false;
+  try {
+    return new URL(apiUrl).origin !== new URL(pageOrigin).origin;
+  } catch {
+    return false;
+  }
+}
+
 export function createBrowserAuthClient(options = {}) {
   const apiUrl = normalizeApiUrl(options.apiUrl);
   const storage = options.storage || getDefaultStorage();
@@ -121,13 +140,13 @@ export function createBrowserAuthClient(options = {}) {
   const refreshMarginMs = options.refreshMarginMs ?? DEFAULT_REFRESH_MARGIN_MS;
   const lockTtlMs = options.lockTtlMs ?? DEFAULT_LOCK_TTL_MS;
   const waitTimeoutMs = options.waitTimeoutMs ?? DEFAULT_WAIT_TIMEOUT_MS;
-  const persistTokenToStorage = options.persistTokenToStorage === true;
   const ownerId = options.ownerId || makeOwnerId();
 
   let refreshPromise = null;
   let lastRefreshAttemptAt = 0;
   let memoryToken = getStorageValue(AUTH_STORAGE_KEYS.token);
   let memoryTokenExpiresAt = getStorageValue(AUTH_STORAGE_KEYS.tokenExpiresAt);
+  let memoryRefreshToken = getStorageValue(AUTH_STORAGE_KEYS.refreshToken);
   let memoryRefreshTokenExpiresAt = getStorageValue(AUTH_STORAGE_KEYS.refreshTokenExpiresAt);
 
   function getStorageValue(key) {
@@ -159,7 +178,20 @@ export function createBrowserAuthClient(options = {}) {
     return memoryToken || getStorageValue(AUTH_STORAGE_KEYS.token);
   }
 
+  function getStoredRefreshToken() {
+    return memoryRefreshToken || getStorageValue(AUTH_STORAGE_KEYS.refreshToken);
+  }
+
+  function persistRefreshToken(refreshToken) {
+    if (!refreshToken) return;
+    memoryRefreshToken = refreshToken;
+    setStorageValue(AUTH_STORAGE_KEYS.refreshToken, refreshToken);
+  }
+
   function persistToken(payload) {
+    if (payload?.refresh_token) {
+      persistRefreshToken(payload.refresh_token);
+    }
     if (!payload?.token) return;
     const tokenExpiresAt = normalizeTimestamp(payload.expires_at);
     const refreshTokenExpiresAt = normalizeTimestamp(payload.refresh_expires_at);
@@ -173,13 +205,11 @@ export function createBrowserAuthClient(options = {}) {
     memoryTokenExpiresAt = tokenExpiresAt;
     memoryRefreshTokenExpiresAt = refreshTokenExpiresAt;
 
-    if (persistTokenToStorage) {
-      setStorageValue(AUTH_STORAGE_KEYS.token, payload.token);
-      setStorageValue(AUTH_STORAGE_KEYS.tokenExpiresAt, tokenExpiresAt);
-      setStorageValue(AUTH_STORAGE_KEYS.refreshTokenExpiresAt, refreshTokenExpiresAt);
-      if (lifetimeSec) {
-        setStorageValue(AUTH_STORAGE_KEYS.tokenLifetimeSec, String(lifetimeSec));
-      }
+    setStorageValue(AUTH_STORAGE_KEYS.token, payload.token);
+    setStorageValue(AUTH_STORAGE_KEYS.tokenExpiresAt, tokenExpiresAt);
+    setStorageValue(AUTH_STORAGE_KEYS.refreshTokenExpiresAt, refreshTokenExpiresAt);
+    if (lifetimeSec) {
+      setStorageValue(AUTH_STORAGE_KEYS.tokenLifetimeSec, String(lifetimeSec));
     }
 
     setStorageValue(
@@ -188,6 +218,7 @@ export function createBrowserAuthClient(options = {}) {
         token: payload.token,
         expires_at: tokenExpiresAt,
         refresh_expires_at: refreshTokenExpiresAt,
+        refresh_token: payload.refresh_token || getStoredRefreshToken(),
         token_lifetime_sec: lifetimeSec,
         written_at: now(),
       })
@@ -198,9 +229,11 @@ export function createBrowserAuthClient(options = {}) {
   function clearStoredAuthState() {
     memoryToken = null;
     memoryTokenExpiresAt = null;
+    memoryRefreshToken = null;
     memoryRefreshTokenExpiresAt = null;
     setStorageValue(AUTH_STORAGE_KEYS.token, null);
     setStorageValue(AUTH_STORAGE_KEYS.tokenExpiresAt, null);
+    setStorageValue(AUTH_STORAGE_KEYS.refreshToken, null);
     setStorageValue(AUTH_STORAGE_KEYS.refreshTokenExpiresAt, null);
     setStorageValue(AUTH_STORAGE_KEYS.tokenLifetimeSec, null);
     setStorageValue(AUTH_STORAGE_KEYS.userInfo, null);
@@ -261,6 +294,7 @@ export function createBrowserAuthClient(options = {}) {
           token: refreshResult.token,
           expires_at: refreshResult.expires_at,
           refresh_expires_at: refreshResult.refresh_expires_at,
+          refresh_token: refreshResult.refresh_token,
         });
         return refreshResult.token;
       }
@@ -276,16 +310,22 @@ export function createBrowserAuthClient(options = {}) {
   async function performRefreshRequest() {
     if (!fetchImpl) return null;
 
+    const storedRefreshToken = getStoredRefreshToken();
+    if (!storedRefreshToken) return null;
+
     const response = await fetchImpl(`${apiUrl}/account/refresh-token`, {
       method: "POST",
-      credentials: "include",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
       },
-      body: "{}",
+      body: JSON.stringify({ refresh_token: storedRefreshToken }),
       cache: "no-store",
     });
+
+    // #region agent log
+    fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1167d'},body:JSON.stringify({sessionId:'f1167d',location:'auth-core/index.js:performRefreshRequest',message:'refresh request result',data:{apiUrl,hasStoredRefreshToken:true,status:response?.status,ok:response?.ok},timestamp:Date.now(),runId:'localStorage',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
 
     if (!response?.ok) {
       if ([400, 401, 403].includes(Number(response?.status))) {
@@ -300,11 +340,21 @@ export function createBrowserAuthClient(options = {}) {
     const payload = await response.json().catch(() => null);
     if (!payload || payload.status !== "success" || !payload.token) return null;
 
-    persistToken(payload);
+    persistToken({
+      token: payload.token,
+      expires_at: payload.expires_at,
+      refresh_expires_at: payload.refresh_expires_at,
+      refresh_token: payload.refresh_token,
+    });
     return payload.token;
   }
 
   async function refreshStoredAuthToken() {
+    if (!getStoredRefreshToken()) {
+      clearStoredAuthState();
+      return null;
+    }
+
     if (isRefreshTokenExpired()) {
       clearStoredAuthState();
       return null;
@@ -362,7 +412,6 @@ export function createBrowserAuthClient(options = {}) {
 
     let response = await fetchImpl(url, {
       ...init,
-      credentials: "include",
       headers: mergeHeaders(init, useToken),
       cache: "no-store",
     });
@@ -373,7 +422,6 @@ export function createBrowserAuthClient(options = {}) {
         useToken = refreshedToken;
         response = await fetchImpl(url, {
           ...init,
-          credentials: "include",
           headers: mergeHeaders(init, useToken),
           cache: "no-store",
         });
@@ -388,6 +436,7 @@ export function createBrowserAuthClient(options = {}) {
     clearStoredAuthState,
     getFreshAuthToken,
     getStoredToken,
+    getStoredRefreshToken,
     isRefreshInFlight: () => refreshPromise !== null,
     persistToken,
     refreshStoredAuthToken,

@@ -1,7 +1,9 @@
 export declare const AUTH_STORAGE_KEYS: {
   token: string;
   tokenExpiresAt: string;
+  refreshToken: string;
   refreshTokenExpiresAt: string;
+  tokenLifetimeSec: string;
   userInfo: string;
   refreshLock: string;
   refreshResult: string;
@@ -16,6 +18,7 @@ export declare const AUTH_EVENTS: {
 export type RefreshPayload = {
   status?: string;
   token?: string;
+  refresh_token?: string;
   expires_at?: string | number | null;
   refresh_expires_at?: string | number | null;
 };
@@ -40,10 +43,16 @@ export type BrowserAuthClient = {
     options?: { force?: boolean }
   ): Promise<string | null>;
   getStoredToken(): string | null;
+  getStoredRefreshToken(): string | null;
   isRefreshInFlight(): boolean;
   persistToken(payload: RefreshPayload): void;
   refreshStoredAuthToken(): Promise<string | null>;
 };
+
+export declare function isCrossOriginAuth(
+  apiUrl: string,
+  pageOrigin?: string | null
+): boolean;
 
 export declare function createBrowserAuthClient(
   options?: BrowserAuthClientOptions

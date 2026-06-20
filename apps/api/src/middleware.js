@@ -146,6 +146,9 @@ export async function configureMiddleware(app) {
             } catch {}
 
             logger.error("CORS限制，请求来源：" + origin);
+            // #region agent log
+            fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1167d'},body:JSON.stringify({sessionId:'f1167d',location:'middleware.js:cors',message:'cors blocked',data:{origin,path:req.path,corslist,frontendHostname},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'E'})}).catch(()=>{});
+            // #endregion
             return callback(new Error("CORS限制，请求来源可能存在风险"));
         })
     );

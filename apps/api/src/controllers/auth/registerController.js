@@ -175,8 +175,7 @@ export const completeRegister = async (req, res) => {
         }
 
         const response = tokenUtils.generateLoginResponse(newUser, tokenGen, email);
-        tokenUtils.setRefreshTokenCookie(res, tokenGen.refreshToken, tokenGen.refreshExpiresAt);
-        return res.status(200).json(response);
+        return tokenUtils.respondWithBrowserAuthTokens(res, response);
     } catch (error) {
         logger.error("完成注册失败:", error);
         return res.status(200).json({status: "error", message: "注册失败"});

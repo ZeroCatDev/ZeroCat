@@ -1,4 +1,4 @@
-import axios from '@/axios/axios';
+import axios, { authClient } from '@/axios/axios';
 import {localuser} from './localAccount';
 
 export const AuthService = {
@@ -162,10 +162,17 @@ export const AuthService = {
   // Refresh token
   refreshToken: async () => {
     try {
-      const response = await axios.post('/account/refresh-token');
+      const response = await axios.post('/account/refresh-token', {
+        refresh_token: authClient.getStoredRefreshToken() || undefined,
+      });
 
       if (response.data.status === 'success') {
-        localuser.updateToken(response.data.token, response.data.expires_at);
+        await localuser.setUser({
+          token: response.data.token,
+          expires_at: response.data.expires_at,
+          refresh_expires_at: response.data.refresh_expires_at,
+          refresh_token: response.data.refresh_token,
+        });
       }
 
       return response.data;
@@ -177,10 +184,15 @@ export const AuthService = {
 
 // Helper function to store authentication data
 async function storeAuthData(data) {
+  // #region agent log
+  fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1167d'},body:JSON.stringify({sessionId:'f1167d',location:'authService.js:storeAuthData',message:'persist login tokens',data:{hasToken:!!data?.token,hasRefreshToken:!!data?.refresh_token},timestamp:Date.now(),runId:'localStorage-v2',hypothesisId:'D'})}).catch(()=>{});
+  // #endregion
+
   await localuser.setUser({
     token: data.token,
     expires_at: data.expires_at,
-    refresh_expires_at: data.refresh_expires_at
+    refresh_expires_at: data.refresh_expires_at,
+    refresh_token: data.refresh_token,
   });
   return true;
 }

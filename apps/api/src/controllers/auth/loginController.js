@@ -226,8 +226,7 @@ export const loginWithPassword = async (req, res, next) => {
         await redisClient.delete(attemptKey);
 
         const response = tokenUtils.generateLoginResponse(user, tokenResult, userEmail);
-        tokenUtils.setRefreshTokenCookie(res, tokenResult.refreshToken, tokenResult.refreshExpiresAt);
-        return res.status(200).json(response);
+        return tokenUtils.respondWithBrowserAuthTokens(res, response);
     } catch (err) {
         logger.error("密码登录失败:", err);
         return res.status(500).json({
@@ -401,8 +400,7 @@ export const loginWithCode = async (req, res) => {
         }
 
         const response = tokenUtils.generateLoginResponse(user, tokenResult, email);
-        tokenUtils.setRefreshTokenCookie(res, tokenResult.refreshToken, tokenResult.refreshExpiresAt);
-        return res.status(200).json(response);
+        return tokenUtils.respondWithBrowserAuthTokens(res, response);
     } catch (error) {
         logger.error("验证码登录时出错:", error);
         return res.status(200).json({
@@ -630,8 +628,7 @@ export const validateMagicLinkAndLogin = async (req, res) => {
             : null;
 
         const response = tokenUtils.generateLoginResponse(user, tokenResult, userEmail, {callback: callbackData});
-        tokenUtils.setRefreshTokenCookie(res, tokenResult.refreshToken, tokenResult.refreshExpiresAt);
-        return res.status(200).json(response);
+        return tokenUtils.respondWithBrowserAuthTokens(res, response);
     } catch (error) {
         logger.error("验证魔术链接时出错:", error);
         return res.status(200).json({
