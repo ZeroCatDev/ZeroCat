@@ -359,13 +359,26 @@ export function clearAllRefreshTokenCookies(res) {
     }
 }
 
+function normalizeRefreshToken(value) {
+    const normalized = String(value || "").trim();
+    return normalized || null;
+}
+
+function toIsoOrValue(value) {
+    if (!value) return value;
+    if (value instanceof Date) return value.toISOString();
+    return value;
+}
+
+export { toIsoOrValue };
+
 /**
  * 从请求 Cookie 头解析 refresh_token；存在多个同名 cookie 时优先 zc_ 新格式
  * @param {object} req Express request 对象
  * @returns {{ fromCookie: boolean, refresh_token: string | undefined, duplicateCount: number }}
  */
 export function extractRefreshTokenFromRequest(req) {
-    const bodyToken = req.body?.refresh_token;
+    const bodyToken = normalizeRefreshToken(req.body?.refresh_token);
     if (bodyToken) {
         return { fromCookie: false, refresh_token: bodyToken, duplicateCount: 0 };
     }
@@ -427,7 +440,7 @@ export function respondWithBrowserAuthTokens(res, payload, statusCode = 200) {
     clearLegacyAuthCookies(res);
 
     // #region agent log
-    fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1167d'},body:JSON.stringify({sessionId:'f1167d',location:'tokenUtils.js:respondWithBrowserAuthTokens',message:'auth tokens in json body',data:{hasToken:!!payload?.token,hasRefreshToken:!!payload?.refresh_token,statusCode},timestamp:Date.now(),runId:'localStorage-v2',hypothesisId:'C'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1167d'},body:JSON.stringify({sessionId:'f1167d',location:'tokenUtils.js:respondWithBrowserAuthTokens',message:'auth tokens in json body',data:{hasToken:!!payload?.token,hasRefreshToken:!!payload?.refresh_token,accessPrefix:typeof payload?.token==='string'?payload.token.slice(0,12):null,refreshPrefix:typeof payload?.refresh_token==='string'?payload.refresh_token.slice(0,12):null,samePrefix:typeof payload?.token==='string'&&typeof payload?.refresh_token==='string'?payload.token.slice(0,12)===payload.refresh_token.slice(0,12):null,statusCode},timestamp:Date.now(),runId:'localStorage-v3',hypothesisId:'C'})}).catch(()=>{});
     // #endregion
 
     return res.status(statusCode).json(payload);
@@ -452,8 +465,8 @@ export function generateLoginResponse(user, tokenResult, email, additionalData =
         email: email,
         ...additionalData,
         token: tokenResult.accessToken,
-        expires_at: tokenResult.expiresAt,
-        refresh_expires_at: tokenResult.refreshExpiresAt,
+        expires_at: toIsoOrValue(tokenResult.expiresAt),
+        refresh_expires_at: toIsoOrValue(tokenResult.refreshExpiresAt),
         refresh_token: tokenResult.refreshToken,
     };
 }
@@ -464,6 +477,7 @@ export default {
     generateLoginResponse,
     clearLegacyAuthCookies,
     respondWithBrowserAuthTokens,
+    toIsoOrValue,
     setRefreshTokenCookie,
     clearRefreshTokenCookie,
     clearAllRefreshTokenCookies,

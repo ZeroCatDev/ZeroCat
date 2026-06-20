@@ -6,6 +6,7 @@ import zcconfig from "../../services/config/zcconfig.js";
 import {
     extractRefreshTokenFromRequest,
     respondWithBrowserAuthTokens,
+    toIsoOrValue,
 } from "../../services/auth/tokenUtils.js";
 
 /**
@@ -74,7 +75,7 @@ export const refreshToken = async (req, res) => {
 
         // #region agent log
         const csrfPreview = fromCookie ? await validateOriginForCSRF(req) : { valid: true, skipped: true };
-        fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1167d'},body:JSON.stringify({sessionId:'f1167d',location:'tokenController.js:refreshToken:entry',message:'refresh token request',data:{origin:req.headers.origin||null,fromCookie,hasRefreshToken:!!refresh_token,duplicateCount,csrfValid:csrfPreview.valid,csrfMessage:csrfPreview.message||null},timestamp:Date.now(),runId:'localStorage',hypothesisId:'B'})}).catch(()=>{});
+        fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1167d'},body:JSON.stringify({sessionId:'f1167d',location:'tokenController.js:refreshToken:entry',message:'refresh token request',data:{origin:req.headers.origin||null,fromCookie,hasRefreshToken:!!refresh_token,refreshPrefix:refresh_token?String(refresh_token).slice(0,12):null,tokenLength:refresh_token?String(refresh_token).length:0,duplicateCount,csrfValid:csrfPreview.valid,csrfMessage:csrfPreview.message||null},timestamp:Date.now(),runId:'localStorage-v3',hypothesisId:'B'})}).catch(()=>{});
         // #endregion
 
         if (!refresh_token) {
@@ -110,10 +111,14 @@ export const refreshToken = async (req, res) => {
                 message: "令牌已刷新",
                 token: result.accessToken,
                 refresh_token: result.refreshToken,
-                expires_at: result.expiresAt,
-                refresh_expires_at: result.refreshExpiresAt,
+                expires_at: toIsoOrValue(result.expiresAt),
+                refresh_expires_at: toIsoOrValue(result.refreshExpiresAt),
             });
         } else {
+            // #region agent log
+            fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1167d'},body:JSON.stringify({sessionId:'f1167d',location:'tokenController.js:refreshToken:fail',message:'refresh failed',data:{refreshPrefix:refresh_token?String(refresh_token).slice(0,12):null,errorMessage:result.message||null},timestamp:Date.now(),runId:'localStorage-v3',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
+
             return res.status(401).json({
                 status: "error",
                 message: result.message || "刷新令牌失败",

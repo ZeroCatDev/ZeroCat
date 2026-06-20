@@ -144,6 +144,7 @@ export function createBrowserAuthClient(options = {}) {
 
   let refreshPromise = null;
   let lastRefreshAttemptAt = 0;
+  let authCredentialGeneration = 0;
   let memoryToken = getStorageValue(AUTH_STORAGE_KEYS.token);
   let memoryTokenExpiresAt = getStorageValue(AUTH_STORAGE_KEYS.tokenExpiresAt);
   let memoryRefreshToken = getStorageValue(AUTH_STORAGE_KEYS.refreshToken);
@@ -174,24 +175,40 @@ export function createBrowserAuthClient(options = {}) {
     window.dispatchEvent(new CustomEvent(AUTH_EVENTS.userRefreshed, { detail }));
   }
 
+  function bumpAuthCredentialGeneration() {
+    authCredentialGeneration += 1;
+  }
+
+  function normalizeRefreshToken(value) {
+    const normalized = String(value || "").trim();
+    return normalized || null;
+  }
+
   function getStoredToken() {
     return memoryToken || getStorageValue(AUTH_STORAGE_KEYS.token);
   }
 
   function getStoredRefreshToken() {
-    return memoryRefreshToken || getStorageValue(AUTH_STORAGE_KEYS.refreshToken);
+    return normalizeRefreshToken(memoryRefreshToken || getStorageValue(AUTH_STORAGE_KEYS.refreshToken));
   }
 
   function persistRefreshToken(refreshToken) {
-    if (!refreshToken) return;
-    memoryRefreshToken = refreshToken;
-    setStorageValue(AUTH_STORAGE_KEYS.refreshToken, refreshToken);
+    const normalized = normalizeRefreshToken(refreshToken);
+    if (!normalized) return;
+    memoryRefreshToken = normalized;
+    setStorageValue(AUTH_STORAGE_KEYS.refreshToken, normalized);
   }
 
   function persistToken(payload) {
-    if (payload?.refresh_token) {
+    bumpAuthCredentialGeneration();
+
+    if (payload?.refresh_token === null) {
+      memoryRefreshToken = null;
+      setStorageValue(AUTH_STORAGE_KEYS.refreshToken, null);
+    } else if (payload?.refresh_token) {
       persistRefreshToken(payload.refresh_token);
     }
+
     if (!payload?.token) return;
     const tokenExpiresAt = normalizeTimestamp(payload.expires_at);
     const refreshTokenExpiresAt = normalizeTimestamp(payload.refresh_expires_at);
@@ -227,6 +244,7 @@ export function createBrowserAuthClient(options = {}) {
   }
 
   function clearStoredAuthState() {
+    bumpAuthCredentialGeneration();
     memoryToken = null;
     memoryTokenExpiresAt = null;
     memoryRefreshToken = null;
@@ -307,9 +325,10 @@ export function createBrowserAuthClient(options = {}) {
     return getStoredToken() !== previousToken ? getStoredToken() : null;
   }
 
-  async function performRefreshRequest() {
+  async function performRefreshRequest(allowCredentialRetry = true) {
     if (!fetchImpl) return null;
 
+    const generationAtStart = authCredentialGeneration;
     const storedRefreshToken = getStoredRefreshToken();
     if (!storedRefreshToken) return null;
 
@@ -324,14 +343,35 @@ export function createBrowserAuthClient(options = {}) {
     });
 
     // #region agent log
-    fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1167d'},body:JSON.stringify({sessionId:'f1167d',location:'auth-core/index.js:performRefreshRequest',message:'refresh request result',data:{apiUrl,hasStoredRefreshToken:true,status:response?.status,ok:response?.ok},timestamp:Date.now(),runId:'localStorage',hypothesisId:'A'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1167d'},body:JSON.stringify({sessionId:'f1167d',location:'auth-core/index.js:performRefreshRequest',message:'refresh request result',data:{apiUrl,refreshPrefix:storedRefreshToken.slice(0,12),tokenLength:storedRefreshToken.length,generationAtStart,generationNow:authCredentialGeneration,status:response?.status,ok:response?.ok},timestamp:Date.now(),runId:'localStorage-v3',hypothesisId:'A'})}).catch(()=>{});
     // #endregion
+
+    if (authCredentialGeneration !== generationAtStart) {
+      if (allowCredentialRetry) {
+        return performRefreshRequest(false);
+      }
+      return getStoredToken();
+    }
 
     if (!response?.ok) {
       if ([400, 401, 403].includes(Number(response?.status))) {
+        const latestRefreshToken = getStoredRefreshToken();
+        if (
+          allowCredentialRetry &&
+          latestRefreshToken &&
+          latestRefreshToken !== storedRefreshToken
+        ) {
+          return performRefreshRequest(false);
+        }
+
         const previousToken = getStoredToken();
         const peerToken = await waitForPeerRefresh(previousToken);
         if (peerToken) return peerToken;
+
+        if (authCredentialGeneration !== generationAtStart) {
+          return getStoredToken();
+        }
+
         clearStoredAuthState();
       }
       return null;

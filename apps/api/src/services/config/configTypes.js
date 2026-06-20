@@ -428,6 +428,24 @@ export const CONFIG_TYPES = {
         required: false,
         description: "厚浪 Logto OIDC 应用密钥",
     },
+    "oauth.dynamic.enabled": {
+        type: "boolean",
+        required: false,
+        default: false,
+        description: "是否启用Dynamic登录",
+        transform: typeTransformers.boolean,
+        public: true,
+    },
+    "oauth.dynamic.client_id": {
+        type: "string",
+        required: false,
+        description: "Dynamic Logto OIDC 应用ID",
+    },
+    "oauth.dynamic.client_secret": {
+        type: "string",
+        required: false,
+        description: "Dynamic Logto OIDC 应用密钥",
+    },
     "git.sync.enabled": {
         type: "boolean",
         required: false,

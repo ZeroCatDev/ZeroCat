@@ -773,6 +773,27 @@ export const OAUTH_PROVIDERS = {
             profile_url: data.website || data.profile || data.profile_url || null,
         })
     },
+
+    dynamic : {
+        id: 'dynamic',
+        name: 'Dynamic',
+        type: 'oauth_dynamic',
+        issuer: 'https://auth.yun/oidc',
+        ...buildOidcEndpoints('https://auth.yun/oidc'),
+        scope: 'openid profile email',
+        enabled: false,
+        clientId: null,
+        clientSecret: null,
+        redirectUri: null,
+        mapUserInfo: (data) => ({
+            id: data.sub || data.id,
+            email: data.email || null,
+            name: data.name || data.username || data.preferred_username || data.nickname || data.email || data.sub,
+            avatar: data.picture || data.avatar || data.avatar_url || null,
+            username: data.username || data.preferred_username || data.nickname || null,
+            profile_url: data.website || data.profile || data.profile_url || null,
+        })
+    },
     microsoft: {
         id: 'microsoft',
         name: 'Microsoft',
