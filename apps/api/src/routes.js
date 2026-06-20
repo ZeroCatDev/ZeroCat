@@ -140,9 +140,9 @@ async function registerBusinessRoutes(app) {
         const blogModule = await import('./routes/router_blog.js');
         app.use("/blog", blogModule.default);
 
-        // 账户令牌路由
-        const accountTokenModule = await import('./routes/router_accounttoken.js');
-        app.use("/accounttoken", accountTokenModule.default);
+        // 统一令牌管理路由 (个人 API 令牌)
+        const tokensModule = await import('./routes/router_tokens.js');
+        app.use("/tokens", tokensModule.default);
 
         // CodeRun Runner路由
         const coderunRunnerModule = await import('./routes/admin/coderun_runner.js');

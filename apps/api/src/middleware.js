@@ -6,72 +6,70 @@ import cookieParser from 'cookie-parser';
 import logger from './services/logger.js';
 import zcconfig from './services/config/zcconfig.js';
 import ipMiddleware from './middleware/ipMiddleware.js';
+import { verifyToken as verifyUnifiedToken } from './services/auth/tokenService.js';
+
+const SENSITIVE_QUERY_KEYS = new Set([
+    "token",
+    "refresh_token",
+    "access_token",
+    "sudo_token",
+    "code",
+]);
+
+function redactUrlForLogs(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== "string") return rawUrl;
+    try {
+        const parsed = new URL(rawUrl, "http://localhost");
+        for (const key of [...parsed.searchParams.keys()]) {
+            if (SENSITIVE_QUERY_KEYS.has(key.toLowerCase())) {
+                parsed.searchParams.set(key, "[REDACTED]");
+            }
+        }
+        return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    } catch {
+        return rawUrl.replace(
+            /([?&](?:token|refresh_token|access_token|sudo_token|code)=)[^&]*/gi,
+            "$1[REDACTED]"
+        );
+    }
+}
 
 /**
- * 统一的令牌验证函数
- * 支持JWT令牌和账户令牌
+ * 统一的令牌验证函数 (不透明 scope 令牌)
  * @param {string} token 令牌字符串
  * @param {string} ipAddress IP地址
- * @returns {Promise<{valid: boolean, user: object|null, message: string, tokenType: string|null}>}
+ * @returns {Promise<{valid: boolean, user: object|null, scopes: string[], tokenType: string|null, applicationId: number|null, message: string}>}
  */
 async function verifyTokenUnified(token, ipAddress) {
     try {
-        logger.debug(token);
-        // 根据令牌前缀决定验证方式
-        if (token.startsWith('zc_')) {
-            // 验证账户令牌
-            const accountTokenModule = await import('./services/auth/accountTokenService.js');
-            const accountTokenResult = await accountTokenModule.verifyAccountToken(token);
-
-            if (accountTokenResult.valid && accountTokenResult.user) {
-                // 异步更新账户令牌使用记录
-                accountTokenModule.updateAccountTokenUsage(accountTokenResult.user.token_id, ipAddress)
-                    .catch(err => logger.error("更新账户令牌使用记录时出错:", err));
-
-                return {
-                    valid: true,
-                    user: accountTokenResult.user,
-                    message: "账户令牌验证成功",
-                    tokenType: "account"
-                };
-            }
-
+        const result = await verifyUnifiedToken(token, ipAddress);
+        if (result.valid && result.user) {
             return {
-                valid: false,
-                user: null,
-                message: accountTokenResult.message || "账户令牌验证失败",
-                tokenType: null
-            };
-        } else {
-            // 验证JWT令牌
-            const authModule = await import('./services/auth/auth.js');
-            const authUtils = authModule.default;
-
-            const jwtResult = await authUtils.verifyToken(token, ipAddress);
-
-            if (jwtResult.valid && jwtResult.user) {
-                return {
-                    valid: true,
-                    user: jwtResult.user,
-                    message: "JWT令牌验证成功",
-                    tokenType: "jwt"
-                };
-            }
-
-            return {
-                valid: false,
-                user: null,
-                message: jwtResult.message || "JWT令牌验证失败",
-                tokenType: null
+                valid: true,
+                user: result.user,
+                scopes: result.scopes || [],
+                tokenType: result.tokenType,
+                applicationId: result.applicationId || null,
+                message: "令牌验证成功",
             };
         }
+        return {
+            valid: false,
+            user: null,
+            scopes: [],
+            tokenType: null,
+            applicationId: null,
+            message: result.message || "令牌验证失败",
+        };
     } catch (error) {
         logger.error("统一令牌验证时出错:", error);
         return {
             valid: false,
             user: null,
+            scopes: [],
+            tokenType: null,
+            applicationId: null,
             message: "令牌验证时发生错误",
-            tokenType: null
         };
     }
 }
@@ -89,7 +87,7 @@ export async function configureMiddleware(app) {
         expressWinston.logger({
             winstonInstance: logger,
             meta: true,
-            msg: "HTTP {{req.method}} {{res.statusCode}} {{res.responseTime}}ms {{req.url}} {{req.ipInfo.clientIP}}",
+            msg: "HTTP {{req.method}} {{res.statusCode}} {{res.responseTime}}ms {{req.ipInfo.clientIP}}",
             colorize: false,
             ignoreRoute: (req, res) => false,
             level: "info",
@@ -101,7 +99,7 @@ export async function configureMiddleware(app) {
                 return {
                     reqId: req.id,
                     method: req.method,
-                    url: req.url,
+                    url: redactUrlForLogs(req.originalUrl || req.url),
                     ip: req.ipInfo.clientIP
                 };
             }
@@ -217,6 +215,8 @@ export async function configureMiddleware(app) {
                 res.locals.email = result.user.email;
                 res.locals.tokenId = result.user.token_id;
                 res.locals.tokenType = result.tokenType;
+                res.locals.scopes = result.scopes || [];
+                res.locals.applicationId = result.applicationId || null;
             } else {
                 logger.debug(`令牌验证失败: ${result.message}`);
             }
@@ -292,6 +292,14 @@ export async function tokenAuthMiddleware(req, res, next) {
 
         // 设置验证后的用户信息
         res.locals.tokeninfo = result.user;
+        res.locals.userid = result.user.userid;
+        res.locals.username = result.user.username;
+        res.locals.display_name = result.user.display_name;
+        res.locals.email = result.user.email;
+        res.locals.tokenId = result.user.token_id;
+        res.locals.tokenType = result.tokenType;
+        res.locals.scopes = result.scopes || [];
+        res.locals.applicationId = result.applicationId || null;
         next();
     } catch (error) {
         logger.error("Token验证失败:", error);

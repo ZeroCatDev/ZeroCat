@@ -2,6 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import logger from "../services/logger.js";
 import { needLogin } from "../middleware/auth.js";
+import { requireScope } from "../middleware/scope.js";
 import {
   createPost,
   markPostRead,
@@ -91,7 +92,7 @@ const parseEmbedDataQuery = (value) => {
 
   return parsed;
 };
-router.post("/upload-image", needLogin, upload.single("file"), async (req, res) => {
+router.post("/upload-image", needLogin, requireScope("post:create"), upload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ status: "error", message: "没有上传文件" });
@@ -127,7 +128,7 @@ router.post("/upload-image", needLogin, upload.single("file"), async (req, res) 
   }
 });
 
-router.post("/", needLogin, async (req, res) => {
+router.post("/", needLogin, requireScope("post:create"), async (req, res) => {
   try {
     const { content, mediaIds = [], embed } = req.body;
     if (mediaIds.length > MAX_MEDIA_COUNT) {
@@ -146,7 +147,7 @@ router.post("/", needLogin, async (req, res) => {
   }
 });
 
-router.post("/:id/reply", needLogin, async (req, res) => {
+router.post("/:id/reply", needLogin, requireScope("post:create"), async (req, res) => {
   try {
     const { content, mediaIds = [], embed } = req.body;
     const data = await replyToPost({
@@ -163,7 +164,7 @@ router.post("/:id/reply", needLogin, async (req, res) => {
   }
 });
 
-router.post("/:id/retweet", needLogin, async (req, res) => {
+router.post("/:id/retweet", needLogin, requireScope("post:create"), async (req, res) => {
   try {
     const data = await retweetPost({
       authorId: res.locals.userid,
@@ -176,7 +177,7 @@ router.post("/:id/retweet", needLogin, async (req, res) => {
   }
 });
 
-router.delete("/:id/retweet", needLogin, async (req, res) => {
+router.delete("/:id/retweet", needLogin, requireScope("post:interact"), async (req, res) => {
   try {
     const result = await unretweetPost({
       authorId: res.locals.userid,
@@ -189,7 +190,7 @@ router.delete("/:id/retweet", needLogin, async (req, res) => {
   }
 });
 
-router.post("/:id/quote", needLogin, async (req, res) => {
+router.post("/:id/quote", needLogin, requireScope("post:create"), async (req, res) => {
   try {
     const { content, mediaIds = [], embed } = req.body;
     const data = await quotePost({
@@ -216,7 +217,7 @@ router.post("/:id/read", async (req, res) => {
   }
 });
 
-router.post("/:id/like", needLogin, async (req, res) => {
+router.post("/:id/like", needLogin, requireScope("post:interact"), async (req, res) => {
   try {
     const like = await likePost({ userId: res.locals.userid, postId: req.params.id });
     res.status(200).json({ status: "success", data: like });
@@ -226,7 +227,7 @@ router.post("/:id/like", needLogin, async (req, res) => {
   }
 });
 
-router.delete("/:id/like", needLogin, async (req, res) => {
+router.delete("/:id/like", needLogin, requireScope("post:interact"), async (req, res) => {
   try {
     const result = await unlikePost({ userId: res.locals.userid, postId: req.params.id });
     res.status(200).json({ status: "success", data: result });
@@ -236,7 +237,7 @@ router.delete("/:id/like", needLogin, async (req, res) => {
   }
 });
 
-router.post("/:id/bookmark", needLogin, async (req, res) => {
+router.post("/:id/bookmark", needLogin, requireScope("post:interact"), async (req, res) => {
   try {
     const bookmark = await bookmarkPost({ userId: res.locals.userid, postId: req.params.id });
     res.status(200).json({ status: "success", data: bookmark });
@@ -246,7 +247,7 @@ router.post("/:id/bookmark", needLogin, async (req, res) => {
   }
 });
 
-router.delete("/:id/bookmark", needLogin, async (req, res) => {
+router.delete("/:id/bookmark", needLogin, requireScope("post:interact"), async (req, res) => {
   try {
     const result = await unbookmarkPost({ userId: res.locals.userid, postId: req.params.id });
     res.status(200).json({ status: "success", data: result });
@@ -256,7 +257,7 @@ router.delete("/:id/bookmark", needLogin, async (req, res) => {
   }
 });
 
-router.delete("/:id", needLogin, async (req, res) => {
+router.delete("/:id", needLogin, requireScope("post:delete"), async (req, res) => {
   try {
     const result = await deletePost({ userId: res.locals.userid, postId: req.params.id });
     res.status(200).json({ status: "success", data: result });
@@ -284,7 +285,7 @@ router.get("/feed", async (req, res) => {
   }
 });
 
-router.get("/global", needLogin, async (req, res) => {
+router.get("/global", needLogin, requireScope("post:read"), async (req, res) => {
   try {
     const { cursor, limit = 20, include_replies = "false" } = req.query;
     const data = await getGlobalFeed({
@@ -382,7 +383,7 @@ router.get("/recommend/mixed", async (req, res) => {
   }
 });
 
-router.get("/mentions", needLogin, async (req, res) => {
+router.get("/mentions", needLogin, requireScope("post:read"), async (req, res) => {
   try {
     const { cursor, limit = 20 } = req.query;
     const data = await getMentions({
@@ -489,7 +490,7 @@ router.get("/user/:userid/media", async (req, res) => {
 });
 
 // 获取用户喜欢的帖子（仅自己可见）
-router.get("/user/:userid/likes", needLogin, async (req, res) => {
+router.get("/user/:userid/likes", needLogin, requireScope("post:read"), async (req, res) => {
   try {
     const { cursor, limit = 20 } = req.query;
     const data = await getUserLikedPosts({
@@ -509,7 +510,7 @@ router.get("/user/:userid/likes", needLogin, async (req, res) => {
 });
 
 // 获取用户收藏（仅自己可见）
-router.get("/user/:userid/bookmarks", needLogin, async (req, res) => {
+router.get("/user/:userid/bookmarks", needLogin, requireScope("post:read"), async (req, res) => {
   try {
     const { cursor, limit = 20 } = req.query;
     const data = await getUserBookmarks({
@@ -580,7 +581,7 @@ router.get("/:id/quotes", async (req, res) => {
 });
 
 // 获取帖子的点赞用户列表（仅发帖人可见）
-router.get("/:id/likes", needLogin, async (req, res) => {
+router.get("/:id/likes", needLogin, requireScope("post:read"), async (req, res) => {
   try {
     const { cursor, limit = 20 } = req.query;
     const data = await getPostLikes({
@@ -687,7 +688,7 @@ router.get("/:id", async (req, res) => {
  * POST /posts/:id/resync
  * 只有帖子作者可以触发
  */
-router.post("/:id/resync", needLogin, async (req, res) => {
+router.post("/:id/resync", needLogin, requireScope("post:update"), async (req, res) => {
   try {
     const postId = parseInt(req.params.id);
     if (isNaN(postId)) {
@@ -728,7 +729,7 @@ router.post("/:id/resync", needLogin, async (req, res) => {
  * POST /posts/:id/push-federation
  * 只有帖子作者可以触发
  */
-router.post("/:id/push-federation", needLogin, async (req, res) => {
+router.post("/:id/push-federation", needLogin, requireScope("post:update"), async (req, res) => {
   try {
     const postId = parseInt(req.params.id);
     if (isNaN(postId)) {
@@ -791,7 +792,7 @@ router.post("/:id/push-federation", needLogin, async (req, res) => {
  * POST /posts/remote-user/:userId/fetch
  * 需要登录
  */
-router.post("/remote-user/:userId/fetch", needLogin, async (req, res) => {
+router.post("/remote-user/:userId/fetch", needLogin, requireScope("post:read"), async (req, res) => {
   try {
     const userId = parseInt(req.params.userId);
     if (isNaN(userId)) {

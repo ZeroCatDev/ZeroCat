@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { parseToken, needLogin } from '../middleware/auth.js';
+import { scopeSatisfies } from '../services/auth/scopes.js';
 import {
     sendCode,
     auth,
@@ -7,6 +8,41 @@ import {
 } from '../controllers/auth/unifiedAuthController.js';
 
 const router = Router();
+
+const AUTHENTICATED_PURPOSE_SCOPES = {
+    sudo: null,
+    change_email: "user:update",
+    delete_account: "user:delete",
+};
+
+const requirePurposeAuthorization = (req, res, next) => {
+    const { purpose } = req.body || {};
+    if (!Object.prototype.hasOwnProperty.call(AUTHENTICATED_PURPOSE_SCOPES, purpose)) {
+        return next();
+    }
+
+    return needLogin(req, res, () => {
+        if (res.locals.tokenType !== "session") {
+            return res.status(403).json({
+                status: "error",
+                message: "此认证目的需要使用网页登录会话",
+                code: "ZC_ERROR_SESSION_REQUIRED",
+            });
+        }
+
+        const requiredScope = AUTHENTICATED_PURPOSE_SCOPES[purpose];
+        if (requiredScope && !scopeSatisfies(res.locals.scopes || [], requiredScope)) {
+            return res.status(403).json({
+                status: "error",
+                message: "令牌权限不足",
+                code: "ZC_ERROR_INSUFFICIENT_SCOPE",
+                required: requiredScope,
+            });
+        }
+
+        return next();
+    });
+};
 
 // 应用通用中间件
 router.use(parseToken);
@@ -28,14 +64,7 @@ router.get('/methods', getAuthMethods);
  * - purpose: 认证目的 (login, sudo, reset_password, change_email, delete_account)
  * - userId: 用户ID（某些场景下可选，会从登录状态获取）
  */
-router.post('/send-code', (req, res, next) => {
-    // 根据purpose决定是否需要登录
-    const { purpose } = req.body;
-    if (['sudo', 'change_email', 'delete_account'].includes(purpose)) {
-        return needLogin(req, res, next);
-    }
-    next();
-}, sendCode);
+router.post('/send-code', requirePurposeAuthorization, sendCode);
 
 /**
  * POST /auth/authenticate
@@ -52,13 +81,6 @@ router.post('/send-code', (req, res, next) => {
  * - code: 验证码（email方式）
  * - new_password: 新密码（reset_password时必填）
  */
-router.post('/authenticate', (req, res, next) => {
-    // 根据purpose决定是否需要登录
-    const { purpose } = req.body;
-    if (['sudo', 'change_email', 'delete_account'].includes(purpose)) {
-        return needLogin(req, res, next);
-    }
-    next();
-}, auth);
+router.post('/authenticate', requirePurposeAuthorization, auth);
 
 export default router;

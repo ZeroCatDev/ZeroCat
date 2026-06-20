@@ -198,7 +198,7 @@ export async function auth(req, res) {
                 });
 
                 // 重置密码后撤销现有登录令牌
-                await prisma.ow_auth_tokens.updateMany({
+                await prisma.ow_tokens.updateMany({
                     where: {
                         user_id: authResult.user.id,
                         revoked: false,

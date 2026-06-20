@@ -1,6 +1,7 @@
 import {Router} from "express";
 import logger from "../services/logger.js";
 import {needLogin} from "../middleware/auth.js";
+import { requireScope } from "../middleware/scope.js";
 import {getFollowingTimeline, getMyTimeline, getUserTimeline} from "../services/timeline.js";
 
 const router = Router();
@@ -35,7 +36,7 @@ router.get("/user/:userid", async (req, res) => {
 });
 
 // 获取关注的用户的时间线（只显示公开事件）
-router.get("/following", needLogin, async (req, res) => {
+router.get("/following", needLogin, requireScope("event:read"), async (req, res) => {
     try {
         const {page = 1, limit = 20} = req.query;
         const result = await getFollowingTimeline(res.locals.userid, page, limit);
@@ -54,7 +55,7 @@ router.get("/following", needLogin, async (req, res) => {
 });
 
 // 获取我的时间线（包含自己和关注的人的事件）
-router.get("/me", needLogin, async (req, res) => {
+router.get("/me", needLogin, requireScope("event:read"), async (req, res) => {
     try {
         const {page = 1, limit = 20} = req.query;
         const result = await getMyTimeline(res.locals.userid, page, limit);

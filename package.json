@@ -24,6 +24,7 @@
     "dev:all": "turbo run dev",
     "lint:all": "turbo run lint",
     "typecheck:all": "turbo run typecheck",
+    "test:permissions": "node scripts/test-token-permissions.js",
     "dev:blog": "pnpm --filter ./apps/blog dev",
     "build:blog": "pnpm --filter ./apps/blog build"
   },

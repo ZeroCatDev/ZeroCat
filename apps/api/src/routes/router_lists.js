@@ -1,6 +1,7 @@
 import logger from "../services/logger.js";
 import {Router} from "express";
 import {needLogin} from "../middleware/auth.js";
+import { requireScope } from "../middleware/scope.js";
 import {
     addProjectToList,
     createList,
@@ -48,7 +49,7 @@ router.get("/userid/:id/public", async (req, res) => {
 });
 
 // Get current user's lists
-router.get("/my", async (req, res) => {
+router.get("/my", needLogin, requireScope("list:read"), async (req, res) => {
     try {
         const list = await getUserListInfo(res.locals.userid);
         res
@@ -63,7 +64,7 @@ router.get("/my", async (req, res) => {
 });
 
 // Check if a project is in any of the user's lists
-router.get("/check", async (req, res) => {
+router.get("/check", needLogin, requireScope("list:read"), async (req, res) => {
     try {
         const {projectid} = req.query;
 
@@ -86,7 +87,7 @@ router.get("/check", async (req, res) => {
 });
 
 // Create a new list
-router.post("/create", needLogin, async (req, res) => {
+router.post("/create", needLogin, requireScope("list:create"), async (req, res) => {
     try {
         const {title, description} = req.body;
 
@@ -107,7 +108,7 @@ router.post("/create", needLogin, async (req, res) => {
 // Delete a list
 import { requireSudo } from "../middleware/sudo.js";
 
-router.post("/delete", needLogin, requireSudo, async (req, res) => {
+router.post("/delete", needLogin, requireScope("list:delete"), requireSudo, async (req, res) => {
     try {
         const {id} = req.body;
 
@@ -128,7 +129,7 @@ router.post("/delete", needLogin, requireSudo, async (req, res) => {
 });
 
 // Add a project to a list
-router.post("/add", needLogin, async (req, res) => {
+router.post("/add", needLogin, requireScope("list:update"), async (req, res) => {
     try {
         const {listid, projectid} = req.body;
 
@@ -149,7 +150,7 @@ router.post("/add", needLogin, async (req, res) => {
 });
 
 // Remove a project from a list
-router.post("/remove", needLogin, async (req, res) => {
+router.post("/remove", needLogin, requireScope("list:update"), async (req, res) => {
     try {
         const {listid, projectid} = req.body;
 
@@ -176,7 +177,7 @@ router.post("/remove", needLogin, async (req, res) => {
 });
 
 // Update list details
-router.post("/update/:id", needLogin, async (req, res) => {
+router.post("/update/:id", needLogin, requireScope("list:update"), async (req, res) => {
     try {
         const list = await updateList(res.locals.userid, req.params.id, req.body);
         res

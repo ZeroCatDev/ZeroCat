@@ -4,6 +4,17 @@ import {createTypedJWT} from "./tokenUtils.js";
 import logger from "../logger.js";
 import {prisma} from "../prisma.js";
 import crypto from "crypto";
+import {issueToken, hashToken, refreshAccessToken, revokeTokensWhere} from "./tokenService.js";
+import { normalizeScopes as normalizeScopeCatalog } from "./scopes.js";
+
+/**
+ * 将 scope 规范化为字符串数组
+ * @param {string|string[]} scopes
+ * @returns {string[]}
+ */
+function normalizeScopes(scopes) {
+    return normalizeScopeCatalog(scopes);
+}
 
 export async function generateFileAccessToken(sha256, userid) {
     return createTypedJWT("file", {
@@ -27,35 +38,28 @@ export async function verifyFileAccessToken(token, userid) {
     return sha256;
 }
 
-// OAuth令牌生成
+// OAuth令牌生成 (统一写入 ow_tokens, type=oauth)
 export async function generateOAuthTokens(userId, applicationId, authorizationId, scopes) {
     try {
-        const accessToken = crypto.randomBytes(32).toString("hex");
-        const refreshToken = crypto.randomBytes(32).toString("hex");
-        const expiresIn = 3600; // 访问令牌1小时有效期
+        const scopeArray = normalizeScopes(scopes);
+        const result = await issueToken({
+            userId,
+            type: "oauth",
+            scopes: scopeArray,
+            applicationId,
+            authorizationId,
+            accessTokenExpiry: 3600, // 1小时
+            withRefreshToken: true,
+        });
 
-        if (!accessToken || !refreshToken) {
+        if (!result.success || !result.accessToken) {
             throw new Error("Failed to generate tokens");
         }
 
-        // 创建访问令牌记录
-        await prisma.ow_oauth_access_tokens.create({
-            data: {
-                application_id: applicationId,
-                authorization_id: authorizationId,
-                user_id: userId,
-                access_token: accessToken,
-                refresh_token: refreshToken,
-                scopes: scopes || [],
-                expires_at: new Date(Date.now() + expiresIn * 1000),
-                refresh_token_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30天
-            },
-        });
-
         return {
-            accessToken,
-            refreshToken,
-            expiresIn,
+            accessToken: result.accessToken,
+            refreshToken: result.refreshToken,
+            expiresIn: 3600,
         };
     } catch (error) {
         logger.error("Error generating OAuth tokens:", error);
@@ -63,13 +67,13 @@ export async function generateOAuthTokens(userId, applicationId, authorizationId
     }
 }
 
-// 验证OAuth访问令牌
+// 验证OAuth访问令牌 (从 ow_tokens 读取)
 export async function verifyOAuthAccessToken(accessToken) {
-    const token = await prisma.ow_oauth_access_tokens.findFirst({
+    const token = await prisma.ow_tokens.findFirst({
         where: {
-            access_token: accessToken,
-            expires_at: {gt: new Date()},
-            is_revoked: false,
+            token_hash: hashToken(accessToken),
+            type: "oauth",
+            revoked: false,
         },
         include: {
             application: true,
@@ -84,62 +88,49 @@ export async function verifyOAuthAccessToken(accessToken) {
         },
     });
 
-    if (!token) {
+    if (!token || (token.expires_at && token.expires_at < new Date())) {
         throw new Error("Invalid or expired access token");
     }
 
-    // 更新最后使用时间
-    await prisma.ow_oauth_access_tokens.update({
-        where: {id: token.id},
-        data: {
-            last_used_at: new Date(),
-        },
+    await prisma.ow_tokens.update({
+        where: { id: token.id },
+        data: { last_used_at: new Date() },
     });
 
     return token;
 }
 
-// 刷新OAuth令牌
+// 刷新OAuth令牌 (基于 ow_tokens)
 export async function refreshOAuthTokens(refreshToken, applicationId) {
     try {
-        const oldToken = await prisma.ow_oauth_access_tokens.findFirst({
+        // 校验刷新令牌属于该应用
+        const existing = await prisma.ow_tokens.findFirst({
             where: {
-                refresh_token: refreshToken,
+                refresh_token_hash: hashToken(refreshToken),
+                type: "oauth",
                 application_id: applicationId,
-                refresh_token_expires_at: {gt: new Date()},
-                is_revoked: false,
+                revoked: false,
             },
         });
 
-        if (!oldToken) {
+        if (!existing) {
+            throw new Error("Invalid or expired refresh token");
+        }
+        if (existing.refresh_expires_at && existing.refresh_expires_at < new Date()) {
             throw new Error("Invalid or expired refresh token");
         }
 
-        // 生成新的令牌
-        const newTokens = await generateOAuthTokens(
-            oldToken.user_id,
-            oldToken.application_id,
-            oldToken.authorization_id,
-            oldToken.scopes
-        );
-
-        if (!newTokens || !newTokens.accessToken) {
+        // 轮换访问令牌
+        const result = await refreshAccessToken(refreshToken);
+        if (!result.success || !result.accessToken) {
             throw new Error("Failed to generate new tokens");
         }
 
-        // 撤销旧令牌
-        await prisma.ow_oauth_access_tokens.update({
-            where: {id: oldToken.id},
-            data: {
-                is_revoked: true,
-                updated_at: new Date()
-            },
-        });
-
         return {
-            accessToken: newTokens.accessToken,
-            refreshToken: newTokens.refreshToken,
-            expiresIn: newTokens.expiresIn
+            accessToken: result.accessToken,
+            refreshToken: result.refreshToken,
+            expiresIn: 3600,
+            scope: Array.isArray(existing.scopes) ? existing.scopes.join(" ") : existing.scopes,
         };
     } catch (error) {
         logger.error("Error refreshing OAuth tokens:", error);
@@ -149,19 +140,14 @@ export async function refreshOAuthTokens(refreshToken, applicationId) {
 
 // 撤销OAuth令牌
 export async function revokeOAuthToken(token, tokenType = "access_token") {
-    const tokenField = tokenType === "refresh_token" ? "refresh_token" : "access_token";
+    const tokenField = tokenType === "refresh_token" ? "refresh_token_hash" : "token_hash";
 
-    const result = await prisma.ow_oauth_access_tokens.updateMany({
-        where: {
-            [tokenField]: token,
-            is_revoked: false,
-        },
-        data: {
-            is_revoked: true,
-        },
+    const result = await revokeTokensWhere({
+        [tokenField]: hashToken(token),
+        type: "oauth",
     });
 
-    return result.count > 0;
+    return Boolean(result.success && result.count > 0);
 }
 
 // 验证OAuth应用凭证

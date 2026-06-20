@@ -51,6 +51,15 @@
                     color="primary"
                   ></v-icon>
                 </template>
+                <template v-slot:append>
+                  <v-chip
+                    :color="riskColor(scope.risk_level)"
+                    size="x-small"
+                    label
+                  >
+                    {{ riskLabel(scope.risk_level) }}
+                  </v-chip>
+                </template>
                 <v-list-item-title class="font-weight-bold">
                   {{ scope.title }}
                 </v-list-item-title>
@@ -129,6 +138,7 @@
 import {ref, onMounted, computed} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
 import axios from '@/axios/axios'
+import { getScopeCatalog } from '@/services/tokenService'
 
 const route = useRoute()
 const router = useRouter()
@@ -139,6 +149,7 @@ const loading = ref(false)
 const error = ref(null)
 const emails = ref([])
 const selectedEmail = ref(null)
+const scopeCatalog = ref([])
 
 // 请求参数
 const clientId = route.query.client_id
@@ -149,28 +160,61 @@ const codeChallenge = route.query.code_challenge
 const codeChallengeMethod = route.query.code_challenge_method
 //const responseType = route.query.response_type
 
-// 权限映射
-const scopeMap = {
-  'user:basic': {
-    icon: 'mdi-account',
-    title: '查看您的基本信息',
-    description: '包括您的用户名、显示名称和头像'
-  },
-  'user:email': {
-    icon: 'mdi-email',
-    title: '查看您的邮箱地址',
-    description: '访问您的主要邮箱地址'
-  }
+const scopeIconMap = {
+  user: 'mdi-account',
+  project: 'mdi-folder-outline',
+  asset: 'mdi-image-outline',
+  post: 'mdi-post-outline',
+  notification: 'mdi-bell-outline',
+  token: 'mdi-key-outline',
+  oauth_app: 'mdi-application-cog-outline'
+}
+
+const legacyScopeMap = {
+  'user:basic': 'user:read',
+  'user:email': 'user:read',
+  profile: 'user:read'
 }
 
 // 计算请求的权限列表
 const requestedScopes = computed(() => {
   if (!scope) return []
-  return scope.split(' ').map(s => ({
-    name: s,
-    ...scopeMap[s]
-  }))
+  const catalogMap = new Map(scopeCatalog.value.map(item => [item.name, item]))
+  return String(scope).split(/\s+/).filter(Boolean).map(s => {
+    const canonical = legacyScopeMap[s] || s
+    const item = catalogMap.get(canonical)
+    if (item) {
+      return {
+        name: canonical,
+        icon: scopeIconMap[item.resource] || 'mdi-shield-key-outline',
+        title: item.title || canonical,
+        description: item.description || canonical,
+        risk_level: item.risk_level || 'medium'
+      }
+    }
+    return {
+      name: s,
+      icon: 'mdi-shield-key-outline',
+      title: s,
+      description: '应用请求的自定义权限',
+      risk_level: 'medium'
+    }
+  })
 })
+
+const riskColor = (level) => {
+  if (level === 'high') return 'error'
+  if (level === 'medium') return 'warning'
+  if (level === 'low') return 'success'
+  return 'primary'
+}
+
+const riskLabel = (level) => {
+  if (level === 'high') return '高风险'
+  if (level === 'medium') return '中风险'
+  if (level === 'low') return '低风险'
+  return '普通'
+}
 
 // 验证参数
 const validateParams = () => {
@@ -228,6 +272,15 @@ const loadEmails = async () => {
   }
 }
 
+const loadScopeCatalog = async () => {
+  try {
+    const response = await getScopeCatalog()
+    scopeCatalog.value = response.data?.data || []
+  } catch (err) {
+    console.error('Failed to load scopes:', err)
+  }
+}
+
 // 授权确认
 const authorize = async () => {
   if (!selectedEmail.value) {
@@ -281,6 +334,7 @@ const cancel = () => {
 onMounted(() => {
   loadApplication()
   loadEmails()
+  loadScopeCatalog()
 })
 </script>
 

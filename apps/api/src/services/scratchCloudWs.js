@@ -2,8 +2,7 @@ import {WebSocketServer, WebSocket} from "ws";
 import logger from "./logger.js";
 import {prisma} from "./prisma.js";
 import redisClient from "./redis.js";
-import {verifyToken} from "./auth/tokenUtils.js";
-import {verifyAccountToken} from "./auth/accountTokenService.js";
+import {verifyToken} from "./auth/tokenService.js";
 
 const CLOUD_EVENT_TARGET_TYPE = "scratch_cloud";
 const TARGET_CONFIG_TYPE_PROJECT = "project";
@@ -250,29 +249,17 @@ const authenticateRequest = async (req) => {
         };
     }
 
-    const accountTokenResult = await verifyAccountToken(token);
-    if (accountTokenResult.valid && accountTokenResult.user) {
-        return {
-            ok: true,
-            hasToken: true,
-            user: {
-                userid: accountTokenResult.user.userid,
-                username: accountTokenResult.user.username,
-            },
-        };
-    }
-
-    const jwtResult = await verifyToken(token, clientIp);
-    if (!jwtResult.valid || !jwtResult.user) {
-        return {ok: false, message: jwtResult.message || "登录失效"};
+    const result = await verifyToken(token, clientIp);
+    if (!result.valid || !result.user) {
+        return {ok: false, message: result.message || "登录失效"};
     }
 
     return {
         ok: true,
         hasToken: true,
         user: {
-            userid: jwtResult.user.userid,
-            username: jwtResult.user.username,
+            userid: result.user.userid,
+            username: result.user.username,
         },
     };
 };

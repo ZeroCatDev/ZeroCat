@@ -1,137 +1,43 @@
 import zcconfig from "../services/config/zcconfig.js";
 import logger from "../services/logger.js";
-import {updateTokenActivity, verifyToken,} from "../services/auth/tokenUtils.js";
-import {prisma} from "../services/prisma.js";
-import {verifyAccountToken, updateAccountTokenUsage} from "../services/auth/accountTokenService.js";
+import { verifyToken } from "../services/auth/tokenService.js";
+import { scopeSatisfies } from "../services/auth/scopes.js";
+import { extractTokenFromRequest } from "../middleware.js";
 
 /**
- * 验证令牌在数据库中的有效性
- * @param {string} tokenId 令牌ID
- * @param {string} ipAddress 请求IP地址
- * @returns {Promise<{valid: boolean, message: string, tokenRecord: object|null}>} 验证结果
- */
-const validateTokenInDatabase = async (tokenId, ipAddress = null) => {
-    try {
-        // 检查令牌是否已被吊销
-        const tokenRecord = await prisma.ow_auth_tokens.findFirst({
-            where: {
-                id: tokenId,
-                revoked: false,
-            },
-        });
-
-        if (!tokenRecord) {
-            return {
-                valid: false,
-                message: "令牌已被吊销或不存在",
-                tokenRecord: null,
-            };
-        }
-
-        // 检查令牌是否过期
-        if (tokenRecord.expires_at < new Date()) {
-            return {
-                valid: false,
-                message: "令牌已过期",
-                tokenRecord: null,
-            };
-        }
-
-        // 如果提供了IP地址，更新令牌的活动记录
-        if (ipAddress) {
-            // 使用单独的变量避免影响函数返回
-            updateTokenActivity(tokenId, ipAddress).catch((err) =>
-                logger.error("更新令牌活动记录时出错:", err)
-            );
-        }
-
-        return {
-            valid: true,
-            message: "令牌有效",
-            tokenRecord,
-        };
-    } catch (error) {
-        logger.error("验证令牌在数据库中的状态时出错:", error);
-        return {
-            valid: false,
-            message: "验证令牌时发生错误",
-            tokenRecord: null,
-        };
-    }
-};
-
-/**
- * 解析token中间件
- * 从请求中提取token并验证
+ * 解析token中间件 (可选认证)
+ *
+ * 注意: 全局认证中间件 (middleware.js configureMiddleware) 已在所有路由之前
+ * 解析并验证令牌, 设置 res.locals.userid / scopes 等。此中间件作为兜底:
+ * 若 res.locals.userid 尚未设置, 再尝试解析一次, 以兼容独立挂载场景。
+ *
  * @param {import("express").Request} req
  * @param {import("express").Response} res
  * @param {import("express").NextFunction} next
  */
 export const parseToken = async (req, res, next) => {
-    // 尝试从多种来源获取token：
-    // 1. Authorization header (Bearer token)
-    // 2. Query parameter 'token'
-    // 3. Cookie 'token'
-    let token = null;
-
-    // 检查Authorization header
-    const authHeader = req.headers["authorization"];
-    if (authHeader) {
-        // 支持"Bearer token"格式或直接提供token
-        const parts = authHeader.split(" ");
-        if (parts.length === 2 && parts[0].toLowerCase() === "bearer") {
-            token = parts[1];
-        } else {
-            token = authHeader;
-        }
+    if (res.locals.userid) {
+        return next();
     }
 
-    // 如果header中没有token，检查query参数
-    if (!token && req.query.token) {
-        token = req.query.token;
-    }
-
-    // 如果query中没有token，检查cookies
-    if (!token && req.cookies && req.cookies.token) {
-        token = req.cookies.token;
-    }
-
+    const token = extractTokenFromRequest(req);
     if (!token) {
-        // 没有令牌，继续处理请求但不设置用户信息
         return next();
     }
 
     try {
-        // 首先尝试验证账户令牌
-        const accountTokenResult = await verifyAccountToken(token);
-
-        if (accountTokenResult.valid && accountTokenResult.user) {
-            // 设置用户信息
-            res.locals.userid = accountTokenResult.user.userid;
-            res.locals.username = accountTokenResult.user.username;
-            res.locals.display_name = accountTokenResult.user.display_name;
-            res.locals.email = accountTokenResult.user.email;
-            res.locals.tokenId = accountTokenResult.user.token_id;
-            res.locals.tokenType = "account";
-
-            // 异步更新账户令牌使用记录
-            updateAccountTokenUsage(accountTokenResult.user.token_id, req.ipInfo?.clientIP || req.ip)
-                .catch(err => logger.error("更新账户令牌使用记录时出错:", err));
+        const result = await verifyToken(token, req.ipInfo?.clientIP || req.ip);
+        if (result.valid && result.user) {
+            res.locals.userid = result.user.userid;
+            res.locals.username = result.user.username;
+            res.locals.display_name = result.user.display_name;
+            res.locals.email = result.user.email;
+            res.locals.tokenId = result.user.token_id;
+            res.locals.tokenType = result.tokenType;
+            res.locals.scopes = result.scopes || [];
+            res.locals.applicationId = result.applicationId || null;
         } else {
-            // 如果账户令牌验证失败，尝试验证JWT令牌
-            const {valid, user, message} = await verifyToken(token, req.ipInfo?.clientIP || req.ip);
-
-            if (valid && user) {
-                // 设置用户信息
-                res.locals.userid = user.userid;
-                res.locals.username = user.username;
-                res.locals.display_name = user.display_name;
-                res.locals.email = user.email;
-                res.locals.tokenId = user.token_id;
-                res.locals.tokenType = "jwt";
-            } else {
-                logger.debug(`令牌验证失败: ${message}`);
-            }
+            logger.debug(`令牌验证失败: ${result.message}`);
         }
     } catch (err) {
         logger.debug("解析令牌时出错:", err);
@@ -142,16 +48,12 @@ export const parseToken = async (req, res, next) => {
 
 /**
  * 严格模式token中间件
- * 确保用户已登录，并且令牌有效（未被吊销）
- * 在请求处理前同步验证令牌有效性
+ * 确保用户已登录且令牌有效。全局中间件已完成验证, 这里检查结果。
  * @param {import("express").Request} req
  * @param {import("express").Response} res
  * @param {import("express").NextFunction} next
  */
 export const strictTokenCheck = async (req, res, next) => {
-    // 由于 parseToken 已经处理了获取令牌和基本验证的工作，
-    // 我们只需要检查用户是否已登录和令牌是否有效
-
     if (!res.locals.userid || !res.locals.tokenId) {
         return res.status(401).json({
             status: "error",
@@ -159,56 +61,12 @@ export const strictTokenCheck = async (req, res, next) => {
             code: "ZC_ERROR_NEED_LOGIN",
         });
     }
-
-    try {
-        // 重新验证令牌有效性
-        const token =
-            req.headers["authorization"]?.split(" ")[1] ||
-            req.query.token ||
-            req.cookies?.token;
-
-        if (!token) {
-            return res.status(401).json({
-                status: "error",
-                message: "未提供授权令牌",
-                code: "ZC_ERROR_NEED_LOGIN",
-            });
-        }
-
-        // 首先尝试验证账户令牌
-        const accountTokenResult = await verifyAccountToken(token);
-
-        if (accountTokenResult.valid && accountTokenResult.user) {
-            // 账户令牌验证成功
-            next();
-            return;
-        }
-
-        // 如果账户令牌验证失败，尝试验证JWT令牌
-        const {valid, message} = await verifyToken(token, req.ipInfo?.clientIP || req.ip);
-
-        if (!valid) {
-            return res.status(401).json({
-                status: "error",
-                message: message,
-                code: "ZC_ERROR_NEED_LOGOUT",
-            });
-        }
-
-        next();
-    } catch (err) {
-        logger.error("验证令牌吊销状态时出错:", err);
-        return res.status(500).json({
-            status: "error",
-            message: "服务器错误",
-            code: "ZC_ERROR_NEED_LOGOUT",
-        });
-    }
+    next();
 };
 
 /**
  * 需要登录的中间件
- * 检查用户是否已登录，但异步验证令牌有效性
+ * 全局中间件已验证令牌有效性, 这里只需检查是否登录。
  * @param {import("express").Request} req
  * @param {import("express").Response} res
  * @param {import("express").NextFunction} next
@@ -225,51 +83,12 @@ export const needLogin = async (req, res, next) => {
             return res.redirect(await zcconfig.get("urls.frontend") + "/app/login");
         }
     }
-
-    // 异步验证令牌在数据库中的状态
-    // 这不会阻塞请求继续处理
-    if (res.locals.tokenId) {
-        // 获取令牌
-        const token =
-            req.headers["authorization"]?.split(" ")[1] ||
-            req.query.token ||
-            req.cookies?.token;
-
-        if (token) {
-            try {
-                // 首先尝试验证账户令牌
-                const accountTokenResult = await verifyAccountToken(token);
-
-                if (accountTokenResult.valid && accountTokenResult.user) {
-                    // 账户令牌验证成功，无需进一步验证
-                } else {
-                    // 如果账户令牌验证失败，尝试验证JWT令牌
-                    const {valid, message} = await verifyToken(token, req.ipInfo?.clientIP || req.ip);
-                    if (!valid) {
-                        logger.debug(`用户 ${res.locals.userid} 使用无效令牌: ${message}`);
-                        return res.status(401).json({
-                            status: "error",
-                            message: "无效的认证令牌",
-                            code: "ZC_ERROR_NEED_LOGOUT",
-                        });
-                    }
-                }
-            } catch (err) {
-                logger.debug("验证令牌时出错:", err);
-                return res.status(401).json({
-                    status: "error",
-                    message: "令牌验证失败",
-                    code: "ZC_ERROR_NEED_LOGOUT",
-                });
-            }
-        }
-    }
-
     next();
 };
 
 /**
  * 需要管理员权限的中间件
+ * 命中管理员名单后, 为请求附加 admin:* scope 语义 (供下游 requireScope 使用)。
  * @param {import("express").Request} req
  * @param {import("express").Response} res
  * @param {import("express").NextFunction} next
@@ -289,12 +108,31 @@ export const needAdmin = async (req, res, next) => {
 
     try {
         const adminUsers = await zcconfig.get("security.adminusers");
-        logger.debug(adminUsers);
-        if (!adminUsers.includes(res.locals.userid.toString())) {
+        const adminUserIds = Array.isArray(adminUsers) ? adminUsers.map(String) : [];
+        if (!adminUserIds.includes(res.locals.userid.toString())) {
             return res.status(403).json({
                 status: "error",
                 message: "需要管理员权限",
                 code: "ZC_ERROR_FORBIDDEN",
+            });
+        }
+
+        // 只有已确认的管理员网页登录会话可把 session 的 "*" 提升为显式 admin:*。
+        if (
+            res.locals.tokenType === "session" &&
+            Array.isArray(res.locals.scopes) &&
+            !res.locals.scopes.includes("admin:*") &&
+            res.locals.scopes.includes("*")
+        ) {
+            res.locals.scopes = [...res.locals.scopes, "admin:*"];
+        }
+
+        if (!scopeSatisfies(res.locals.scopes || [], "admin:manage")) {
+            return res.status(403).json({
+                status: "error",
+                message: "管理员令牌权限不足",
+                code: "ZC_ERROR_INSUFFICIENT_SCOPE",
+                required: "admin:manage",
             });
         }
 

@@ -1,6 +1,7 @@
 import {Router} from "express";
 import {needLogin} from "../middleware/auth.js";
 import { requireSudo } from "../middleware/sudo.js";
+import { requireScope } from "../middleware/scope.js";
 import {tokenAuthMiddleware} from "../middleware.js";
 import geetestMiddleware from "../middleware/geetest.js";
 import {
@@ -26,6 +27,17 @@ initializeOAuthProviders();
 
 const router = Router();
 
+function requireInteractiveSession(req, res, next) {
+    if (res.locals.tokenType !== "session") {
+        return res.status(403).json({
+            status: "error",
+            message: "此操作需要使用网页登录会话",
+            code: "ZC_ERROR_SESSION_REQUIRED",
+        });
+    }
+    return next();
+}
+
 // 登录相关路由
 router.post("/login", geetestMiddleware, loginController.loginWithPassword);
 router.post("/send-login-code", geetestMiddleware, loginController.sendLoginCode);
@@ -33,7 +45,7 @@ router.post("/login-with-code", loginController.loginWithCode);
 router.post("/magiclink/generate", geetestMiddleware, loginController.sendMagicLinkForLogin);
 router.get("/magiclink/validate", loginController.validateMagicLinkAndLogin);
 router.post("/logout", tokenAuthMiddleware, loginController.logout);
-router.post("/logout-all-devices", tokenAuthMiddleware, loginController.logoutAllDevices);
+router.post("/logout-all-devices", tokenAuthMiddleware, requireScope("token:manage"), requireSudo, loginController.logoutAllDevices);
 router.get("/logout", (req, res) => {
     res.locals.userid = null;
     res.redirect("/");
@@ -46,31 +58,31 @@ router.get("/register/validate-token", registerController.checkRegisterToken);
 router.post("/register/complete", registerController.completeRegister);
 router.post("/send-code", geetestMiddleware, registerController.retrievePassword);
 router.post("/reset-password", registerController.resetPassword);
-router.post("/set-password", needLogin, registerController.setPassword);
+router.post("/set-password", needLogin, requireScope("user:update"), registerController.setPassword);
 
 // 邮箱管理相关路由
-router.post("/send-verification-code", needLogin, emailController.sendVerificationCode);
-router.get("/emails", needLogin, emailController.getEmails);
-router.post("/add-email", needLogin, requireSudo, emailController.addEmail);
-router.post("/verify-email", needLogin, emailController.verifyEmail);
-router.post("/remove-email", needLogin, requireSudo, emailController.removeEmail);
-router.post("/set-primary-email", needLogin, requireSudo, emailController.setPrimaryEmail);
+router.post("/send-verification-code", needLogin, requireScope("user:update"), emailController.sendVerificationCode);
+router.get("/emails", needLogin, requireScope("user:read"), emailController.getEmails);
+router.post("/add-email", needLogin, requireScope("user:update"), requireSudo, emailController.addEmail);
+router.post("/verify-email", needLogin, requireScope("user:update"), emailController.verifyEmail);
+router.post("/remove-email", needLogin, requireScope("user:update"), requireSudo, emailController.removeEmail);
+router.post("/set-primary-email", needLogin, requireScope("user:update"), requireSudo, emailController.setPrimaryEmail);
 // 二次验证（2FA）相关路由
-router.get("/2fa/status", needLogin, twoFactorController.status);
-router.post("/2fa/setup", needLogin, requireSudo, twoFactorController.setup);
-router.post("/2fa/activate", needLogin, requireSudo, twoFactorController.activate);
-router.post("/2fa/disable", needLogin, requireSudo, twoFactorController.disable);
+router.get("/2fa/status", needLogin, requireScope("user:read"), twoFactorController.status);
+router.post("/2fa/setup", needLogin, requireScope("user:update"), requireSudo, twoFactorController.setup);
+router.post("/2fa/activate", needLogin, requireScope("user:update"), requireSudo, twoFactorController.activate);
+router.post("/2fa/disable", needLogin, requireScope("user:update"), requireSudo, twoFactorController.disable);
 router.post("/2fa/login/totp", twoFactorController.finalizeLoginWithTotp);
 
 // Passkey相关路由
-router.post("/passkey/begin-registration", needLogin, requireSudo, passkeyController.beginRegistration);
-router.post("/passkey/finish-registration", needLogin, requireSudo, passkeyController.finishRegistration);
+router.post("/passkey/begin-registration", needLogin, requireScope("user:update"), requireSudo, passkeyController.beginRegistration);
+router.post("/passkey/finish-registration", needLogin, requireScope("user:update"), requireSudo, passkeyController.finishRegistration);
 router.post("/passkey/begin-login", passkeyController.beginLogin);
 router.post("/passkey/finish-login", passkeyController.finishLogin);
-router.post("/passkey/sudo-begin", needLogin, passkeyController.sudoWithPasskey);
-router.post("/passkey/sudo-finish", needLogin, passkeyController.finalizeSudoWithPasskey);
-router.get("/passkey/list", needLogin, passkeyController.listCredentials);
-router.post("/passkey/delete", needLogin, requireSudo, passkeyController.deleteCredential);
+router.post("/passkey/sudo-begin", needLogin, requireInteractiveSession, passkeyController.sudoWithPasskey);
+router.post("/passkey/sudo-finish", needLogin, requireInteractiveSession, passkeyController.finalizeSudoWithPasskey);
+router.get("/passkey/list", needLogin, requireScope("user:read"), passkeyController.listCredentials);
+router.post("/passkey/delete", needLogin, requireScope("user:update"), requireSudo, passkeyController.deleteCredential);
 
 // OAuth相关路由
 router.get("/oauth/providers", oauthController.getOAuthProviders);
@@ -85,7 +97,7 @@ router.get('/oauth/bluesky/client-metadata.json', async (req, res) => {
         res.status(500).json({ status: 'error', message: '生成Bluesky client metadata失败' });
     }
 });
-router.get("/oauth/bind/:provider", needLogin, oauthController.bindOAuth);
+router.get("/oauth/bind/:provider", needLogin, requireScope("user:update"), oauthController.bindOAuth);
 router.get("/oauth/:provider", oauthController.authWithOAuth);
 router.get("/oauth/:provider/callback", oauthController.handleOAuthCallbackRequest);
 // 使用临时令牌验证并获取用户信息
@@ -220,13 +232,13 @@ router.get("/oauth/validate-token/:token", async (req, res) => {
         });
     }
 });
-router.post("/oauth/bound", needLogin, oauthController.getBoundOAuthAccounts);
-router.post("/unlink-oauth", requireSudo, oauthController.unlinkOAuth);
+router.post("/oauth/bound", needLogin, requireScope("user:read"), oauthController.getBoundOAuthAccounts);
+router.post("/unlink-oauth", needLogin, requireScope("user:update"), requireSudo, oauthController.unlinkOAuth);
 
 // 令牌管理相关路由
 router.post("/refresh-token", tokenController.refreshToken);
-router.get("/token-details/:tokenId", needLogin, tokenController.getTokenDetails);
-router.get("/active-tokens", needLogin, tokenController.getActiveTokens);
-router.post("/revoke-token", needLogin, tokenController.revokeToken);
+router.get("/token-details/:tokenId", needLogin, requireScope("token:read"), tokenController.getTokenDetails);
+router.get("/active-tokens", needLogin, requireScope("token:read"), tokenController.getActiveTokens);
+router.post("/revoke-token", needLogin, requireScope("token:manage"), tokenController.revokeToken);
 
 export default router;

@@ -111,7 +111,6 @@ model ow_users {
   embedding_at DateTime? @db.Timestamp(6) // 最近一次向量生成时间
 
   // 关联
-  auth_tokens             ow_auth_tokens[]
   authored_projects       ow_projects[]           @relation("ProjectAuthor")
   starred_projects        ow_projects_stars[]
   project_lists           ow_projects_lists[]
@@ -126,7 +125,7 @@ model ow_users {
   oauth_authorizations    ow_oauth_authorizations[]
   oauth_access_tokens     ow_oauth_access_tokens[]
   kv_store                ow_cache_kv[]
-  account_tokens          ow_account_tokens[]     @relation("AccountTokens")
+  tokens                  ow_tokens[]             @relation("UserTokens")
   uploaded_assets         ow_assets[]             @relation("AssetUploader")
   banned_assets           ow_assets[]             @relation("AssetBannedBy")
   push_subscriptions      ow_push_subscriptions[] @relation("UserPushSubscriptions")
@@ -410,36 +409,7 @@ model ow_projects_list_items {
   @@map("ow_projects_list_items")
 }
 
-// 认证令牌表
-model ow_auth_tokens {
-  id                 Int       @id @default(autoincrement())
-  user_id            Int?
-  access_token       String    @unique @db.VarChar(255)
-  refresh_token      String    @unique @db.VarChar(255)
-  expires_at         DateTime  @db.Timestamp(6)
-  refresh_expires_at DateTime  @db.Timestamp(6)
-  created_at         DateTime  @default(now()) @db.Timestamp(6)
-  updated_at         DateTime  @updatedAt @db.Timestamp(6)
-  last_used_at       DateTime? @db.Timestamp(6)
-  last_used_ip       String?   @db.VarChar(255)
-  activity_count     Int       @default(0)
-  extended_at        DateTime? @db.Timestamp(6)
-  revoked            Boolean   @default(false)
-  revoked_at         DateTime? @db.Timestamp(6)
-  ip_address         String?   @db.VarChar(100)
-  user_agent         String?
-  device_info        String?
-
-  // 关联
-  user ow_users? @relation(fields: [user_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
-
-  @@index([user_id])
-  @@index([last_used_at])
-  @@index([last_used_ip])
-  @@index([expires_at])
-  @@map("ow_auth_tokens")
-}
-
+// 认证令牌表 (已废弃, 由统一令牌表 ow_tokens 取代)
 // 通知表
 model ow_notifications {
   id                Int       @id @default(autoincrement())
@@ -589,6 +559,7 @@ model ow_oauth_applications {
   owner          ow_users?                 @relation(fields: [owner_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
   authorizations ow_oauth_authorizations[]
   access_tokens  ow_oauth_access_tokens[]
+  tokens         ow_tokens[]
 
   @@index([owner_id])
   @@index([client_id])
@@ -617,6 +588,7 @@ model ow_oauth_authorizations {
   application   ow_oauth_applications?   @relation(fields: [application_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
   user          ow_users?                @relation(fields: [user_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
   access_tokens ow_oauth_access_tokens[]
+  tokens        ow_tokens[]
 
   @@unique([application_id, user_id])
   @@index([code])
@@ -782,27 +754,51 @@ model ow_scratch_extensions {
 }
 
 // 用户账户令牌表
-model ow_account_tokens {
-  id           Int       @id @default(autoincrement())
-  user_id      Int?
-  name         String    @db.VarChar(255)
-  token        String    @unique @db.VarChar(255)
-  expires_at   DateTime? @db.Timestamp(6)
-  is_revoked   Boolean   @default(false)
-  revoked_at   DateTime? @db.Timestamp(6)
-  last_used_at DateTime? @db.Timestamp(6)
-  last_used_ip String?   @db.VarChar(100)
-  created_at   DateTime  @default(now()) @db.Timestamp(6)
-  updated_at   DateTime  @updatedAt @db.Timestamp(6)
+// 统一令牌表 (会话 / 个人API / OAuth 三类令牌的唯一来源)
+// 所有令牌均为不透明随机串，仅存储 SHA-256 哈希；scope 用于精细化鉴权
+model ow_tokens {
+  id                 Int       @id @default(autoincrement())
+  user_id            Int?
+  // 令牌类型: session(登录会话) | personal(个人API令牌) | oauth(第三方授权)
+  type               String    @default("session") @db.VarChar(20)
+  name               String?   @db.VarChar(255)
+  // 访问令牌哈希 (SHA-256 hex), 不存明文
+  token_hash         String    @unique @db.VarChar(64)
+  // 展示用前缀 (如 zc_a1b2c3..)
+  token_prefix       String?   @db.VarChar(32)
+  // 刷新令牌哈希 (会话/oauth 适用)
+  refresh_token_hash String?   @unique @db.VarChar(64)
+  // 授予的 scope 列表, 如 ["*"] 或 ["project:read","project:118:write"]
+  scopes             Json
+  // OAuth 关联 (type=oauth 时填写)
+  application_id     Int?
+  authorization_id   Int?
+  expires_at         DateTime? @db.Timestamp(6)
+  refresh_expires_at DateTime? @db.Timestamp(6)
+  last_used_at       DateTime? @db.Timestamp(6)
+  last_used_ip       String?   @db.VarChar(100)
+  activity_count     Int       @default(0)
+  ip_address         String?   @db.VarChar(100)
+  user_agent         String?
+  device_info        String?
+  revoked            Boolean   @default(false)
+  revoked_at         DateTime? @db.Timestamp(6)
+  created_at         DateTime  @default(now()) @db.Timestamp(6)
+  updated_at         DateTime  @updatedAt @db.Timestamp(6)
 
   // 关联
-  user ow_users? @relation("AccountTokens", fields: [user_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+  user          ow_users?                @relation("UserTokens", fields: [user_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+  application   ow_oauth_applications?   @relation(fields: [application_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+  authorization ow_oauth_authorizations? @relation(fields: [authorization_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
 
+  @@index([token_hash])
+  @@index([refresh_token_hash])
   @@index([user_id])
-  @@index([token])
-  @@index([is_revoked])
+  @@index([type])
+  @@index([application_id])
+  @@index([authorization_id])
   @@index([expires_at])
-  @@map("ow_account_tokens")
+  @@map("ow_tokens")
 }
 
 // 项目素材关联表

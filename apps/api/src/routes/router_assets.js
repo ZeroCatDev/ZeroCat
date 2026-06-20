@@ -1,6 +1,7 @@
 import logger from "../services/logger.js";
 import { Router } from "express";
 import { needLogin } from "../middleware/auth.js";
+import { requireScope } from "../middleware/scope.js";
 import multer from "multer";
 import {
   validateFileTypeFromContent,
@@ -69,7 +70,7 @@ const upload = multer({
 });
 
 // 上传素材
-router.post("/upload", needLogin, upload.single("file"), async (req, res) => {
+router.post("/upload", needLogin, requireScope("asset:create"), upload.single("file"), async (req, res) => {
   const { tags, category } = req.body;
 
   const uploadResult = await handleAssetUpload(req, res, {
@@ -102,7 +103,7 @@ router.post("/upload", needLogin, upload.single("file"), async (req, res) => {
 });
 
 // 原始文件上传接口（不做任何处理，保持原始格式）
-router.post("/upload-raw", needLogin, upload.single("file"), async (req, res) => {
+router.post("/upload-raw", needLogin, requireScope("asset:create"), upload.single("file"), async (req, res) => {
   const { tags, category } = req.body;
 
   const uploadResult = await handleAssetUpload(req, res, {
@@ -133,7 +134,7 @@ router.post("/upload-raw", needLogin, upload.single("file"), async (req, res) =>
 });
 
 // 简化的图片上传接口（仅支持图片，自动转PNG，无安全检查）
-router.post("/image-upload", needLogin, upload.single("file"), async (req, res) => {
+router.post("/image-upload", needLogin, requireScope("asset:create"), upload.single("file"), async (req, res) => {
   const { quality = 80, tags, category } = req.body;
 
   try {
@@ -164,7 +165,7 @@ router.post("/image-upload", needLogin, upload.single("file"), async (req, res) 
 });
 
 // 获取素材列表
-router.get("/list", needLogin, async (req, res) => {
+router.get("/list", needLogin, requireScope("asset:read"), async (req, res) => {
   try {
     const { page, limit, category, search, sortBy, sortOrder } = req.query;
 

@@ -165,7 +165,7 @@ export default {
         description: '',
         homepage_url: '',
         redirect_uris: [''],
-        scopes: ['profile']
+        scopes: ['user:read']
       },
       loading: false,
       snackbar: {

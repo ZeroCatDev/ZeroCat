@@ -54,6 +54,11 @@ const items = [
     description: '/app/debug/token',
     link: '/app/debug/token'
   },
+  {
+    title: '令牌归属查询',
+    description: '/app/debug/token-introspect',
+    link: '/app/debug/token-introspect'
+  },
 
 
 ]

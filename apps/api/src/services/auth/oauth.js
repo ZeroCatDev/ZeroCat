@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { isScopeSubset, normalizeScopes } from "./scopes.js";
 
 /**
  * 验证重定向URI是否在允许列表中
@@ -55,7 +56,10 @@ export async function generateTokens() {
  * @returns {boolean}
  */
 export function validateScopes(requestedScopes, allowedScopes) {
-    return requestedScopes.every((scope) => allowedScopes.includes(scope));
+    const requested = normalizeScopes(requestedScopes);
+    const allowed = normalizeScopes(allowedScopes);
+    if (requested.length === 0) return true;
+    return isScopeSubset(requested, allowed);
 }
 
 /**

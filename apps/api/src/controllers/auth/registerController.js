@@ -360,7 +360,7 @@ export const resetPassword = async (req, res) => {
         });
 
         // 撤销所有现有登录令牌
-        await prisma.ow_auth_tokens.updateMany({
+        await prisma.ow_tokens.updateMany({
             where: {
                 user_id: user.id,
                 revoked: false,

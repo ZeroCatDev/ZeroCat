@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import logger from '../services/logger.js';
 import zcconfig from '../services/config/zcconfig.js';
 import { parseToken, needLogin, needAdmin } from '../middleware/auth.js';
+import { requireScope } from '../middleware/scope.js';
 import queueManager from '../services/queue/queueManager.js';
 import { prisma } from '../services/prisma.js';
 import { createWalineToken } from '../services/commentService/walineAuth.js';
@@ -57,7 +58,7 @@ router.use(parseToken);
  * POST /commentservice/spaces
  * 创建空间
  */
-router.post('/spaces', needLogin, async (req, res, next) => {
+router.post('/spaces', needLogin, requireScope("comment:manage"), async (req, res, next) => {
     try {
         const { name, domain } = req.body;
         if (!name) {
@@ -75,7 +76,7 @@ router.post('/spaces', needLogin, async (req, res, next) => {
  * GET /commentservice/spaces
  * 列出我的空间
  */
-router.get('/spaces', needLogin, async (req, res, next) => {
+router.get('/spaces', needLogin, requireScope("comment:read"), async (req, res, next) => {
     try {
         const spaces = await listSpaces(res.locals.userid);
         return res.json({ status: 'success', data: spaces.map(sanitizeSpace) });
@@ -161,7 +162,7 @@ router.get('/spaces/:cuid', async (req, res, next) => {
  * PUT /commentservice/spaces/:cuid
  * 更新空间
  */
-router.put('/spaces/:cuid', needLogin, async (req, res, next) => {
+router.put('/spaces/:cuid', needLogin, requireScope("comment:manage"), async (req, res, next) => {
     try {
         const updated = await updateSpace(req.params.cuid, res.locals.userid, req.body);
         if (!updated) {
@@ -177,7 +178,7 @@ router.put('/spaces/:cuid', needLogin, async (req, res, next) => {
  * DELETE /commentservice/spaces/:cuid
  * 删除空间
  */
-router.delete('/spaces/:cuid', needLogin, async (req, res, next) => {
+router.delete('/spaces/:cuid', needLogin, requireScope("comment:manage"), async (req, res, next) => {
     try {
         const deleted = await deleteSpace(req.params.cuid, res.locals.userid);
         if (!deleted) {
@@ -197,7 +198,7 @@ router.delete('/spaces/:cuid', needLogin, async (req, res, next) => {
  * GET /commentservice/spaces/:cuid/config
  * 获取空间配置
  */
-router.get('/spaces/:cuid/config', needLogin, async (req, res, next) => {
+router.get('/spaces/:cuid/config', needLogin, requireScope("comment:manage"), async (req, res, next) => {
     try {
         const space = await getSpaceByGuid(req.params.cuid);
         if (!space || space.owner_id !== res.locals.userid) {
@@ -215,7 +216,7 @@ router.get('/spaces/:cuid/config', needLogin, async (req, res, next) => {
  * PUT /commentservice/spaces/:cuid/config
  * 更新空间配置
  */
-router.put('/spaces/:cuid/config', needLogin, async (req, res, next) => {
+router.put('/spaces/:cuid/config', needLogin, requireScope("comment:manage"), async (req, res, next) => {
     try {
         const updated = await updateSpaceConfig(req.params.cuid, res.locals.userid, req.body);
         if (!updated) {
@@ -240,7 +241,7 @@ router.put('/spaces/:cuid/config', needLogin, async (req, res, next) => {
  * GET /commentservice/spaces/:cuid/comments
  * 评论管理列表
  */
-router.get('/spaces/:cuid/comments', needLogin, async (req, res, next) => {
+router.get('/spaces/:cuid/comments', needLogin, requireScope("comment:read"), async (req, res, next) => {
     try {
         const space = await getSpaceByGuid(req.params.cuid);
         if (!space || space.owner_id !== res.locals.userid) {
@@ -258,7 +259,7 @@ router.get('/spaces/:cuid/comments', needLogin, async (req, res, next) => {
  * PUT /commentservice/spaces/:cuid/comments/:id
  * 审核评论 (更新状态)
  */
-router.put('/spaces/:cuid/comments/:id', needLogin, async (req, res, next) => {
+router.put('/spaces/:cuid/comments/:id', needLogin, requireScope("comment:update"), async (req, res, next) => {
     try {
         const space = await getSpaceByGuid(req.params.cuid);
         if (!space || space.owner_id !== res.locals.userid) {
@@ -296,7 +297,7 @@ router.put('/spaces/:cuid/comments/:id', needLogin, async (req, res, next) => {
  * DELETE /commentservice/spaces/:cuid/comments/:id
  * 删除评论
  */
-router.delete('/spaces/:cuid/comments/:id', needLogin, async (req, res, next) => {
+router.delete('/spaces/:cuid/comments/:id', needLogin, requireScope("comment:delete"), async (req, res, next) => {
     try {
         const space = await getSpaceByGuid(req.params.cuid);
         if (!space || space.owner_id !== res.locals.userid) {
@@ -328,7 +329,7 @@ router.delete('/spaces/:cuid/comments/:id', needLogin, async (req, res, next) =>
  * GET /commentservice/spaces/:cuid/users
  * 空间用户列表
  */
-router.get('/spaces/:cuid/users', needLogin, async (req, res, next) => {
+router.get('/spaces/:cuid/users', needLogin, requireScope("comment:manage"), async (req, res, next) => {
     try {
         const space = await getSpaceByGuid(req.params.cuid);
         if (!space || space.owner_id !== res.locals.userid) {
@@ -351,7 +352,7 @@ router.get('/spaces/:cuid/users', needLogin, async (req, res, next) => {
  * PUT /commentservice/spaces/:cuid/users/:userId
  * 更新用户角色 (只能设为 moderator/guest/banned, 不能设为 administrator)
  */
-router.put('/spaces/:cuid/users/:userId', needLogin, async (req, res, next) => {
+router.put('/spaces/:cuid/users/:userId', needLogin, requireScope("comment:manage"), async (req, res, next) => {
     try {
         const space = await getSpaceByGuid(req.params.cuid);
         if (!space || space.owner_id !== res.locals.userid) {
@@ -390,7 +391,7 @@ router.put('/spaces/:cuid/users/:userId', needLogin, async (req, res, next) => {
  * GET /commentservice/spaces/:cuid/stats
  * 空间统计
  */
-router.get('/spaces/:cuid/stats', needLogin, async (req, res, next) => {
+router.get('/spaces/:cuid/stats', needLogin, requireScope("comment:read"), async (req, res, next) => {
     try {
         const space = await getSpaceByGuid(req.params.cuid);
         if (!space || space.owner_id !== res.locals.userid) {
@@ -413,7 +414,7 @@ router.get('/spaces/:cuid/stats', needLogin, async (req, res, next) => {
  * ZeroCat token 换取 Waline JWT
  * 前端在用户登录后调用此接口
  */
-router.post('/ui/login', needLogin, async (req, res, next) => {
+router.post('/ui/login', needLogin, requireScope("comment:create"), async (req, res, next) => {
     try {
         const { spaceCuid } = req.body;
         if (!spaceCuid) {
@@ -493,7 +494,7 @@ router.post('/ui/login', needLogin, async (req, res, next) => {
  * POST /commentservice/spaces/:cuid/data/export
  * 发起导出任务
  */
-router.post('/spaces/:cuid/data/export', needLogin, async (req, res, next) => {
+router.post('/spaces/:cuid/data/export', needLogin, requireScope("comment:read"), async (req, res, next) => {
     try {
         const space = await getSpaceByGuid(req.params.cuid);
         if (!space || space.owner_id !== res.locals.userid) {
@@ -526,7 +527,7 @@ router.post('/spaces/:cuid/data/export', needLogin, async (req, res, next) => {
  * Body: Waline JSON 格式
  * { __version, type, version, time, tables, data: { Comment: [...], Counter: [...], Users: [...] } }
  */
-router.post('/spaces/:cuid/data/import', needLogin, async (req, res, next) => {
+router.post('/spaces/:cuid/data/import', needLogin, requireScope("comment:manage"), async (req, res, next) => {
     try {
         const space = await getSpaceByGuid(req.params.cuid);
         if (!space || space.owner_id !== res.locals.userid) {
@@ -565,7 +566,7 @@ router.post('/spaces/:cuid/data/import', needLogin, async (req, res, next) => {
  * GET /commentservice/spaces/:cuid/data/tasks
  * 查看空间的导入导出任务列表
  */
-router.get('/spaces/:cuid/data/tasks', needLogin, async (req, res, next) => {
+router.get('/spaces/:cuid/data/tasks', needLogin, requireScope("comment:read"), async (req, res, next) => {
     try {
         const space = await getSpaceByGuid(req.params.cuid);
         if (!space || space.owner_id !== res.locals.userid) {
@@ -583,7 +584,7 @@ router.get('/spaces/:cuid/data/tasks', needLogin, async (req, res, next) => {
  * GET /commentservice/spaces/:cuid/data/tasks/:taskId
  * 查看任务详情/进度
  */
-router.get('/spaces/:cuid/data/tasks/:taskId', needLogin, async (req, res, next) => {
+router.get('/spaces/:cuid/data/tasks/:taskId', needLogin, requireScope("comment:read"), async (req, res, next) => {
     try {
         const space = await getSpaceByGuid(req.params.cuid);
         if (!space || space.owner_id !== res.locals.userid) {
@@ -605,7 +606,7 @@ router.get('/spaces/:cuid/data/tasks/:taskId', needLogin, async (req, res, next)
  * GET /commentservice/spaces/:cuid/data/tasks/:taskId/download
  * 下载导出结果 (仅导出任务，完成后 1 小时内有效)
  */
-router.get('/spaces/:cuid/data/tasks/:taskId/download', needLogin, async (req, res, next) => {
+router.get('/spaces/:cuid/data/tasks/:taskId/download', needLogin, requireScope("comment:read"), async (req, res, next) => {
     try {
         const space = await getSpaceByGuid(req.params.cuid);
         if (!space || space.owner_id !== res.locals.userid) {
@@ -645,7 +646,7 @@ router.get('/spaces/:cuid/data/tasks/:taskId/download', needLogin, async (req, r
  * GET /commentservice/my/comments
  * 我在所有空间的评论
  */
-router.get('/my/comments', needLogin, async (req, res, next) => {
+router.get('/my/comments', needLogin, requireScope("comment:read"), async (req, res, next) => {
     try {
         const userId = res.locals.userid;
         const page = Math.max(1, parseInt(req.query.page) || 1);

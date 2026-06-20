@@ -8,6 +8,7 @@ import {createHash} from "crypto";
 import {prisma} from "../services/prisma.js";
 import {S3update} from "../services/global.js";
 import {needLogin} from "../middleware/auth.js";
+import { requireScope } from "../middleware/scope.js";
 import {getProjectById, getProjectFile} from "../controllers/projects.js";
 import multer from "multer";
 import { validateFileTypeFromContent, uploadFile, handleAssetUpload, processImage, generateMD5, uploadToS3 } from "../services/assets.js";
@@ -755,6 +756,7 @@ router.get("/project/:id", async (req, res, next) => {
 router.post(
     "/thumbnail/:projectid",
     needLogin,
+    requireScope("project:update"),
     upload.single("file"),
     async (req, res, next) => {
         // 项目权限验证函数
@@ -851,6 +853,7 @@ router.post(
 router.post(
     "/assets/:filename",
     needLogin,
+    requireScope("asset:create"),
     upload.single("file"),
     async (req, res, next) => {
         // Scratch素材成功回调
@@ -899,7 +902,7 @@ router.post(
     }
 );
 
-router.post("/cloud/:projectid/message", needLogin, async (req, res, next) => {
+router.post("/cloud/:projectid/message", needLogin, requireScope("project:interact"), async (req, res, next) => {
     try {
         const projectId = Number(req.params.projectid);
 
@@ -939,7 +942,7 @@ router.post("/cloud/:projectid/message", needLogin, async (req, res, next) => {
     }
 });
 
-router.get("/cloud/:projectid/variables", needLogin, async (req, res, next) => {
+router.get("/cloud/:projectid/variables", needLogin, requireScope("project:read"), async (req, res, next) => {
     try {
         const projectId = Number(req.params.projectid);
         if (!projectId) {
@@ -1044,9 +1047,9 @@ const handleCloudUpdatesRequest = async (req, res, next) => {
     }
 };
 
-router.get("/cloud/:projectid/updates", needLogin, handleCloudUpdatesRequest);
+router.get("/cloud/:projectid/updates", needLogin, requireScope("project:read"), handleCloudUpdatesRequest);
 
-router.get("/cloud/:projectid/history", needLogin, async (req, res, next) => {
+router.get("/cloud/:projectid/history", needLogin, requireScope("project:read"), async (req, res, next) => {
     try {
         const projectId = Number(req.params.projectid);
         if (!projectId) {

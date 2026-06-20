@@ -99,13 +99,14 @@ export const refreshToken = async (req, res) => {
         if (result.success) {
             // 如果是 Cookie 方式，重新设置 cookie（更新 maxAge）
             if (fromCookie) {
-                setRefreshTokenCookie(res, refresh_token, result.refreshExpiresAt);
+                setRefreshTokenCookie(res, result.refreshToken, result.refreshExpiresAt);
             }
 
             return res.status(200).json({
                 status: "success",
                 message: "令牌已刷新",
                 token: result.accessToken,
+                refresh_token: fromCookie ? undefined : result.refreshToken,
                 expires_at: result.expiresAt,
                 refresh_expires_at: result.refreshExpiresAt,
             });
@@ -145,7 +146,7 @@ export const getTokenDetails = async (req, res) => {
         }
 
         // 获取令牌详情
-        const token = await prisma.ow_auth_tokens.findFirst({
+        const token = await prisma.ow_tokens.findFirst({
             where: {
                 id: tokenIdNumber,
                 user_id: userId,
@@ -331,7 +332,7 @@ export const revokeToken = async (req, res) => {
         }
 
         // 验证令牌是否属于当前用户
-        const tokenRecord = await prisma.ow_auth_tokens.findFirst({
+        const tokenRecord = await prisma.ow_tokens.findFirst({
             where: {
                 id: token_id,
                 user_id: userId,

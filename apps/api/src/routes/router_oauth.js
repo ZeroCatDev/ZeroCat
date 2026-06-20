@@ -4,15 +4,29 @@ import { Router } from "express";
 import { prisma } from "../services/prisma.js";
 import { S3update } from "../services/global.js";
 import { needLogin } from "../middleware/auth.js";
+import { requireScope } from "../middleware/scope.js";
 import { oauthRateLimit } from "../middleware/rateLimit.js";
 import crypto from "crypto";
 import { generateAuthCode, validateRedirectUri, validateScopes, } from "../services/auth/oauth.js";
+import { isScopeSubset, normalizeScopes, scopeSatisfies, validateUserGrantableScopes } from "../services/auth/scopes.js";
 import { generateOAuthTokens, refreshOAuthTokens, verifyOAuthClientCredentials, } from "../services/auth/tokenManager.js";
+import { revokeTokensWhere } from "../services/auth/tokenService.js";
 import multer from "multer";
 import { handleAssetUpload } from "../services/assets.js";
 import { requireSudo } from "../middleware/sudo.js";
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
+
+function requireInteractiveSession(req, res, next) {
+    if (res.locals.tokenType !== "session") {
+        return res.status(403).json({
+            status: "error",
+            message: "此操作需要使用网页登录会话",
+            code: "ZC_ERROR_SESSION_REQUIRED",
+        });
+    }
+    return next();
+}
 
 // OAuth错误处理函数
 const OAuthErrors = {
@@ -129,7 +143,7 @@ async function handleUserInfoError(res, errorInfo) {
 }
 
 // 创建新的OAuth应用
-router.post("/applications", needLogin, requireSudo, async (req, res) => {
+router.post("/applications", needLogin, requireScope("oauth_app:manage"), requireSudo, async (req, res) => {
     try {
         const {
             name,
@@ -153,7 +167,7 @@ router.post("/applications", needLogin, requireSudo, async (req, res) => {
         const client_secret = crypto.randomBytes(32).toString("hex");
 
         // 设置默认权限范围
-        const defaultScopes = ["user:basic", "user:email"];
+        const defaultScopes = ["user:read"];
 
         const application = await prisma.ow_oauth_applications.create({
             data: {
@@ -184,7 +198,7 @@ router.post("/applications", needLogin, requireSudo, async (req, res) => {
 });
 
 // 获取应用列表
-router.get("/applications", needLogin, async (req, res) => {
+router.get("/applications", needLogin, requireScope("oauth_app:read"), async (req, res) => {
     try {
         const applications = await prisma.ow_oauth_applications.findMany({
             where: {
@@ -246,8 +260,10 @@ router.get("/applications/:client_id", async (req, res) => {
 
         // 检查是否为应用作者，如果不是则隐藏敏感信息
         const isOwner = res.locals.userid && res.locals.userid === application.owner_id;
+        const canSeeSensitive =
+            isOwner && scopeSatisfies(res.locals.scopes || [], "oauth_app:manage");
 
-        if (!isOwner) {
+        if (!canSeeSensitive) {
             // 非作者只能看到公开信息，隐藏敏感字段
             delete application.client_secret;
             delete application.redirect_uris;
@@ -265,6 +281,7 @@ router.get("/applications/:client_id", async (req, res) => {
 router.post(
     "/applications/:client_id/logo",
     needLogin,
+    requireScope("oauth_app:manage"),
     upload.single("zcfile"),
     async (req, res) => {
         try {
@@ -336,7 +353,7 @@ router.post(
 );
 
 // 更新应用信息
-router.put("/applications/:client_id", needLogin, async (req, res) => {
+router.put("/applications/:client_id", needLogin, requireScope("oauth_app:manage"), async (req, res) => {
     try {
         const { client_id } = req.params;
         const {
@@ -370,6 +387,30 @@ router.put("/applications/:client_id", needLogin, async (req, res) => {
             return res.status(400).json({ error: "无效的重定向URI" });
         }
 
+        const normalizedScopes = scopes === undefined ? undefined : normalizeScopes(scopes);
+        if (scopes !== undefined && normalizedScopes.length === 0) {
+            return res.status(400).json({ error: "无效的权限范围" });
+        }
+        if (
+            normalizedScopes !== undefined &&
+            !isScopeSubset(normalizedScopes, res.locals.scopes || [])
+        ) {
+            return res.status(403).json({
+                error: "requested scopes exceed current token permissions",
+                code: "ZC_ERROR_SCOPE_ESCALATION",
+            });
+        }
+        if (normalizedScopes !== undefined) {
+            const grantCheck = await validateUserGrantableScopes(res.locals.userid, normalizedScopes);
+            if (!grantCheck.allowed) {
+                return res.status(403).json({
+                    error: "requested scopes exceed user permissions",
+                    code: "ZC_ERROR_SCOPE_ESCALATION",
+                    denied_scopes: grantCheck.denied,
+                });
+            }
+        }
+
         // 更新应用信息
         const updatedApplication = await prisma.ow_oauth_applications.update({
             where: { id: application.id },
@@ -379,7 +420,7 @@ router.put("/applications/:client_id", needLogin, async (req, res) => {
                 homepage_url: homepage_url || undefined,
                 redirect_uris: redirect_uris || undefined,
                 type: type || undefined,
-                scopes: scopes || undefined,
+                scopes: normalizedScopes || undefined,
                 webhook_url: webhook_url || undefined,
                 logo_url: logo_url || undefined,
                 terms_url: terms_url || undefined,
@@ -396,7 +437,7 @@ router.put("/applications/:client_id", needLogin, async (req, res) => {
 });
 
 // 删除应用（软删除）
-router.delete("/applications/:client_id", needLogin, requireSudo, async (req, res) => {
+router.delete("/applications/:client_id", needLogin, requireScope("oauth_app:manage"), requireSudo, async (req, res) => {
     try {
         const { client_id } = req.params;
 
@@ -422,13 +463,10 @@ router.delete("/applications/:client_id", needLogin, requireSudo, async (req, re
             },
         });
 
-        // 撤销所有相关的访问令牌
-        await prisma.ow_oauth_access_tokens.updateMany({
-            where: { application_id: application.id },
-            data: {
-                is_revoked: true,
-                updated_at: new Date(),
-            },
+        // 撤销所有相关的访问令牌 (统一 ow_tokens)
+        await revokeTokensWhere({
+            application_id: application.id,
+            type: "oauth",
         });
 
         // 更新所有相关的授权记录
@@ -448,7 +486,7 @@ router.delete("/applications/:client_id", needLogin, requireSudo, async (req, re
 });
 
 // 获取用户已验证的邮箱列表
-router.get("/user/emails", needLogin, async (req, res) => {
+router.get("/user/emails", needLogin, requireScope("user:read"), async (req, res) => {
     try {
         const verifiedEmails = await prisma.ow_users_contacts.findMany({
             where: {
@@ -519,9 +557,10 @@ router.get("/authorize", async (req, res) => {
             return handleAuthorizationError(res, OAuthErrors.UNSUPPORTED_RESPONSE_TYPE, state);
         }
 
-        // 验证权限范围
-        const requestedScopes = scope ? scope.split(" ") : [];
-        if (!validateScopes(requestedScopes, application.scopes)) {
+        // 验证权限范围。未显式传 scope 时使用应用声明的默认 scope。
+        const appScopes = normalizeScopes(application.scopes);
+        const requestedScopes = scope ? normalizeScopes(String(scope)) : appScopes;
+        if (requestedScopes.length === 0 || !validateScopes(requestedScopes, appScopes)) {
             return handleAuthorizationError(res, OAuthErrors.INVALID_SCOPE, state);
         }
 
@@ -532,19 +571,19 @@ router.get("/authorize", async (req, res) => {
         );
         frontendUrl.searchParams.set("client_id", client_id);
         frontendUrl.searchParams.set("redirect_uri", redirect_uri);
-        frontendUrl.searchParams.set("scope", scope || "");
+        frontendUrl.searchParams.set("scope", requestedScopes.join(" "));
         if (state) frontendUrl.searchParams.set("state", state);
 
         // 重定向到前端
         res.redirect(frontendUrl.toString());
     } catch (error) {
         logger.error("OAuth authorize error:", error);
-        return handleAuthorizationError(res, OAuthErrors.SERVER_ERROR, state);
+        return handleAuthorizationError(res, OAuthErrors.SERVER_ERROR, req.query?.state);
     }
 });
 
 // 处理用户授权 - API接口
-router.post("/authorize/confirm", needLogin, async (req, res) => {
+router.post("/authorize/confirm", needLogin, requireInteractiveSession, requireScope("user:read"), async (req, res) => {
     try {
         const {
             client_id,
@@ -588,6 +627,36 @@ router.post("/authorize/confirm", needLogin, async (req, res) => {
             });
         }
 
+        // 自定义授权: 用户勾选的 scope 子集, 必须 ⊆ 应用声明的 scopes
+        const requestedGrantScopes = typeof scope === "string"
+            ? scope.split(/\s+/).filter(Boolean)
+            : Array.isArray(scope) ? scope : [];
+        const appScopes = normalizeScopes(application.scopes);
+        const grantedScopes = requestedGrantScopes.length > 0
+            ? normalizeScopes(requestedGrantScopes)
+            : appScopes;
+
+        if (grantedScopes.length === 0) {
+            return handleApiError(res, {
+                error: OAuthErrors.INVALID_SCOPE.error,
+                description: "At least one scope must be granted"
+            });
+        }
+        // 层级感知的子集校验: 用户授予的每个 scope 必须被应用声明的 scopes 覆盖
+        // (如应用声明 project:manage, 用户可授予较窄的 project:read)
+        if (!isScopeSubset(grantedScopes, appScopes)) {
+            return handleApiError(res, OAuthErrors.INVALID_SCOPE);
+        }
+        if (!isScopeSubset(grantedScopes, res.locals.scopes || [])) {
+            return handleApiError(res, OAuthErrors.INVALID_SCOPE);
+        }
+        const grantCheck = await validateUserGrantableScopes(res.locals.userid, grantedScopes);
+        if (!grantCheck.allowed) {
+            return handleApiError(res, OAuthErrors.INVALID_SCOPE);
+        }
+        // 规范化授予的 scope (去重 + 去除被更宽 scope 覆盖的冗余项)
+        const grantedScopeStr = normalizeScopes(grantedScopes).join(" ");
+
         // 生成授权码
         const authCode = await generateAuthCode();
 
@@ -601,7 +670,7 @@ router.post("/authorize/confirm", needLogin, async (req, res) => {
             },
             update: {
                 authorized_email,
-                scopes: scope,
+                scopes: grantedScopeStr,
                 code: authCode,
                 code_expires_at: new Date(Date.now() + 10 * 60 * 1000), // 10分钟有效期
                 status: "active",
@@ -611,7 +680,7 @@ router.post("/authorize/confirm", needLogin, async (req, res) => {
                 application_id: application.id,
                 user_id: res.locals.userid,
                 authorized_email,
-                scopes: scope,
+                scopes: grantedScopeStr,
                 code: authCode,
                 code_expires_at: new Date(Date.now() + 10 * 60 * 1000),
             },
@@ -675,6 +744,23 @@ router.post("/token", oauthRateLimit, async (req, res) => {
                 return handleApiError(res, OAuthErrors.INVALID_GRANT);
             }
 
+            const consumeResult = await prisma.ow_oauth_authorizations.updateMany({
+                where: {
+                    id: authorization.id,
+                    code,
+                    code_expires_at: { gt: new Date() },
+                    status: "active",
+                },
+                data: {
+                    code: null,
+                    last_used_at: new Date(),
+                },
+            });
+
+            if (consumeResult.count !== 1) {
+                return handleApiError(res, OAuthErrors.INVALID_GRANT);
+            }
+
             // 生成访问令牌和刷新令牌
             const { accessToken, refreshToken, expiresIn } =
                 await generateOAuthTokens(
@@ -683,15 +769,6 @@ router.post("/token", oauthRateLimit, async (req, res) => {
                     authorization.id,
                     authorization.scopes
                 );
-
-            // 清除授权码
-            await prisma.ow_oauth_authorizations.update({
-                where: { id: authorization.id },
-                data: {
-                    code: null,
-                    last_used_at: new Date(),
-                },
-            });
 
             res.json({
                 access_token: accessToken,
@@ -743,12 +820,13 @@ router.get("/userinfo", async (req, res) => {
 
         const accessToken = authHeader.substring(7);
 
-        // 查找访问令牌
-        const token = await prisma.ow_oauth_access_tokens.findFirst({
+        // 查找访问令牌 (统一 ow_tokens, type=oauth)
+        const { hashToken } = await import("../services/auth/tokenService.js");
+        const token = await prisma.ow_tokens.findFirst({
             where: {
-                access_token: accessToken,
-                expires_at: { gt: new Date() },
-                is_revoked: false,
+                token_hash: hashToken(accessToken),
+                type: "oauth",
+                revoked: false,
             },
             include: {
                 authorization: true,
@@ -763,15 +841,20 @@ router.get("/userinfo", async (req, res) => {
             },
         });
 
-        if (!token) {
+        if (!token || (token.expires_at && token.expires_at < new Date())) {
             return handleUserInfoError(res, {
                 error: OAuthErrors.INVALID_TOKEN.error,
                 description: "Token is invalid or expired"
             });
         }
 
+        const tokenScopes = normalizeScopes(token.scopes);
+        if (!scopeSatisfies(tokenScopes, "user:read")) {
+            return handleUserInfoError(res, OAuthErrors.INVALID_SCOPE);
+        }
+
         // 更新令牌使用信息
-        await prisma.ow_oauth_access_tokens.update({
+        await prisma.ow_tokens.update({
             where: { id: token.id },
             data: {
                 last_used_at: new Date(),

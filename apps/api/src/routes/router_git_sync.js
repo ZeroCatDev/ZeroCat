@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { needLogin } from '../middleware/auth.js';
+import { requireScope } from '../middleware/scope.js';
 import { createRateLimit } from '../middleware/rateLimit.js';
 import redisClient from '../services/redis.js';
 import logger from '../services/logger.js';
@@ -217,7 +218,7 @@ const ensureProjectOwner = async (projectId, userId) => {
     return project;
 };
 
-router.get('/links', needLogin, gitSyncRateLimit, async (req, res, next) => {
+router.get('/links', needLogin, requireScope("git_sync:read"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const [links, tokens] = await Promise.all([
             getUserGitLinks(res.locals.userid),
@@ -245,7 +246,7 @@ router.get('/links', needLogin, gitSyncRateLimit, async (req, res, next) => {
     }
 });
 
-router.delete('/links/:linkId', needLogin, gitSyncRateLimit, async (req, res, next) => {
+router.delete('/links/:linkId', needLogin, requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const removed = await removeUserGitLink(res.locals.userid, req.params.linkId);
         if (!removed) {
@@ -257,7 +258,7 @@ router.delete('/links/:linkId', needLogin, gitSyncRateLimit, async (req, res, ne
     }
 });
 
-router.post('/github/app/install-url', needLogin, gitSyncRateLimit, async (req, res, next) => {
+router.post('/github/app/install-url', needLogin, requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const state = crypto.randomUUID();
         const stateKey = `git-sync:github:state:${state}`;
@@ -280,7 +281,7 @@ router.post('/github/app/install-url', needLogin, gitSyncRateLimit, async (req, 
     }
 });
 
-router.post('/github/app/user-token-url', needLogin, gitSyncRateLimit, async (req, res, next) => {
+router.post('/github/app/user-token-url', needLogin, requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const state = crypto.randomUUID();
         const stateKey = `git-sync:github:user-token:state:${state}`;
@@ -478,7 +479,7 @@ router.get('/github/app/user-token/callback', gitSyncRateLimit, async (req, res,
     }
 });
 
-router.get('/github/app/installations/:linkId/repos', needLogin, gitSyncRateLimit, async (req, res, next) => {
+router.get('/github/app/installations/:linkId/repos', needLogin, requireScope("git_sync:read"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const link = await findUserGitLink(res.locals.userid, req.params.linkId);
         if (!link?.installationId) {
@@ -497,7 +498,7 @@ router.get('/github/app/installations/:linkId/repos', needLogin, gitSyncRateLimi
     }
 });
 
-router.get('/github/app/repos', needLogin, gitSyncRateLimit, async (req, res, next) => {
+router.get('/github/app/repos', needLogin, requireScope("git_sync:read"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const links = await getUserGitLinks(res.locals.userid);
         if (!links.length) {
@@ -539,7 +540,7 @@ router.get('/github/app/repos', needLogin, gitSyncRateLimit, async (req, res, ne
     }
 });
 
-router.get('/github/app/repos/tree', needLogin, gitSyncRateLimit, async (req, res, next) => {
+router.get('/github/app/repos/tree', needLogin, requireScope("git_sync:read"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const linkId = String(req.query.linkId || '').trim();
         const repoOwner = sanitizeRepoOwnerInput(req.query.owner || req.query.repoOwner);
@@ -652,7 +653,7 @@ router.get('/github/app/repos/tree', needLogin, gitSyncRateLimit, async (req, re
     }
 });
 
-router.get('/github/app/repos/check', needLogin, gitSyncRateLimit, async (req, res, next) => {
+router.get('/github/app/repos/check', needLogin, requireScope("git_sync:read"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const linkId = String(req.query.linkId || '').trim();
         const repoName = sanitizeRepoNameInput(req.query.name);
@@ -717,7 +718,7 @@ router.get('/github/app/repos/check', needLogin, gitSyncRateLimit, async (req, r
     }
 });
 
-router.get('/github/app/repos/branches', needLogin, gitSyncRateLimit, async (req, res, next) => {
+router.get('/github/app/repos/branches', needLogin, requireScope("git_sync:read"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const linkId = String(req.query.linkId || '').trim();
         const repoOwner = sanitizeRepoOwnerInput(req.query.owner || req.query.repoOwner);
@@ -791,7 +792,7 @@ router.get('/github/app/repos/branches', needLogin, gitSyncRateLimit, async (req
     }
 });
 
-router.get('/github/app/repos/search', needLogin, gitSyncRateLimit, async (req, res, next) => {
+router.get('/github/app/repos/search', needLogin, requireScope("git_sync:read"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const query = String(req.query.q || req.query.query || '').trim();
         if (!query) {
@@ -857,7 +858,7 @@ router.get('/github/app/repos/search', needLogin, gitSyncRateLimit, async (req, 
     }
 });
 
-router.post('/github/app/repos/create', needLogin, gitSyncRateLimit, async (req, res, next) => {
+router.post('/github/app/repos/create', needLogin, requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const { linkId, name, description, private: isPrivate } = req.body || {};
         const repoName = sanitizeRepoNameInput(name);
@@ -948,7 +949,7 @@ router.post('/github/app/repos/create', needLogin, gitSyncRateLimit, async (req,
 });
 
 
-router.post('/projects/:projectId/provision', needLogin, gitSyncRateLimit, async (req, res, next) => {
+router.post('/projects/:projectId/provision', needLogin, requireScope("project:update"), requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const project = await ensureProjectOwner(req.params.projectId, res.locals.userid);
         const { linkId, name, description, private: isPrivate, branch, fileName, includeReadme } = req.body || {};
@@ -1065,7 +1066,7 @@ router.post('/projects/:projectId/provision', needLogin, gitSyncRateLimit, async
     }
 });
 
-router.get('/projects/:projectId', needLogin, gitSyncRateLimit, async (req, res, next) => {
+router.get('/projects/:projectId', needLogin, requireScope("project:read"), requireScope("git_sync:read"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const project = await ensureProjectOwner(req.params.projectId, res.locals.userid);
         const settings = await getProjectGitSyncSettings(project.id);
@@ -1085,7 +1086,7 @@ router.get('/projects/:projectId', needLogin, gitSyncRateLimit, async (req, res,
     }
 });
 
-router.post('/projects/:projectId/bind', needLogin, gitSyncRateLimit, async (req, res, next) => {
+router.post('/projects/:projectId/bind', needLogin, requireScope("project:update"), requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const project = await ensureProjectOwner(req.params.projectId, res.locals.userid);
         const {
@@ -1155,7 +1156,7 @@ router.post('/projects/:projectId/bind', needLogin, gitSyncRateLimit, async (req
     }
 });
 
-router.post('/projects/:projectId/unbind', needLogin, gitSyncRateLimit, async (req, res, next) => {
+router.post('/projects/:projectId/unbind', needLogin, requireScope("project:update"), requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const project = await ensureProjectOwner(req.params.projectId, res.locals.userid);
         const settings = await updateProjectGitSyncSettings(project.id, {
@@ -1168,7 +1169,7 @@ router.post('/projects/:projectId/unbind', needLogin, gitSyncRateLimit, async (r
     }
 });
 
-router.post('/projects/:projectId/sync', needLogin, gitSyncRateLimit, async (req, res, next) => {
+router.post('/projects/:projectId/sync', needLogin, requireScope("project:update"), requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const project = await ensureProjectOwner(req.params.projectId, res.locals.userid);
         const latestCommit = await prisma.ow_projects_commits.findFirst({
@@ -1199,7 +1200,7 @@ const blogResyncRateLimit = createRateLimit({
     message: { status: 'error', message: '全量同步请求过于频繁，请稍后再试' },
 });
 
-router.get('/blog/settings', needLogin, gitSyncRateLimit, async (req, res, next) => {
+router.get('/blog/settings', needLogin, requireScope("blog:read"), requireScope("git_sync:read"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const settings = await getBlogSettings(res.locals.userid);
         const state = await getBlogState(res.locals.userid);
@@ -1209,7 +1210,7 @@ router.get('/blog/settings', needLogin, gitSyncRateLimit, async (req, res, next)
     }
 });
 
-router.put('/blog/settings', needLogin, gitSyncRateLimit, async (req, res, next) => {
+router.put('/blog/settings', needLogin, requireScope("blog:update"), requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const body = req.body || {};
         const linkId = String(body.linkId || '').trim();
@@ -1296,7 +1297,7 @@ router.put('/blog/settings', needLogin, gitSyncRateLimit, async (req, res, next)
     }
 });
 
-router.delete('/blog/settings', needLogin, gitSyncRateLimit, async (req, res, next) => {
+router.delete('/blog/settings', needLogin, requireScope("blog:update"), requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const saved = await disableBlogSettings(res.locals.userid, 'manual');
         res.status(200).send({ status: 'success', settings: saved });
@@ -1305,7 +1306,7 @@ router.delete('/blog/settings', needLogin, gitSyncRateLimit, async (req, res, ne
     }
 });
 
-router.get('/blog/projects', needLogin, gitSyncRateLimit, async (req, res, next) => {
+router.get('/blog/projects', needLogin, requireScope("blog:read"), requireScope("git_sync:read"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const projects = await blogSyncService.listArticleProjects(res.locals.userid);
         const state = await getBlogState(res.locals.userid);
@@ -1321,7 +1322,7 @@ router.get('/blog/projects', needLogin, gitSyncRateLimit, async (req, res, next)
     }
 });
 
-router.post('/blog/resync', needLogin, blogResyncRateLimit, async (req, res, next) => {
+router.post('/blog/resync', needLogin, requireScope("blog:update"), requireScope("git_sync:manage"), blogResyncRateLimit, async (req, res, next) => {
     try {
         const settings = await getBlogSettings(res.locals.userid);
         if (!settings?.enabled) {
@@ -1346,7 +1347,7 @@ router.post('/blog/resync', needLogin, blogResyncRateLimit, async (req, res, nex
     }
 });
 
-router.post('/blog/sync/:projectId', needLogin, gitSyncRateLimit, async (req, res, next) => {
+router.post('/blog/sync/:projectId', needLogin, requireScope("blog:update"), requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const project = await ensureProjectOwner(req.params.projectId, res.locals.userid);
         if (String(project.type || '').toLowerCase() !== 'article') {

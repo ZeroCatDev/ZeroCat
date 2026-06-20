@@ -1,5 +1,6 @@
 import {Router} from 'express';
 import {needLogin} from '../middleware/auth.js';
+import { requireScope } from '../middleware/scope.js';
 import * as cachekv from '../services/cachekv.js';
 
 const router = Router();
@@ -7,7 +8,7 @@ const router = Router();
 router.use(needLogin);
 
 // Get value by key
-router.get('/:key', async (req, res) => {
+router.get('/:key', requireScope("cachekv:read"), async (req, res) => {
     try {
         const {key} = req.params;
         const userId = res.locals.userid;
@@ -26,7 +27,7 @@ router.get('/:key', async (req, res) => {
 });
 
 // Set value for key
-router.post('/:key', async (req, res) => {
+router.post('/:key', requireScope("cachekv:update"), async (req, res) => {
     try {
         const {key} = req.params;
         const userId = res.locals.userid;
@@ -41,7 +42,7 @@ router.post('/:key', async (req, res) => {
 });
 
 // Delete key
-router.delete('/:key', async (req, res) => {
+router.delete('/:key', requireScope("cachekv:delete"), async (req, res) => {
     try {
         const {key} = req.params;
         const userId = res.locals.userid;
@@ -60,7 +61,7 @@ router.delete('/:key', async (req, res) => {
 });
 
 // List all keys
-router.get('/', async (req, res) => {
+router.get('/', requireScope("cachekv:read"), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const {page = 1, limit = 20, showValue = false} = req.query;

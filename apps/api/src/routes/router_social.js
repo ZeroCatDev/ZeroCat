@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import logger from '../services/logger.js';
 import { needLogin } from '../middleware/auth.js';
+import { requireScope } from '../middleware/scope.js';
 import zcconfig from '../services/config/zcconfig.js';
 import memoryCache from '../services/memoryCache.js';
 import queueManager from '../services/queue/queueManager.js';
@@ -44,7 +45,7 @@ router.get('/bluesky/sync/client-metadata.json', async (req, res) => {
     }
 });
 
-router.get('/overview', needLogin, async (req, res) => {
+router.get('/overview', needLogin, requireScope("user:read"), async (req, res) => {
     try {
         const data = await getSocialIntegrationOverview(res.locals.userid);
         res.status(200).json({ status: 'success', data });
@@ -54,7 +55,7 @@ router.get('/overview', needLogin, async (req, res) => {
     }
 });
 
-router.post('/sync/settings', needLogin, async (req, res) => {
+router.post('/sync/settings', needLogin, requireScope("user:update"), async (req, res) => {
     try {
         const { twitter, bluesky } = req.body || {};
         if (twitter === undefined && bluesky === undefined) {
@@ -69,7 +70,7 @@ router.post('/sync/settings', needLogin, async (req, res) => {
     }
 });
 
-router.get('/twitter/sync/app', needLogin, async (req, res) => {
+router.get('/twitter/sync/app', needLogin, requireScope("user:read"), async (req, res) => {
     try {
         const data = await getTwitterSyncAppConfig(res.locals.userid, { masked: true });
         res.status(200).json({ status: 'success', data });
@@ -79,7 +80,7 @@ router.get('/twitter/sync/app', needLogin, async (req, res) => {
     }
 });
 
-router.post('/twitter/sync/app', needLogin, async (req, res) => {
+router.post('/twitter/sync/app', needLogin, requireScope("user:update"), async (req, res) => {
     try {
         const data = await setTwitterSyncAppConfig(res.locals.userid, req.body || {});
         res.status(200).json({ status: 'success', data });
@@ -89,7 +90,7 @@ router.post('/twitter/sync/app', needLogin, async (req, res) => {
     }
 });
 
-router.delete('/twitter/sync/app', needLogin, async (req, res) => {
+router.delete('/twitter/sync/app', needLogin, requireScope("user:update"), async (req, res) => {
     try {
         await removeTwitterSyncAppConfig(res.locals.userid);
         res.status(200).json({ status: 'success', message: 'Twitter 同步应用配置已删除' });
@@ -99,7 +100,7 @@ router.delete('/twitter/sync/app', needLogin, async (req, res) => {
     }
 });
 
-router.get('/twitter/sync/oauth/start', needLogin, async (req, res) => {
+router.get('/twitter/sync/oauth/start', needLogin, requireScope("user:update"), async (req, res) => {
     try {
         const appConfig = await getTwitterSyncAppConfig(res.locals.userid, { masked: false });
         if (!appConfig?.clientId || !appConfig?.clientSecret || !appConfig?.redirectUri) {
@@ -154,7 +155,7 @@ router.get('/twitter/sync/oauth/callback', async (req, res) => {
     }
 });
 
-router.post('/bluesky/pds', needLogin, async (req, res) => {
+router.post('/bluesky/pds', needLogin, requireScope("user:update"), async (req, res) => {
     try {
         const { pds } = req.body || {};
         if (!pds) {
@@ -169,7 +170,7 @@ router.post('/bluesky/pds', needLogin, async (req, res) => {
     }
 });
 
-router.get('/bluesky/sync/oauth/start', needLogin, async (req, res) => {
+router.get('/bluesky/sync/oauth/start', needLogin, requireScope("user:update"), async (req, res) => {
     try {
         const provider = 'bluesky';
         if (!OAUTH_PROVIDERS[provider]?.enabled) {
@@ -266,7 +267,7 @@ router.get('/bluesky/sync/oauth/callback', async (req, res) => {
     }
 });
 
-router.post('/sync/post/:postId', needLogin, async (req, res) => {
+router.post('/sync/post/:postId', needLogin, requireScope("post:update"), async (req, res) => {
     try {
         const postId = Number(req.params.postId);
         if (!Number.isInteger(postId) || postId <= 0) {

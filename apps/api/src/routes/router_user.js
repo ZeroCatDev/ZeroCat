@@ -5,6 +5,8 @@ import {prisma} from "../services/prisma.js";
 import {validateUsername} from "../services/global.js";
 import {needAdmin, needLogin} from "../middleware/auth.js";
 import { requireSudo } from "../middleware/sudo.js";
+import { requireScope } from "../middleware/scope.js";
+import { scopeSatisfies } from "../services/auth/scopes.js";
 import {createEvent} from "../controllers/events.js";
 import jwt from "jsonwebtoken";
 import * as bcrypt from "bcrypt";
@@ -131,7 +133,7 @@ logger.debug(user);
 });
 
 // 获取推荐用户
-router.get("/recommend/me", needLogin, async (req, res, next) => {
+router.get("/recommend/me", needLogin, requireScope("user:read"), async (req, res, next) => {
     try {
         const userId = Number(res.locals.userid);
         const { limit = 20, offset = 0 } = req.query;
@@ -214,7 +216,7 @@ router.post("/batch/:type", async function (req, res, next) {
 });
 
 // 获取用户自身信息
-router.get("/me", needLogin, async function (req, res, next) {
+router.get("/me", needLogin, requireScope("user:read"), async function (req, res, next) {
     try {
         const user = await prisma.ow_users.findFirst({
             where: {id: res.locals.userid},
@@ -473,7 +475,7 @@ router.post("/login", async function (req, res, next) {
 });
 
 // 修改密码
-router.post("/change-password", needLogin, requireSudo, async function (req, res, next) {
+router.post("/change-password", needLogin, requireScope("user:update"), requireSudo, async function (req, res, next) {
     try {
         const userId = res.locals.userid;
         const { newPassword } = req.body;
@@ -507,10 +509,10 @@ router.post("/change-password", needLogin, requireSudo, async function (req, res
 });
 
 // 修改用户名
-router.post("/change-username", needLogin, requireSudo, changeUsername);
+router.post("/change-username", needLogin, requireScope("user:update"), requireSudo, changeUsername);
 
  // 更新用户信息
- router.patch("/profile/update", needLogin, async function (req, res, next) {
+ router.patch("/profile/update", needLogin, requireScope("user:update"), async function (req, res, next) {
     try {
         const userId = res.locals.userid;
         const {display_name, bio, avatar, settings} = req.body;
@@ -603,15 +605,26 @@ router.post("/change-username", needLogin, requireSudo, changeUsername);
 });
 
 // 删除用户账户
-router.delete("/:userId", needLogin, async function (req, res, next) {
+router.delete("/:userId", needLogin, requireScope("user:delete"), requireSudo, async function (req, res, next) {
     try {
         const targetUserId = parseInt(req.params.userId);
         const requesterId = res.locals.userid;
 
         // 验证权限 - 只能删除自己的账户或管理员操作
-        const requesterIsAdmin = await needAdmin(req, res, () => true).catch(
-            () => false
-        );
+        const adminUsers = await zcconfig.get("security.adminusers");
+        const requesterIsAdminUser =
+            Array.isArray(adminUsers) &&
+            adminUsers.includes(String(requesterId));
+        const requesterScopes = requesterIsAdminUser &&
+            res.locals.tokenType === "session" &&
+            Array.isArray(res.locals.scopes) &&
+            res.locals.scopes.includes("*") &&
+            !res.locals.scopes.includes("admin:*")
+            ? [...res.locals.scopes, "admin:*"]
+            : (res.locals.scopes || []);
+        const requesterIsAdmin =
+            requesterIsAdminUser &&
+            scopeSatisfies(requesterScopes, "admin:manage");
 
         if (targetUserId !== requesterId && !requesterIsAdmin) {
             return res.status(403).json({

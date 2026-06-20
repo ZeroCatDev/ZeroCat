@@ -641,7 +641,7 @@ router.delete("/:id", async (req, res) => {
             });
 
             // Delete auth tokens
-            await prisma.ow_auth_tokens.deleteMany({
+            await prisma.ow_tokens.deleteMany({
                 where: {user_id: userId},
             });
 
@@ -930,7 +930,7 @@ router.get("/:id/activity", async (req, res) => {
                 take: 10,
             }),
             // Get auth tokens
-            prisma.ow_auth_tokens.findMany({
+            prisma.ow_tokens.findMany({
                 where: {user_id: userId},
                 orderBy: {last_used_at: "desc"},
                 take: 5,

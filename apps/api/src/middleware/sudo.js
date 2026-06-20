@@ -18,6 +18,13 @@ export const requireSudo = async (req, res, next) => {
                 code: 'SUDO_NEED_LOGIN'
             });
         }
+        if (res.locals.tokenType !== 'session') {
+            return res.status(403).json({
+                status: 'error',
+                message: 'sudo操作需要使用网页登录会话',
+                code: 'SUDO_SESSION_REQUIRED'
+            });
+        }
 
         // 获取sudo令牌 - 从多个来源尝试获取
         let sudoToken = null;
@@ -124,6 +131,10 @@ export const optionalSudo = async (req, res, next) => {
 
         if (!sudoToken) {
             // 没有提供sudo令牌，继续处理但不标记sudo验证
+            res.locals.sudoVerified = false;
+            return next();
+        }
+        if (res.locals.tokenType !== 'session') {
             res.locals.sudoVerified = false;
             return next();
         }

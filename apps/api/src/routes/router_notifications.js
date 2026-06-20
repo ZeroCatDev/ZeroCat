@@ -4,6 +4,7 @@
  */
 import express from "express";
 import {needLogin} from "../middleware/auth.js";
+import { requireScope } from "../middleware/scope.js";
 import logger from "../services/logger.js";
 import notificationUtils from "../controllers/notifications.js";
 import {prisma} from "../services/prisma.js";
@@ -16,7 +17,7 @@ const router = express.Router();
  * @desc 获取当前用户的通知
  * @access Private
  */
-router.get("/", needLogin, async (req, res) => {
+router.get("/", needLogin, requireScope("notification:read"), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const limit = req.query.limit ? parseInt(req.query.limit, 10) : 20;
@@ -60,7 +61,7 @@ router.get("/", needLogin, async (req, res) => {
  * @desc 获取当前用户的未读通知数量
  * @access Private
  */
-router.get("/unread-count", needLogin, async (req, res) => {
+router.get("/unread-count", needLogin, requireScope("notification:read"), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const count = await notificationUtils.getUnreadNotificationCount(userId);
@@ -77,7 +78,7 @@ router.get("/unread-count", needLogin, async (req, res) => {
  * @desc 将通知标记为已读
  * @access Private
  */
-router.post("/mark-read", needLogin, async (req, res) => {
+router.post("/mark-read", needLogin, requireScope("notification:update"), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const {notification_ids} = req.body;
@@ -103,7 +104,7 @@ router.post("/mark-read", needLogin, async (req, res) => {
  * @desc 将通知标记为已读 (兼容旧API)
  * @access Private
  */
-router.put("/read", needLogin, async (req, res) => {
+router.put("/read", needLogin, requireScope("notification:update"), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const {notification_ids} = req.body;
@@ -129,7 +130,7 @@ router.put("/read", needLogin, async (req, res) => {
  * @desc 将所有通知标记为已读
  * @access Private
  */
-router.put("/read_all", needLogin, async (req, res) => {
+router.put("/read_all", needLogin, requireScope("notification:update"), async (req, res) => {
     try {
         const userId = res.locals.userid;
 
@@ -165,7 +166,7 @@ router.put("/read_all", needLogin, async (req, res) => {
  * @desc 发送增强通知（支持隐藏通知和多渠道推送）
  * @access Private
  */
-router.post("/send-enhanced", needLogin, async (req, res) => {
+router.post("/send-enhanced", needLogin, requireScope("notification:update"), async (req, res) => {
     try {
         const {
             user_id,
@@ -229,7 +230,7 @@ router.post("/send-enhanced", needLogin, async (req, res) => {
  * @desc 发送通知（支持多种渠道）
  * @access Private
  */
-router.post("/send", needLogin, async (req, res) => {
+router.post("/send", needLogin, requireScope("notification:update"), async (req, res) => {
     try {
         const {
             user_id,
@@ -280,7 +281,7 @@ router.post("/send", needLogin, async (req, res) => {
  * @desc 注册浏览器推送通知
  * @access Private
  */
-router.post("/register-browser", needLogin, async (req, res) => {
+router.post("/register-browser", needLogin, requireScope("notification:update"), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const { subscription, device_info } = req.body;
@@ -327,7 +328,7 @@ router.post("/register-browser", needLogin, async (req, res) => {
  * @desc 取消浏览器推送通知
  * @access Private
  */
-router.delete("/register-browser", async (req, res) => {
+router.delete("/register-browser", needLogin, requireScope("notification:update"), async (req, res) => {
     try {
         const { endpoint } = req.body;
 
@@ -360,7 +361,7 @@ router.delete("/register-browser", async (req, res) => {
  * @desc 获取用户的推送订阅列表
  * @access Private
  */
-router.get("/push-subscriptions", needLogin, async (req, res) => {
+router.get("/push-subscriptions", needLogin, requireScope("notification:read"), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const subscriptions = await getUserPushSubscriptions(userId);
@@ -400,7 +401,7 @@ router.get("/templates", async (req, res) => {
  * @desc 获取通知的推送状态
  * @access Private
  */
-router.get("/push-status/:id", needLogin, async (req, res) => {
+router.get("/push-status/:id", needLogin, requireScope("notification:read"), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const notificationId = parseInt(req.params.id, 10);
@@ -447,7 +448,7 @@ router.get("/push-status/:id", needLogin, async (req, res) => {
  * @desc 更新或创建通知设置
  * @access Private
  */
-router.get("/settings/metadata", needLogin, async (req, res) => {
+router.get("/settings/metadata", needLogin, requireScope("notification:read"), async (req, res) => {
     try {
         const metadata = notificationUtils.getNotificationSettingsMetadata();
         res.json({ success: true, metadata });
@@ -462,7 +463,7 @@ router.get("/settings/metadata", needLogin, async (req, res) => {
  * @desc 获取通知设置列表
  * @access Private
  */
-router.get("/settings", needLogin, async (req, res) => {
+router.get("/settings", needLogin, requireScope("notification:read"), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const { target_type, target_ids, limit, offset } = req.query;
@@ -494,7 +495,7 @@ router.get("/settings", needLogin, async (req, res) => {
  * @desc 获取当前用户已修改的通知设置（仅返回非默认等级）
  * @access Private
  */
-router.get("/settings/changed", needLogin, async (req, res) => {
+router.get("/settings/changed", needLogin, requireScope("notification:read"), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const { target_type, target_ids } = req.query;
@@ -519,7 +520,7 @@ router.get("/settings/changed", needLogin, async (req, res) => {
     }
 });
 
-router.put("/settings", needLogin, async (req, res) => {
+router.put("/settings", needLogin, requireScope("notification:update"), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const { targetId, targetType, level } = req.body;
@@ -547,7 +548,7 @@ router.put("/settings", needLogin, async (req, res) => {
  * @desc 批量更新通知设置
  * @access Private
  */
-router.put("/settings/bulk", needLogin, async (req, res) => {
+router.put("/settings/bulk", needLogin, requireScope("notification:update"), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const { settings } = req.body;
@@ -579,7 +580,7 @@ router.put("/settings/bulk", needLogin, async (req, res) => {
  * @desc 获取特定目标的通知设置
  * @access Private
  */
-router.get("/settings/:targetType/:targetId", needLogin, async (req, res) => {
+router.get("/settings/:targetType/:targetId", needLogin, requireScope("notification:read"), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const { targetType, targetId } = req.params;
@@ -611,7 +612,7 @@ router.get("/settings/:targetType/:targetId", needLogin, async (req, res) => {
  * @desc 获取单个通知详情
  * @access Private
  */
-router.get("/:id", needLogin, async (req, res) => {
+router.get("/:id", needLogin, requireScope("notification:read"), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const notificationId = parseInt(req.params.id, 10);

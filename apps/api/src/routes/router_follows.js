@@ -1,5 +1,6 @@
 import express from 'express';
 import {needLogin} from "../middleware/auth.js";
+import { requireScope } from "../middleware/scope.js";
 import followsController from "../controllers/follows.js";
 import logger from "../services/logger.js";
 
@@ -62,7 +63,7 @@ function handleError(res, error) {
  *   }
  * }
  */
-router.post('/:userId', needLogin, async (req, res) => {
+router.post('/:userId', needLogin, requireScope("follow:interact"), async (req, res) => {
     try {
         const followerId = res.locals.userid;
         const followedId = parseInt(req.params.userId);
@@ -103,7 +104,7 @@ router.post('/:userId', needLogin, async (req, res) => {
  *   }
  * }
  */
-router.delete('/:userId', needLogin, async (req, res) => {
+router.delete('/:userId', needLogin, requireScope("follow:interact"), async (req, res) => {
     try {
         const followerId = res.locals.userid;
         const followedId = parseInt(req.params.userId);
@@ -151,7 +152,7 @@ router.delete('/:userId', needLogin, async (req, res) => {
  *   }
  * }
  */
-router.post('/block/:userId', needLogin, async (req, res) => {
+router.post('/block/:userId', needLogin, requireScope("follow:interact"), async (req, res) => {
     try {
         const blockerId = res.locals.userid;
         const blockedId = parseInt(req.params.userId);
@@ -192,7 +193,7 @@ router.post('/block/:userId', needLogin, async (req, res) => {
  *   }
  * }
  */
-router.delete('/block/:userId', needLogin, async (req, res) => {
+router.delete('/block/:userId', needLogin, requireScope("follow:interact"), async (req, res) => {
     try {
         const blockerId = res.locals.userid;
         const blockedId = parseInt(req.params.userId);
@@ -349,7 +350,7 @@ router.get('/following/:userId', async (req, res) => {
  *   }
  * }
  */
-router.get('/blocked', needLogin, async (req, res) => {
+router.get('/blocked', needLogin, requireScope("follow:read"), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const limit = parseInt(req.query.limit) || 20;
@@ -383,7 +384,7 @@ router.get('/blocked', needLogin, async (req, res) => {
  *   }
  * }
  */
-router.get('/check/:userId', needLogin, async (req, res) => {
+router.get('/check/:userId', needLogin, requireScope("follow:read"), async (req, res) => {
     try {
         const followerId = res.locals.userid;
         const followedId = parseInt(req.params.userId);
@@ -416,7 +417,7 @@ router.get('/check/:userId', needLogin, async (req, res) => {
  *   }
  * }
  */
-router.get('/check-block/:userId', needLogin, async (req, res) => {
+router.get('/check-block/:userId', needLogin, requireScope("follow:read"), async (req, res) => {
     try {
         const blockerId = res.locals.userid;
         const blockedId = parseInt(req.params.userId);
@@ -455,7 +456,7 @@ router.get('/check-block/:userId', needLogin, async (req, res) => {
  *   }
  * }
  */
-router.get('/relationships/:userId', needLogin, async (req, res) => {
+router.get('/relationships/:userId', needLogin, requireScope("follow:read"), async (req, res) => {
     try {
         const userId1 = res.locals.userid;
         const userId2 = parseInt(req.params.userId);
@@ -508,7 +509,7 @@ router.get('/relationships/:userId', needLogin, async (req, res) => {
  *   }
  * }
  */
-router.patch('/note/:userId', needLogin, async (req, res) => {
+router.patch('/note/:userId', needLogin, requireScope("follow:interact"), async (req, res) => {
     try {
         const followerId = res.locals.userid;
         const followedId = parseInt(req.params.userId);
@@ -572,7 +573,7 @@ router.patch('/note/:userId', needLogin, async (req, res) => {
  *   }
  * }
  */
-router.patch('/block-reason/:userId', needLogin, async (req, res) => {
+router.patch('/block-reason/:userId', needLogin, requireScope("follow:interact"), async (req, res) => {
     try {
         const blockerId = res.locals.userid;
         const blockedId = parseInt(req.params.userId);
@@ -648,7 +649,7 @@ router.patch('/block-reason/:userId', needLogin, async (req, res) => {
  *   }
  * }
  */
-router.get('/notes/:userId', needLogin, async (req, res) => {
+router.get('/notes/:userId', needLogin, requireScope("follow:read"), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const targetUserId = parseInt(req.params.userId);

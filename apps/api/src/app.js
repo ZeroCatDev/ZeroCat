@@ -128,6 +128,14 @@ class Application {
             // Initialize CodeRunManager
             await codeRunManager.initialize();
 
+            // 同步 scope 目录到数据库 (供 OAuth 同意页 / 令牌创建 UI 使用)
+            try {
+                const { syncScopeCatalog } = await import('./services/auth/scopes.js');
+                await syncScopeCatalog();
+            } catch (error) {
+                logger.error('[app] 同步 scope 目录失败:', error);
+            }
+
             // 初始化 ActivityPub（联邦启用时自动生成实例密钥）
             try {
                 const { isFederationEnabled } = await import('./services/activitypub/config.js');

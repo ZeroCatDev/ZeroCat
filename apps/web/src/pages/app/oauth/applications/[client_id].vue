@@ -320,7 +320,7 @@
                     client_id={{ application?.client_id }}<br>
                     &redirect_uri={{ form?.redirect_uris?.[0] || "[您的回调URL]" }}<br>
                     &response_type=code<br>
-                    &scope=user:basic user:email<br>
+                    &scope=user:read<br>
                     &state=[推荐：随机字符串防止CSRF攻击]<br>
                     &code_challenge=[可选：PKCE挑战码]<br>
                     &code_challenge_method=[可选：plain或S256]
@@ -329,7 +329,7 @@
                     color="primary"
                     icon="mdi-content-copy"
                     variant="text"
-                    @click="copyToClipboard('https://api.zcservice.houlang.cloud/oauth/authorize?client_id=' + application?.client_id + '&redirect_uri=' + (form?.redirect_uris?.[0] || '[您的回调URL]') + '&response_type=code&scope=user:basic user:email&state=[推荐：随机字符串]')"
+                    @click="copyToClipboard('https://api.zcservice.houlang.cloud/oauth/authorize?client_id=' + application?.client_id + '&redirect_uri=' + (form?.redirect_uris?.[0] || '[您的回调URL]') + '&response_type=code&scope=user:read&state=[推荐：随机字符串]')"
                   ></v-btn>
                 </div>
                 <div class="mt-3">
@@ -393,7 +393,7 @@
   "token_type": "Bearer",
   "expires_in": 3600,
   "refresh_token": "xyz",
-  "scope": "user:basic user:email"
+  "scope": "user:read"
 }</pre>
                 </div>
               </v-card>
@@ -447,12 +447,20 @@
                 </thead>
                 <tbody>
                 <tr>
-                  <td><code>user:basic</code></td>
-                  <td>获取用户名与显示名</td>
+                  <td><code>user:read</code></td>
+                  <td>读取用户名、显示名、头像和已验证邮箱等账户资料</td>
                 </tr>
                 <tr>
-                  <td><code>user:email</code></td>
-                  <td>获取用户验证过的邮箱地址</td>
+                  <td><code>project:read</code></td>
+                  <td>读取用户授权范围内的私有项目信息</td>
+                </tr>
+                <tr>
+                  <td><code>project:update</code></td>
+                  <td>修改用户授权范围内的项目内容，不包含删除</td>
+                </tr>
+                <tr>
+                  <td><code>post:create</code></td>
+                  <td>发布推文、回复、引用或转发</td>
                 </tr>
                 </tbody>
               </v-table>

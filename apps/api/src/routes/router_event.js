@@ -3,6 +3,7 @@
  */
 import express from "express";
 import {needLogin} from "../middleware/auth.js";
+import { requireScope } from "../middleware/scope.js";
 import {
     createEvent,
     getActorEvents,
@@ -81,7 +82,7 @@ router.get("/actor/:actorId", async (req, res) => {
  * @desc Create a new event
  * @access Private
  */
-router.post("/", needLogin, async (req, res) => {
+router.post("/", needLogin, requireScope("event:create"), async (req, res) => {
     try {
         const {eventType, targetType, targetId, ...eventData} = req.body;
 
