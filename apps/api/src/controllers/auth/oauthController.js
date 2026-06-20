@@ -396,6 +396,7 @@ export const getBoundOAuthAccounts = async (req, res) => {
                 contact_type: {
                     in: [
                         "oauth_google",
+                        "oauth_houlang",
                         "oauth_microsoft",
                         "oauth_github",
                         "oauth_linuxdo",

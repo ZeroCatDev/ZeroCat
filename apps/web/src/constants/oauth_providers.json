@@ -7,6 +7,14 @@
       "color": "#FFFFFF"
     }
   },
+  "houlang": {
+    "name": "厚浪",
+    "icon": "mdi-waves",
+    "style": {
+      "backgroundColor": "#0F6FFF",
+      "color": "#FFFFFF"
+    }
+  },
   "microsoft": {
     "name": "Microsoft",
     "icon": "mdi-microsoft",

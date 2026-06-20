@@ -410,7 +410,24 @@ export const CONFIG_TYPES = {
         required: false,
         description: "GitHub OAuth客户端密钥",
     },
-    // Git sync (GitHub App)
+    "oauth.houlang.enabled": {
+        type: "boolean",
+        required: false,
+        default: false,
+        description: "是否启用厚浪登录",
+        transform: typeTransformers.boolean,
+        public: true,
+    },
+    "oauth.houlang.client_id": {
+        type: "string",
+        required: false,
+        description: "厚浪 Logto OIDC 应用ID",
+    },
+    "oauth.houlang.client_secret": {
+        type: "string",
+        required: false,
+        description: "厚浪 Logto OIDC 应用密钥",
+    },
     "git.sync.enabled": {
         type: "boolean",
         required: false,
