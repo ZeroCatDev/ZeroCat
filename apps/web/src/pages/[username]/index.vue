@@ -479,7 +479,7 @@ export default {
       this.readmeExists = false;
       try {
         const readmeProject = await getProjectInfoByNamespace(this.username, this.username);
-        if (!readmeProject?.id || readmeProject.id === 0 || readmeProject.type !== "article") {
+        if (!readmeProject?.id || readmeProject.id === 0 || readmeProject.type !== "readme") {
           return;
         }
 
@@ -514,7 +514,7 @@ export default {
       this.readmeLoading = true;
       try {
         const readmeProject = await getProjectInfoByNamespace(this.username, this.username);
-        if (readmeProject?.id && readmeProject.id !== 0 && readmeProject.type === "article") {
+        if (readmeProject?.id && readmeProject.id !== 0 && readmeProject.type === "readme") {
           this.readmeExists = true;
           this.$router.push(`/${this.username}/articles/${this.username}/edit`);
           return;
@@ -525,7 +525,7 @@ export default {
           title: 'README.md',
           description: '',
           state: 'public',
-          type: 'article',
+          type: 'readme',
           license: 'None'
         });
 

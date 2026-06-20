@@ -115,6 +115,7 @@ function buildProjectTrgmWhere({ keyword, type, state, useridArray, tagsArray })
   const params = [keyword, ilikePattern];
   const conditions = [
     "p.authorid IS NOT NULL",
+    "p.type != 'readme'",
     `(COALESCE(p.name, '') % $1 OR COALESCE(p.title, '') % $1 OR COALESCE(p.description, '') % $1 OR p.name ILIKE $2 OR p.title ILIKE $2 OR p.description ILIKE $2)`,
   ];
 
@@ -153,6 +154,15 @@ function buildProjectTrgmWhere({ keyword, type, state, useridArray, tagsArray })
     whereSql: conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "",
     params,
   };
+}
+
+async function findReadmeProjectUserIds(keyword) {
+  const projects = await prisma.ow_projects.findMany({
+    where: { type: "readme", name: { contains: keyword, mode: "insensitive" } },
+    select: { authorid: true },
+    take: 20,
+  });
+  return [...new Set(projects.map((p) => p.authorid).filter(Boolean))];
 }
 
 async function searchProjectsByTrgm({
@@ -448,6 +458,7 @@ router.get("/", async (req, res, next) => {
 
     const projectAnd = [
       { authorid: { not: null } },
+      { type: { not: "readme" } },
       type ? { type: { equals: String(type) } } : undefined,
       state.length > 0 ? { state: { in: state } } : undefined,
       useridArray.length > 0 ? { authorid: { in: useridArray } } : undefined,
@@ -706,6 +717,25 @@ router.get("/", async (req, res, next) => {
             take,
           }),
         ]);
+      }
+
+      // 将 readme 项目匹配的用户追加到搜索结果
+      if (keyword) {
+        const readmeUserIds = await findReadmeProjectUserIds(keyword);
+        if (readmeUserIds.length > 0) {
+          const existingIds = new Set(users.map((u) => u.id));
+          const newIds = readmeUserIds.filter((id) => !existingIds.has(id));
+          if (newIds.length > 0) {
+            const extraUsers = await prisma.ow_users.findMany({
+              where: { id: { in: newIds } },
+              select: {
+                id: true, username: true, display_name: true, avatar: true,
+                status: true, bio: true, location: true, region: true, regTime: true,
+              },
+            });
+            users.push(...extraUsers);
+          }
+        }
       }
     }
 

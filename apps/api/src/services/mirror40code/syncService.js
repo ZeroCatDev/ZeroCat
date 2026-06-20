@@ -1647,7 +1647,7 @@ class Mirror40CodeSyncService {
                 where: {
                     authorid: localUser.id,
                     name: { in: [projectName, legacyProjectName] },
-                    type: 'article',
+                    type: { in: ['article', 'readme'] },
                 },
             });
         }
@@ -1656,7 +1656,7 @@ class Mirror40CodeSyncService {
             name: projectName,
             title: projectTitle,
             description: articleDescription,
-            type: 'article',
+            type: 'readme',
             state: 'public',
             authorid: localUser.id,
             default_branch: 'main',

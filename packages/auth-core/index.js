@@ -184,6 +184,11 @@ export function createBrowserAuthClient(options = {}) {
     return normalized || null;
   }
 
+  function isLikelySessionRefreshToken(value) {
+    const token = normalizeRefreshToken(value);
+    return !!token && token.startsWith("zc_") && token.length >= 40;
+  }
+
   function getStoredToken() {
     return memoryToken || getStorageValue(AUTH_STORAGE_KEYS.token);
   }
@@ -331,6 +336,14 @@ export function createBrowserAuthClient(options = {}) {
     const generationAtStart = authCredentialGeneration;
     const storedRefreshToken = getStoredRefreshToken();
     if (!storedRefreshToken) return null;
+
+    if (!isLikelySessionRefreshToken(storedRefreshToken)) {
+      // #region agent log
+      fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1167d'},body:JSON.stringify({sessionId:'f1167d',location:'auth-core/index.js:performRefreshRequest:invalidFormat',message:'skip refresh invalid token format',data:{refreshPrefix:storedRefreshToken.slice(0,12),tokenLength:storedRefreshToken.length},timestamp:Date.now(),runId:'localStorage-v3',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+      clearStoredAuthState();
+      return null;
+    }
 
     const response = await fetchImpl(`${apiUrl}/account/refresh-token`, {
       method: "POST",
