@@ -13,8 +13,13 @@
 
     <v-row>
       <!-- OAuth 应用卡片 -->
-      <v-col v-for="item in items" :key="item.title" :to="item.link" cols="12" md="6">
-        <v-card :to="item.link" class="h-100" elevation="1" hover>
+      <v-col
+        v-for="item in items"
+        :key="item.title"
+        cols="12"
+        md="6"
+      >
+        <v-card class="h-100" elevation="1" hover :to="item.link">
           <v-card-item>
             <v-card-title>{{ item.title }}</v-card-title>
             <v-card-subtitle class="mt-2">
@@ -32,36 +37,41 @@
   </v-container>
 </template>
 
-<script setup>
-const items = [
-  {
-    title: '接口调试',
-    description: '/app/debug/api',
-    link: '/app/debug/api'
-  },
-  {
-    title: '缓存管理',
-    description: '/app/debug/kv',
-    link: '/app/debug/kv'
-  },
-  {
-    title: '浏览器指纹',
-    description: '/app/debug/fingerprint',
-    link: '/app/debug/fingerprint'
-  },
-  {
-    title: '用户令牌',
-    description: '/app/debug/token',
-    link: '/app/debug/token'
-  },
-  {
-    title: '令牌归属查询',
-    description: '/app/debug/token-introspect',
-    link: '/app/debug/token-introspect'
-  },
+<script setup lang="ts">
+  const items = [
+    {
+      title: '接口调试',
+      description: '/app/debug/api',
+      link: '/app/debug/api'
+    },
+    {
+      title: '缓存管理',
+      description: '/app/debug/kv',
+      link: '/app/debug/kv'
+    },
+    {
+      title: '浏览器指纹',
+      description: '/app/debug/fingerprint',
+      link: '/app/debug/fingerprint'
+    },
+    {
+      title: '用户令牌',
+      description: '/app/debug/token',
+      link: '/app/debug/token'
+    },
+    {
+      title: '令牌归属查询',
+      description: '/app/debug/token-introspect',
+      link: '/app/debug/token-introspect'
+    },
+    {
+      title: 'OAuth 贴文调试',
+      description: '/app/debug/oauth-post-manager',
+      link: '/app/debug/oauth-post-manager'
+    },
 
 
-]
+  ]
 </script>
 
 <style scoped>

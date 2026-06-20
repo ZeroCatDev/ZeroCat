@@ -7,7 +7,7 @@ import { needLogin } from "../middleware/auth.js";
 import { requireScope } from "../middleware/scope.js";
 import { oauthRateLimit } from "../middleware/rateLimit.js";
 import crypto from "crypto";
-import { generateAuthCode, validateRedirectUri, validateScopes, } from "../services/auth/oauth.js";
+import { generateAuthCode, validatePKCE, validateRedirectUri, validateScopes, } from "../services/auth/oauth.js";
 import { isScopeSubset, normalizeScopes, scopeSatisfies, validateUserGrantableScopes } from "../services/auth/scopes.js";
 import { generateOAuthTokens, refreshOAuthTokens, verifyOAuthClientCredentials, } from "../services/auth/tokenManager.js";
 import { revokeTokensWhere } from "../services/auth/tokenService.js";
@@ -151,6 +151,7 @@ router.post("/applications", needLogin, requireScope("oauth_app:manage"), requir
             homepage_url,
             redirect_uris,
             type = "oauth",
+            scopes,
             webhook_url,
             logo_url,
             terms_url,
@@ -166,8 +167,24 @@ router.post("/applications", needLogin, requireScope("oauth_app:manage"), requir
         const client_id = crypto.randomBytes(16).toString("hex");
         const client_secret = crypto.randomBytes(32).toString("hex");
 
-        // 设置默认权限范围
-        const defaultScopes = ["user:read"];
+        const normalizedScopes = scopes === undefined ? ["user:read"] : normalizeScopes(scopes);
+        if (normalizedScopes.length === 0) {
+            return res.status(400).json({ error: "无效的权限范围" });
+        }
+        if (!isScopeSubset(normalizedScopes, res.locals.scopes || [])) {
+            return res.status(403).json({
+                error: "requested scopes exceed current token permissions",
+                code: "ZC_ERROR_SCOPE_ESCALATION",
+            });
+        }
+        const grantCheck = await validateUserGrantableScopes(res.locals.userid, normalizedScopes);
+        if (!grantCheck.allowed) {
+            return res.status(403).json({
+                error: "requested scopes exceed user permissions",
+                code: "ZC_ERROR_SCOPE_ESCALATION",
+                denied_scopes: grantCheck.denied,
+            });
+        }
 
         const application = await prisma.ow_oauth_applications.create({
             data: {
@@ -179,7 +196,7 @@ router.post("/applications", needLogin, requireScope("oauth_app:manage"), requir
                 client_secret,
                 redirect_uris,
                 type,
-                scopes: defaultScopes,
+                scopes: normalizedScopes,
                 webhook_url,
                 logo_url,
                 terms_url,
@@ -517,6 +534,8 @@ router.get("/authorize", async (req, res) => {
             redirect_uri,
             scope,
             state,
+            code_challenge,
+            code_challenge_method,
         } = req.query;
 
         // 验证基本参数
@@ -573,6 +592,8 @@ router.get("/authorize", async (req, res) => {
         frontendUrl.searchParams.set("redirect_uri", redirect_uri);
         frontendUrl.searchParams.set("scope", requestedScopes.join(" "));
         if (state) frontendUrl.searchParams.set("state", state);
+        if (code_challenge) frontendUrl.searchParams.set("code_challenge", code_challenge);
+        if (code_challenge_method) frontendUrl.searchParams.set("code_challenge_method", code_challenge_method);
 
         // 重定向到前端
         res.redirect(frontendUrl.toString());
@@ -591,6 +612,8 @@ router.post("/authorize/confirm", needLogin, requireInteractiveSession, requireS
             scope,
             state,
             authorized_email,
+            code_challenge,
+            code_challenge_method,
         } = req.body;
 
         // 验证邮箱是否属于用户且已验证
@@ -672,6 +695,8 @@ router.post("/authorize/confirm", needLogin, requireInteractiveSession, requireS
                 authorized_email,
                 scopes: grantedScopeStr,
                 code: authCode,
+                code_challenge: code_challenge || null,
+                code_challenge_method: code_challenge_method || null,
                 code_expires_at: new Date(Date.now() + 10 * 60 * 1000), // 10分钟有效期
                 status: "active",
                 last_used_at: new Date(),
@@ -682,6 +707,8 @@ router.post("/authorize/confirm", needLogin, requireInteractiveSession, requireS
                 authorized_email,
                 scopes: grantedScopeStr,
                 code: authCode,
+                code_challenge: code_challenge || null,
+                code_challenge_method: code_challenge_method || null,
                 code_expires_at: new Date(Date.now() + 10 * 60 * 1000),
             },
         });
@@ -713,6 +740,7 @@ router.post("/token", oauthRateLimit, async (req, res) => {
             client_id,
             client_secret,
             refresh_token,
+            code_verifier,
         } = req.body;
 
         // 验证授权类型
@@ -742,6 +770,11 @@ router.post("/token", oauthRateLimit, async (req, res) => {
 
             if (!authorization) {
                 return handleApiError(res, OAuthErrors.INVALID_GRANT);
+            }
+            if (authorization.code_challenge) {
+                if (!validatePKCE(code_verifier, authorization.code_challenge, authorization.code_challenge_method)) {
+                    return handleApiError(res, OAuthErrors.INVALID_GRANT);
+                }
             }
 
             const consumeResult = await prisma.ow_oauth_authorizations.updateMany({

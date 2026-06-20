@@ -4,15 +4,13 @@
       <v-col>
         <div class="d-flex align-center">
           <v-btn
-            :to="'/app/oauth/applications'"
             class="mr-4"
             icon="mdi-arrow-left"
+            :to="'/app/oauth/applications'"
             variant="text"
-          >
-
-          </v-btn>
+          />
           <h1 class="text-h4">编辑 {{ form.name||'OAuth 应用' }}</h1>
-          <v-spacer></v-spacer>
+          <v-spacer />
           <!-- <v-btn
              variant="text"
              prepend-icon="mdi-help-circle"
@@ -34,11 +32,11 @@
 
               <v-text-field
                 v-model="form.name"
-                :rules="[v => !!v || '应用名称是必填的']"
                 class="mb-4"
                 label="应用名称"
                 required
-              ></v-text-field>
+                :rules="[v => !!v || '应用名称是必填的']"
+              />
 
               <v-textarea
                 v-model="form.description"
@@ -46,17 +44,17 @@
                 hint="简要描述你的应用，帮助用户了解应用的用途"
                 label="应用描述"
                 rows="3"
-              ></v-textarea>
+              />
 
               <v-text-field
                 v-model="form.homepage_url"
-                :rules="[
-                  v => !v || /^https?:\/\/.+/.test(v) || '请输入有效的URL（以http://或https://开头）'
-                ]"
                 class="mb-4"
                 hint="你的应用的完整URL"
                 label="应用主页"
-              ></v-text-field>
+                :rules="[
+                  v => !v || /^https?:\/\/.+/.test(v) || '请输入有效的URL（以http://或https://开头）'
+                ]"
+              />
 
               <!-- 回调设置 -->
               <h2 class="text-h6 mb-4 mt-6">回调设置</h2>
@@ -64,21 +62,21 @@
               <div v-for="(uri, index) in form.redirect_uris" :key="index" class="d-flex mb-2">
                 <v-text-field
                   v-model="form.redirect_uris[index]"
+                  class="mr-2"
+                  label="授权回调URL"
+                  required
                   :rules="[
                     v => !!v || '回调URL是必填的',
                     v => /^https?:\/\/.+/.test(v) || '请输入有效的URL（以http://或https://开头）'
                   ]"
-                  class="mr-2"
-                  label="授权回调URL"
-                  required
-                ></v-text-field>
+                />
                 <v-btn
-                  :disabled="form.redirect_uris.length === 1"
                   color="error"
+                  :disabled="form.redirect_uris.length === 1"
                   icon="mdi-delete"
                   variant="text"
                   @click="removeRedirectUri(index)"
-                ></v-btn>
+                />
               </div>
 
               <v-btn
@@ -90,55 +88,65 @@
                 添加回调URL
               </v-btn>
 
+              <v-divider class="my-6" />
+
+              <OAuthScopeSelector
+                ref="scopeSelector"
+                description="客户端授权 URL 中的 scope 必须是这些权限的子集；用户最终授予的访问令牌只会包含授权页确认的权限。"
+                :model-value="form.scopes"
+                title="应用可请求权限"
+                @error="showError('加载权限目录失败')"
+              />
+
               <!-- 高级设置 -->
               <h2 class="text-h6 mb-4 mt-6">高级设置</h2>
 
               <v-text-field
                 v-model="form.webhook_url"
-                :rules="[
-                  v => !v || /^https?:\/\/.+/.test(v) || '请输入有效的URL（以http://或https://开头）'
-                ]"
                 class="mb-4"
                 hint="接收应用相关事件通知的URL"
                 label="Webhook URL"
-              ></v-text-field>
+                :rules="[
+                  v => !v || /^https?:\/\/.+/.test(v) || '请输入有效的URL（以http://或https://开头）'
+                ]"
+              />
 
 
               <v-text-field
                 v-model="form.terms_url"
-                :rules="[
-                  v => !v || /^https?:\/\/.+/.test(v) || '请输入有效的URL（以http://或https://开头）'
-                ]"
                 class="mb-4"
                 hint="应用服务条款页面的URL"
                 label="服务条款URL"
-              ></v-text-field>
-
-              <v-text-field
-                v-model="form.privacy_url"
                 :rules="[
                   v => !v || /^https?:\/\/.+/.test(v) || '请输入有效的URL（以http://或https://开头）'
                 ]"
+              />
+
+              <v-text-field
+                v-model="form.privacy_url"
                 class="mb-4"
                 hint="应用隐私政策页面的URL"
                 label="隐私政策URL"
-              ></v-text-field>
+                :rules="[
+                  v => !v || /^https?:\/\/.+/.test(v) || '请输入有效的URL（以http://或https://开头）'
+                ]"
+              />
             </v-card-text>
 
-            <v-divider></v-divider>
+            <v-divider />
 
             <v-card-actions class="pa-4">
-              <v-spacer></v-spacer>
+              <v-spacer />
               <v-btn
-                :to="'/app/oauth/applications'"
                 class="mr-2"
+                :to="'/app/oauth/applications'"
                 variant="outlined"
               >
                 取消
               </v-btn>
               <v-btn
-                :loading="loading"
                 color="primary"
+                :loading="loading"
                 type="submit"
               >
                 保存更改
@@ -150,7 +158,7 @@
         <!-- 应用徽标上传卡片 -->
         <v-card class="mb-4">
           <v-card-title class="text-h6 d-flex align-center">
-            <v-icon class="mr-2" color="primary" icon="mdi-image"></v-icon>
+            <v-icon class="mr-2" color="primary" icon="mdi-image" />
             应用徽标
           </v-card-title>
           <v-card-text>
@@ -162,15 +170,15 @@
                   width="96"
                 >
                   <v-img
-                    :src="logoPreview || s3BucketUrl + '/material/asset/' + application?.logo_url"
                     class="bg-grey-lighten-3"
                     cover
                     height="96"
+                    :src="logoPreview || s3BucketUrl + '/material/asset/' + application?.logo_url"
                     width="96"
                   >
-                    <template v-slot:placeholder>
+                    <template #placeholder>
                       <div class="d-flex align-center justify-center fill-height">
-                        <v-icon color="grey-darken-1" icon="mdi-image" size="48"></v-icon>
+                        <v-icon color="grey-darken-1" icon="mdi-image" size="48" />
                       </div>
                     </template>
                   </v-img>
@@ -187,24 +195,24 @@
               <div class="d-flex flex-column">
                 <v-file-input
                   v-model="logoFile"
-                  :rules="[
-                    v => (!v || !v.length || v[0].size < 2000000) || '徽标大小不能超过2MB'
-                  ]"
                   accept="image/*"
                   class="mb-2"
                   density="comfortable"
                   label="选择图片"
                   placeholder="选择或拖放图片"
                   prepend-icon="mdi-image"
+                  :rules="[
+                    v => (!v || v.length === 0 || v[0].size < 2000000) || '徽标大小不能超过2MB'
+                  ]"
                   show-size
                   variant="outlined"
                   @change="onLogoFileChange"
-                ></v-file-input>
+                />
                 <div v-if="logoFile" class="d-flex align-items-center">
                   <v-btn
-                    :loading="logoUploading"
                     class="mr-2"
                     color="primary"
+                    :loading="logoUploading"
                     prepend-icon="mdi-cloud-upload"
                     @click="uploadLogo"
                   >
@@ -243,12 +251,12 @@
               readonly
               variant="outlined"
             >
-              <template v-slot:append>
+              <template #append>
                 <v-btn
                   icon="mdi-content-copy"
                   variant="text"
                   @click="copyToClipboard(application.client_id)"
-                ></v-btn>
+                />
               </template>
             </v-text-field>
 
@@ -261,17 +269,17 @@
               type="password"
               variant="outlined"
             >
-              <template v-slot:append>
+              <template #append>
                 <v-btn
                   icon="mdi-eye"
                   variant="text"
                   @click="toggleClientSecret"
-                ></v-btn>
+                />
                 <v-btn
                   icon="mdi-content-copy"
                   variant="text"
                   @click="copyToClipboard(application.client_secret)"
-                ></v-btn>
+                />
               </template>
             </v-text-field>
 
@@ -288,7 +296,7 @@
         <!-- OAuth集成指南 -->
         <v-card class="mb-4">
           <v-card-title class="text-h6 d-flex align-center">
-            <v-icon class="mr-2" color="primary" icon="mdi-book-open-page-variant"></v-icon>
+            <v-icon class="mr-2" color="primary" icon="mdi-book-open-page-variant" />
             OAuth 2.0 集成指南
           </v-card-title>
 
@@ -320,7 +328,7 @@
                     client_id={{ application?.client_id }}<br>
                     &redirect_uri={{ form?.redirect_uris?.[0] || "[您的回调URL]" }}<br>
                     &response_type=code<br>
-                    &scope=user:read<br>
+                    &scope={{ oauthScopeString }}<br>
                     &state=[推荐：随机字符串防止CSRF攻击]<br>
                     &code_challenge=[可选：PKCE挑战码]<br>
                     &code_challenge_method=[可选：plain或S256]
@@ -329,8 +337,8 @@
                     color="primary"
                     icon="mdi-content-copy"
                     variant="text"
-                    @click="copyToClipboard('https://api.zcservice.houlang.cloud/oauth/authorize?client_id=' + application?.client_id + '&redirect_uri=' + (form?.redirect_uris?.[0] || '[您的回调URL]') + '&response_type=code&scope=user:read&state=[推荐：随机字符串]')"
-                  ></v-btn>
+                    @click="copyToClipboard(authorizeUrlExample)"
+                  />
                 </div>
                 <div class="mt-3">
                   <p class="text-caption">
@@ -374,13 +382,13 @@
                       icon="mdi-content-copy"
                       variant="text"
                       @click="copyToClipboard(`POST https://api.zcservice.houlang.cloud/oauth/token\nContent-Type: application/x-www-form-urlencoded\n\ngrant_type=authorization_code\ncode=[授权码]\nclient_id=${application?.client_id}\nclient_secret=${application?.client_secret}\nredirect_uri=[您的回调URL]`)"
-                    ></v-btn>
+                    />
                     <v-btn
-                      :icon="showClientSecret ? 'mdi-eye-off' : 'mdi-eye'"
                       color="primary"
+                      :icon="showClientSecret ? 'mdi-eye-off' : 'mdi-eye'"
                       variant="text"
                       @click="toggleClientSecret"
-                    ></v-btn>
+                    />
                   </div>
                 </div>
                 <div class="mt-3">
@@ -393,7 +401,7 @@
   "token_type": "Bearer",
   "expires_in": 3600,
   "refresh_token": "xyz",
-  "scope": "user:read"
+  "scope": "{{ oauthScopeString }}"
 }</pre>
                 </div>
               </v-card>
@@ -416,7 +424,7 @@
                     icon="mdi-content-copy"
                     variant="text"
                     @click="copyToClipboard(`GET https://api.zcservice.houlang.cloud/oauth/userinfo\nAuthorization: Bearer [访问令牌]`)"
-                  ></v-btn>
+                  />
                 </div>
                 <div class="mt-3">
                   <p class="text-caption">
@@ -440,28 +448,22 @@
               <h3 class="text-h6 mb-3">可用权限（Scopes）</h3>
               <v-table density="compact">
                 <thead>
-                <tr>
-                  <th>权限名</th>
-                  <th>说明</th>
-                </tr>
+                  <tr>
+                    <th>权限名</th>
+                    <th>说明</th>
+                    <th>风险</th>
+                  </tr>
                 </thead>
                 <tbody>
-                <tr>
-                  <td><code>user:read</code></td>
-                  <td>读取用户名、显示名、头像和已验证邮箱等账户资料</td>
-                </tr>
-                <tr>
-                  <td><code>project:read</code></td>
-                  <td>读取用户授权范围内的私有项目信息</td>
-                </tr>
-                <tr>
-                  <td><code>project:update</code></td>
-                  <td>修改用户授权范围内的项目内容，不包含删除</td>
-                </tr>
-                <tr>
-                  <td><code>post:create</code></td>
-                  <td>发布推文、回复、引用或转发</td>
-                </tr>
+                  <tr v-for="scope in scopeSummaries" :key="scope.name">
+                    <td><code>{{ scope.name }}</code></td>
+                    <td>{{ scope.description }}</td>
+                    <td>
+                      <v-chip :color="riskColor(scope.risk_level)" label size="x-small">
+                        {{ riskLabel(scope.risk_level) }}
+                      </v-chip>
+                    </td>
+                  </tr>
                 </tbody>
               </v-table>
             </div>
@@ -496,8 +498,8 @@
               type="warning"
               variant="outlined"
             >
-              <template v-slot:prepend>
-                <v-icon icon="mdi-shield-lock"></v-icon>
+              <template #prepend>
+                <v-icon icon="mdi-shield-lock" />
               </template>
               <div class="text-body-1">
                 <strong>安全建议：</strong>
@@ -576,12 +578,12 @@
           </p>
           <v-text-field
             v-model="deleteConfirmation"
-            :rules="[v => v === form.name || '请输入正确的应用名称']"
             label="输入应用名称以确认"
-          ></v-text-field>
+            :rules="[v => v === form.name || '请输入正确的应用名称']"
+          />
         </v-card-text>
         <v-card-actions>
-          <v-spacer></v-spacer>
+          <v-spacer />
           <v-btn
             variant="text"
             @click="deleteDialog = false"
@@ -589,9 +591,9 @@
             取消
           </v-btn>
           <v-btn
+            color="error"
             :disabled="deleteConfirmation !== form.name"
             :loading="loading"
-            color="error"
             @click="deleteApplication"
           >
             删除应用
@@ -604,241 +606,314 @@
   </v-container>
 </template>
 
-<script>
-import axios from '@/axios/axios'
-import {ref, onMounted} from "vue";
-import {get} from "@/services/serverConfig";
-import { useSudoManager } from '@/composables/useSudoManager'
+<script lang="ts">
+  import axios from '@/axios/axios'
+  import OAuthScopeSelector from '@/components/oauth/OAuthScopeSelector.vue'
+  import { useSudoManager } from '@/composables/useSudoManager'
+  import {get} from "@/services/serverConfig";
+  import { getScopeCatalog } from '@/services/tokenService'
 
-export default {
-  data() {
-    return {
-      form: {
-        name: '',
-        description: '',
-        homepage_url: '',
-        redirect_uris: [''],
-        webhook_url: '',
-        logo_url: '',
-        terms_url: '',
-        privacy_url: ''
-      },
-      loading: false,
-      application: null,
-      showClientSecret: false,
-      deleteDialog: false,
-      deleteConfirmation: '',
-      logoFile: null,
-      logoPreview: null,
-      compressedLogoFile: null,
-      logoUploading: false,
-      snackbar: {
-        show: false,
-        text: '',
-        color: 'success'
-      },
-      s3BucketUrl: '',
-      sudoManager: useSudoManager()
-    }
-  },
-
-  methods: {
-    // 加载应用数据
-    async loadApplication() {
-      this.loading = true
-      try {
-        const response = await axios.get(`/oauth/applications/${this.$route.params.client_id}`)
-        this.application = response.data
-        this.form = response.data
-      } catch (error) {
-        this.showError('加载应用信息失败')
-        console.error('Failed to load application:', error)
+  export default {
+    components: {
+      OAuthScopeSelector
+    },
+    emits: ["error"],
+    data() {
+      return {
+        form: {
+          name: '',
+          description: '',
+          homepage_url: '',
+          redirect_uris: [''],
+          scopes: ['user:read'],
+          webhook_url: '',
+          logo_url: '',
+          terms_url: '',
+          privacy_url: ''
+        },
+        loading: false,
+        application: null,
+        showClientSecret: false,
+        deleteDialog: false,
+        deleteConfirmation: '',
+        logoFile: null,
+        logoPreview: null,
+        compressedLogoFile: null,
+        logoUploading: false,
+        snackbar: {
+          show: false,
+          text: '',
+          color: 'success'
+        },
+        scopeCatalog: [],
+        s3BucketUrl: '',
+        sudoManager: useSudoManager()
       }
-      this.loading = false
     },
 
-    // 保存应用
-    async saveApplication() {
-      const {valid} = await this.$refs.formRef.validate()
-
-      if (!valid) {
-        this.showError('请检查表单填写是否正确')
-        return
-      }
-
-      this.loading = true
-      try {
-        const data = this.form
-        await axios.put(`/oauth/applications/${this.$route.params.client_id}`, data)
-        this.showSuccess('应用更新成功')
-        await this.loadApplication()
-      } catch (error) {
-        this.showError('更新应用失败')
-        console.error('Failed to save application:', error)
-      }
-      this.loading = false
-    },
-
-    // 删除应用
-    async deleteApplication() {
-      this.loading = true
-      try {
-        // 请求sudo认证
-        const sudoToken = await this.sudoManager.requireSudo({
-          title: '删除 OAuth 应用',
-          subtitle: `您正在删除OAuth应用"${this.form.name}"。此操作不可逆，请验证您的身份。`,
-          persistent: true
-        });
-
-        await axios.delete(`/oauth/applications/${this.$route.params.client_id}`, {
-          headers: {
-            'X-Sudo-Token': sudoToken
+    computed: {
+      oauthScopeString() {
+        const scopes = Array.isArray(this.form?.scopes) && this.form.scopes.length > 0
+          ? this.form.scopes
+          : ['user:read']
+        return scopes.join(' ')
+      },
+      authorizeUrlExample() {
+        const params = new URLSearchParams({
+          client_id: this.application?.client_id || '[您的客户端ID]',
+          redirect_uri: this.form?.redirect_uris?.[0] || '[您的回调URL]',
+          response_type: 'code',
+          scope: this.oauthScopeString,
+          state: '[推荐：随机字符串]'
+        })
+        return `https://api.zcservice.houlang.cloud/oauth/authorize?${params.toString()}`
+      },
+      scopeSummaries() {
+        const catalogMap = new Map(this.scopeCatalog.map((item) => [item.name, item]))
+        return this.oauthScopeString.split(/\s+/).filter(Boolean).map((name) => {
+          const detail = catalogMap.get(name)
+          return detail || {
+            name,
+            description: '应用声明的自定义权限',
+            risk_level: 'medium'
           }
         })
-        this.showSuccess('应用已删除')
-        this.$router.push("/app/oauth/applications")
-      } catch (error) {
-        if (error.type !== 'cancelled') {
-          this.showError('删除应用失败')
-          console.error('Failed to delete application:', error)
-        }
-      }
-      this.loading = false
-      this.deleteDialog = false
-    },
-
-    // 添加回调URL
-    addRedirectUri() {
-      this.form.redirect_uris.push('')
-    },
-
-    // 删除回调URL
-    removeRedirectUri(index) {
-      this.form.redirect_uris.splice(index, 1)
-    },
-
-    // 复制到剪贴板
-    async copyToClipboard(text) {
-      try {
-        await navigator.clipboard.writeText(text)
-        this.showSuccess('已复制到剪贴板')
-      } catch (error) {
-        this.showError('复制失败')
       }
     },
 
-    // 切换客户端密钥显示状态
-    toggleClientSecret() {
-      this.showClientSecret = !this.showClientSecret
+    async mounted() {
+      this.s3BucketUrl = get('s3.staticurl');
+      await Promise.all([this.loadApplication(), this.loadScopeCatalog()]);
     },
 
-    // 确认删除
-    confirmDelete() {
-      this.deleteDialog = true
-      this.deleteConfirmation = ''
-    },
-
-    // 显示成功消息
-    showSuccess(text) {
-      this.snackbar = {
-        show: true,
-        text,
-        color: 'success'
-      }
-    },
-
-    // 显示错误消息
-    showError(text) {
-      this.snackbar = {
-        show: true,
-        text,
-        color: 'error'
-      }
-    },
-
-    // 处理应用徽标文件选择
-    async onLogoFileChange(event) {
-      const file = event.target.files ? event.target.files[0] : null;
-      if (file instanceof File && file.type.startsWith("image/")) {
-        const { default: Compressor } = await import("compressorjs");
-        new Compressor(file, {
-          quality: 0.8,
-          maxWidth: 500,
-          maxHeight: 500,
-          success: (compressedFile) => {
-            this.logoPreview = URL.createObjectURL(compressedFile);
-            this.compressedLogoFile = compressedFile;
-          },
-          error: (err) => {
-            console.error("图片压缩出错：", err.message);
-            this.$emit('error', {
-              message: "图片压缩出错：" + err.message
-            });
-          },
-        });
-      } else if (file) {
-        this.$emit('error', {
-          message: "请选择有效的图片文件"
-        });
-      }
-
-    },
-
-    // 取消徽标上传
-    cancelLogoUpload() {
+    beforeUnmount() {
       if (this.logoPreview) {
         URL.revokeObjectURL(this.logoPreview)
       }
-      this.logoFile = null
-      this.logoPreview = null
-      this.compressedLogoFile = null
     },
 
-    // 上传徽标到服务器
-    async uploadLogo() {
-      if (!this.compressedLogoFile) return
-
-      const formData = new FormData()
-      formData.append('zcfile', this.compressedLogoFile) // 统一使用 zcfile 作为字段名
-
-      try {
-        this.logoUploading = true
-        const response = await axios.post(
-          `/oauth/applications/${this.$route.params.client_id}/logo`,
-          formData,
-          {
-            headers: {
-              'Content-Type': 'multipart/form-data'
-            }
+    methods: {
+      // 加载应用数据
+      async loadApplication() {
+        this.loading = true
+        try {
+          const response = await axios.get(`/oauth/applications/${this.$route.params.client_id}`)
+          this.application = response.data
+          this.form = {
+            ...response.data,
+            scopes: Array.isArray(response.data?.scopes) && response.data.scopes.length > 0
+              ? response.data.scopes
+              : ['user:read']
           }
-        )
-
-        if (response.data.code === 'success') {
-          this.showSuccess('徽标上传成功')
-          this.cancelLogoUpload() // 清理预览状态
-        } else {
-          throw new Error('上传响应格式错误')
+        } catch (error) {
+          this.showError('加载应用信息失败')
+          console.error('Failed to load application:', error)
         }
-      } catch (error) {
-        console.error('上传徽标失败:', error)
-        this.showError(error.response?.data?.message || error.response?.data?.error || '上传徽标失败，请稍后重试')
-      } finally {
-        this.logoUploading = false
+        this.loading = false
+      },
+
+      // 保存应用
+      async saveApplication() {
+        const {valid} = await this.$refs.formRef.validate()
+
+        if (!valid) {
+          this.showError('请检查表单填写是否正确')
+          return
+        }
+        const selectedScopes = this.$refs.scopeSelector?.getSelectedScopes?.() || this.form.scopes
+        if (!Array.isArray(selectedScopes) || selectedScopes.length === 0) {
+          this.showError('请至少选择一项应用权限')
+          return
+        }
+
+        this.loading = true
+        try {
+          const data = {
+            ...this.form,
+            scopes: selectedScopes
+          }
+          await axios.put(`/oauth/applications/${this.$route.params.client_id}`, data)
+          this.showSuccess('应用更新成功')
+          await this.loadApplication()
+        } catch (error) {
+          this.showError('更新应用失败')
+          console.error('Failed to save application:', error)
+        }
+        this.loading = false
+      },
+
+      // 删除应用
+      async deleteApplication() {
+        this.loading = true
+        try {
+          // 请求sudo认证
+          const sudoToken = await this.sudoManager.requireSudo({
+            title: '删除 OAuth 应用',
+            subtitle: `您正在删除OAuth应用"${this.form.name}"。此操作不可逆，请验证您的身份。`,
+            persistent: true
+          });
+
+          await axios.delete(`/oauth/applications/${this.$route.params.client_id}`, {
+            headers: {
+              'X-Sudo-Token': sudoToken
+            }
+          })
+          this.showSuccess('应用已删除')
+          this.$router.push("/app/oauth/applications")
+        } catch (error) {
+          if (error.type !== 'cancelled') {
+            this.showError('删除应用失败')
+            console.error('Failed to delete application:', error)
+          }
+        }
+        this.loading = false
+        this.deleteDialog = false
+      },
+
+      // 添加回调URL
+      addRedirectUri() {
+        this.form.redirect_uris.push('')
+      },
+
+      // 删除回调URL
+      removeRedirectUri(index) {
+        this.form.redirect_uris.splice(index, 1)
+      },
+
+      // 复制到剪贴板
+      async copyToClipboard(text) {
+        try {
+          await navigator.clipboard.writeText(text)
+          this.showSuccess('已复制到剪贴板')
+        } catch {
+          this.showError('复制失败')
+        }
+      },
+
+      // 切换客户端密钥显示状态
+      toggleClientSecret() {
+        this.showClientSecret = !this.showClientSecret
+      },
+
+      // 确认删除
+      confirmDelete() {
+        this.deleteDialog = true
+        this.deleteConfirmation = ''
+      },
+
+      // 显示成功消息
+      showSuccess(text) {
+        this.snackbar = {
+          show: true,
+          text,
+          color: 'success'
+        }
+      },
+
+      // 显示错误消息
+      showError(text) {
+        this.snackbar = {
+          show: true,
+          text,
+          color: 'error'
+        }
+      },
+
+      async loadScopeCatalog() {
+        try {
+          const response = await getScopeCatalog()
+          this.scopeCatalog = response.data?.data || []
+        } catch (error) {
+          console.error('Failed to load scope catalog:', error)
+        }
+      },
+
+      riskColor(level) {
+        if (level === 'high') return 'error'
+        if (level === 'medium') return 'warning'
+        if (level === 'low') return 'success'
+        return 'primary'
+      },
+
+      riskLabel(level) {
+        if (level === 'high') return '高风险'
+        if (level === 'medium') return '中风险'
+        if (level === 'low') return '低风险'
+        return '普通'
+      },
+
+      // 处理应用徽标文件选择
+      async onLogoFileChange(event) {
+        const file = event.target.files ? event.target.files[0] : null;
+        if (file instanceof File && file.type.startsWith("image/")) {
+          const { default: Compressor } = await import("compressorjs");
+          new Compressor(file, {
+            quality: 0.8,
+            maxWidth: 500,
+            maxHeight: 500,
+            success: (compressedFile) => {
+              this.logoPreview = URL.createObjectURL(compressedFile);
+              this.compressedLogoFile = compressedFile;
+            },
+            error: (err) => {
+              console.error("图片压缩出错：", err.message);
+              this.$emit('error', {
+                message: "图片压缩出错：" + err.message
+              });
+            },
+          });
+        } else if (file) {
+          this.$emit('error', {
+            message: "请选择有效的图片文件"
+          });
+        }
+
+      },
+
+      // 取消徽标上传
+      cancelLogoUpload() {
+        if (this.logoPreview) {
+          URL.revokeObjectURL(this.logoPreview)
+        }
+        this.logoFile = null
+        this.logoPreview = null
+        this.compressedLogoFile = null
+      },
+
+      // 上传徽标到服务器
+      async uploadLogo() {
+        if (!this.compressedLogoFile) return
+
+        const formData = new FormData()
+        formData.append('zcfile', this.compressedLogoFile) // 统一使用 zcfile 作为字段名
+
+        try {
+          this.logoUploading = true
+          const response = await axios.post(
+            `/oauth/applications/${this.$route.params.client_id}/logo`,
+            formData,
+            {
+              headers: {
+                'Content-Type': 'multipart/form-data'
+              }
+            }
+          )
+
+          if (response.data.code === 'success') {
+            this.showSuccess('徽标上传成功')
+            this.cancelLogoUpload() // 清理预览状态
+          } else {
+            throw new Error('上传响应格式错误')
+          }
+        } catch (error) {
+          console.error('上传徽标失败:', error)
+          this.showError(error.response?.data?.message || error.response?.data?.error || '上传徽标失败，请稍后重试')
+        } finally {
+          this.logoUploading = false
+        }
       }
     }
-  },
-
-  async mounted() {
-    this.s3BucketUrl = get('s3.staticurl');
-    this.loadApplication();
-  },
-
-  beforeDestroy() {
-    if (this.logoPreview) {
-      URL.revokeObjectURL(this.logoPreview)
-    }
   }
-}
 </script>
 
 <style scoped>

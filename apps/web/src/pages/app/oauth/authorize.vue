@@ -1,353 +1,479 @@
 <template>
-  <v-container class="pa-4">
+  <v-container class="oauth-authorize py-8" fluid>
     <v-row justify="center">
-      <v-col cols="12" lg="6" md="8" sm="10">
-        <!-- 应用信息卡片 -->
-        <v-card v-if="application" class="mb-4">
-          <v-card-item>
-            <template v-slot:prepend>
-              <v-avatar
-                :image="application.logo_url || '/default-app-logo.png'"
-                class="mr-4"
-                size="64"
-              ></v-avatar>
-            </template>
-            <v-card-title class="text-h5">
-              授权请求
-            </v-card-title>
-            <v-card-subtitle>
-              <span class="font-weight-bold">{{ application.name }}</span> 想要访问您的账号
-            </v-card-subtitle>
-          </v-card-item>
-
-          <v-divider></v-divider>
-
-          <!-- 应用信息 -->
-          <v-card-text class="pt-4">
-            <div class="d-flex align-center mb-4">
-              <v-icon class="mr-2" icon="mdi-web"></v-icon>
-              <a :href="application.homepage_url" class="text-decoration-none" target="_blank">
-                {{ application.homepage_url }}
-              </a>
-            </div>
-            <p class="text-body-1">{{ application.description }}</p>
-          </v-card-text>
-
-          <v-divider></v-divider>
-
-          <!-- 权限列表 -->
-          <v-card-text>
-            <h3 class="text-h6 mb-4">此应用将获得以下权限：</h3>
-            <v-list>
-              <v-list-item
-                v-for="scope in requestedScopes"
-                :key="scope.name"
-                class="mb-2"
-              >
-                <template v-slot:prepend>
-                  <v-icon
-                    :icon="scope.icon"
-                    class="mr-2"
-                    color="primary"
-                  ></v-icon>
-                </template>
-                <template v-slot:append>
-                  <v-chip
-                    :color="riskColor(scope.risk_level)"
-                    size="x-small"
-                    label
-                  >
-                    {{ riskLabel(scope.risk_level) }}
-                  </v-chip>
-                </template>
-                <v-list-item-title class="font-weight-bold">
-                  {{ scope.title }}
-                </v-list-item-title>
-                <v-list-item-subtitle>
-                  {{ scope.description }}
-                </v-list-item-subtitle>
-              </v-list-item>
-            </v-list>
-          </v-card-text>
-
-          <!-- 授权邮箱选择 -->
-          <v-card-text v-if="emails.length > 0">
-            <h3 class="text-h6 mb-4">选择授权邮箱：</h3>
-            <v-select
-              v-model="selectedEmail"
-              :items="emails"
-              class="mb-4"
-              density="comfortable"
-              item-title="email"
-              item-value="email"
-              label="选择要授权的邮箱"
-              variant="outlined"
-            ></v-select>
-          </v-card-text>
-
-          <v-divider></v-divider>
-
-          <!-- 操作按钮 -->
-          <v-card-actions class="pa-4">
-            <v-btn
-              class="mr-2"
-              color="error"
-              variant="outlined"
-              @click="cancel"
-            >
-              取消
-            </v-btn>
-            <v-btn
-              :disabled="!selectedEmail"
-              :loading="loading"
-              color="primary"
-              @click="authorize"
-            >
-              授权应用
-            </v-btn>
-          </v-card-actions>
-        </v-card>
-
-        <!-- 错误提示 -->
+      <v-col cols="12" lg="5" md="7" xl="4">
         <v-alert
           v-if="error"
           class="mb-4"
           closable
           type="error"
           variant="tonal"
+          @click:close="error = null"
         >
           {{ error }}
         </v-alert>
-      </v-col>
-    </v-row>
 
-    <!-- 加载中状态 -->
-    <v-row v-if="loading && !application" justify="center">
-      <v-col class="text-center" cols="12">
-        <v-progress-circular
-          color="primary"
-          indeterminate
-          size="64"
-        ></v-progress-circular>
+        <div v-if="loading && !application" class="loading-state">
+          <v-progress-circular color="primary" indeterminate size="42" />
+          <div class="text-body-2 text-medium-emphasis mt-3">正在加载授权请求</div>
+        </div>
+
+        <v-card v-else-if="application" class="auth-shell" elevation="0">
+          <v-card-text class="auth-content">
+            <div class="brand-row mb-7">
+              <v-avatar
+                class="app-avatar"
+                :image="application.logo_url || '/default-app-logo.png'"
+                rounded="lg"
+                size="56"
+              >
+                <v-icon icon="mdi-application-brackets-outline" size="30" />
+              </v-avatar>
+              <v-icon class="brand-arrow" icon="mdi-arrow-right" size="22" />
+              <v-avatar class="zc-avatar" rounded="lg" size="56">
+                Z
+              </v-avatar>
+            </div>
+
+            <h1 class="auth-title">
+              {{ application.name }} 想访问你的 ZeroCat 账号
+            </h1>
+
+            <div class="account-select mt-5">
+              <v-select
+                v-model="selectedEmail"
+                density="comfortable"
+                :disabled="emails.length === 0"
+                hide-details="auto"
+                item-title="email"
+                item-value="email"
+                :items="emails"
+                label="账号"
+                variant="outlined"
+              >
+                <template #item="{ props, item }">
+                  <v-list-item v-bind="props">
+                    <template #append>
+                      <v-chip v-if="item.raw.primary" color="primary" label size="x-small">
+                        主邮箱
+                      </v-chip>
+                    </template>
+                  </v-list-item>
+                </template>
+              </v-select>
+            </div>
+
+            <v-divider class="my-6" />
+
+            <div class="text-subtitle-1 font-weight-bold mb-2">
+              此应用将可以：
+            </div>
+
+            <v-list class="permission-list" density="comfortable" lines="two">
+              <v-list-item
+                v-for="item in requestedScopeItems"
+                :key="item.name"
+                class="permission-item"
+              >
+                <template #prepend>
+                  <v-icon
+                    :color="isSensitiveScope(item) ? 'error' : 'medium-emphasis'"
+                    :icon="item.icon"
+                    size="22"
+                  />
+                </template>
+
+                <v-list-item-title class="permission-title">
+                  {{ item.title }}
+                  <span v-if="isSensitiveScope(item)" class="sensitive-mark">
+                    敏感
+                  </span>
+                </v-list-item-title>
+                <v-list-item-subtitle>
+                  {{ item.description }}
+                </v-list-item-subtitle>
+              </v-list-item>
+            </v-list>
+
+            <v-divider class="my-6" />
+
+            <div class="meta-list">
+              <div v-if="application.homepage_url" class="meta-row">
+                <span>应用主页</span>
+                <a :href="application.homepage_url" target="_blank">
+                  {{ application.homepage_url }}
+                </a>
+              </div>
+              <div class="meta-row">
+                <span>授权后跳转</span>
+                <strong>{{ redirectHost }}</strong>
+              </div>
+            </div>
+          </v-card-text>
+
+          <v-card-actions class="auth-actions">
+            <v-btn
+              color="primary"
+              size="large"
+              variant="text"
+              @click="cancel"
+            >
+              取消
+            </v-btn>
+            <v-spacer />
+            <v-btn
+              color="primary"
+              :disabled="!canAuthorize"
+              :loading="loading"
+              size="large"
+              variant="flat"
+              @click="authorize"
+            >
+              继续
+            </v-btn>
+          </v-card-actions>
+        </v-card>
       </v-col>
     </v-row>
   </v-container>
 </template>
 
-<script setup>
-import {ref, onMounted, computed} from 'vue'
-import {useRoute, useRouter} from 'vue-router'
-import axios from '@/axios/axios'
-import { getScopeCatalog } from '@/services/tokenService'
+<script setup lang="ts">
+  import { computed, onMounted, ref } from 'vue'
+  import { useRoute, useRouter } from 'vue-router'
+  import axios from '@/axios/axios'
+  import { getScopeCatalog } from '@/services/tokenService'
 
-const route = useRoute()
-const router = useRouter()
+  const route = useRoute()
+  const router = useRouter()
 
-// 状态变量
-const application = ref(null)
-const loading = ref(false)
-const error = ref(null)
-const emails = ref([])
-const selectedEmail = ref(null)
-const scopeCatalog = ref([])
+  const application = ref(null)
+  const loading = ref(false)
+  const error = ref(null)
+  const emails = ref([])
+  const selectedEmail = ref(null)
+  const scopeCatalog = ref([])
 
-// 请求参数
-const clientId = route.query.client_id
-const redirectUri = route.query.redirect_uri
-const scope = route.query.scope
-const state = route.query.state
-const codeChallenge = route.query.code_challenge
-const codeChallengeMethod = route.query.code_challenge_method
-//const responseType = route.query.response_type
+  const clientId = route.query.client_id
+  const redirectUri = route.query.redirect_uri
+  const requestedScopeParam = ref(route.query.scope ? String(route.query.scope) : '')
+  const state = route.query.state
+  const codeChallenge = route.query.code_challenge
+  const codeChallengeMethod = route.query.code_challenge_method
 
-const scopeIconMap = {
-  user: 'mdi-account',
-  project: 'mdi-folder-outline',
-  asset: 'mdi-image-outline',
-  post: 'mdi-post-outline',
-  notification: 'mdi-bell-outline',
-  token: 'mdi-key-outline',
-  oauth_app: 'mdi-application-cog-outline'
-}
+  const scopeIconMap = {
+    user: 'mdi-account-outline',
+    project: 'mdi-folder-outline',
+    asset: 'mdi-image-outline',
+    post: 'mdi-post-outline',
+    notification: 'mdi-bell-outline',
+    token: 'mdi-key-outline',
+    oauth_app: 'mdi-application-cog-outline',
+    comment: 'mdi-comment-outline',
+    follow: 'mdi-account-heart-outline',
+    list: 'mdi-format-list-bulleted',
+    blog: 'mdi-post-outline',
+    cachekv: 'mdi-database-outline',
+    git_sync: 'mdi-source-branch',
+    extension: 'mdi-puzzle-outline',
+    admin: 'mdi-shield-crown-outline'
+  }
 
-const legacyScopeMap = {
-  'user:basic': 'user:read',
-  'user:email': 'user:read',
-  profile: 'user:read'
-}
+  const legacyScopeMap = {
+    'user:basic': 'user:read',
+    'user:email': 'user:read',
+    profile: 'user:read'
+  }
 
-// 计算请求的权限列表
-const requestedScopes = computed(() => {
-  if (!scope) return []
-  const catalogMap = new Map(scopeCatalog.value.map(item => [item.name, item]))
-  return String(scope).split(/\s+/).filter(Boolean).map(s => {
-    const canonical = legacyScopeMap[s] || s
-    const item = catalogMap.get(canonical)
-    if (item) {
-      return {
-        name: canonical,
-        icon: scopeIconMap[item.resource] || 'mdi-shield-key-outline',
-        title: item.title || canonical,
-        description: item.description || canonical,
-        risk_level: item.risk_level || 'medium'
+  const requestedScopeNames = computed(() => {
+    return requestedScopeParam.value
+      .split(/\s+/)
+      .map((name) => legacyScopeMap[name] || name)
+      .filter(Boolean)
+      .filter((name, index, arr) => arr.indexOf(name) === index)
+  })
+
+  const requestedScopeItems = computed(() => {
+    const catalogMap = new Map(scopeCatalog.value.map((item) => [item.name, item]))
+    return requestedScopeNames.value.map((name) => {
+      const item = catalogMap.get(name)
+      if (item) {
+        return {
+          name,
+          icon: scopeIconMap[item.resource] || 'mdi-shield-key-outline',
+          title: item.title || name,
+          description: item.description || name,
+          risk_level: item.risk_level || 'medium'
+        }
       }
-    }
-    return {
-      name: s,
-      icon: 'mdi-shield-key-outline',
-      title: s,
-      description: '应用请求的自定义权限',
-      risk_level: 'medium'
-    }
-  })
-})
-
-const riskColor = (level) => {
-  if (level === 'high') return 'error'
-  if (level === 'medium') return 'warning'
-  if (level === 'low') return 'success'
-  return 'primary'
-}
-
-const riskLabel = (level) => {
-  if (level === 'high') return '高风险'
-  if (level === 'medium') return '中风险'
-  if (level === 'low') return '低风险'
-  return '普通'
-}
-
-// 验证参数
-const validateParams = () => {
-  if (!clientId) {
-    error.value = '缺少必要的client_id参数'
-    return false
-  }
-  if (!redirectUri) {
-    error.value = '缺少必要的redirect_uri参数'
-    return false
-  }
-  //if (responseType !== 'code') {
-  //  error.value = 'response_type必须为code'
-  //  return false
-  //}
-  return true
-}
-
-// 加载应用数据
-const loadApplication = async () => {
-  if (!validateParams()) return
-
-  loading.value = true
-  try {
-    const response = await axios.get(`/oauth/applications/${clientId}`)
-    application.value = response.data
-
-    // 验证回调地址
-    if (!application.value.redirect_uris.includes(redirectUri)) {
-      error.value = '无效的回调地址'
-      application.value = null
-    }
-  } catch (err) {
-    error.value = '无法加载应用信息'
-    console.error('Failed to load application:', err)
-  }
-  loading.value = false
-}
-
-// 加载用户邮箱
-const loadEmails = async () => {
-  try {
-    const response = await axios.get('/oauth/user/emails')
-    emails.value = response.data.map(email => ({
-      email: email.contact_value,
-      primary: email.is_primary
-    }))
-    if (emails.value.length > 0) {
-      // 查找主邮箱并设置为默认选中
-      const primaryEmail = emails.value.find(email => email.primary)
-      selectedEmail.value = primaryEmail ? primaryEmail.email : emails.value[0].email
-    }
-  } catch (err) {
-    console.error('Failed to load emails:', err)
-  }
-}
-
-const loadScopeCatalog = async () => {
-  try {
-    const response = await getScopeCatalog()
-    scopeCatalog.value = response.data?.data || []
-  } catch (err) {
-    console.error('Failed to load scopes:', err)
-  }
-}
-
-// 授权确认
-const authorize = async () => {
-  if (!selectedEmail.value) {
-    error.value = '请选择要授权的邮箱'
-    return
-  }
-
-  loading.value = true
-  try {
-    const response = await axios.post('/oauth/authorize/confirm', {
-      client_id: clientId,
-      redirect_uri: redirectUri,
-      scope,
-      state,
-      authorized_email: selectedEmail.value,
-      code_challenge: codeChallenge,
-      code_challenge_method: codeChallengeMethod
+      const resource = name.split(':')[0]
+      return {
+        name,
+        icon: scopeIconMap[resource] || 'mdi-shield-key-outline',
+        title: name,
+        description: '应用请求的自定义权限',
+        risk_level: 'medium'
+      }
     })
+  })
 
-    // 重定向到应用指定的回调地址
-    if (response.data.redirect_url) {
-      window.location.href = response.data.redirect_url
+  const redirectHost = computed(() => {
+    try {
+      const parsed = new URL(redirectUri)
+      return `${parsed.host}${parsed.pathname}`
+    } catch {
+      return redirectUri || '未提供'
     }
-  } catch (err) {
-    error.value = '授权失败，请重试'
-    console.error('Authorization failed:', err)
+  })
+
+  const canAuthorize = computed(() => {
+    return Boolean(selectedEmail.value && requestedScopeItems.value.length > 0)
+  })
+
+  function isSensitiveScope (item: { risk_level?: string } | null | undefined) {
+    return item?.risk_level === 'high'
   }
-  loading.value = false
-}
 
-// 取消授权
-const cancel = () => {
-  const errorParams = new URLSearchParams({
-    error: 'access_denied',
-    error_description: '用户拒绝了应用程序的访问请求',
-    state: state || ''
-  })
-
-  // 如果是本地错误，跳转到错误页面
-  router.push({
-    path: '/app/oauth/error',
-    query: {
-      error: 'access_denied',
-      error_description: '用户拒绝了应用程序的访问请求',
-      state: state || ''
+  function validateParams () {
+    if (!clientId) {
+      error.value = '缺少必要的 client_id 参数'
+      return false
     }
-  })
-}
+    if (!redirectUri) {
+      error.value = '缺少必要的 redirect_uri 参数'
+      return false
+    }
+    return true
+  }
 
-// 页面加载时获取数据
-onMounted(() => {
-  loadApplication()
-  loadEmails()
-  loadScopeCatalog()
-})
+  async function loadApplication () {
+    if (!validateParams()) return
+
+    loading.value = true
+    try {
+      const response = await axios.get(`/oauth/applications/${clientId}`)
+      application.value = response.data
+
+      if (!requestedScopeParam.value) {
+        requestedScopeParam.value = Array.isArray(response.data?.scopes)
+          ? response.data.scopes.join(' ')
+          : 'user:read'
+      }
+
+      if (
+        Array.isArray(application.value.redirect_uris) &&
+        !application.value.redirect_uris.includes(redirectUri)
+      ) {
+        error.value = '无效的回调地址'
+        application.value = null
+      }
+    } catch (error_) {
+      error.value = '无法加载应用信息'
+      console.error('Failed to load application:', error_)
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function loadEmails () {
+    try {
+      const response = await axios.get('/oauth/user/emails')
+      emails.value = response.data.map((email) => ({
+        email: email.contact_value,
+        primary: email.is_primary
+      }))
+      if (emails.value.length > 0) {
+        const primaryEmail = emails.value.find((email) => email.primary)
+        selectedEmail.value = primaryEmail ? primaryEmail.email : emails.value[0].email
+      }
+    } catch (error_) {
+      console.error('Failed to load emails:', error_)
+    }
+  }
+
+  async function loadScopeCatalog () {
+    try {
+      const response = await getScopeCatalog()
+      scopeCatalog.value = response.data?.data || []
+    } catch (error_) {
+      console.error('Failed to load scopes:', error_)
+    }
+  }
+
+  async function authorize () {
+    if (!canAuthorize.value) {
+      error.value = '请选择授权邮箱和至少一项权限'
+      return
+    }
+
+    loading.value = true
+    try {
+      const response = await axios.post('/oauth/authorize/confirm', {
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        scope: requestedScopeItems.value.map((item) => item.name).join(' '),
+        state,
+        authorized_email: selectedEmail.value,
+        code_challenge: codeChallenge,
+        code_challenge_method: codeChallengeMethod
+      })
+
+      if (response.data.redirect_url) {
+        window.location.href = response.data.redirect_url
+      }
+    } catch (error_) {
+      error.value = error_.response?.data?.error_description || error_.response?.data?.error || '授权失败，请重试'
+      console.error('Authorization failed:', error_)
+    } finally {
+      loading.value = false
+    }
+  }
+
+  function cancel () {
+    router.push({
+      path: '/app/oauth/error',
+      query: {
+        error: 'access_denied',
+        error_description: '用户拒绝了应用程序的访问请求',
+        state: state || ''
+      }
+    })
+  }
+
+  onMounted(async () => {
+    await Promise.all([
+      loadApplication(),
+      loadEmails(),
+      loadScopeCatalog()
+    ])
+  })
 </script>
 
 <style scoped>
-.v-card {
-  border: 1px solid rgba(0, 0, 0, 0.12);
+.oauth-authorize {
+  min-height: 100vh;
+  background: rgb(var(--v-theme-background));
 }
 
-.v-list-item {
+.loading-state {
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.auth-shell {
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   border-radius: 8px;
+  overflow: hidden;
+  background: rgb(var(--v-theme-surface));
 }
 
-.v-list-item:hover {
-  background-color: rgba(var(--v-theme-primary), 0.05);
+.auth-content {
+  padding: 40px 40px 24px;
+}
+
+.brand-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.app-avatar,
+.zc-avatar {
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  background: rgb(var(--v-theme-surface));
+}
+
+.zc-avatar {
+  font-weight: 700;
+  color: rgb(var(--v-theme-primary));
+}
+
+.brand-arrow {
+  color: rgba(var(--v-theme-on-surface), 0.62);
+}
+
+.auth-title {
+  max-width: 420px;
+  margin: 0 auto;
+  font-size: 1.75rem;
+  font-weight: 500;
+  line-height: 1.25;
+  text-align: center;
+  letter-spacing: 0;
+}
+
+.account-select {
+  max-width: 420px;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.permission-list {
+  padding: 0;
+  background: transparent;
+}
+
+.permission-item {
+  padding-inline: 0;
+}
+
+.permission-title {
+  white-space: normal;
+}
+
+.sensitive-mark {
+  margin-left: 8px;
+  color: rgb(var(--v-theme-error));
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.meta-list {
+  display: grid;
+  gap: 10px;
+  font-size: 0.875rem;
+}
+
+.meta-row {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.meta-row span {
+  color: rgba(var(--v-theme-on-surface), 0.62);
+}
+
+.meta-row a,
+.meta-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 500;
+}
+
+.auth-actions {
+  padding: 16px 32px 28px;
+}
+
+@media (max-width: 600px) {
+  .auth-content {
+    padding: 28px 22px 16px;
+  }
+
+  .auth-title {
+    font-size: 1.45rem;
+  }
+
+  .auth-actions {
+    padding: 12px 18px 22px;
+  }
+
+  .auth-actions .v-btn {
+    width: 100%;
+  }
 }
 </style>
