@@ -35,7 +35,7 @@
                 最新
               </button>
               <button
-                v-if="isLogin"
+                v-if="showAuthenticatedUI"
                 class="header-tab"
                 :class="{ 'header-tab--active': feedType === 'following' }"
                 @click="feedType = 'following'"
@@ -54,7 +54,7 @@
 
           <!-- Post Composer -->
           <PostComposer
-            v-if="isLogin"
+            v-if="showAuthenticatedUI"
             ref="composerRef"
             :submit="submitPost"
             placeholder="有什么新鲜事？"
@@ -62,8 +62,13 @@
             class="feed-composer"
           />
 
+          <!-- Auth loading skeleton -->
+          <div v-else-if="authPending" class="feed-composer feed-composer--skeleton">
+            <v-skeleton-loader type="list-item-avatar-two-line" />
+          </div>
+
           <!-- Login Prompt -->
-          <div v-else class="feed-login-prompt">
+          <div v-else-if="showGuestUI" class="feed-login-prompt">
             <div class="login-prompt-content">
               <h2 class="login-prompt-title">加入对话</h2>
               <p class="login-prompt-text">登录后即可发帖、点赞、转推和回复。</p>
@@ -138,6 +143,7 @@ import MixedFeedList from '@/components/feed/MixedFeedList.vue';
 import UnifiedSidebar from '@/components/sidebar/UnifiedSidebar.vue';
 import HomeRightSidebar from '@/components/home/HomeRightSidebar.vue';
 import PageAnalytics from '@/components/analytics/PageAnalytics.vue';
+import { useAccountState } from '@/composables/useAccountState';
 
 // Head meta
 useSeo({
@@ -159,7 +165,7 @@ const recommendOffset = ref(0); // Gorse 推荐接口使用 offset 分页
 const hasMore = ref(true);
 const feedType = ref('recommend');
 
-const isLogin = computed(() => localuser.isLogin.value);
+const { isLogin, authPending, showGuestUI, showAuthenticatedUI } = useAccountState();
 
 // Focus composer (called from sidebar)
 const focusComposer = () => {
@@ -396,6 +402,11 @@ onMounted(() => {
 /* Composer */
 .feed-composer {
   border-bottom: none;
+}
+
+.feed-composer--skeleton {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08);
 }
 
 /* Login Prompt */

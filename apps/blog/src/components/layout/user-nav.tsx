@@ -23,7 +23,11 @@ export function UserNav() {
   const user = useCurrentUser();
 
   if (!ready) {
-    return <div className="h-9 w-9 rounded-full bg-secondary animate-pulse" />;
+    return (
+      <div className="flex items-center gap-2">
+        <div className="h-8 w-8 rounded-full bg-muted animate-pulse" />
+      </div>
+    );
   }
 
   if (!isAuthed) {

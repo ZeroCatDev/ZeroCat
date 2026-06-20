@@ -42,7 +42,7 @@
 
       <!-- Post Button -->
       <button
-        v-if="isLogin"
+        v-if="isLogin && !authPending"
         class="post-button"
         @click="openComposer"
       >
@@ -61,7 +61,7 @@
 
       <!-- User Profile (when logged in) -->
       <router-link
-        v-if="isLogin && user"
+        v-if="isLogin && user && !authPending"
         :to="`/${user.username}`"
         class="user-profile"
       >
@@ -74,6 +74,7 @@
         </div>
         <v-icon class="user-menu-icon">mdi-dots-horizontal</v-icon>
       </router-link>
+      <AccountUserSkeleton v-else-if="authPending" variant="profile" />
     </div>
   </nav>
 </template>
@@ -82,6 +83,8 @@
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useTheme } from 'vuetify';
+import { useAccountState } from '@/composables/useAccountState';
+import AccountUserSkeleton from '@/components/account/AccountUserSkeleton.vue';
 import { localuser } from '@/services/localAccount';
 
 const emit = defineEmits(['open-composer']);
@@ -89,8 +92,7 @@ const emit = defineEmits(['open-composer']);
 const route = useRoute();
 const theme = useTheme();
 
-const isLogin = computed(() => localuser.isLogin.value);
-const user = computed(() => localuser.user.value);
+const { isLogin, user, authPending } = useAccountState();
 const isDark = computed(() => theme.global.name.value === 'dark');
 
 const avatarUrl = computed(() => {
@@ -115,7 +117,7 @@ const navItems = computed(() => {
       { name: 'profile', label: '个人主页', icon: 'mdi-account-outline', to: user.value ? `/${user.value.username}` : '/app/account' },
       { name: 'settings', label: '设置', icon: 'mdi-cog-outline', to: '/app/account' }
     );
-  } else {
+  } else if (!authPending.value) {
     items.push(
       { name: 'login', label: '登录', icon: 'mdi-login', to: '/app/account/login' },
       { name: 'register', label: '注册', icon: 'mdi-account-plus-outline', to: '/app/account/register' }

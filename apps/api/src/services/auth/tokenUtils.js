@@ -299,17 +299,75 @@ function resolveRefreshCookieSecure(req) {
     return Boolean(req?.secure) || process.env.NODE_ENV === 'production';
 }
 
-function buildRefreshCookieBaseOptions(res) {
-    const req = res?.req;
-    const domain = resolveRefreshCookieDomain(req);
-
+function buildRefreshCookieSharedOptions(res) {
     return {
         httpOnly: true,
-        secure: resolveRefreshCookieSecure(req),
+        secure: resolveRefreshCookieSecure(res?.req),
         sameSite: 'lax',
         path: '/account',
-        ...(domain ? {domain} : {}),
     };
+}
+
+/** 列出 refresh_token 可能存在的 cookie 作用域（host-only + 根域），用于清除遗留重复 cookie */
+function buildRefreshCookieClearVariants(res) {
+    const shared = buildRefreshCookieSharedOptions(res);
+    const domain = resolveRefreshCookieDomain(res?.req);
+    const variants = [{ ...shared }];
+    if (domain) {
+        variants.push({ ...shared, domain });
+    }
+    return variants;
+}
+
+function buildRefreshCookieBaseOptions(res) {
+    const shared = buildRefreshCookieSharedOptions(res);
+    const domain = resolveRefreshCookieDomain(res?.req);
+    return {
+        ...shared,
+        ...(domain ? { domain } : {}),
+    };
+}
+
+/**
+ * 清除所有可能作用域下的 refresh_token cookie（host-only 与根域）
+ * @param {object} res Express response 对象
+ */
+export function clearAllRefreshTokenCookies(res) {
+    for (const options of buildRefreshCookieClearVariants(res)) {
+        res.clearCookie('refresh_token', options);
+    }
+}
+
+/**
+ * 从请求 Cookie 头解析 refresh_token；存在多个同名 cookie 时优先 zc_ 新格式
+ * @param {object} req Express request 对象
+ * @returns {{ fromCookie: boolean, refresh_token: string | undefined, duplicateCount: number }}
+ */
+export function extractRefreshTokenFromRequest(req) {
+    const raw = req.headers?.cookie || '';
+    const values = [];
+    for (const part of raw.split(';')) {
+        const trimmed = part.trim();
+        if (!trimmed.startsWith('refresh_token=')) continue;
+        try {
+            const value = decodeURIComponent(trimmed.slice('refresh_token='.length));
+            if (value) values.push(value);
+        } catch {
+            // ignore malformed value
+        }
+    }
+
+    if (values.length > 0) {
+        const preferred = values.find((v) => v.startsWith('zc_')) || values[values.length - 1];
+        return { fromCookie: true, refresh_token: preferred, duplicateCount: values.length };
+    }
+
+    const fromParser = req.cookies?.refresh_token;
+    if (fromParser) {
+        return { fromCookie: true, refresh_token: fromParser, duplicateCount: 1 };
+    }
+
+    return { fromCookie: false, refresh_token: req.body?.refresh_token, duplicateCount: 0 };
 }
 
 /**
@@ -321,6 +379,8 @@ function buildRefreshCookieBaseOptions(res) {
 export function setRefreshTokenCookie(res, refreshToken, refreshExpiresAt) {
     const maxAge = new Date(refreshExpiresAt).getTime() - Date.now();
     const baseOptions = buildRefreshCookieBaseOptions(res);
+    // 清除 host-only / 根域遗留 cookie，避免浏览器携带两个 refresh_token
+    clearAllRefreshTokenCookies(res);
     res.cookie('refresh_token', refreshToken, {
         ...baseOptions,
         maxAge: Math.max(0, maxAge),
@@ -332,10 +392,7 @@ export function setRefreshTokenCookie(res, refreshToken, refreshExpiresAt) {
  * @param {object} res Express response 对象
  */
 export function clearRefreshTokenCookie(res) {
-    const baseOptions = buildRefreshCookieBaseOptions(res);
-    res.clearCookie('refresh_token', {
-        ...baseOptions,
-    });
+    clearAllRefreshTokenCookies(res);
 }
 
 /**
@@ -368,6 +425,8 @@ export default {
     generateLoginResponse,
     setRefreshTokenCookie,
     clearRefreshTokenCookie,
+    clearAllRefreshTokenCookies,
+    extractRefreshTokenFromRequest,
     parseDeviceInfo,
     generateToken,
 };

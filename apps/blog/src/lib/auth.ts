@@ -19,6 +19,20 @@ const DEFAULT_ZC_WEB_URL = "http://localhost:3141";
 
 let hydratePromise: Promise<void> | null = null;
 
+function hasStoredAuthHint(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return (
+      !!getStoredToken() ||
+      !!window.localStorage.getItem(USER_INFO_KEY) ||
+      !!window.localStorage.getItem("refreshTokenExpiresAt") ||
+      !!window.localStorage.getItem("tokenExpiresAt")
+    );
+  } catch {
+    return false;
+  }
+}
+
 function setLocalStorageValue(key: string, value: string | null) {
   try {
     if (value === null || value === "") {
@@ -139,24 +153,30 @@ export function buildZcLoginUrl(redirectUrl?: string): string {
 
 export function useAuthToken() {
   const [token, setToken] = useState<string | null>(() => getStoredToken());
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(() => !hasStoredAuthHint());
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
     let cancelled = false;
 
-    if (!hydratePromise) {
-      hydratePromise = hydrateAuthState().finally(() => {
-        hydratePromise = null;
+    if (hasStoredAuthHint()) {
+      if (!hydratePromise) {
+        hydratePromise = hydrateAuthState().finally(() => {
+          hydratePromise = null;
+        });
+      }
+
+      void hydratePromise.finally(() => {
+        if (cancelled) return;
+        setToken(getStoredToken());
+        setReady(true);
+
+        // #region agent log
+        fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9c6b7d'},body:JSON.stringify({sessionId:'9c6b7d',location:'auth.ts:useAuthToken:ready',message:'blog auth ready',data:{hasToken:!!getStoredToken(),hasHint:hasStoredAuthHint()},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
       });
     }
-
-    void hydratePromise.finally(() => {
-      if (cancelled) return;
-      setToken(getStoredToken());
-      setReady(true);
-    });
 
     const onStorage = (e: StorageEvent) => {
       if (e.key === TOKEN_KEY) setToken(e.newValue);
@@ -225,17 +245,19 @@ export function useCurrentUser(): StoredUserInfo | null {
 
     let cancelled = false;
 
-    if (!hydratePromise) {
-      hydratePromise = hydrateAuthState().finally(() => {
-        hydratePromise = null;
+    if (hasStoredAuthHint()) {
+      if (!hydratePromise) {
+        hydratePromise = hydrateAuthState().finally(() => {
+          hydratePromise = null;
+        });
+      }
+
+      void hydratePromise.finally(() => {
+        if (!cancelled) {
+          setUser(readStoredUser());
+        }
       });
     }
-
-    void hydratePromise.finally(() => {
-      if (!cancelled) {
-        setUser(readStoredUser());
-      }
-    });
 
     const onStorage = (e: StorageEvent) => {
       if (e.key === USER_INFO_KEY) {

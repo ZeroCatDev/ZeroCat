@@ -12,13 +12,14 @@
         >
           <v-icon :icon="isDark ? 'mdi-weather-sunny' : 'mdi-weather-night'" />
         </v-btn>
-        <router-link v-if="isLogin && user" :to="`/${user.username}`" class="drawer-user-link" v-ripple>
+        <router-link v-if="isLogin && user && !authPending" :to="`/${user.username}`" class="drawer-user-link" v-ripple>
           <v-avatar size="40">
             <v-img :src="userAvatar" alt="avatar" />
           </v-avatar>
           <div class="drawer-user-name">{{ user.display_name || user.username }}</div>
           <div class="drawer-user-handle">@{{ user.username }}</div>
         </router-link>
+        <AccountUserSkeleton v-else-if="authPending" variant="profile" />
       </div>
 
       <!-- Logo (独立侧栏模式) -->
@@ -49,7 +50,7 @@
 
       <!-- Post Button -->
       <v-btn
-        v-if="isLogin"
+        v-if="isLogin && !authPending"
         color="primary"
         :size="isSmallScreen ? 'large' : 'x-large'"
         rounded="pill"
@@ -71,7 +72,7 @@
         </button>
 
         <router-link
-          v-if="isLogin && user"
+          v-if="isLogin && user && !authPending"
           :to="`/${user.username}`"
           class="user-profile"
           v-ripple
@@ -85,6 +86,7 @@
           </div>
           <v-icon class="user-menu-icon">mdi-dots-horizontal</v-icon>
         </router-link>
+        <AccountUserSkeleton v-else-if="authPending" variant="profile" />
       </template>
     </div>
   </nav>
@@ -95,6 +97,7 @@ import { computed, onMounted } from 'vue';
 import { useDisplay } from 'vuetify';
 import { useSidebarContent } from '@/composables/useSidebarContent';
 import { openPostDialog } from '@/composables/usePostDialog';
+import AccountUserSkeleton from '@/components/account/AccountUserSkeleton.vue';
 
 const props = defineProps({
   mode: {
@@ -114,6 +117,7 @@ const isSmallScreen = computed(() => (display.width?.value ?? window.innerWidth)
 const {
   isLogin,
   user,
+  authPending,
   userAvatar,
   isDark,
   unifiedNavItems,

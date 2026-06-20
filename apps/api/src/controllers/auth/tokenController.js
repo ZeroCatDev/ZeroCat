@@ -3,7 +3,10 @@ import authUtils from "../../services/auth/auth.js";
 import {prisma} from "../../services/prisma.js";
 import ipLocation from "../../services/ip/ipLocation.js";
 import zcconfig from "../../services/config/zcconfig.js";
-import { setRefreshTokenCookie } from "../../services/auth/tokenUtils.js";
+import {
+    extractRefreshTokenFromRequest,
+    setRefreshTokenCookie,
+} from "../../services/auth/tokenUtils.js";
 
 /**
  * 验证 Origin/Referer 是否在允许的来源列表中（CSRF 防护）
@@ -67,10 +70,7 @@ async function validateOriginForCSRF(req) {
 export const refreshToken = async (req, res) => {
     try {
         // 优先从 cookie 读取 refresh token，回退到 body（兼容非浏览器客户端）
-        const fromCookie = !!(req.cookies && req.cookies.refresh_token);
-        const refresh_token = fromCookie
-            ? req.cookies.refresh_token
-            : req.body.refresh_token;
+        const { fromCookie, refresh_token } = extractRefreshTokenFromRequest(req);
 
         if (!refresh_token) {
             return res.status(400).json({

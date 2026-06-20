@@ -3,6 +3,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useTheme } from 'vuetify';
 import { localuser } from '@/services/localAccount';
 import { get } from '@/services/serverConfig';
+import { useAccountState } from '@/composables/useAccountState';
 
 /**
  * 统一侧边栏内容提供者
@@ -18,8 +19,7 @@ export function useSidebarContent() {
     proxyEnabled.value = get('scratchproxy.enabled') || false;
   };
 
-  const isLogin = computed(() => localuser.isLogin.value);
-  const user = computed(() => localuser.user.value);
+  const { isLogin, user, authPending, showGuestUI } = useAccountState();
 
   const userAvatar = computed(() => {
     try {
@@ -84,7 +84,7 @@ export function useSidebarContent() {
       { name: 'services', label: '云服务', icon: 'mdi-cloud-outline', to: '/app/services' },
     );
 
-    if (!isLogin.value) {
+    if (!isLogin.value && !authPending.value) {
       items.push(
         { name: 'login', label: '登录', icon: 'mdi-login', to: '/app/account/login' },
         { name: 'register', label: '注册', icon: 'mdi-account-plus-outline', to: '/app/account/register' },
@@ -105,6 +105,8 @@ export function useSidebarContent() {
   return {
     isLogin,
     user,
+    authPending,
+    showGuestUI,
     userAvatar,
     isDark,
     proxyEnabled,

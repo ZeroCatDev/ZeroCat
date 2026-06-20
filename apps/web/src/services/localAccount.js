@@ -6,6 +6,8 @@ const store = useAuthStore(pinia);
 const {
   user,
   isLogin,
+  authReady,
+  hasAuthHint,
   devices,
   activeTokens,
   currentTokenDetails,
@@ -19,6 +21,12 @@ export const localuser = {
   },
   get isLogin() {
     return isLogin;
+  },
+  get authReady() {
+    return authReady;
+  },
+  get hasAuthHint() {
+    return hasAuthHint;
   },
 
   // Original functions

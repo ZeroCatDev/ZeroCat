@@ -80,7 +80,12 @@
       <!-- 用户菜单 -->
       <v-menu :close-on-content-click="false" location="bottom">
         <template #activator="{ props, isActive }">
-          <template v-if="localuser.isLogin.value">
+          <AccountUserSkeleton
+            v-if="authPending"
+            variant="header"
+            :avatar-size="40"
+          />
+          <template v-else-if="localuser.isLogin.value">
             <v-btn icon v-bind="props">
               <v-badge
                 v-if="unreadCount > 0"
@@ -254,12 +259,14 @@ import { get, fetchConfig } from "@/services/serverConfig";
 import { useNotificationStore } from "@/stores/notification";
 import { useAuthStore } from "@/stores/auth";
 import { openPostDialog } from '@/composables/usePostDialog';
+import { useAccountState } from '@/composables/useAccountState';
+import AccountUserSkeleton from '@/components/account/AccountUserSkeleton.vue';
 
 export default {
   components: {
     NotificationsCard,
     SearchDialog,
-
+    AccountUserSkeleton,
   },
   props: {},
   emits: ['toggle-drawer', 'tab-switched', 'tab-added', 'tab-removing', 'tab-removed'],
@@ -275,6 +282,7 @@ export default {
     const notificationStore = useNotificationStore();
     const authStore = useAuthStore();
     const { unreadCount } = storeToRefs(notificationStore);
+    const { authPending } = useAccountState();
 
     // 监听登录状态变化
     watch(
@@ -313,6 +321,7 @@ export default {
       fetchUnreadCount,
       localuser,
       authStore,
+      authPending,
       s3BucketUrl: "",
     };
   },

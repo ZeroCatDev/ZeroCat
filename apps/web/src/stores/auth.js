@@ -242,6 +242,43 @@ const DEFAULT_USER = {
   username: "virtual",
 };
 
+const readCachedUserSync = () => {
+  try {
+    const cached = localStorage.getItem(USER_INFO_KEY);
+    if (!cached) return null;
+    const parsed = JSON.parse(cached);
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const hasStoredAuthHintSync = () => {
+  try {
+    return (
+      !!authClient.getStoredToken() ||
+      !!localStorage.getItem(USER_INFO_KEY) ||
+      !!localStorage.getItem(REFRESH_TOKEN_EXPIRES_AT_KEY) ||
+      !!localStorage.getItem(TOKEN_EXPIRES_AT_KEY)
+    );
+  } catch {
+    return false;
+  }
+};
+
+const createInitialAuthState = () => {
+  const cached = readCachedUserSync();
+  const hasHint = hasStoredAuthHintSync();
+  const hasToken = !!authClient.getStoredToken();
+
+  return {
+    user: cached ? { ...DEFAULT_USER, ...cached } : { ...DEFAULT_USER },
+    isLogin: !!(hasToken || cached),
+    hasHint,
+  };
+};
+
 /**
  * Token refresh scheduler.
  *
@@ -297,8 +334,11 @@ export const useAuthStore = defineStore("auth", () => {
   const refreshTokenExpiresAt = ref(
     localStorage.getItem(REFRESH_TOKEN_EXPIRES_AT_KEY)
   );
-  const user = ref({ ...DEFAULT_USER });
-  const isLogin = ref(false);
+  const initialAuthState = createInitialAuthState();
+  const user = ref(initialAuthState.user);
+  const isLogin = ref(initialAuthState.isLogin);
+  const hasAuthHint = ref(initialAuthState.hasHint);
+  const authReady = ref(!initialAuthState.hasHint);
   const devices = ref([]);
   const activeTokens = ref([]);
   const currentTokenDetails = ref(null);
@@ -776,6 +816,8 @@ export const useAuthStore = defineStore("auth", () => {
     refreshTokenExpiresAt.value = null;
     user.value = { ...DEFAULT_USER };
     isLogin.value = false;
+    hasAuthHint.value = false;
+    authReady.value = true;
     devices.value = [];
     activeTokens.value = [];
     currentTokenDetails.value = null;
@@ -1036,40 +1078,43 @@ export const useAuthStore = defineStore("auth", () => {
 
   installListenersOnce();
 
-  const hasBootstrapHint = () => {
-    try {
-      return (
-        !!localStorage.getItem(USER_INFO_KEY) ||
-        !!localStorage.getItem(REFRESH_TOKEN_EXPIRES_AT_KEY) ||
-        !!localStorage.getItem(TOKEN_EXPIRES_AT_KEY)
-      );
-    } catch {
-      return false;
-    }
-  };
+  const hasBootstrapHint = () => hasStoredAuthHintSync();
 
   // Sequential initialization: attempt startup recovery first, then start refresh cycle.
   // Goal: after a hard refresh, recover login state via HttpOnly refresh cookie.
   const bootstrapAuth = async () => {
-    const t = getToken();
-    if (t) {
-      await loadUser();
-      await initializeTokenRefresh();
-      return;
-    }
+    // #region agent log
+    fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9c6b7d'},body:JSON.stringify({sessionId:'9c6b7d',location:'auth.js:bootstrapAuth:start',message:'auth bootstrap start',data:{optimisticLogin:isLogin.value,hasHint:hasAuthHint.value,hasToken:!!getToken()},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
 
-    // Only attempt refresh if we have a hint that the user previously logged in.
-    if (hasBootstrapHint()) {
-      console.log("[Auth] No access token on init, attempting cookie refresh...");
-      const ok = await refreshAccessToken();
-      if (ok) {
-        await loadUser(true);
+    try {
+      const t = getToken();
+      if (t) {
+        await loadUser();
         await initializeTokenRefresh();
         return;
       }
-    }
 
-    await loadUser();
+      // Only attempt refresh if we have a hint that the user previously logged in.
+      if (hasBootstrapHint()) {
+        console.log("[Auth] No access token on init, attempting cookie refresh...");
+        const ok = await refreshAccessToken();
+        if (ok) {
+          await loadUser(true);
+          await initializeTokenRefresh();
+          return;
+        }
+      }
+
+      await loadUser();
+    } finally {
+      hasAuthHint.value = hasStoredAuthHintSync();
+      authReady.value = true;
+
+      // #region agent log
+      fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9c6b7d'},body:JSON.stringify({sessionId:'9c6b7d',location:'auth.js:bootstrapAuth:done',message:'auth bootstrap done',data:{isLogin:isLogin.value,authReady:authReady.value,hasHint:hasAuthHint.value,username:user.value?.username},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
+    }
   };
 
   void bootstrapAuth().catch((err) =>
@@ -1084,6 +1129,8 @@ export const useAuthStore = defineStore("auth", () => {
     refreshTokenExpiresAt,
     user,
     isLogin,
+    authReady,
+    hasAuthHint,
     devices,
     activeTokens,
     currentTokenDetails,
