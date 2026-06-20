@@ -79,7 +79,6 @@
           <v-tab value="antispam" class="text-none">反垃圾</v-tab>
           <v-tab value="captcha" class="text-none">验证码</v-tab>
           <v-tab value="notification" class="text-none">通知渠道</v-tab>
-          <v-tab value="markdown" class="text-none">Markdown</v-tab>
           <v-tab value="data" class="text-none">数据管理</v-tab>
         </v-tabs>
 
@@ -214,8 +213,22 @@
                 placeholder="https://seccdn.libravatar.org/avatar/{{mail|md5}}"
                 hint="基于 nunjucks 语法，可用 {{mail|md5}} 替换为用户邮箱的 MD5 值"
                 persistent-hint
-                class="mb-4"
+                class="mb-1"
               />
+              <div class="d-flex flex-wrap align-center gap-1 mb-4">
+                <span class="text-caption text-medium-emphasis mr-1">快捷填入：</span>
+                <v-chip
+                  v-for="preset in gravatarPresets"
+                  :key="preset"
+                  size="small"
+                  variant="tonal"
+                  color="primary"
+                  class="text-none"
+                  @click="config.gravatarStr = preset"
+                >
+                  {{ gravatarPresetLabel(preset) }}
+                </v-chip>
+              </div>
 
               <v-text-field
                 v-model="config.avatarProxy"
@@ -1138,106 +1151,6 @@
             </v-card-text>
           </v-tabs-window-item>
 
-          <!-- ── Markdown 渲染 ── -->
-          <v-tabs-window-item value="markdown">
-            <v-card-text class="pa-5">
-              <div class="d-flex align-center mb-4">
-                <v-avatar size="32" color="teal" variant="tonal" class="mr-3">
-                  <v-icon size="16" color="teal">mdi-language-markdown-outline</v-icon>
-                </v-avatar>
-                <div class="text-subtitle-1 font-weight-bold">Markdown 渲染</div>
-              </div>
-
-              <v-switch
-                v-model="configBool.markdownHighlight"
-                label="代码高亮"
-                color="primary"
-                hide-details
-                density="compact"
-                class="mb-3"
-              />
-
-              <v-switch
-                v-model="configBool.markdownEmoji"
-                label="Emoji 支持"
-                color="primary"
-                hide-details
-                density="compact"
-                class="mb-3"
-              />
-
-              <v-switch
-                v-model="configBool.markdownSub"
-                label="下角标"
-                color="primary"
-                hide-details
-                density="compact"
-                class="mb-3"
-              />
-
-              <v-switch
-                v-model="configBool.markdownSup"
-                label="上角标"
-                color="primary"
-                hide-details
-                density="compact"
-                class="mb-4"
-              />
-
-              <v-select
-                v-model="config.markdownTex"
-                label="数学公式渲染"
-                variant="solo-filled"
-                flat
-                density="comfortable"
-                :items="[
-                  { title: 'MathJax（默认）', value: 'mathjax' },
-                  { title: 'KaTeX', value: 'katex' },
-                  { title: '关闭', value: 'false' },
-                ]"
-                class="mb-4"
-              />
-
-              <v-text-field
-                v-if="config.markdownTex === 'mathjax'"
-                v-model="config.markdownMathjax"
-                label="MathJax 选项"
-                variant="solo-filled"
-                flat
-                density="comfortable"
-                placeholder="{}"
-                hint="JSON 格式的 MathJax 配置，留空使用默认"
-                persistent-hint
-                class="mb-4"
-              />
-
-              <v-text-field
-                v-if="config.markdownTex === 'katex'"
-                v-model="config.markdownKatex"
-                label="KaTeX 选项"
-                variant="solo-filled"
-                flat
-                density="comfortable"
-                placeholder="{}"
-                hint="JSON 格式的 KaTeX 配置，留空使用默认"
-                persistent-hint
-                class="mb-4"
-              />
-
-              <v-textarea
-                v-model="config.markdownConfig"
-                label="MarkdownIt 自定义配置"
-                variant="solo-filled"
-                flat
-                density="comfortable"
-                rows="3"
-                placeholder="{}"
-                hint="JSON 格式的 MarkdownIt 配置，一般无需修改"
-                persistent-hint
-              />
-            </v-card-text>
-          </v-tabs-window-item>
-
           <!-- ── 数据管理 ── -->
           <v-tabs-window-item value="data">
             <v-card-text class="pa-5">
@@ -1450,15 +1363,6 @@ const config = reactive({
   larkWebhook: "",
   larkSecret: "",
   larkTemplate: "",
-  // Markdown
-  markdownConfig: "",
-  markdownHighlight: "true",
-  markdownEmoji: "true",
-  markdownSub: "true",
-  markdownSup: "true",
-  markdownTex: "mathjax",
-  markdownMathjax: "",
-  markdownKatex: "",
 });
 
 const showSecret = reactive({
@@ -1541,15 +1445,17 @@ const configBool = reactive({
   set notifyLark(v) { config.notifyLark = v ? "true" : "false"; },
   get smtpSecure() { return config.smtpSecure === "true"; },
   set smtpSecure(v) { config.smtpSecure = v ? "true" : "false"; },
-  get markdownHighlight() { return config.markdownHighlight === "true"; },
-  set markdownHighlight(v) { config.markdownHighlight = v ? "true" : "false"; },
-  get markdownEmoji() { return config.markdownEmoji === "true"; },
-  set markdownEmoji(v) { config.markdownEmoji = v ? "true" : "false"; },
-  get markdownSub() { return config.markdownSub === "true"; },
-  set markdownSub(v) { config.markdownSub = v ? "true" : "false"; },
-  get markdownSup() { return config.markdownSup === "true"; },
-  set markdownSup(v) { config.markdownSup = v ? "true" : "false"; },
 });
+
+const gravatarPresets = [
+  "https://192625.xyz/gravatar/{{mail|md5}}",
+  "https://all.hlmirror.com/{{mail|md5}}",
+  "https://gravatar.com/avatar/{{mail|md5}}",
+];
+
+function gravatarPresetLabel(preset) {
+  return preset.replace("{{mail|md5}}", "…");
+}
 
 const defaultLevelLabels = ["潜水", "冒泡", "吐槽", "活跃", "话痨", "传说"];
 

@@ -81,15 +81,6 @@ const DEFAULT_SPACE_CONFIG = {
     recaptchaV3Secret: '',
     turnstileKey: '',
     turnstileSecret: '',
-    // Markdown
-    markdownConfig: '',
-    markdownHighlight: 'true',
-    markdownEmoji: 'true',
-    markdownSub: 'true',
-    markdownSup: 'true',
-    markdownTex: 'katex',     // 'false' | 'mathjax' | 'katex'
-    markdownMathjax: '',       // MathJax CDN / 配置（markdownTex='mathjax' 时生效）
-    markdownKatex: '',         // KaTeX CDN / 配置（markdownTex='katex' 时生效）
 };
 
 /**
@@ -240,7 +231,6 @@ function containsDangerousContent(str) {
 const ENUM_CONFIGS = {
     spamChecker: ['', 'akismet'],
     captchaType: ['', 'turnstile', 'recaptchaV3'],
-    markdownTex: ['false', 'mathjax', 'katex'],
 };
 
 // 布尔值约束
@@ -249,13 +239,11 @@ const BOOLEAN_CONFIGS = [
     'smtpSecure',
     'notifyEmailAdmin', 'notifyEmailReply', 'notifyWechat', 'notifyQywx', 'notifyQq',
     'notifyTelegram', 'notifyPushplus', 'notifyDiscord', 'notifyLark',
-    'markdownHighlight', 'markdownEmoji', 'markdownSub',
-    'markdownSup',
 ];
 
 // 需要安全检查的自由文本配置（可能被前端渲染到页面）
 const SANITIZE_CONFIGS = [
-    'markdownConfig', 'markdownMathjax', 'markdownKatex', 'gravatarStr',
+    'gravatarStr',
 ];
 
 /**
