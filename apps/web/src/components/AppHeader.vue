@@ -56,7 +56,7 @@
       <v-menu>
         <template v-slot:activator="{ props }">
           <v-btn icon="mdi-plus" v-bind="props"></v-btn>
-        </template>
+        </template><v-card border>
         <v-list>
                 <v-list-item prepend-icon="mdi-pencil" @click="clickOpenPostDialog()">
             <v-list-item-title>帖子</v-list-item-title>
@@ -74,30 +74,22 @@
             <v-list-item-title>扩展</v-list-item-title>
             <v-list-item-subtitle>发布你的Scratch扩展</v-list-item-subtitle>
           </v-list-item>
-        </v-list>
+        </v-list></v-card>
       </v-menu>
 
+      <NotificationBell />
+
       <!-- 用户菜单 -->
-      <v-menu :close-on-content-click="false" location="bottom">
-        <template #activator="{ props, isActive }">
+      <v-menu location="bottom end">
+        <template #activator="{ props }">
           <AccountUserSkeleton
             v-if="authPending"
             variant="header"
             :avatar-size="40"
           />
           <template v-else-if="localuser.isLogin.value">
-            <v-btn icon v-bind="props">
-              <v-badge
-                v-if="unreadCount > 0"
-                :content="unreadCount"
-                color="error"
-                location="top end"
-                offset-x="2"
-                offset-y="2"
-              >
-                <v-avatar :image="localuser.getUserAvatar()"></v-avatar>
-              </v-badge>
-              <v-avatar v-else :image="localuser.getUserAvatar()"></v-avatar>
+            <v-btn icon size="40" v-bind="props">
+              <v-avatar size="36" :image="localuser.getUserAvatar()" />
             </v-btn>
           </template>
           <template v-else>
@@ -114,81 +106,56 @@
             ></v-btn>
           </template>
         </template>
-        <v-card border min-width="300px"
-          ><v-tabs v-model="userTab" grow>
-            <v-tab value="notifications">通知</v-tab>
-            <v-tab value="profile">个人资料</v-tab>
-          </v-tabs>
-          <v-divider></v-divider>
-
-          <v-tabs-window v-model="userTab">
-            <v-tabs-window-item value="notifications">
-              <NotificationsCard
-                min-width="400px"
-                max-width="500px"
-                ref="notificationsCard"
-                :autoFetch="true"
-                :maxHeight="'420px'"
-                :menuMode="true"
-                :showHeader="false"
-                @update:unread-count="updateUnreadCount"
-              />
-            </v-tabs-window-item>
-
-            <v-tabs-window-item value="profile">
-              <v-card
-                :append-avatar="localuser.getUserAvatar()"
-                :subtitle="localuser.user.value.username"
-                :title="localuser.user.value.display_name"
-                @click="reloadinfos()"
-              ></v-card>
-
-              <v-list>
-                <v-list-item
-                  :to="`/${localuser.user.value.username}`"
-                  color="primary"
-                  prepend-icon="mdi-account"
-                  rounded="xl"
-                  title="个人主页"
-                ></v-list-item>
-                <v-list-item
-                  color="primary"
-                  prepend-icon="mdi-cog"
-                  rounded="xl"
-                  title="设置"
-                  to="/app/account"
-                ></v-list-item>
-                <v-list-item
-                  color="primary"
-                  prepend-icon="mdi-xml"
-                  rounded="xl"
-                  title="项目"
-                  to="/app/project"
-                ></v-list-item>
-                <v-list-item
-                  color="primary"
-                  prepend-icon="mdi-format-list-bulleted"
-                  rounded="xl"
-                  title="列表"
-                  to="/app/projectlist"
-                ></v-list-item>
-              </v-list>
-              <v-divider></v-divider>
-              <v-list>
-                <v-list-item
-                  active
-                  color="error"
-                  prepend-icon="mdi-logout"
-                  rounded="xl"
-                  title="退出"
-                  to="/app/account/logout"
-                  variant="plain"
-                ></v-list-item>
-              </v-list>
-            </v-tabs-window-item>
-
-
-          </v-tabs-window>
+        <v-card border min-width="260px" rounded="lg">
+          <v-list>
+            <v-list-item
+              :prepend-avatar="localuser.getUserAvatar()"
+              :subtitle="'@' + localuser.user.value.username"
+              :title="localuser.user.value.display_name"
+              @click="reloadinfos()"
+            />
+          </v-list>
+          <v-divider />
+          <v-list>
+            <v-list-item
+              :to="`/${localuser.user.value.username}`"
+              color="primary"
+              prepend-icon="mdi-account"
+              rounded="xl"
+              title="个人主页"
+            />
+            <v-list-item
+              color="primary"
+              prepend-icon="mdi-cog"
+              rounded="xl"
+              title="设置"
+              to="/app/account"
+            />
+            <v-list-item
+              color="primary"
+              prepend-icon="mdi-xml"
+              rounded="xl"
+              title="项目"
+              to="/app/project"
+            />
+            <v-list-item
+              color="primary"
+              prepend-icon="mdi-format-list-bulleted"
+              rounded="xl"
+              title="列表"
+              to="/app/projectlist"
+            />
+          </v-list>
+          <v-divider />
+          <v-list>
+            <v-list-item
+              color="error"
+              prepend-icon="mdi-logout"
+              rounded="xl"
+              title="退出"
+              to="/app/account/logout"
+            />
+          </v-list>
         </v-card>
       </v-menu>
     </template>
@@ -250,13 +217,9 @@
 <script>
 import { localuser } from "@/services/localAccount";
 import { useTheme } from "vuetify";
-import { ref, onMounted, watch, nextTick, computed } from "vue";
-import { storeToRefs } from "pinia";
-import { useRoute, useRouter } from "vue-router";
-import NotificationsCard from "@/components/NotificationsCard.vue";
 import SearchDialog from "@/components/SearchDialog.vue";
-import { get, fetchConfig } from "@/services/serverConfig";
-import { useNotificationStore } from "@/stores/notification";
+import NotificationBell from "@/components/NotificationBell.vue";
+import { get } from "@/services/serverConfig";
 import { useAuthStore } from "@/stores/auth";
 import { openPostDialog } from '@/composables/usePostDialog';
 import { useAccountState } from '@/composables/useAccountState';
@@ -264,7 +227,7 @@ import AccountUserSkeleton from '@/components/account/AccountUserSkeleton.vue';
 
 export default {
   components: {
-    NotificationsCard,
+    NotificationBell,
     SearchDialog,
     AccountUserSkeleton,
   },
@@ -276,49 +239,10 @@ export default {
     this.proxyEnabled = get("scratchproxy.enabled");
   },
   setup(props) {
-    const route = useRoute();
-    const router = useRouter();
-    const notificationsCard = ref(null);
-    const notificationStore = useNotificationStore();
     const authStore = useAuthStore();
-    const { unreadCount } = storeToRefs(notificationStore);
     const { authPending } = useAccountState();
 
-    // 监听登录状态变化
-    watch(
-      () => localuser.isLogin.value,
-      async (isLogin) => {
-        if (isLogin) {
-          // 获取未读通知数量
-          await fetchUnreadCount();
-        } else {
-          notificationStore.resetUnreadCount();
-        }
-      }
-    );
-
-    // 更新未读通知计数
-    const updateUnreadCount = (count) => {
-      notificationStore.setUnreadCount(count);
-    };
-
-    // 从 Pinia store 同步未读通知数量
-    const fetchUnreadCount = async () => {
-      await notificationStore.fetchUnreadCount();
-    };
-
-    onMounted(async () => {
-      // 如果用户已登录，获取未读通知数量
-      if (localuser.isLogin.value) {
-        await fetchUnreadCount();
-      }
-    });
-
     return {
-      notificationsCard,
-      unreadCount,
-      updateUnreadCount,
-      fetchUnreadCount,
       localuser,
       authStore,
       authPending,
@@ -336,7 +260,6 @@ export default {
       activeTab: "notifications",
       isDarkTheme: false,
       theme: null,
-      userTab: "profile",
       proxyEnabled: false,
       // 编辑器标签页相关
       showEditorTabs: false,
@@ -369,11 +292,6 @@ export default {
     activeTab(newVal) {
       this.setSubNavItems(this.$route);
     },
-    "localuser.isLogin"(newVal) {
-      if (newVal && this.notificationsCard) {
-        this.notificationsCard.checkUnreadNotifications();
-      }
-    },
 
     activeEditorTab(newTabId, oldTabId) {
       if (newTabId !== oldTabId) {
@@ -394,9 +312,6 @@ export default {
     },
     reloadinfos() {
       localuser.loadUser(true);
-      if (this.notificationsCard) {
-        this.notificationsCard.checkUnreadNotifications();
-      }
       this.$router.push('/' + localuser.user.value.username);
     },
     goHome() {
@@ -404,11 +319,6 @@ export default {
         window.location.reload();
       } else {
         this.$router.push("/");
-      }
-    },
-    checkNotifications() {
-      if (this.notificationsCard) {
-        this.notificationsCard.notificationsHandler.fetchNotifications();
       }
     },
 

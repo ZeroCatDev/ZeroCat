@@ -2,37 +2,25 @@
   <v-dialog
     v-if="!isMobileOrTablet"
     v-model="dialog"
-    :scrim="false"
-    class="search-dialog"
-    transition="dialog-bottom-transition"
     width="80%"
+    max-width="800px"
+    transition="dialog-bottom-transition"
   >
     <template v-slot:activator="{ props }">
-      <v-btn
-        class="search-trigger"
-        icon="mdi-magnify"
-        v-bind="props"
-        variant="text"
-      ></v-btn>
+      <v-btn icon="mdi-magnify" variant="text" v-bind="props" />
     </template>
-    <v-card
-      border
-      class="d-flex flex-column search-dialog-card bg-surface-light"
-      hover
-      max-height="90vh"
-    >
-      <v-card-text class="pa-0 flex-grow-0" style="margin: 16px">
-        <SearchComponent mode="dialog" @search-submitted="closeDialog"/>
+    <v-card>
+      <v-card-text>
+        <SearchComponent mode="dialog" @search-submitted="closeDialog" />
       </v-card-text>
     </v-card>
   </v-dialog>
   <v-btn
     v-else
-    class="search-trigger"
     icon="mdi-magnify"
     variant="text"
     @click="navigateToSearch"
-  ></v-btn>
+  />
 </template>
 
 <script>
@@ -51,9 +39,7 @@ export default {
   },
   methods: {
     checkDevice() {
-      const userAgent = navigator.userAgent.toLowerCase();
-      const isMobile = /mobile|android|iphone|ipad|phone/i.test(userAgent);
-      this.isMobileOrTablet = isMobile;
+      this.isMobileOrTablet = window.matchMedia("(max-width: 768px)").matches;
     },
     navigateToSearch() {
       this.dialog = false;
@@ -62,73 +48,29 @@ export default {
     closeDialog() {
       this.dialog = false;
     },
+    handleKeydown(e) {
+      const tag = e.target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || e.target.isContentEditable) {
+        return;
+      }
+      if (e.key === "/" || (e.ctrlKey && e.key === "k")) {
+        e.preventDefault();
+        this.dialog = !this.dialog;
+      }
+      if (e.key === "Escape" && this.dialog) {
+        this.dialog = false;
+      }
+    },
   },
   mounted() {
-    if (typeof window !== "undefined") {
-      this.checkDevice();
-      window.addEventListener("resize", this.checkDevice);
-    }
+    this.checkDevice();
+    this._mq = window.matchMedia("(max-width: 768px)");
+    this._mq.addEventListener("change", this.checkDevice);
+    window.addEventListener("keydown", this.handleKeydown);
   },
   beforeUnmount() {
-    if (typeof window !== "undefined") {
-      window.removeEventListener("resize", this.checkDevice);
-    }
+    this._mq?.removeEventListener("change", this.checkDevice);
+    window.removeEventListener("keydown", this.handleKeydown);
   },
 };
 </script>
-
-<style scoped>
-.search-dialog {
-  animation: dialogFadeIn 0.3s ease;
-}
-
-.search-trigger {
-  transition: transform 0.3s ease;
-}
-
-.search-trigger:hover {
-  transform: scale(1.1);
-}
-
-.search-dialog-card {
-  animation: slideInFromTop 0.3s ease;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1) !important;
-}
-
-@keyframes dialogFadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes slideInFromTop {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-:deep(.v-overlay__content) {
-  transition: transform 0.3s ease !important;
-}
-
-:deep(.dialog-bottom-transition-enter-active),
-:deep(.dialog-bottom-transition-leave-active) {
-  transition: transform 0.3s ease, opacity 0.3s ease !important;
-}
-
-:deep(.dialog-bottom-transition-enter-from),
-:deep(.dialog-bottom-transition-leave-to) {
-  transform: translateY(-20px) !important;
-  opacity: 0;
-}
-</style>
