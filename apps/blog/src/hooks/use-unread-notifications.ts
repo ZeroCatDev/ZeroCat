@@ -14,19 +14,18 @@ export function useUnreadNotifications() {
   const refresh = React.useCallback(async () => {
     if (!isAuthed || !token) {
       setUnread(0);
-      return 0;
+      return;
     }
     setLoading(true);
     try {
       const { count } = await getUnreadNotificationCount(token);
       setUnread(count);
-      return count;
     } catch {
-      return unread;
+      // keep the last known count on a transient failure
     } finally {
       setLoading(false);
     }
-  }, [isAuthed, token, unread]);
+  }, [isAuthed, token]);
 
   React.useEffect(() => {
     if (!ready) return;
@@ -41,8 +40,7 @@ export function useUnreadNotifications() {
       window.clearInterval(timer);
       window.removeEventListener("focus", onFocus);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, isAuthed, token]);
+  }, [ready, isAuthed, refresh]);
 
   return { unread, loading, refresh, setUnread };
 }

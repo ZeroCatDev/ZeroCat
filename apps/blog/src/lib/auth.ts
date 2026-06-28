@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { AUTH_EVENTS, AUTH_STORAGE_KEYS } from "@zerocat/auth-core";
 import {
   API_URL,
   clearStoredAuthState,
@@ -9,138 +10,172 @@ import {
 } from "./api";
 import { resolveAvatarUrl } from "./avatar";
 
-const TOKEN_KEY = "token";
-const USER_INFO_KEY = "userInfo";
-
-const TOKEN_REFRESHED_EVENT = "auth:token-refreshed";
-const USER_REFRESHED_EVENT = "auth:user-refreshed";
-
 const DEFAULT_ZC_WEB_URL = "http://localhost:3141";
 
-let hydratePromise: Promise<void> | null = null;
-
-function hasStoredAuthHint(): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    return (
-      !!getStoredToken() ||
-      !!window.localStorage.getItem("refreshToken") ||
-      !!window.localStorage.getItem(USER_INFO_KEY) ||
-      !!window.localStorage.getItem("refreshTokenExpiresAt") ||
-      !!window.localStorage.getItem("tokenExpiresAt")
-    );
-  } catch {
-    return false;
-  }
+export interface StoredUserInfo {
+  id?: number;
+  username?: string;
+  display_name?: string | null;
+  avatar?: string | null;
 }
 
-function setLocalStorageValue(key: string, value: string | null) {
+/* -------------------------------- storage --------------------------------- */
+// All persisted auth state lives under auth-core's keys so the token client and
+// these hooks never drift; we only own the cached user profile on top of it.
+
+function readStorage(key: string): string | null {
+  if (typeof window === "undefined") return null;
   try {
-    if (value === null || value === "") {
-      window.localStorage.removeItem(key);
-      return;
-    }
-    window.localStorage.setItem(key, value);
-  } catch {}
-}
-
-function toStoredUserInfo(source: Record<string, unknown>): StoredUserInfo {
-  const rawId = source.id;
-  const parsedId =
-    typeof rawId === "number"
-      ? rawId
-      : typeof rawId === "string"
-        ? Number.parseInt(rawId, 10)
-        : undefined;
-
-  const rawAvatar =
-    typeof source.avatar === "string" || source.avatar === null
-      ? (source.avatar as string | null)
-      : undefined;
-
-  return {
-    id: Number.isFinite(parsedId) ? Number(parsedId) : undefined,
-    username: typeof source.username === "string" ? source.username : undefined,
-    display_name:
-      typeof source.display_name === "string" || source.display_name === null
-        ? (source.display_name as string | null)
-        : undefined,
-    avatar: rawAvatar === undefined ? undefined : resolveAvatarUrl(rawAvatar),
-  };
-}
-
-function persistUserInfo(userInfo: StoredUserInfo | null) {
-  if (!userInfo) {
-    setLocalStorageValue(USER_INFO_KEY, null);
-    return;
-  }
-
-  const hasIdentity =
-    Boolean(userInfo.username) ||
-    typeof userInfo.id === "number" ||
-    Boolean(userInfo.display_name);
-  if (!hasIdentity) {
-    setLocalStorageValue(USER_INFO_KEY, null);
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(USER_INFO_KEY, JSON.stringify(userInfo));
-  } catch {}
-}
-
-async function fetchCurrentUser(token: string): Promise<StoredUserInfo | null> {
-  try {
-    const res = await fetch(`${API_URL}/user/me`, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      cache: "no-store",
-    });
-
-    if (!res.ok) return null;
-
-    const payload = (await res.json().catch(() => null)) as
-      | { data?: Record<string, unknown> }
-      | null;
-    const data = payload?.data;
-    if (!data || typeof data !== "object") return null;
-
-    return toStoredUserInfo(data);
+    return window.localStorage.getItem(key);
   } catch {
     return null;
   }
 }
 
-function emitAuthRefreshEvents() {
-  window.dispatchEvent(new CustomEvent(TOKEN_REFRESHED_EVENT));
-  window.dispatchEvent(new CustomEvent(USER_REFRESHED_EVENT));
+function writeStorage(key: string, value: string | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (value) window.localStorage.setItem(key, value);
+    else window.localStorage.removeItem(key);
+  } catch {}
 }
 
-async function hydrateAuthState() {
-  if (typeof window === "undefined") return;
+function readStoredUser(): StoredUserInfo | null {
+  try {
+    const raw = readStorage(AUTH_STORAGE_KEYS.userInfo);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+    return parsed && typeof parsed === "object" ? (parsed as StoredUserInfo) : null;
+  } catch {
+    return null;
+  }
+}
 
+/** Any sign of a prior session, used to decide whether mount needs hydration. */
+function hasAuthHint(): boolean {
+  return Boolean(
+    readStorage(AUTH_STORAGE_KEYS.token) ||
+      readStorage(AUTH_STORAGE_KEYS.refreshToken) ||
+      readStorage(AUTH_STORAGE_KEYS.userInfo) ||
+      readStorage(AUTH_STORAGE_KEYS.refreshTokenExpiresAt) ||
+      readStorage(AUTH_STORAGE_KEYS.tokenExpiresAt)
+  );
+}
+
+/* ------------------------------ user profile ------------------------------ */
+
+function normalizeUser(source: Record<string, unknown>): StoredUserInfo {
+  const rawId = source.id;
+  const id =
+    typeof rawId === "number"
+      ? rawId
+      : typeof rawId === "string"
+        ? Number.parseInt(rawId, 10)
+        : NaN;
+
+  return {
+    id: Number.isFinite(id) ? Number(id) : undefined,
+    username: typeof source.username === "string" ? source.username : undefined,
+    display_name:
+      typeof source.display_name === "string" || source.display_name === null
+        ? (source.display_name as string | null)
+        : undefined,
+    avatar:
+      typeof source.avatar === "string" || source.avatar === null
+        ? resolveAvatarUrl(source.avatar as string | null)
+        : undefined,
+  };
+}
+
+function persistUser(user: StoredUserInfo | null) {
+  const hasIdentity =
+    !!user &&
+    (Boolean(user.username) ||
+      typeof user.id === "number" ||
+      Boolean(user.display_name));
+  writeStorage(AUTH_STORAGE_KEYS.userInfo, hasIdentity ? JSON.stringify(user) : null);
+}
+
+async function fetchCurrentUser(token: string): Promise<StoredUserInfo | null> {
+  try {
+    const res = await fetch(`${API_URL}/user/me`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const payload = (await res.json().catch(() => null)) as
+      | { data?: Record<string, unknown> }
+      | null;
+    const data = payload?.data;
+    return data && typeof data === "object" ? normalizeUser(data) : null;
+  } catch {
+    return null;
+  }
+}
+
+/* ------------------------------- hydration -------------------------------- */
+// Refresh the access token (via auth-core) and lazily backfill the cached
+// profile. Deduplicated so concurrently-mounting hooks share a single pass.
+
+let hydratePromise: Promise<void> | null = null;
+
+async function hydrate(): Promise<void> {
   const token = await getFreshAuthToken(getStoredToken());
-
   if (!token) {
-    persistUserInfo(null);
-    emitAuthRefreshEvents();
+    persistUser(null);
     return;
   }
-
-  const existingUser = readStoredUser();
-  if (!existingUser?.username && !existingUser?.id) {
-    const userInfo = await fetchCurrentUser(token);
-    persistUserInfo(userInfo);
+  if (!readStoredUser()) {
+    persistUser(await fetchCurrentUser(token));
   }
-
-  emitAuthRefreshEvents();
 }
 
+function hydrateOnce(): Promise<void> {
+  if (!hydratePromise) {
+    hydratePromise = hydrate().finally(() => {
+      hydratePromise = null;
+    });
+  }
+  return hydratePromise;
+}
+
+/**
+ * Shared client-only auth subscription. Starts from SSR-safe state, resolves
+ * stored values on mount (after a one-shot hydration when a session looks
+ * present), and re-syncs on auth-core refresh events or cross-tab writes to the
+ * watched key. Keeping reads in an effect — never in a render-time initializer —
+ * is what avoids the server/client hydration mismatch.
+ */
+function useAuthSync(sync: () => void, watchKey: string, authEvent: string) {
+  useEffect(() => {
+    let alive = true;
+    const run = () => {
+      if (alive) sync();
+    };
+
+    if (hasAuthHint()) void hydrateOnce().finally(run);
+    else run();
+
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === watchKey) run();
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener(authEvent, run);
+    return () => {
+      alive = false;
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(authEvent, run);
+    };
+    // `sync` is re-created each render but only reads fresh storage, so a single
+    // subscription for the component's lifetime is correct.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+}
+
+/* ---------------------------------- API ----------------------------------- */
+
 export function buildZcLoginUrl(redirectUrl?: string): string {
-  const configuredBase = process.env.NEXT_PUBLIC_ZC_WEB_URL || process.env.NEXT_PUBLIC_WEB_URL;
+  const configuredBase =
+    process.env.NEXT_PUBLIC_ZC_WEB_URL || process.env.NEXT_PUBLIC_WEB_URL;
   const base =
     configuredBase && /^https?:\/\//i.test(configuredBase)
       ? configuredBase.replace(/\/+$/, "")
@@ -152,127 +187,49 @@ export function buildZcLoginUrl(redirectUrl?: string): string {
 }
 
 export function useAuthToken() {
-  const [token, setToken] = useState<string | null>(() => getStoredToken());
-  const [ready, setReady] = useState(() => !hasStoredAuthHint());
+  const [token, setToken] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    let cancelled = false;
-
-    if (hasStoredAuthHint()) {
-      if (!hydratePromise) {
-        hydratePromise = hydrateAuthState().finally(() => {
-          hydratePromise = null;
-        });
-      }
-
-      void hydratePromise.finally(() => {
-        if (cancelled) return;
-        setToken(getStoredToken());
-        setReady(true);
-      });
-    }
-
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === TOKEN_KEY) setToken(e.newValue);
-    };
-    const onRefresh = () => setToken(getStoredToken());
-
-    window.addEventListener("storage", onStorage);
-    window.addEventListener(TOKEN_REFRESHED_EVENT, onRefresh);
-
-    return () => {
-      cancelled = true;
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener(TOKEN_REFRESHED_EVENT, onRefresh);
-    };
-  }, []);
+  useAuthSync(
+    () => {
+      setToken(getStoredToken());
+      setReady(true);
+    },
+    AUTH_STORAGE_KEYS.token,
+    AUTH_EVENTS.tokenRefreshed
+  );
 
   const clear = useCallback(async () => {
-    const currentToken = getStoredToken();
-    if (currentToken) {
-      try {
-        await fetch(`${API_URL}/account/logout`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-            Authorization: `Bearer ${currentToken}`,
-          },
-          body: "{}",
-          cache: "no-store",
-        });
-      } catch {}
+    const active = getStoredToken();
+    if (active) {
+      await fetch(`${API_URL}/account/logout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Authorization: `Bearer ${active}`,
+        },
+        body: "{}",
+        cache: "no-store",
+      }).catch(() => {});
     }
-
+    // auth-core clears token + cached user and emits the refresh events our
+    // subscriptions listen for, which resets every hook instance.
     clearStoredAuthState();
     setToken(null);
-    emitAuthRefreshEvents();
   }, []);
 
   return { token, ready, isAuthed: Boolean(token), clear };
 }
 
-export interface StoredUserInfo {
-  id?: number;
-  username?: string;
-  display_name?: string | null;
-  avatar?: string | null;
-}
-
-function readStoredUser(): StoredUserInfo | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem("userInfo");
-    if (!raw) return null;
-    return JSON.parse(raw) as StoredUserInfo;
-  } catch {
-    return null;
-  }
-}
-
 export function useCurrentUser(): StoredUserInfo | null {
-  const [user, setUser] = useState<StoredUserInfo | null>(() => readStoredUser());
+  const [user, setUser] = useState<StoredUserInfo | null>(null);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    let cancelled = false;
-
-    if (hasStoredAuthHint()) {
-      if (!hydratePromise) {
-        hydratePromise = hydrateAuthState().finally(() => {
-          hydratePromise = null;
-        });
-      }
-
-      void hydratePromise.finally(() => {
-        if (!cancelled) {
-          setUser(readStoredUser());
-        }
-      });
-    }
-
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === USER_INFO_KEY) {
-        setUser(readStoredUser());
-      }
-    };
-
-    const onRefresh = () => {
-      setUser(readStoredUser());
-    };
-
-    window.addEventListener("storage", onStorage);
-    window.addEventListener(USER_REFRESHED_EVENT, onRefresh);
-
-    return () => {
-      cancelled = true;
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener(USER_REFRESHED_EVENT, onRefresh);
-    };
-  }, []);
+  useAuthSync(
+    () => setUser(readStoredUser()),
+    AUTH_STORAGE_KEYS.userInfo,
+    AUTH_EVENTS.userRefreshed
+  );
 
   return user;
 }
