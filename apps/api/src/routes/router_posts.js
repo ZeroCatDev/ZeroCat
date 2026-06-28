@@ -2,7 +2,7 @@ import { Router } from "express";
 import multer from "multer";
 import logger from "../services/logger.js";
 import { needLogin } from "../middleware/auth.js";
-import { requireScope } from "../middleware/scope.js";
+import { requireResource, requireScope } from "../middleware/scope.js";
 import {
   createPost,
   markPostRead,
@@ -164,7 +164,7 @@ router.post("/:id/reply", needLogin, requireScope("post:create"), async (req, re
   }
 });
 
-router.post("/:id/retweet", needLogin, requireScope("post:create"), async (req, res) => {
+router.post("/:id/retweet", needLogin, requireResource("post", "interact", "id"), async (req, res) => {
   try {
     const data = await retweetPost({
       authorId: res.locals.userid,
@@ -177,7 +177,7 @@ router.post("/:id/retweet", needLogin, requireScope("post:create"), async (req, 
   }
 });
 
-router.delete("/:id/retweet", needLogin, requireScope("post:interact"), async (req, res) => {
+router.delete("/:id/retweet", needLogin, requireResource("post", "interact", "id"), async (req, res) => {
   try {
     const result = await unretweetPost({
       authorId: res.locals.userid,
@@ -217,7 +217,7 @@ router.post("/:id/read", async (req, res) => {
   }
 });
 
-router.post("/:id/like", needLogin, requireScope("post:interact"), async (req, res) => {
+router.post("/:id/like", needLogin, requireResource("post", "interact", "id"), async (req, res) => {
   try {
     const like = await likePost({ userId: res.locals.userid, postId: req.params.id });
     res.status(200).json({ status: "success", data: like });
@@ -227,7 +227,7 @@ router.post("/:id/like", needLogin, requireScope("post:interact"), async (req, r
   }
 });
 
-router.delete("/:id/like", needLogin, requireScope("post:interact"), async (req, res) => {
+router.delete("/:id/like", needLogin, requireResource("post", "interact", "id"), async (req, res) => {
   try {
     const result = await unlikePost({ userId: res.locals.userid, postId: req.params.id });
     res.status(200).json({ status: "success", data: result });
@@ -237,7 +237,7 @@ router.delete("/:id/like", needLogin, requireScope("post:interact"), async (req,
   }
 });
 
-router.post("/:id/bookmark", needLogin, requireScope("post:interact"), async (req, res) => {
+router.post("/:id/bookmark", needLogin, requireResource("post", "interact", "id"), async (req, res) => {
   try {
     const bookmark = await bookmarkPost({ userId: res.locals.userid, postId: req.params.id });
     res.status(200).json({ status: "success", data: bookmark });
@@ -247,7 +247,7 @@ router.post("/:id/bookmark", needLogin, requireScope("post:interact"), async (re
   }
 });
 
-router.delete("/:id/bookmark", needLogin, requireScope("post:interact"), async (req, res) => {
+router.delete("/:id/bookmark", needLogin, requireResource("post", "interact", "id"), async (req, res) => {
   try {
     const result = await unbookmarkPost({ userId: res.locals.userid, postId: req.params.id });
     res.status(200).json({ status: "success", data: result });
@@ -257,7 +257,7 @@ router.delete("/:id/bookmark", needLogin, requireScope("post:interact"), async (
   }
 });
 
-router.delete("/:id", needLogin, requireScope("post:delete"), async (req, res) => {
+router.delete("/:id", needLogin, requireResource("post", "delete", "id"), async (req, res) => {
   try {
     const result = await deletePost({ userId: res.locals.userid, postId: req.params.id });
     res.status(200).json({ status: "success", data: result });
@@ -581,7 +581,7 @@ router.get("/:id/quotes", async (req, res) => {
 });
 
 // 获取帖子的点赞用户列表（仅发帖人可见）
-router.get("/:id/likes", needLogin, requireScope("post:read"), async (req, res) => {
+router.get("/:id/likes", needLogin, requireResource("post", "read", "id"), async (req, res) => {
   try {
     const { cursor, limit = 20 } = req.query;
     const data = await getPostLikes({
@@ -616,7 +616,7 @@ router.get("/:id/analytics", async (req, res) => {
 });
 
 // 获取帖子的浏览分析明细（仅作者可见）
-router.get("/:id/analytics/views", async (req, res) => {
+router.get("/:id/analytics/views", needLogin, requireResource("post", "read", "id"), async (req, res) => {
   try {
     const viewerId = res.locals.userid || null;
     const { start_date: startDate, end_date: endDate } = req.query;
@@ -688,7 +688,7 @@ router.get("/:id", async (req, res) => {
  * POST /posts/:id/resync
  * 只有帖子作者可以触发
  */
-router.post("/:id/resync", needLogin, requireScope("post:update"), async (req, res) => {
+router.post("/:id/resync", needLogin, requireResource("post", "update", "id"), async (req, res) => {
   try {
     const postId = parseInt(req.params.id);
     if (isNaN(postId)) {
@@ -729,7 +729,7 @@ router.post("/:id/resync", needLogin, requireScope("post:update"), async (req, r
  * POST /posts/:id/push-federation
  * 只有帖子作者可以触发
  */
-router.post("/:id/push-federation", needLogin, requireScope("post:update"), async (req, res) => {
+router.post("/:id/push-federation", needLogin, requireResource("post", "update", "id"), async (req, res) => {
   try {
     const postId = parseInt(req.params.id);
     if (isNaN(postId)) {

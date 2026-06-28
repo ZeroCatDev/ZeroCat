@@ -23,6 +23,7 @@ import {
 import { needLogin } from "../middleware/auth.js";
 import { requireScope, requireResource } from "../middleware/scope.js";
 import { hasProjectPermission } from "../services/auth/permissionManager.js";
+import { userCanActOnProject } from "../services/projectCollaborationService.js";
 import { getUserByUsername } from "../controllers/users.js";
 import { createEvent } from "../controllers/events.js";
 import { getAnalytics } from "../services/analytics.js";
@@ -481,7 +482,9 @@ router.post("/", needLogin, requireScope("project:create"), async (req, res, nex
 });
 
 // 保存源代码
-router.post("/savefile", needLogin, requireScope("project:update"), async (req, res, next) => {
+router.post("/savefile", needLogin, requireResource("project", "update", (req) =>
+  req.body?.projectid || req.query?.projectid || req.headers["x-project-id"]
+), async (req, res, next) => {
   try {
     let source;
     const shouldFormatJson = req.query.json === "true";
@@ -649,10 +652,9 @@ router.get("/commit", async (req, res, next) => {
   }
 });
 // 提交代码
-router.put("/commit/id/:id", needLogin, requireScope((req) => {
-  const projectId = req.body?.projectid;
-  return projectId ? `project:${projectId}:update` : "project:update";
-}), async (req, res, next) => {
+router.put("/commit/id/:id", needLogin, requireResource("project", "update", (req) =>
+  req.body?.projectid || req.query?.projectid || req.headers["x-project-id"]
+), async (req, res, next) => {
   try {
     const {
       branch = "main",
@@ -681,12 +683,7 @@ router.put("/commit/id/:id", needLogin, requireScope((req) => {
       });
     }
 
-    if (project.authorid !== res.locals.userid) {
-      return res.status(403).send({
-        status: "error",
-        message: "无权提交此项目",
-      });
-    }
+    // 提交权限已由 requireResource("project","update",...) 中间件校验（作者或编辑者及以上协作者）。
 
     // 检查项目是否已初始化（至少存在一次提交）
     const commitCount = await prisma.ow_projects_commits.count({
@@ -1035,10 +1032,7 @@ router.get("/commits", async (req, res, next) => {
   }
 });
 
-router.post("/branches", needLogin, requireScope((req) => {
-  const projectId = req.body?.projectid;
-  return projectId ? `project:${projectId}:create` : "project:create";
-}), async (req, res, next) => {
+router.post("/branches", needLogin, requireResource("project", "create", "projectid"), async (req, res, next) => {
   try {
     const { name, branch, projectid } = req.body;
     await checkProjectPermission(projectid, res.locals.userid, "write");
@@ -1162,8 +1156,9 @@ router.get("/id/:id/cloudconfig", async (req, res, next) => {
 router.put("/id/:id/cloudconfig", needLogin, requireResource("project", "update", "id"), async (req, res, next) => {
   try {
     const projectId = Number(req.params.id);
+    // 权限已由 requireResource("project","update","id") 中间件校验（含协作者）。
     const project = await prisma.ow_projects.findFirst({
-      where: { id: projectId, authorid: res.locals.userid },
+      where: { id: projectId },
       select: { id: true },
     });
 
@@ -1280,8 +1275,9 @@ router.put("/id/:id/cloudconfig", needLogin, requireResource("project", "update"
 // 更新作品信息
 router.put("/id/:id", needLogin, requireResource("project", "update", "id"), async (req, res, next) => {
   try {
+    // 权限已由 requireResource 中间件校验（作者或编辑者及以上协作者）。
     const project = await prisma.ow_projects.findFirst({
-      where: { id: Number(req.params.id), authorid: res.locals.userid },
+      where: { id: Number(req.params.id) },
     });
 
     if (!project) {
@@ -1292,8 +1288,15 @@ router.put("/id/:id", needLogin, requireResource("project", "update", "id"), asy
     }
 
     const updatedData = extractProjectData(req.body);
+    // 可见性(state)属于高风险设置：仅作者/管理员协作者可改，编辑者通过本接口改 state 时忽略。
+    if (updatedData.state !== undefined) {
+      const canManage = await userCanActOnProject(res.locals.userid, req.params.id, "manage");
+      if (!canManage) {
+        delete updatedData.state;
+      }
+    }
     await prisma.ow_projects.update({
-      where: { id: Number(req.params.id), authorid: Number(res.locals.userid) },
+      where: { id: Number(req.params.id) },
       data: updatedData,
     });
 
@@ -1536,8 +1539,9 @@ router.put("/rename/:id", needLogin, requireResource("project", "update", "id"),
       });
     }
 
+    // 权限已由 requireResource 中间件校验（作者或编辑者及以上协作者）。
     const project = await prisma.ow_projects.findFirst({
-      where: { id: Number(id), authorid: res.locals.userid },
+      where: { id: Number(id) },
     });
 
     if (!project) {
@@ -1547,8 +1551,9 @@ router.put("/rename/:id", needLogin, requireResource("project", "update", "id"),
       });
     }
 
+    // 重名校验针对项目作者的项目集合（协作者重命名时作者仍是原作者）。
     const existingProject = await prisma.ow_projects.findFirst({
-      where: { name: newName, authorid: res.locals.userid },
+      where: { name: newName, authorid: project.authorid, NOT: { id: Number(id) } },
     });
 
     if (existingProject) {
@@ -1615,9 +1620,10 @@ router.put("/changevisibility/:id", needLogin, requireResource("project", "manag
       });
     }
 
+    // 权限已由 requireResource("project","manage","id") 校验（作者或管理员协作者）。
     await prisma.ow_projects
       .update({
-        where: { id: Number(id), authorid: res.locals.userid },
+        where: { id: Number(id) },
         data: { state: newState },
       })
       .catch((err) => {
@@ -1646,10 +1652,7 @@ router.put("/changevisibility/:id", needLogin, requireResource("project", "manag
 });
 
 // 修改分支简介
-router.post("/branches/description", needLogin, requireScope((req) => {
-  const projectId = req.query?.projectid;
-  return projectId ? `project:${projectId}:update` : "project:update";
-}), async (req, res, next) => {
+router.post("/branches/description", needLogin, requireResource("project", "update", "projectid"), async (req, res, next) => {
   try {
     const { projectid, branch } = req.query;
     const { description } = req.body;
@@ -1923,7 +1926,7 @@ router.get("/recommend/me", needLogin, requireScope("project:read"), async (req,
 });
 
 // 获取当前用户 + 当前项目上下文推荐
-router.get("/recommend/context/:projectId", needLogin, requireScope("project:read"), async (req, res, next) => {
+router.get("/recommend/context/:projectId", needLogin, requireResource("project", "read", "projectId"), async (req, res, next) => {
   try {
     const userId = Number(res.locals.userid);
     const projectId = Number(req.params.projectId);
@@ -1948,7 +1951,7 @@ router.get("/recommend/context/:projectId", needLogin, requireScope("project:rea
   }
 });
 
-router.post("/:id/read", needLogin, requireScope("project:interact"), async (req, res, next) => {
+router.post("/:id/read", needLogin, requireResource("project", "interact", "id"), async (req, res, next) => {
   try {
     const userId = Number(res.locals.userid);
     const projectId = Number(req.params.id);

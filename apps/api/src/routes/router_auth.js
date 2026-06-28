@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { parseToken, needLogin } from '../middleware/auth.js';
 import { scopeSatisfies } from '../services/auth/scopes.js';
+import { userSatisfiesPolicy } from '../services/auth/policyEngine.js';
 import {
     sendCode,
     auth,
@@ -21,7 +22,7 @@ const requirePurposeAuthorization = (req, res, next) => {
         return next();
     }
 
-    return needLogin(req, res, () => {
+    return needLogin(req, res, async () => {
         if (res.locals.tokenType !== "session") {
             return res.status(403).json({
                 status: "error",
@@ -36,6 +37,14 @@ const requirePurposeAuthorization = (req, res, next) => {
                 status: "error",
                 message: "令牌权限不足",
                 code: "ZC_ERROR_INSUFFICIENT_SCOPE",
+                required: requiredScope,
+            });
+        }
+        if (requiredScope && !(await userSatisfiesPolicy(res.locals.userid, requiredScope))) {
+            return res.status(403).json({
+                status: "error",
+                message: "账号角色权限不足",
+                code: "ZC_ERROR_ROLE_POLICY_FORBIDDEN",
                 required: requiredScope,
             });
         }

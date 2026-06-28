@@ -94,6 +94,19 @@
         </tbody>
       </v-table>
 
+      <v-textarea
+        v-model="customScopesText"
+        class="mt-3"
+        density="comfortable"
+        label="实例级权限"
+        placeholder="project:1134:write&#10;post:42:interact"
+        rows="3"
+        auto-grow
+        variant="outlined"
+        :error-messages="customScopeErrorMessages"
+        @update:model-value="markCustomSelection"
+      />
+
       <div class="mt-3">
         <span class="text-caption text-medium-emphasis mr-1">
           已声明 {{ selectedScopes.length }} 项权限：
@@ -152,8 +165,10 @@
         scopeCatalog: [],
         scopePresets: [],
         categories: {},
+        actions: {},
         selectedPresetId: null,
         scopeSelections: {},
+        customScopesText: "",
         resourceList: [],
         resourceLabels: {
           project: "项目",
@@ -197,12 +212,28 @@
     },
     computed: {
       selectedScopes() {
-        return Object.entries(this.scopeSelections)
+        const catalogScopes = Object.entries(this.scopeSelections)
           .filter(([, selected]) => selected)
           .map(([name]) => name);
+        return [...new Set([...catalogScopes, ...this.validCustomScopes])];
       },
       selectedScopeDetails() {
         return this.selectedScopes.map((name) => this.scopeDetail(name));
+      },
+      customScopeEntries() {
+        return this.parseCustomScopes(this.customScopesText);
+      },
+      validCustomScopes() {
+        return this.customScopeEntries
+          .filter((name) => this.isScopeSyntaxValid(name))
+          .filter((name) => name !== "*");
+      },
+      invalidCustomScopes() {
+        return this.customScopeEntries.filter((name) => !this.isScopeSyntaxValid(name));
+      },
+      customScopeErrorMessages() {
+        if (this.invalidCustomScopes.length === 0) return [];
+        return [`无效 scope：${this.invalidCustomScopes.join(", ")}`];
       },
     },
     watch: {
@@ -234,6 +265,7 @@
             }))
             .filter((preset) => preset.scopes.length > 0);
           this.categories = payload.categories || {};
+          this.actions = payload.actions || {};
           this.buildResourceList();
           this.applyModelValue(this.modelValue);
         } catch (error) {
@@ -275,10 +307,17 @@
       applyModelValue(value) {
         const selected = new Set(Array.isArray(value) && value.length > 0 ? value : ["user:read"]);
         const next = {};
+        const custom = [];
         for (const item of this.scopeCatalog) {
           next[item.name] = selected.has(item.name);
         }
+        for (const item of selected) {
+          if (!this.scopeCatalog.some((scope) => scope.name === item)) {
+            custom.push(item);
+          }
+        }
         this.scopeSelections = next;
+        this.customScopesText = custom.join("\n");
       },
       applyPreset(preset) {
         const selected = new Set(preset.scopes || []);
@@ -288,15 +327,69 @@
         }
         this.selectedPresetId = preset.id;
         this.scopeSelections = next;
+        this.customScopesText = "";
       },
       markCustomSelection() {
         this.selectedPresetId = null;
       },
+      parseCustomScopes(value) {
+        return [
+          ...new Set(
+            String(value || "")
+              .split(/[\s,，]+/)
+              .map((item) => item.trim())
+              .filter(Boolean)
+          ),
+        ];
+      },
+      isScopeSyntaxValid(name) {
+        if (name === "*") return true;
+        const parts = String(name || "").split(":");
+        if (parts.length !== 2 && parts.length !== 3) return false;
+
+        const [resource, maybeIdOrAction, maybeAction] = parts;
+        const action = parts.length === 2 ? maybeIdOrAction : maybeAction;
+        const id = parts.length === 3 ? maybeIdOrAction : null;
+        const resourceNames = new Set(
+          [
+            ...Object.keys(this.resourceLabels || {}),
+            ...this.scopeCatalog.map((item) => item.resource || item.name.split(":")[0]),
+          ].filter(Boolean)
+        );
+        const actionNames = new Set(
+          [
+            ...Object.keys(this.actions || {}),
+            ...this.scopeCatalog.map((item) => item.action || item.name.split(":").slice(-1)[0]),
+          ].filter(Boolean)
+        );
+
+        if (!resourceNames.has(resource)) return false;
+        if (!actionNames.has(action) && action !== "*") return false;
+        if (id !== null && (!id || id.includes(":"))) return false;
+        return true;
+      },
       getSelectedScopes() {
         return [...this.selectedScopes];
       },
+      hasInvalidScopes() {
+        return this.invalidCustomScopes.length > 0;
+      },
       scopeDetail(name) {
-        return this.scopeCatalog.find((item) => item.name === name) || {
+        const exact = this.scopeCatalog.find((item) => item.name === name);
+        if (exact) return exact;
+
+        const parts = String(name).split(":");
+        const typeScope = parts.length === 3 ? `${parts[0]}:${parts[2]}` : name;
+        const base = this.scopeCatalog.find((item) => item.name === typeScope);
+        if (base) {
+          return {
+            ...base,
+            name,
+            title: name,
+          };
+        }
+
+        return {
           name,
           title: name,
           risk_level: "medium",

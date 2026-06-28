@@ -67,6 +67,7 @@ model ow_projects {
   extensions        ow_scratch_extensions[]     @relation("ProjectExtensions")
   sample_extensions ow_scratch_extensions[]     @relation("SampleProject")
   assets            ow_projects_assets[]        @relation("ProjectAssets")
+  collaboration_invitations ow_project_collaboration_invitations[] @relation("ProjectCollaborationInvitations")
 
   @@index([state])
   @@index([authorid])
@@ -137,6 +138,10 @@ model ow_users {
   comment_service_users   ow_comment_service_users[] @relation("CommentServiceUser")
   embedding_updates       ow_user_embedding_updates[]
   notification_settings ow_notification_settings[]
+  role_assignments        ow_user_roles[]         @relation("UserRoleAssignments")
+  assigned_role_records   ow_user_roles[]         @relation("UserRoleAssignedBy")
+  sent_project_collaboration_invitations ow_project_collaboration_invitations[] @relation("ProjectCollaborationInviter")
+  received_project_collaboration_invitations ow_project_collaboration_invitations[] @relation("ProjectCollaborationInvitee")
 
   @@index([email])
   @@index([status])
@@ -148,6 +153,99 @@ model ow_users {
   @@index([location(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_ow_users_location_trgm")
   @@index([region(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_ow_users_region_trgm")
   @@map("ow_users")
+}
+
+// 角色表
+model ow_roles {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique @db.VarChar(64)
+  name        String   @db.VarChar(100)
+  description String?
+  system      Boolean  @default(false)
+  priority    Int      @default(0)
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+  updated_at  DateTime @default(now()) @updatedAt @db.Timestamp(6)
+
+  permissions ow_role_permissions[] @relation("RolePermissions")
+  users       ow_user_roles[]        @relation("RoleAssignments")
+
+  @@index([system])
+  @@index([priority])
+  @@map("ow_roles")
+}
+
+// 角色权限策略表
+model ow_role_permissions {
+  id         Int      @id @default(autoincrement())
+  role_id    Int
+  scope      String   @db.VarChar(160)
+  effect     String   @default("allow") @db.VarChar(16)
+  conditions Json?
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamp(6)
+
+  role ow_roles @relation("RolePermissions", fields: [role_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([role_id, scope, effect])
+  @@index([scope])
+  @@index([effect])
+  @@map("ow_role_permissions")
+}
+
+// 用户角色分配表
+model ow_user_roles {
+  id          Int       @id @default(autoincrement())
+  user_id     Int
+  role_id     Int
+  assigned_by Int?
+  reason      String?   @db.VarChar(255)
+  expires_at  DateTime? @db.Timestamp(6)
+  grant_type  String    @default("manual") @db.VarChar(64)
+  target_type String    @default("global") @db.VarChar(64)
+  target_id   String    @default("global") @db.VarChar(64)
+  metadata    Json?
+  created_at  DateTime  @default(now()) @db.Timestamp(6)
+  updated_at  DateTime  @default(now()) @updatedAt @db.Timestamp(6)
+
+  user             ow_users  @relation("UserRoleAssignments", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  role             ow_roles  @relation("RoleAssignments", fields: [role_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  assigned_by_user ow_users? @relation("UserRoleAssignedBy", fields: [assigned_by], references: [id], onDelete: SetNull, onUpdate: SetNull)
+
+  @@unique([user_id, role_id, target_type, target_id])
+  @@index([user_id])
+  @@index([role_id])
+  @@index([assigned_by])
+  @@index([expires_at])
+  @@index([grant_type])
+  @@index([target_type, target_id])
+  @@map("ow_user_roles")
+}
+
+// 项目合作者邀请表
+model ow_project_collaboration_invitations {
+  id          Int       @id @default(autoincrement())
+  project_id  Int
+  inviter_id  Int
+  invitee_id  Int
+  role_key    String    @db.VarChar(64)
+  status      String    @default("pending") @db.VarChar(32)
+  message     String?   @db.VarChar(500)
+  responded_at DateTime? @db.Timestamp(6)
+  expires_at  DateTime? @db.Timestamp(6)
+  created_at  DateTime  @default(now()) @db.Timestamp(6)
+  updated_at  DateTime  @default(now()) @updatedAt @db.Timestamp(6)
+
+  project ow_projects @relation("ProjectCollaborationInvitations", fields: [project_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  inviter ow_users @relation("ProjectCollaborationInviter", fields: [inviter_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  invitee ow_users @relation("ProjectCollaborationInvitee", fields: [invitee_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([project_id, invitee_id, role_key, status], map: "ow_project_collaboration_invitations_project_id_invitee_id_role")
+  @@index([project_id])
+  @@index([inviter_id])
+  @@index([invitee_id])
+  @@index([status])
+  @@index([expires_at])
+  @@map("ow_project_collaboration_invitations")
 }
 
 model ow_user_embedding_updates {

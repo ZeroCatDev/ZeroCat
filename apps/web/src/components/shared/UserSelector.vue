@@ -80,7 +80,8 @@ const props = defineProps({
   variant: { type: String, default: 'outlined' },
   hideDetails: { type: Boolean, default: false },
   disabled: { type: Boolean, default: false },
-  clearable: { type: Boolean, default: true }
+  clearable: { type: Boolean, default: true },
+  excludeIds: { type: Array, default: () => [] }
 });
 
 const emit = defineEmits(['update:modelValue', 'select']);
@@ -122,7 +123,9 @@ const searchUsers = async (query) => {
       perPage: 20
     };
     const res = await axios.get('/searchapi', { params });
-    users.value = res.data?.users || res.data?.results || [];
+    const found = res.data?.users || res.data?.results || [];
+    const excluded = new Set((props.excludeIds || []).map(Number));
+    users.value = excluded.size ? found.filter((u) => !excluded.has(Number(u.id))) : found;
   } catch (e) {
     console.error('Failed to search users:', e);
     users.value = [];

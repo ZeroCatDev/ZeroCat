@@ -71,12 +71,8 @@ async function validateOriginForCSRF(req) {
 export const refreshToken = async (req, res) => {
     try {
         // 优先从 cookie 读取 refresh token，回退到 body（兼容非浏览器客户端）
-        const { fromCookie, refresh_token, duplicateCount } = extractRefreshTokenFromRequest(req);
-
-        // #region agent log
-        const csrfPreview = fromCookie ? await validateOriginForCSRF(req) : { valid: true, skipped: true };
-        fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1167d'},body:JSON.stringify({sessionId:'f1167d',location:'tokenController.js:refreshToken:entry',message:'refresh token request',data:{origin:req.headers.origin||null,fromCookie,hasRefreshToken:!!refresh_token,refreshPrefix:refresh_token?String(refresh_token).slice(0,12):null,tokenLength:refresh_token?String(refresh_token).length:0,duplicateCount,csrfValid:csrfPreview.valid,csrfMessage:csrfPreview.message||null},timestamp:Date.now(),runId:'localStorage-v3',hypothesisId:'B'})}).catch(()=>{});
-        // #endregion
+        const { fromCookie, refresh_token } = extractRefreshTokenFromRequest(req);
+        const csrfCheck = fromCookie ? await validateOriginForCSRF(req) : { valid: true, skipped: true };
 
         if (!refresh_token) {
             return res.status(400).json({
@@ -87,10 +83,10 @@ export const refreshToken = async (req, res) => {
 
         // 当 refresh token 来自 Cookie 时，执行 CSRF 验证
         if (fromCookie) {
-            if (!csrfPreview.valid) {
+            if (!csrfCheck.valid) {
                 return res.status(403).json({
                     status: "error",
-                    message: csrfPreview.message || "CSRF 验证失败",
+                    message: csrfCheck.message || "CSRF 验证失败",
                 });
             }
         }
@@ -102,10 +98,6 @@ export const refreshToken = async (req, res) => {
         );
 
         if (result.success) {
-            // #region agent log
-            fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1167d'},body:JSON.stringify({sessionId:'f1167d',location:'tokenController.js:refreshToken:ok',message:'refresh ok',data:{fromCookie,duplicateCount,fromGrace:!!result.fromGrace,tokenId:result.tokenId},timestamp:Date.now(),runId:'localStorage',hypothesisId:'D'})}).catch(()=>{});
-            // #endregion
-
             return respondWithBrowserAuthTokens(res, {
                 status: "success",
                 message: "令牌已刷新",
@@ -115,10 +107,6 @@ export const refreshToken = async (req, res) => {
                 refresh_expires_at: toIsoOrValue(result.refreshExpiresAt),
             });
         } else {
-            // #region agent log
-            fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1167d'},body:JSON.stringify({sessionId:'f1167d',location:'tokenController.js:refreshToken:fail',message:'refresh failed',data:{refreshPrefix:refresh_token?String(refresh_token).slice(0,12):null,errorMessage:result.message||null},timestamp:Date.now(),runId:'localStorage-v3',hypothesisId:'B'})}).catch(()=>{});
-            // #endregion
-
             return res.status(401).json({
                 status: "error",
                 message: result.message || "刷新令牌失败",

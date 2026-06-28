@@ -189,10 +189,6 @@ export const AuthService = {
 
 // Helper function to store authentication data
 async function storeAuthData(data) {
-  // #region agent log
-  fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1167d'},body:JSON.stringify({sessionId:'f1167d',location:'authService.js:storeAuthData',message:'persist login tokens',data:{hasToken:!!data?.token,hasRefreshToken:!!data?.refresh_token,accessPrefix:data?.token?String(data.token).slice(0,12):null,refreshPrefix:data?.refresh_token?String(data.refresh_token).slice(0,12):null},timestamp:Date.now(),runId:'localStorage-v3',hypothesisId:'D'})}).catch(()=>{});
-  // #endregion
-
   await localuser.setUser({
     token: data.token,
     expires_at: data.expires_at,

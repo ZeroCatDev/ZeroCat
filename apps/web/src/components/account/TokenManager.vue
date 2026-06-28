@@ -172,6 +172,19 @@
                           </tr>
                         </tbody>
                       </v-table>
+
+                      <v-textarea
+                        v-model="customScopesText"
+                        class="mt-3"
+                        density="comfortable"
+                        label="实例级权限"
+                        placeholder="project:1134:write&#10;post:42:interact"
+                        rows="3"
+                        auto-grow
+                        variant="outlined"
+                        :error-messages="customScopeErrorMessages"
+                        @update:model-value="markCustomSelection"
+                      ></v-textarea>
                     </div>
                   </v-expand-transition>
 
@@ -200,7 +213,7 @@
 
             <v-col cols="12">
               <v-btn
-                :disabled="!createFormValid || creating || selectedScopes.length === 0"
+                :disabled="!createFormValid || creating || selectedScopes.length === 0 || hasInvalidCustomScopes"
                 :loading="creating"
                 color="primary"
                 type="submit"
@@ -437,6 +450,7 @@ export default {
       advancedMode: false,
       selectedPresetId: null,
       scopeSelections: {},
+      customScopesText: "",
       resourceList: [],
       resourceLabels: {
         project: "项目",
@@ -454,6 +468,7 @@ export default {
         event: "事件",
         analytics: "分析",
         extension: "扩展",
+        git_sync: "Git 同步",
         admin: "管理后台",
       },
       resourceDescriptions: {
@@ -472,6 +487,7 @@ export default {
         event: "账户相关事件记录",
         analytics: "统计分析数据",
         extension: "Scratch 扩展",
+        git_sync: "GitHub 绑定和同步任务",
         admin: "管理员操作",
       },
       showNewTokenDialog: false,
@@ -507,12 +523,31 @@ export default {
   computed: {
     selectedScopes() {
       if (this.fullAccess) return ["*"];
-      return Object.entries(this.scopeSelections)
+      const catalogScopes = Object.entries(this.scopeSelections)
         .filter(([, selected]) => selected)
         .map(([name]) => name);
+      return [...new Set([...catalogScopes, ...this.validCustomScopes])];
     },
     selectedScopeDetails() {
       return this.selectedScopes.map((name) => this.scopeDetail(name));
+    },
+    customScopeEntries() {
+      return this.parseCustomScopes(this.customScopesText);
+    },
+    validCustomScopes() {
+      return this.customScopeEntries
+        .filter((name) => this.isScopeSyntaxValid(name))
+        .filter((name) => name !== "*");
+    },
+    invalidCustomScopes() {
+      return this.customScopeEntries.filter((name) => !this.isScopeSyntaxValid(name));
+    },
+    hasInvalidCustomScopes() {
+      return this.invalidCustomScopes.length > 0;
+    },
+    customScopeErrorMessages() {
+      if (!this.hasInvalidCustomScopes) return [];
+      return [`无效 scope：${this.invalidCustomScopes.join(", ")}`];
     },
   },
   async mounted() {
@@ -581,6 +616,7 @@ export default {
       }
       this.fullAccess = false;
       this.scopeSelections = next;
+      this.customScopesText = "";
       this.selectedPresetId = preset.id;
     },
 
@@ -595,9 +631,51 @@ export default {
       this.selectedPresetId = null;
     },
 
+    parseCustomScopes(value) {
+      return [
+        ...new Set(
+          String(value || "")
+            .split(/[\s,，]+/)
+            .map((item) => item.trim())
+            .filter(Boolean)
+        ),
+      ];
+    },
+
+    isScopeSyntaxValid(name) {
+      if (name === "*") return true;
+      const parts = String(name || "").split(":");
+      if (parts.length !== 2 && parts.length !== 3) return false;
+
+      const [resource, maybeIdOrAction, maybeAction] = parts;
+      const action = parts.length === 2 ? maybeIdOrAction : maybeAction;
+      const id = parts.length === 3 ? maybeIdOrAction : null;
+      const resourceNames = new Set(
+        [
+          ...Object.keys(this.resourceLabels || {}),
+          ...this.scopeCatalog.map((item) => item.resource || item.name.split(":")[0]),
+        ].filter(Boolean)
+      );
+      const actionNames = new Set(
+        [
+          ...Object.keys(this.actions || {}),
+          ...this.scopeCatalog.map((item) => {
+            const parts = item.name.split(":");
+            return item.action || parts[parts.length - 1];
+          }),
+        ].filter(Boolean)
+      );
+
+      if (!resourceNames.has(resource)) return false;
+      if (!actionNames.has(action) && action !== "*") return false;
+      if (id !== null && (!id || id.includes(":"))) return false;
+      return true;
+    },
+
     resetScopeSelection() {
       this.fullAccess = false;
       this.selectedPresetId = null;
+      this.customScopesText = "";
       const next = {};
       for (const item of this.scopeCatalog) {
         if (item.name !== "*" && item.action !== "write") {
@@ -615,7 +693,21 @@ export default {
           risk_level: "high",
         };
       }
-      return this.scopeCatalog.find((item) => item.name === name) || {
+      const exact = this.scopeCatalog.find((item) => item.name === name);
+      if (exact) return exact;
+
+      const parts = String(name).split(":");
+      const typeScope = parts.length === 3 ? `${parts[0]}:${parts[2]}` : name;
+      const base = this.scopeCatalog.find((item) => item.name === typeScope);
+      if (base) {
+        return {
+          ...base,
+          name,
+          title: name,
+        };
+      }
+
+      return {
         name,
         title: name,
         risk_level: "medium",

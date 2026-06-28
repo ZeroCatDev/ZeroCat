@@ -3,7 +3,7 @@ import zcconfig from "../services/config/zcconfig.js";
 import { Router } from "express";
 import { prisma } from "../services/prisma.js";
 import { needLogin } from "../middleware/auth.js";
-import { requireScope } from "../middleware/scope.js";
+import { requireResource, requireScope } from "../middleware/scope.js";
 import { hasProjectPermission } from "../services/auth/permissionManager.js";
 import { setReviewStatus, isAutoApproveUser } from "../services/extensionReview.js";
 
@@ -61,7 +61,7 @@ async function validateBranchAndCommit(projectid, branch, commit, userid) {
   };
 }
 
-router.post("/manager/create", needLogin, requireScope("extension:manage"), async (req, res, next) => {
+router.post("/manager/create", needLogin, requireResource("project", "update", "projectid"), requireScope("extension:manage"), async (req, res, next) => {
   try {
     const { projectid, branch, commit, image, samples, docs, scratchCompatible } = req.body;
 
@@ -166,7 +166,7 @@ router.post("/manager/create", needLogin, requireScope("extension:manage"), asyn
   }
 });
 
-router.put("/manager/edit/:id", needLogin, requireScope("extension:manage"), async (req, res, next) => {
+router.put("/manager/edit/:id", needLogin, requireResource("extension", "manage", "id"), async (req, res, next) => {
   try {
     const { id } = req.params;
     const { branch, commit, image, samples, docs, scratchCompatible } = req.body;
@@ -255,7 +255,7 @@ router.put("/manager/edit/:id", needLogin, requireScope("extension:manage"), asy
   }
 });
 
-router.post("/manager/update/:id", needLogin, requireScope("extension:manage"), async (req, res, next) => {
+router.post("/manager/update/:id", needLogin, requireResource("extension", "manage", "id"), async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -324,7 +324,7 @@ router.post("/manager/update/:id", needLogin, requireScope("extension:manage"), 
   }
 });
 
-router.post("/manager/submit/:id", needLogin, requireScope("extension:manage"), async (req, res, next) => {
+router.post("/manager/submit/:id", needLogin, requireResource("extension", "manage", "id"), async (req, res, next) => {
   try {
     const { id } = req.params;
     // 查找扩展及其项目作者
@@ -435,7 +435,7 @@ router.get("/manager/my", needLogin, requireScope("extension:read"), async (req,
   }
 });
 
-router.delete("/manager/:id", needLogin, requireScope("extension:manage"), async (req, res, next) => {
+router.delete("/manager/:id", needLogin, requireResource("extension", "manage", "id"), async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -611,7 +611,7 @@ router.get("/detailbyprojectid/:id", async (req, res, next) => {
 });
 
 // 批量扩展详情查询接口 - 仅返回可见扩展信息，并标记是否已验证
-router.post("/detail/batch", needLogin, requireScope("extension:read"), async (req, res, next) => {
+router.post("/detail/batch", needLogin, requireResource("extension", "read", (req) => req.body?.ids), async (req, res, next) => {
   try {
     const { ids } = req.body;
 

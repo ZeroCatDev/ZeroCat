@@ -1,6 +1,16 @@
 import {Router} from "express";
 import {prisma} from "../../services/prisma.js";
 import {validateUsername} from "../../services/global.js";
+import {
+    assignDefaultRolesToUser,
+    assignRoleToUser,
+    getUserPolicy,
+    getUserRoleAssignments,
+    listRoles,
+    replaceUserRoles,
+    revokeRoleFromUser,
+    SYSTEM_ROLE_KEYS,
+} from "../../services/auth/policyEngine.js";
 
 const router = Router();
 
@@ -26,6 +36,169 @@ const normalizeConfigValue = (value) => {
         return String(value);
     }
 };
+
+async function findAdminUser(userId) {
+    if (!userId) return null;
+    return prisma.ow_users.findUnique({
+        where: { id: userId },
+        select: {
+            id: true,
+            username: true,
+            display_name: true,
+            email: true,
+            status: true,
+            type: true,
+            avatar: true,
+        },
+    });
+}
+
+/**
+ * @api {get} /admin/users/permissions/roles 获取可分配角色与权限清单
+ * @apiName GetUserPermissionRoles
+ * @apiGroup AdminUsers
+ * @apiPermission admin
+ */
+router.get("/permissions/roles", async (req, res) => {
+    try {
+        const roles = await listRoles();
+        res.json({
+            status: "success",
+            data: {
+                roles,
+            },
+        });
+    } catch (error) {
+        console.error("Error fetching permission roles:", error);
+        res.status(500).json({
+            status: "error",
+            message: "获取角色权限清单失败",
+        });
+    }
+});
+
+/**
+ * @api {get} /admin/users/:id/permissions 获取用户角色权限
+ * @apiName GetUserPermissions
+ * @apiGroup AdminUsers
+ * @apiPermission admin
+ */
+router.get("/:id/permissions", async (req, res) => {
+    try {
+        const userId = parseUserId(req.params.id);
+        if (!userId) {
+            return res.status(400).json({
+                status: "error",
+                message: "无效用户ID",
+            });
+        }
+
+        const user = await findAdminUser(userId);
+        if (!user) {
+            return res.status(404).json({
+                status: "error",
+                message: "用户不存在",
+            });
+        }
+
+        const [assignments, policy] = await Promise.all([
+            getUserRoleAssignments(userId),
+            getUserPolicy(userId, { useCache: false }),
+        ]);
+
+        res.json({
+            status: "success",
+            data: {
+                user,
+                assignments,
+                policy,
+            },
+        });
+    } catch (error) {
+        console.error("Error fetching user permissions:", error);
+        res.status(500).json({
+            status: "error",
+            message: "获取用户权限失败",
+        });
+    }
+});
+
+/**
+ * @api {put} /admin/users/:id/permissions 整体更新用户角色权限
+ * @apiName UpdateUserPermissions
+ * @apiGroup AdminUsers
+ * @apiPermission admin
+ *
+ * @apiBody {String[]} role_keys 用户应拥有的角色 key 列表
+ */
+router.put("/:id/permissions", async (req, res) => {
+    try {
+        const userId = parseUserId(req.params.id);
+        if (!userId) {
+            return res.status(400).json({
+                status: "error",
+                message: "无效用户ID",
+            });
+        }
+
+        const roleKeys = Array.isArray(req.body?.role_keys)
+            ? [...new Set(req.body.role_keys.map((roleKey) => String(roleKey || "").trim()).filter(Boolean))]
+            : null;
+        if (!roleKeys) {
+            return res.status(400).json({
+                status: "error",
+                message: "role_keys 必须是数组",
+            });
+        }
+
+        const user = await findAdminUser(userId);
+        if (!user) {
+            return res.status(404).json({
+                status: "error",
+                message: "用户不存在",
+            });
+        }
+
+        const isSelf = String(userId) === String(res.locals.userid);
+        if (isSelf && !roleKeys.includes(SYSTEM_ROLE_KEYS.ADMIN)) {
+            const currentPolicy = await getUserPolicy(userId, { useCache: false });
+            if (currentPolicy.roles.includes(SYSTEM_ROLE_KEYS.ADMIN)) {
+                return res.status(400).json({
+                    status: "error",
+                    message: "不能在当前会话中移除自己的管理员权限",
+                    code: "CANNOT_REMOVE_SELF_ADMIN",
+                });
+            }
+        }
+
+        await replaceUserRoles(userId, roleKeys, {
+            assignedBy: res.locals.userid || null,
+            reason: "admin-permission-page",
+        });
+
+        const [assignments, policy] = await Promise.all([
+            getUserRoleAssignments(userId),
+            getUserPolicy(userId, { useCache: false }),
+        ]);
+
+        res.json({
+            status: "success",
+            message: "用户权限已更新",
+            data: {
+                user,
+                assignments,
+                policy,
+            },
+        });
+    } catch (error) {
+        console.error("Error updating user permissions:", error);
+        const badRole = /角色不存在|未知系统角色/.test(error.message || "");
+        res.status(badRole ? 400 : 500).json({
+            status: "error",
+            message: error.message || "更新用户权限失败",
+        });
+    }
+});
 
 /**
  * @api {get} /admin/users/:id/target-configs 获取指定用户 target configs
@@ -416,18 +589,29 @@ router.post("/", async (req, res) => {
                 .json({error: "Username or email already exists"});
         }
 
-        // Create user
-        const user = await prisma.ow_users.create({
-            data: {
-                username,
-                email,
-                password, // Note: Ensure password is hashed before saving
-                display_name: display_name || username,
-                type,
-                status,
-                regTime: new Date(),
-                loginTime: new Date(),
-            },
+        // Create user and role assignments atomically
+        const user = await prisma.$transaction(async (tx) => {
+            const createdUser = await tx.ow_users.create({
+                data: {
+                    username,
+                    email,
+                    password, // Note: Ensure password is hashed before saving
+                    display_name: display_name || username,
+                    type,
+                    status,
+                    regTime: new Date(),
+                    loginTime: new Date(),
+                },
+            });
+            await assignDefaultRolesToUser(createdUser.id, tx);
+            if (["admin", "administrator"].includes(String(type || "").toLowerCase())) {
+                await assignRoleToUser(createdUser.id, SYSTEM_ROLE_KEYS.ADMIN, {
+                    assignedBy: res.locals.userid || null,
+                    reason: "admin-create-user",
+                    db: tx,
+                });
+            }
+            return createdUser;
         });
 
         res.status(201).json(user);
@@ -595,6 +779,17 @@ router.put("/:id", async (req, res) => {
                 contacts: true,
             },
         });
+        if (Object.prototype.hasOwnProperty.call(cleanUpdates, "type")) {
+            const normalizedType = String(cleanUpdates.type || "").toLowerCase();
+            if (["admin", "administrator"].includes(normalizedType)) {
+                await assignRoleToUser(userId, SYSTEM_ROLE_KEYS.ADMIN, {
+                    assignedBy: res.locals.userid || null,
+                    reason: "admin-update-user-type",
+                });
+            } else {
+                await revokeRoleFromUser(userId, SYSTEM_ROLE_KEYS.ADMIN);
+            }
+        }
 
         res.json(user);
     } catch (error) {

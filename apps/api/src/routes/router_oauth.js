@@ -4,11 +4,18 @@ import { Router } from "express";
 import { prisma } from "../services/prisma.js";
 import { S3update } from "../services/global.js";
 import { needLogin } from "../middleware/auth.js";
-import { requireScope } from "../middleware/scope.js";
+import { requireResource, requireScope } from "../middleware/scope.js";
 import { oauthRateLimit } from "../middleware/rateLimit.js";
 import crypto from "crypto";
 import { generateAuthCode, validatePKCE, validateRedirectUri, validateScopes, } from "../services/auth/oauth.js";
-import { isScopeSubset, normalizeScopes, scopeSatisfies, validateUserGrantableScopes } from "../services/auth/scopes.js";
+import {
+    isScopeSubset,
+    normalizeScopes,
+    scopeSatisfies,
+    tokenContextCanGrantScopes,
+    validateUserGrantableScopes,
+} from "../services/auth/scopes.js";
+import { userSatisfiesPolicy } from "../services/auth/policyEngine.js";
 import { generateOAuthTokens, refreshOAuthTokens, verifyOAuthClientCredentials, } from "../services/auth/tokenManager.js";
 import { revokeTokensWhere } from "../services/auth/tokenService.js";
 import multer from "multer";
@@ -171,7 +178,11 @@ router.post("/applications", needLogin, requireScope("oauth_app:manage"), requir
         if (normalizedScopes.length === 0) {
             return res.status(400).json({ error: "无效的权限范围" });
         }
-        if (!isScopeSubset(normalizedScopes, res.locals.scopes || [])) {
+        if (!tokenContextCanGrantScopes(
+            res.locals.tokenType,
+            res.locals.scopes || [],
+            normalizedScopes
+        )) {
             return res.status(403).json({
                 error: "requested scopes exceed current token permissions",
                 code: "ZC_ERROR_SCOPE_ESCALATION",
@@ -277,8 +288,18 @@ router.get("/applications/:client_id", async (req, res) => {
 
         // 检查是否为应用作者，如果不是则隐藏敏感信息
         const isOwner = res.locals.userid && res.locals.userid === application.owner_id;
+        const ownerScopes = res.locals.scopes || [];
+        const ownerRoleAllows = isOwner && (
+            await userSatisfiesPolicy(res.locals.userid, "oauth_app:manage")
+            || await userSatisfiesPolicy(res.locals.userid, `oauth_app:${client_id}:manage`)
+            || await userSatisfiesPolicy(res.locals.userid, `oauth_app:${application.id}:manage`)
+        );
         const canSeeSensitive =
-            isOwner && scopeSatisfies(res.locals.scopes || [], "oauth_app:manage");
+            ownerRoleAllows && (
+                scopeSatisfies(ownerScopes, "oauth_app:manage")
+                || scopeSatisfies(ownerScopes, `oauth_app:${client_id}:manage`)
+                || scopeSatisfies(ownerScopes, `oauth_app:${application.id}:manage`)
+            );
 
         if (!canSeeSensitive) {
             // 非作者只能看到公开信息，隐藏敏感字段
@@ -298,7 +319,7 @@ router.get("/applications/:client_id", async (req, res) => {
 router.post(
     "/applications/:client_id/logo",
     needLogin,
-    requireScope("oauth_app:manage"),
+    requireResource("oauth_app", "manage", "client_id"),
     upload.single("zcfile"),
     async (req, res) => {
         try {
@@ -370,7 +391,7 @@ router.post(
 );
 
 // 更新应用信息
-router.put("/applications/:client_id", needLogin, requireScope("oauth_app:manage"), async (req, res) => {
+router.put("/applications/:client_id", needLogin, requireResource("oauth_app", "manage", "client_id"), async (req, res) => {
     try {
         const { client_id } = req.params;
         const {
@@ -410,7 +431,11 @@ router.put("/applications/:client_id", needLogin, requireScope("oauth_app:manage
         }
         if (
             normalizedScopes !== undefined &&
-            !isScopeSubset(normalizedScopes, res.locals.scopes || [])
+            !tokenContextCanGrantScopes(
+                res.locals.tokenType,
+                res.locals.scopes || [],
+                normalizedScopes
+            )
         ) {
             return res.status(403).json({
                 error: "requested scopes exceed current token permissions",
@@ -454,7 +479,7 @@ router.put("/applications/:client_id", needLogin, requireScope("oauth_app:manage
 });
 
 // 删除应用（软删除）
-router.delete("/applications/:client_id", needLogin, requireScope("oauth_app:manage"), requireSudo, async (req, res) => {
+router.delete("/applications/:client_id", needLogin, requireResource("oauth_app", "manage", "client_id"), requireSudo, async (req, res) => {
     try {
         const { client_id } = req.params;
 
@@ -670,7 +695,11 @@ router.post("/authorize/confirm", needLogin, requireInteractiveSession, requireS
         if (!isScopeSubset(grantedScopes, appScopes)) {
             return handleApiError(res, OAuthErrors.INVALID_SCOPE);
         }
-        if (!isScopeSubset(grantedScopes, res.locals.scopes || [])) {
+        if (!tokenContextCanGrantScopes(
+            res.locals.tokenType,
+            res.locals.scopes || [],
+            grantedScopes
+        )) {
             return handleApiError(res, OAuthErrors.INVALID_SCOPE);
         }
         const grantCheck = await validateUserGrantableScopes(res.locals.userid, grantedScopes);
@@ -882,7 +911,10 @@ router.get("/userinfo", async (req, res) => {
         }
 
         const tokenScopes = normalizeScopes(token.scopes);
-        if (!scopeSatisfies(tokenScopes, "user:read")) {
+        if (
+            !scopeSatisfies(tokenScopes, "user:read")
+            || !(await userSatisfiesPolicy(token.user_id, "user:read"))
+        ) {
             return handleUserInfoError(res, OAuthErrors.INVALID_SCOPE);
         }
 

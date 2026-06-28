@@ -6,7 +6,7 @@ import {validateUsername} from "../services/global.js";
 import {needAdmin, needLogin} from "../middleware/auth.js";
 import { requireSudo } from "../middleware/sudo.js";
 import { requireScope } from "../middleware/scope.js";
-import { scopeSatisfies } from "../services/auth/scopes.js";
+import {assignDefaultRolesToUser, userSatisfiesPolicy} from "../services/auth/policyEngine.js";
 import {createEvent} from "../controllers/events.js";
 import jwt from "jsonwebtoken";
 import * as bcrypt from "bcrypt";
@@ -255,7 +255,8 @@ router.get("/me", needLogin, requireScope("user:read"), async function (req, res
             ...user,
             avatarURL: await buildAvatarURL(user.avatar),
             isActive: user.status === "active",
-            isAdmin: user.type === "administrator",
+            // 基于角色策略判断（覆盖配置管理员、type 管理员、admin 角色），与 needAdmin 一致
+            isAdmin: await userSatisfiesPolicy(res.locals.userid, "admin:manage"),
         };
 
         res.send({
@@ -320,25 +321,29 @@ router.post("/register", async function (req, res, next) {
         // 哈希密码
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // 创建用户
-        const user = await prisma.ow_users.create({
-            data: {
-                username,
-                email,
-                password: hashedPassword,
-                display_name: display_name || username,
-                type: UserTypes.REGULAR,
-                status: "active",
-                regTime: new Date(),
-                settings: {
-                    theme: "light",
-                    language: "zh-CN",
-                    notifications: {
-                        email: true,
-                        push: true,
+        // 创建用户并授予默认角色
+        const user = await prisma.$transaction(async (tx) => {
+            const createdUser = await tx.ow_users.create({
+                data: {
+                    username,
+                    email,
+                    password: hashedPassword,
+                    display_name: display_name || username,
+                    type: UserTypes.REGULAR,
+                    status: "active",
+                    regTime: new Date(),
+                    settings: {
+                        theme: "light",
+                        language: "zh-CN",
+                        notifications: {
+                            email: true,
+                            push: true,
+                        },
                     },
                 },
-            },
+            });
+            await assignDefaultRolesToUser(createdUser.id, tx);
+            return createdUser;
         });
 
         // 记录注册事件
@@ -611,20 +616,7 @@ router.delete("/:userId", needLogin, requireScope("user:delete"), requireSudo, a
         const requesterId = res.locals.userid;
 
         // 验证权限 - 只能删除自己的账户或管理员操作
-        const adminUsers = await zcconfig.get("security.adminusers");
-        const requesterIsAdminUser =
-            Array.isArray(adminUsers) &&
-            adminUsers.includes(String(requesterId));
-        const requesterScopes = requesterIsAdminUser &&
-            res.locals.tokenType === "session" &&
-            Array.isArray(res.locals.scopes) &&
-            res.locals.scopes.includes("*") &&
-            !res.locals.scopes.includes("admin:*")
-            ? [...res.locals.scopes, "admin:*"]
-            : (res.locals.scopes || []);
-        const requesterIsAdmin =
-            requesterIsAdminUser &&
-            scopeSatisfies(requesterScopes, "admin:manage");
+        const requesterIsAdmin = await userSatisfiesPolicy(requesterId, "admin:manage");
 
         if (targetUserId !== requesterId && !requesterIsAdmin) {
             return res.status(403).json({

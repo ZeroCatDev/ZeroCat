@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { needLogin } from '../middleware/auth.js';
-import { requireScope } from '../middleware/scope.js';
+import { requireResource, requireScope } from '../middleware/scope.js';
 import { createRateLimit } from '../middleware/rateLimit.js';
 import redisClient from '../services/redis.js';
 import logger from '../services/logger.js';
@@ -949,7 +949,7 @@ router.post('/github/app/repos/create', needLogin, requireScope("git_sync:manage
 });
 
 
-router.post('/projects/:projectId/provision', needLogin, requireScope("project:update"), requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
+router.post('/projects/:projectId/provision', needLogin, requireResource("project", "update", "projectId"), requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const project = await ensureProjectOwner(req.params.projectId, res.locals.userid);
         const { linkId, name, description, private: isPrivate, branch, fileName, includeReadme } = req.body || {};
@@ -1066,7 +1066,7 @@ router.post('/projects/:projectId/provision', needLogin, requireScope("project:u
     }
 });
 
-router.get('/projects/:projectId', needLogin, requireScope("project:read"), requireScope("git_sync:read"), gitSyncRateLimit, async (req, res, next) => {
+router.get('/projects/:projectId', needLogin, requireResource("project", "read", "projectId"), requireScope("git_sync:read"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const project = await ensureProjectOwner(req.params.projectId, res.locals.userid);
         const settings = await getProjectGitSyncSettings(project.id);
@@ -1086,7 +1086,7 @@ router.get('/projects/:projectId', needLogin, requireScope("project:read"), requ
     }
 });
 
-router.post('/projects/:projectId/bind', needLogin, requireScope("project:update"), requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
+router.post('/projects/:projectId/bind', needLogin, requireResource("project", "update", "projectId"), requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const project = await ensureProjectOwner(req.params.projectId, res.locals.userid);
         const {
@@ -1156,7 +1156,7 @@ router.post('/projects/:projectId/bind', needLogin, requireScope("project:update
     }
 });
 
-router.post('/projects/:projectId/unbind', needLogin, requireScope("project:update"), requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
+router.post('/projects/:projectId/unbind', needLogin, requireResource("project", "update", "projectId"), requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const project = await ensureProjectOwner(req.params.projectId, res.locals.userid);
         const settings = await updateProjectGitSyncSettings(project.id, {
@@ -1169,7 +1169,7 @@ router.post('/projects/:projectId/unbind', needLogin, requireScope("project:upda
     }
 });
 
-router.post('/projects/:projectId/sync', needLogin, requireScope("project:update"), requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
+router.post('/projects/:projectId/sync', needLogin, requireResource("project", "update", "projectId"), requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const project = await ensureProjectOwner(req.params.projectId, res.locals.userid);
         const latestCommit = await prisma.ow_projects_commits.findFirst({
@@ -1347,7 +1347,7 @@ router.post('/blog/resync', needLogin, requireScope("blog:update"), requireScope
     }
 });
 
-router.post('/blog/sync/:projectId', needLogin, requireScope("blog:update"), requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
+router.post('/blog/sync/:projectId', needLogin, requireResource("blog", "update", "projectId"), requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
     try {
         const project = await ensureProjectOwner(req.params.projectId, res.locals.userid);
         if (String(project.type || '').toLowerCase() !== 'article') {

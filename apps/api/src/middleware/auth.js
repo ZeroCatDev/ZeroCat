@@ -2,6 +2,7 @@ import zcconfig from "../services/config/zcconfig.js";
 import logger from "../services/logger.js";
 import { verifyToken } from "../services/auth/tokenService.js";
 import { scopeSatisfies } from "../services/auth/scopes.js";
+import { assignRoleToUser, SYSTEM_ROLE_KEYS, userSatisfiesPolicy } from "../services/auth/policyEngine.js";
 import { extractTokenFromRequest } from "../middleware.js";
 
 /**
@@ -107,24 +108,25 @@ export const needAdmin = async (req, res, next) => {
     }
 
     try {
-        const adminUsers = await zcconfig.get("security.adminusers");
-        const adminUserIds = Array.isArray(adminUsers) ? adminUsers.map(String) : [];
-        if (!adminUserIds.includes(res.locals.userid.toString())) {
+        let isAdmin = await userSatisfiesPolicy(res.locals.userid, "admin:manage");
+
+        if (!isAdmin) {
+            const adminUsers = await zcconfig.get("security.adminusers");
+            const adminUserIds = Array.isArray(adminUsers) ? adminUsers.map(String) : [];
+            if (adminUserIds.includes(res.locals.userid.toString())) {
+                await assignRoleToUser(res.locals.userid, SYSTEM_ROLE_KEYS.ADMIN, {
+                    reason: "system-config-admin",
+                });
+                isAdmin = await userSatisfiesPolicy(res.locals.userid, "admin:manage");
+            }
+        }
+
+        if (!isAdmin) {
             return res.status(403).json({
                 status: "error",
                 message: "需要管理员权限",
                 code: "ZC_ERROR_FORBIDDEN",
             });
-        }
-
-        // 只有已确认的管理员网页登录会话可把 session 的 "*" 提升为显式 admin:*。
-        if (
-            res.locals.tokenType === "session" &&
-            Array.isArray(res.locals.scopes) &&
-            !res.locals.scopes.includes("admin:*") &&
-            res.locals.scopes.includes("*")
-        ) {
-            res.locals.scopes = [...res.locals.scopes, "admin:*"];
         }
 
         if (!scopeSatisfies(res.locals.scopes || [], "admin:manage")) {

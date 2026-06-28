@@ -81,13 +81,15 @@ export async function initProject(projectid, type) {
   }
 }
 
-export const saveFile = async (projectFile) => {
+export const saveFile = async (projectFile, projectId = null) => {
+  const query = projectId ? `?projectid=${encodeURIComponent(projectId)}` : "";
   const response = await request({
-    url: "/project/savefile",
+    url: `/project/savefile${query}`,
     data: {source: projectFile},
     method: "post",
     headers: {
       "Content-Type": "application/json",
+      ...(projectId ? {"X-Project-ID": String(projectId)} : {}),
     },
   });
   return response.data;

@@ -5,7 +5,7 @@
  * 所有令牌均为不透明随机串, 仅在数据库中存储 SHA-256 哈希, 并携带 scope 列表用于精细化鉴权。
  *
  * 令牌类型 (ow_tokens.type):
- *   - session  : 用户登录会话 (默认 scope=["*"], 带刷新令牌)
+ *   - session  : 用户登录会话 (不保存权限快照，运行时使用当前用户角色策略，带刷新令牌)
  *   - personal : 用户自建的个人 API 令牌 (自定义 scope, 无刷新令牌)
  *   - oauth    : 第三方应用授权令牌 (用户授予的 scope 子集, 带刷新令牌)
  */
@@ -17,18 +17,48 @@ import redisClient from "../redis.js";
 import zcconfig from "../config/zcconfig.js";
 import { parseDeviceInfo } from "./tokenUtils.js";
 import { normalizeScopes, validateUserGrantableScopes } from "./scopes.js";
+import { getUserPolicy } from "./policyEngine.js";
 
 const TOKEN_PREFIX = "zc_";
 const CACHE_PREFIX = "token:cache:";
 const REFRESH_GRACE_PREFIX = "refresh:grace:";
-const REFRESH_GRACE_TTL_SEC = 120;
+const REFRESH_GRACE_TTL_SEC = 30;
 const TOKEN_CACHE_MAX_TTL = 5 * 60;
+const RAW_TOKEN_RANDOM_HEX_LENGTH = 96;
+const RAW_TOKEN_PATTERN = new RegExp(`^${TOKEN_PREFIX}[a-f0-9]{${RAW_TOKEN_RANDOM_HEX_LENGTH}}$`, "i");
+const ACTIVITY_THROTTLE_PREFIX = "token:activity:update:";
+const ACTIVITY_UPDATE_INTERVAL_SEC = 60;
+const localActivityThrottle = new Map();
 
 // 默认有效期 (秒)
 const DEFAULT_SESSION_ACCESS_EXPIRY = 60 * 60 * 24; // 24 小时
 const DEFAULT_SESSION_REFRESH_EXPIRY = 60 * 60 * 24 * 30; // 30 天
 const DEFAULT_OAUTH_ACCESS_EXPIRY = 60 * 60; // 1 小时
 const DEFAULT_OAUTH_REFRESH_EXPIRY = 60 * 60 * 24 * 30; // 30 天
+
+/**
+ * 返回 token 在当前时刻实际参与 scope 匹配的权限。
+ *
+ * session token 是网页登录会话，不再把权限快照固化在 token 记录里；
+ * 它总是使用用户当前角色策略中的 allow 权限。personal/oauth token
+ * 仍使用自身记录的 scopes，再由 requireScope 叠加用户角色策略上限。
+ *
+ * @param {{userId:number|string,type:string,scopes?:string[]}} params
+ * @returns {Promise<string[]>}
+ */
+export async function getEffectiveTokenScopes({ userId, type, scopes = [] }) {
+    if (type !== "session") {
+        return normalizeScopes(scopes);
+    }
+
+    const normalizedUserId = Number(userId);
+    if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) {
+        return [];
+    }
+
+    const policy = await getUserPolicy(normalizedUserId);
+    return normalizeScopes(policy.allow || []);
+}
 
 /**
  * 生成不透明令牌明文
@@ -38,13 +68,21 @@ function generateRawToken() {
     return TOKEN_PREFIX + crypto.randomBytes(48).toString("hex");
 }
 
+function normalizeRawToken(rawToken) {
+    return typeof rawToken === "string" ? rawToken.trim() : "";
+}
+
+export function isValidRawTokenFormat(rawToken) {
+    return RAW_TOKEN_PATTERN.test(normalizeRawToken(rawToken));
+}
+
 /**
  * 计算令牌哈希 (SHA-256 hex)
  * @param {string} rawToken
  * @returns {string}
  */
 export function hashToken(rawToken) {
-    return crypto.createHash("sha256").update(rawToken).digest("hex");
+    return crypto.createHash("sha256").update(normalizeRawToken(rawToken)).digest("hex");
 }
 
 /**
@@ -52,6 +90,25 @@ export function hashToken(rawToken) {
  */
 function tokenDisplayPrefix(rawToken) {
     return rawToken.substring(0, 12);
+}
+
+function normalizeIpAddress(value) {
+    const normalized = String(value || "").trim();
+    return normalized ? normalized.substring(0, 100) : null;
+}
+
+function tokenCacheKey(hash) {
+    return CACHE_PREFIX + hash;
+}
+
+function refreshGraceKey(hash) {
+    return REFRESH_GRACE_PREFIX + hash;
+}
+
+async function deleteTokenCacheKeys(keys) {
+    const uniqueKeys = [...new Set(keys.filter(Boolean))];
+    if (uniqueKeys.length === 0) return;
+    await redisClient.deleteMany(uniqueKeys);
 }
 
 async function getSessionAccessExpiry() {
@@ -120,7 +177,7 @@ export async function issueToken(params) {
             withRefreshToken = false;
         }
 
-        const normalizedScopes = normalizeScopes(scopes);
+        const normalizedScopes = type === "session" ? [] : normalizeScopes(scopes);
         if (type !== "session") {
             const grantCheck = await validateUserGrantableScopes(userId, normalizedScopes);
             if (!grantCheck.allowed) {
@@ -148,6 +205,7 @@ export async function issueToken(params) {
         }
 
         const deviceInfo = userAgent ? parseDeviceInfo(userAgent) : null;
+        const normalizedIp = normalizeIpAddress(ip);
 
         const record = await prisma.ow_tokens.create({
             data: {
@@ -162,11 +220,11 @@ export async function issueToken(params) {
                 authorization_id: authorizationId,
                 expires_at: accessExpiresAt,
                 refresh_expires_at: refreshExpiresAt,
-                ip_address: ip,
+                ip_address: normalizedIp,
                 user_agent: userAgent?.substring(0, 255) || null,
                 device_info: deviceInfo ? JSON.stringify(deviceInfo) : null,
                 last_used_at: new Date(now),
-                last_used_ip: ip,
+                last_used_ip: normalizedIp,
                 activity_count: 0,
             },
         });
@@ -184,6 +242,10 @@ export async function issueToken(params) {
             }
         }
 
+        const responseScopes = type === "session"
+            ? await getEffectiveTokenScopes({ userId, type, scopes: normalizedScopes })
+            : normalizedScopes;
+
         return {
             success: true,
             accessToken: rawAccess,
@@ -191,7 +253,7 @@ export async function issueToken(params) {
             expiresAt: accessExpiresAt,
             refreshExpiresAt,
             tokenId: record.id,
-            scopes: normalizedScopes,
+            scopes: responseScopes,
             type,
         };
     } catch (error) {
@@ -209,12 +271,14 @@ export async function issueToken(params) {
  */
 export async function verifyToken(rawToken, ipAddress = null) {
     try {
-        if (!rawToken || typeof rawToken !== "string") {
+        const normalizedToken = normalizeRawToken(rawToken);
+        if (!isValidRawTokenFormat(normalizedToken)) {
             return { valid: false, message: "无效的令牌格式" };
         }
 
-        const hash = hashToken(rawToken);
-        const cacheKey = CACHE_PREFIX + hash;
+        const hash = hashToken(normalizedToken);
+        const cacheKey = tokenCacheKey(hash);
+        const normalizedIp = normalizeIpAddress(ipAddress);
 
         // 1. 尝试 Redis 缓存
         let cached = await redisClient.get(cacheKey);
@@ -222,13 +286,18 @@ export async function verifyToken(rawToken, ipAddress = null) {
             if (cached.expires_at && cached.expires_at < Date.now()) {
                 await redisClient.delete(cacheKey);
             } else {
-                updateTokenActivity(cached.tokenId, ipAddress).catch((e) =>
+                updateTokenActivity(cached.tokenId, normalizedIp).catch((e) =>
                     logger.error(`更新令牌活动失败: ${e.message}`)
                 );
+                const scopes = await getEffectiveTokenScopes({
+                    userId: cached.user?.userid,
+                    type: cached.type,
+                    scopes: cached.scopes,
+                });
                 return {
                     valid: true,
                     user: cached.user,
-                    scopes: cached.scopes,
+                    scopes,
                     tokenType: cached.type,
                     tokenId: cached.tokenId,
                     applicationId: cached.applicationId || null,
@@ -237,8 +306,8 @@ export async function verifyToken(rawToken, ipAddress = null) {
         }
 
         // 2. 回落数据库
-        const record = await prisma.ow_tokens.findFirst({
-            where: { token_hash: hash, revoked: false },
+        const record = await prisma.ow_tokens.findUnique({
+            where: { token_hash: hash },
             include: {
                 user: {
                     select: {
@@ -252,7 +321,7 @@ export async function verifyToken(rawToken, ipAddress = null) {
             },
         });
 
-        if (!record) {
+        if (!record || record.revoked) {
             return { valid: false, message: "令牌不存在或已被吊销" };
         }
 
@@ -273,9 +342,14 @@ export async function verifyToken(rawToken, ipAddress = null) {
             email: record.user.email,
             token_id: record.id,
         };
-        const scopes = normalizeScopes(record.scopes);
+        const storedScopes = normalizeScopes(record.scopes);
+        const scopes = await getEffectiveTokenScopes({
+            userId: record.user.id,
+            type: record.type,
+            scopes: storedScopes,
+        });
 
-        // 写入缓存 (TTL = 剩余有效期, 上限 1 小时)
+        // 写入缓存 (TTL = 剩余有效期, 上限 5 分钟)
         const remainingMs = record.expires_at
             ? record.expires_at.getTime() - Date.now()
             : TOKEN_CACHE_MAX_TTL * 1000;
@@ -285,7 +359,7 @@ export async function verifyToken(rawToken, ipAddress = null) {
             {
                 tokenId: record.id,
                 user,
-                scopes,
+                scopes: storedScopes,
                 type: record.type,
                 applicationId: record.application_id || null,
                 expires_at: record.expires_at ? record.expires_at.getTime() : null,
@@ -293,7 +367,7 @@ export async function verifyToken(rawToken, ipAddress = null) {
             ttl
         );
 
-        updateTokenActivity(record.id, ipAddress).catch((e) =>
+        updateTokenActivity(record.id, normalizedIp).catch((e) =>
             logger.error(`更新令牌活动失败: ${e.message}`)
         );
 
@@ -314,15 +388,52 @@ export async function verifyToken(rawToken, ipAddress = null) {
 /**
  * 异步更新令牌活动记录
  */
-export async function updateTokenActivity(tokenId, ipAddress) {
+async function shouldWriteTokenActivity(tokenId) {
+    const key = ACTIVITY_THROTTLE_PREFIX + tokenId;
+    if (redisClient.isConnected) {
+        return redisClient.setIfNotExists(key, "1", ACTIVITY_UPDATE_INTERVAL_SEC);
+    }
+
+    const now = Date.now();
+    const nextAllowedAt = localActivityThrottle.get(tokenId) || 0;
+    if (nextAllowedAt > now) {
+        return false;
+    }
+
+    localActivityThrottle.set(tokenId, now + ACTIVITY_UPDATE_INTERVAL_SEC * 1000);
+    if (localActivityThrottle.size > 10_000) {
+        for (const [cachedTokenId, expiresAt] of localActivityThrottle.entries()) {
+            if (expiresAt <= now) {
+                localActivityThrottle.delete(cachedTokenId);
+            }
+        }
+    }
+    return true;
+}
+
+export async function updateTokenActivity(tokenId, ipAddress, { force = false } = {}) {
     try {
+        const normalizedTokenId = Number(tokenId);
+        if (!Number.isInteger(normalizedTokenId) || normalizedTokenId <= 0) {
+            return false;
+        }
+
+        if (!force && !(await shouldWriteTokenActivity(normalizedTokenId))) {
+            return true;
+        }
+
+        const data = {
+            last_used_at: new Date(),
+            activity_count: { increment: 1 },
+        };
+        const normalizedIp = normalizeIpAddress(ipAddress);
+        if (normalizedIp) {
+            data.last_used_ip = normalizedIp;
+        }
+
         await prisma.ow_tokens.update({
-            where: { id: tokenId },
-            data: {
-                last_used_at: new Date(),
-                last_used_ip: ipAddress,
-                activity_count: { increment: 1 },
-            },
+            where: { id: normalizedTokenId },
+            data,
         });
         return true;
     } catch (error) {
@@ -348,7 +459,7 @@ function serializeGracePayload(payload) {
 
 async function readGraceRefreshResult(refreshHash) {
     try {
-        const cached = await redisClient.get(REFRESH_GRACE_PREFIX + refreshHash);
+        const cached = await redisClient.get(refreshGraceKey(refreshHash));
         if (!cached?.accessToken) return null;
         return {
             success: true,
@@ -369,7 +480,7 @@ async function storeGraceRefreshResult(refreshHash, payload) {
     if (!refreshHash) return;
     try {
         await redisClient.set(
-            REFRESH_GRACE_PREFIX + refreshHash,
+            refreshGraceKey(refreshHash),
             serializeGracePayload(payload),
             REFRESH_GRACE_TTL_SEC
         );
@@ -388,18 +499,20 @@ async function storeGraceRefreshResult(refreshHash, payload) {
  */
 export async function refreshAccessToken(rawRefreshToken, ipAddress = null, userAgent = null) {
     try {
-        if (!rawRefreshToken) {
-            return { success: false, message: "缺少刷新令牌" };
+        const normalizedRefreshToken = normalizeRawToken(rawRefreshToken);
+        if (!isValidRawTokenFormat(normalizedRefreshToken)) {
+            return { success: false, message: "无效的刷新令牌" };
         }
-        const refreshHash = hashToken(rawRefreshToken);
+        const refreshHash = hashToken(normalizedRefreshToken);
+        const normalizedIp = normalizeIpAddress(ipAddress);
 
         const graceResult = await readGraceRefreshResult(refreshHash);
         if (graceResult) {
             return graceResult;
         }
 
-        const record = await prisma.ow_tokens.findFirst({
-            where: { refresh_token_hash: refreshHash, revoked: false },
+        const record = await prisma.ow_tokens.findUnique({
+            where: { refresh_token_hash: refreshHash },
             include: {
                 user: {
                     select: { id: true, status: true },
@@ -407,7 +520,7 @@ export async function refreshAccessToken(rawRefreshToken, ipAddress = null, user
             },
         });
 
-        if (!record) {
+        if (!record || record.revoked || !["session", "oauth"].includes(record.type)) {
             return { success: false, message: "无效的刷新令牌" };
         }
         if (!record.user || record.user.status !== "active") {
@@ -421,7 +534,7 @@ export async function refreshAccessToken(rawRefreshToken, ipAddress = null, user
         const previousRefreshHash = refreshHash;
 
         // 失效旧访问令牌缓存
-        await redisClient.delete(CACHE_PREFIX + previousAccessHash);
+        await redisClient.delete(tokenCacheKey(previousAccessHash));
 
         const accessTokenExpiry =
             record.type === "oauth" ? DEFAULT_OAUTH_ACCESS_EXPIRY : await getSessionAccessExpiry();
@@ -432,20 +545,32 @@ export async function refreshAccessToken(rawRefreshToken, ipAddress = null, user
         const newRefreshHash = hashToken(rawRefresh);
         const accessExpiresAt = new Date(now + accessTokenExpiry * 1000);
 
-        await prisma.ow_tokens.update({
-            where: { id: record.id },
+        const updateResult = await prisma.ow_tokens.updateMany({
+            where: {
+                id: record.id,
+                refresh_token_hash: previousRefreshHash,
+                revoked: false,
+            },
             data: {
                 token_hash: accessHash,
                 token_prefix: tokenDisplayPrefix(rawAccess),
                 refresh_token_hash: newRefreshHash,
                 expires_at: accessExpiresAt,
                 last_used_at: new Date(now),
-                last_used_ip: ipAddress,
+                last_used_ip: normalizedIp,
                 user_agent: userAgent?.substring(0, 255) || record.user_agent,
                 device_info: userAgent ? JSON.stringify(parseDeviceInfo(userAgent)) : record.device_info,
                 activity_count: { increment: 1 },
             },
         });
+
+        if (updateResult.count !== 1) {
+            const retryGraceResult = await readGraceRefreshResult(previousRefreshHash);
+            if (retryGraceResult) {
+                return retryGraceResult;
+            }
+            return { success: false, message: "刷新令牌已被轮换，请重试登录" };
+        }
 
         const result = {
             success: true,
@@ -454,7 +579,11 @@ export async function refreshAccessToken(rawRefreshToken, ipAddress = null, user
             expiresAt: accessExpiresAt,
             refreshExpiresAt: record.refresh_expires_at,
             tokenId: record.id,
-            scopes: normalizeScopes(record.scopes),
+            scopes: await getEffectiveTokenScopes({
+                userId: record.user.id,
+                type: record.type,
+                scopes: record.scopes,
+            }),
         };
 
         // 旧刷新令牌宽限期：并发请求仍可拿到同一组最新令牌
@@ -482,7 +611,10 @@ export async function revokeToken(tokenId) {
             where: { id: tokenId },
             data: { revoked: true, revoked_at: new Date() },
         });
-        await redisClient.delete(CACHE_PREFIX + record.token_hash);
+        await deleteTokenCacheKeys([
+            tokenCacheKey(record.token_hash),
+            record.refresh_token_hash ? refreshGraceKey(record.refresh_token_hash) : null,
+        ]);
         return { success: true, message: "令牌已吊销" };
     } catch (error) {
         logger.error(`吊销令牌出错: ${error.message}`);
@@ -509,12 +641,13 @@ export async function revokeAllUserTokens(userId, excludeTokenId = null) {
                 revoked: false,
                 ...(excludeTokenId ? { id: { not: excludeTokenId } } : {}),
             },
-            select: { id: true, token_hash: true },
+            select: { id: true, token_hash: true, refresh_token_hash: true },
         });
 
-        for (const t of tokens) {
-            await redisClient.delete(CACHE_PREFIX + t.token_hash);
-        }
+        await deleteTokenCacheKeys(tokens.flatMap((token) => [
+            tokenCacheKey(token.token_hash),
+            token.refresh_token_hash ? refreshGraceKey(token.refresh_token_hash) : null,
+        ]));
 
         const result = await prisma.ow_tokens.updateMany({
             where: {
@@ -546,12 +679,13 @@ export async function revokeTokensWhere(where) {
         const narrowedWhere = { ...where, revoked: false };
         const tokens = await prisma.ow_tokens.findMany({
             where: narrowedWhere,
-            select: { token_hash: true },
+            select: { token_hash: true, refresh_token_hash: true },
         });
 
-        for (const token of tokens) {
-            await redisClient.delete(CACHE_PREFIX + token.token_hash);
-        }
+        await deleteTokenCacheKeys(tokens.flatMap((token) => [
+            tokenCacheKey(token.token_hash),
+            token.refresh_token_hash ? refreshGraceKey(token.refresh_token_hash) : null,
+        ]));
 
         const result = await prisma.ow_tokens.updateMany({
             where: narrowedWhere,
@@ -622,6 +756,12 @@ export async function introspectToken(rawToken) {
     const now = Date.now();
     const expired = record.expires_at ? record.expires_at.getTime() < now : false;
     const active = !record.revoked && !expired && record.user?.status === "active";
+    const storedScopes = normalizeScopes(record.scopes);
+    const effectiveScopes = await getEffectiveTokenScopes({
+        userId: record.user_id,
+        type: record.type,
+        scopes: storedScopes,
+    });
 
     return {
         active,
@@ -631,7 +771,10 @@ export async function introspectToken(rawToken) {
         type: record.type,
         name: record.name,
         token_prefix: record.token_prefix,
-        scopes: normalizeScopes(record.scopes),
+        scopes: effectiveScopes,
+        effective_scopes: effectiveScopes,
+        stored_scopes: storedScopes,
+        scope_source: record.type === "session" ? "current_user_policy" : "token_record",
         user_id: record.user_id,
         user: record.user
             ? {
@@ -661,6 +804,8 @@ export default {
     revokeAllUserTokens,
     listUserTokens,
     introspectToken,
+    getEffectiveTokenScopes,
     updateTokenActivity,
+    isValidRawTokenFormat,
     hashToken,
 };

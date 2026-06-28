@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { needLogin } from "../middleware/auth.js";
-import { requireScope } from "../middleware/scope.js";
+import { requireResource, requireScope } from "../middleware/scope.js";
 import logger from "../services/logger.js";
 import * as draftService from "../services/blog/draftService.js";
 
@@ -24,7 +24,7 @@ router.get("/drafts", needLogin, requireScope("blog:read"), async (req, res) => 
   }
 });
 
-router.get("/drafts/:projectId", needLogin, requireScope("blog:read"), async (req, res) => {
+router.get("/drafts/:projectId", needLogin, requireResource("blog", "read", "projectId"), async (req, res) => {
   try {
     const draft = await draftService.getDraft(res.locals.userid, req.params.projectId);
     if (!draft) {
@@ -36,7 +36,7 @@ router.get("/drafts/:projectId", needLogin, requireScope("blog:read"), async (re
   }
 });
 
-router.put("/drafts/:projectId", needLogin, requireScope("blog:update"), async (req, res) => {
+router.put("/drafts/:projectId", needLogin, requireResource("blog", "update", "projectId"), async (req, res) => {
   try {
     const payload = req.body || {};
     const patch = {
@@ -59,7 +59,7 @@ router.put("/drafts/:projectId", needLogin, requireScope("blog:update"), async (
   }
 });
 
-router.delete("/drafts/:projectId", needLogin, requireScope("blog:delete"), async (req, res) => {
+router.delete("/drafts/:projectId", needLogin, requireResource("blog", "delete", "projectId"), async (req, res) => {
   try {
     const removed = await draftService.discardDraft(res.locals.userid, req.params.projectId);
     res.json({ status: "success", data: { removed: Boolean(removed) } });
@@ -68,7 +68,7 @@ router.delete("/drafts/:projectId", needLogin, requireScope("blog:delete"), asyn
   }
 });
 
-router.post("/drafts/:projectId/publish", needLogin, requireScope("blog:update"), async (req, res) => {
+router.post("/drafts/:projectId/publish", needLogin, requireResource("blog", "update", "projectId"), async (req, res) => {
   try {
     const { message } = req.body || {};
     const result = await draftService.publishDraft(
@@ -92,9 +92,9 @@ router.get("/posts/@:username", postsController.getPostsByAuthor);
 router.get("/posts/@:username/:slug", postsController.getPostDetail); // Assuming detail can handle slug or id
 router.get("/posts/:id", postsController.getPostDetail);
 router.post("/posts", needLogin, requireScope("blog:create"), postsController.createPost);
-router.patch("/posts/:id/meta", needLogin, requireScope("blog:update"), postsController.updatePostMeta);
+router.patch("/posts/:id/meta", needLogin, requireResource("blog", "update", "id"), postsController.updatePostMeta);
 // router.post("/posts/:id/publish", needLogin, postsController.publishPost); // Re-uses draft publish?
-router.post("/posts/:id/unpublish", needLogin, requireScope("blog:update"), postsController.unpublishPost);
+router.post("/posts/:id/unpublish", needLogin, requireResource("blog", "update", "id"), postsController.unpublishPost);
 router.get("/posts/:id/related", postsController.getRelatedPosts);
 // router.get("/posts/:id/toc", postsController.getPostToc);
 

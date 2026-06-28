@@ -149,7 +149,8 @@ export function parseDeviceInfo(userAgent) {
 /**
  * 为用户创建登录令牌 (会话令牌)
  *
- * 已迁移到统一令牌服务: 签发不透明 scope 令牌 (type=session, scope=["*"]).
+ * 已迁移到统一令牌服务: 签发不透明会话令牌 (type=session).
+ * session 权限不写入令牌记录，鉴权时按用户当前角色策略计算。
  * 保留此函数签名以兼容现有登录控制器, 返回结构保持不变 (accessToken 现为不透明串)。
  *
  * @param {number} userId 用户ID
@@ -438,11 +439,6 @@ export function setRefreshTokenCookie(res) {
  */
 export function respondWithBrowserAuthTokens(res, payload, statusCode = 200) {
     clearLegacyAuthCookies(res);
-
-    // #region agent log
-    fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1167d'},body:JSON.stringify({sessionId:'f1167d',location:'tokenUtils.js:respondWithBrowserAuthTokens',message:'auth tokens in json body',data:{hasToken:!!payload?.token,hasRefreshToken:!!payload?.refresh_token,accessPrefix:typeof payload?.token==='string'?payload.token.slice(0,12):null,refreshPrefix:typeof payload?.refresh_token==='string'?payload.refresh_token.slice(0,12):null,samePrefix:typeof payload?.token==='string'&&typeof payload?.refresh_token==='string'?payload.token.slice(0,12)===payload.refresh_token.slice(0,12):null,statusCode},timestamp:Date.now(),runId:'localStorage-v3',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
-
     return res.status(statusCode).json(payload);
 }
 

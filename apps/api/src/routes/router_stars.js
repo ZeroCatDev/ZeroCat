@@ -1,7 +1,7 @@
 import logger from "../services/logger.js";
 import {Router} from "express";
 import {needLogin} from "../middleware/auth.js";
-import { requireScope } from "../middleware/scope.js";
+import { requireResource } from "../middleware/scope.js";
 import {createEvent} from "../controllers/events.js";
 import {prisma} from "../services/prisma.js";
 import {getProjectStars, getProjectStarStatus, starProject, unstarProject,} from "../controllers/stars.js";
@@ -13,7 +13,7 @@ const router = Router();
  * @route POST /star
  * @access Private
  */
-router.post("/star", needLogin, requireScope("project:interact"), async (req, res) => {
+router.post("/star", needLogin, requireResource("project", "interact", "projectid"), async (req, res) => {
     try {
         const projectId = parseInt(req.body.projectid);
 
@@ -63,7 +63,7 @@ router.post("/star", needLogin, requireScope("project:interact"), async (req, re
  * @route POST /unstar
  * @access Private
  */
-router.post("/unstar", needLogin, requireScope("project:interact"), async (req, res) => {
+router.post("/unstar", needLogin, requireResource("project", "interact", "projectid"), async (req, res) => {
     try {
         const projectId = parseInt(req.body.projectid);
 

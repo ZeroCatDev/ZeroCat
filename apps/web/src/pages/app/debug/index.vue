@@ -65,6 +65,11 @@
       link: '/app/debug/token-introspect'
     },
     {
+      title: '令牌权限调试',
+      description: '/app/debug/token-permissions',
+      link: '/app/debug/token-permissions'
+    },
+    {
       title: 'OAuth 贴文调试',
       description: '/app/debug/oauth-post-manager',
       link: '/app/debug/oauth-post-manager'

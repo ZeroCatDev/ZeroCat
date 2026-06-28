@@ -21,6 +21,7 @@ import {
     processImage,
     uploadToS3,
 } from '../services/assets.js';
+import {assignDefaultRolesToUser} from '../services/auth/policyEngine.js';
 
 const USER_TARGET_TYPE = 'user';
 const TWITTER_OAUTH1_REQUEST_TOKEN_KEY_PREFIX = 'twitter_oauth1_req:';
@@ -1662,6 +1663,7 @@ export async function handleOAuthCallback(provider, code, userIdToBind = null, o
                         }
                     });
                     logger.info(`[oauth] 成功创建OAuth联系方式: userId=${userId}, provider=${provider}`);
+                    await assignDefaultRolesToUser(userId);
                 } catch (error) {
                     logger.error(`[oauth] 创建OAuth联系方式失败:`, error);
                     throw new Error(`创建OAuth联系方式失败: ${error.message}`);

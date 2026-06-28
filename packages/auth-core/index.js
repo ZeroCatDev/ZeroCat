@@ -20,6 +20,7 @@ const DEFAULT_LOCK_TTL_MS = 12_000;
 const DEFAULT_WAIT_TIMEOUT_MS = 15_000;
 const MIN_REFRESH_INTERVAL_MS = 5_000;
 const WAIT_POLL_MS = 50;
+const RAW_TOKEN_PATTERN = /^zc_[a-f0-9]{96}$/i;
 
 function getDefaultStorage() {
   if (typeof window === "undefined") return null;
@@ -186,7 +187,7 @@ export function createBrowserAuthClient(options = {}) {
 
   function isLikelySessionRefreshToken(value) {
     const token = normalizeRefreshToken(value);
-    return !!token && token.startsWith("zc_") && token.length >= 40;
+    return RAW_TOKEN_PATTERN.test(token || "");
   }
 
   function getStoredToken() {
@@ -338,9 +339,6 @@ export function createBrowserAuthClient(options = {}) {
     if (!storedRefreshToken) return null;
 
     if (!isLikelySessionRefreshToken(storedRefreshToken)) {
-      // #region agent log
-      fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1167d'},body:JSON.stringify({sessionId:'f1167d',location:'auth-core/index.js:performRefreshRequest:invalidFormat',message:'skip refresh invalid token format',data:{refreshPrefix:storedRefreshToken.slice(0,12),tokenLength:storedRefreshToken.length},timestamp:Date.now(),runId:'localStorage-v3',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       clearStoredAuthState();
       return null;
     }
@@ -354,10 +352,6 @@ export function createBrowserAuthClient(options = {}) {
       body: JSON.stringify({ refresh_token: storedRefreshToken }),
       cache: "no-store",
     });
-
-    // #region agent log
-    fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1167d'},body:JSON.stringify({sessionId:'f1167d',location:'auth-core/index.js:performRefreshRequest',message:'refresh request result',data:{apiUrl,refreshPrefix:storedRefreshToken.slice(0,12),tokenLength:storedRefreshToken.length,generationAtStart,generationNow:authCredentialGeneration,status:response?.status,ok:response?.ok},timestamp:Date.now(),runId:'localStorage-v3',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
 
     if (authCredentialGeneration !== generationAtStart) {
       if (allowCredentialRetry) {

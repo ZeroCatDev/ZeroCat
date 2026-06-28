@@ -84,11 +84,15 @@
                 <td><code>{{ result.token_prefix }}…</code></td>
               </tr>
               <tr>
-                <td class="font-weight-bold">权限范围 (Scopes)</td>
+                <td class="font-weight-bold">权限来源</td>
+                <td>{{ scopeSourceLabel(result.scope_source) }}</td>
+              </tr>
+              <tr>
+                <td class="font-weight-bold">有效权限</td>
                 <td>
-                  <template v-if="result.scopes && result.scopes.length">
+                  <template v-if="effectiveScopes.length">
                     <v-chip
-                      v-for="s in result.scopes"
+                      v-for="s in effectiveScopes"
                       :key="s"
                       size="x-small"
                       variant="tonal"
@@ -97,6 +101,19 @@
                     >{{ s }}</v-chip>
                   </template>
                   <span v-else class="text-grey">无</span>
+                </td>
+              </tr>
+              <tr v-if="storedScopes.length">
+                <td class="font-weight-bold">记录权限</td>
+                <td>
+                  <v-chip
+                    v-for="s in storedScopes"
+                    :key="s"
+                    size="x-small"
+                    variant="tonal"
+                    color="secondary"
+                    class="mr-1 mb-1"
+                  >{{ s }}</v-chip>
                 </td>
               </tr>
               <tr>
@@ -183,6 +200,8 @@ const error = ref("");
 const result = ref(null);
 
 const canSeeOwner = computed(() => result.value && !!result.value.user);
+const effectiveScopes = computed(() => result.value?.effective_scopes || result.value?.scopes || []);
+const storedScopes = computed(() => result.value?.stored_scopes || []);
 
 const statusText = computed(() => {
   if (!result.value) return "";
@@ -212,6 +231,13 @@ const typeColor = computed(() => {
 function formatDate(d) {
   if (!d) return "";
   return new Date(d).toLocaleString("zh-CN");
+}
+
+function scopeSourceLabel(source) {
+  return {
+    current_user_policy: "当前用户角色策略",
+    token_record: "令牌记录 scope",
+  }[source] || source || "未知";
 }
 
 function useCurrentToken() {

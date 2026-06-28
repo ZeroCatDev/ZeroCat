@@ -553,6 +553,8 @@ export const useAuthStore = defineStore("auth", () => {
         regTime: data.data.regTime,
         sex: data.data.sex,
         username: data.data.username,
+        type: data.data.type,
+        isAdmin: data.data.isAdmin === true,
       };
       localStorage.setItem(USER_INFO_KEY, JSON.stringify(user.value));
       isLogin.value = true;
@@ -735,10 +737,6 @@ export const useAuthStore = defineStore("auth", () => {
       );
     }
 
-    // #region agent log
-    fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9c6b7d'},body:JSON.stringify({sessionId:'9c6b7d',location:'auth.js:scheduleTokenRefresh',message:'schedule refresh',data:{remainingSec,threshold,delayMs,lastRefreshAgo:_lastRefreshCompletedAt?Date.now()-_lastRefreshCompletedAt:null},timestamp:Date.now(),runId:'token-fix',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
-
     TokenRefreshScheduler.schedule(() => doRefreshCycle(), delayMs);
   };
 
@@ -770,9 +768,6 @@ export const useAuthStore = defineStore("auth", () => {
     if (ok) {
       _refreshRetryCount = 0;
       _lastRefreshCompletedAt = Date.now();
-      // #region agent log
-      fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9c6b7d'},body:JSON.stringify({sessionId:'9c6b7d',location:'auth.js:doRefreshCycle:ok',message:'refresh cycle success',data:{remainingSec:getTokenExpirationTime()},timestamp:Date.now(),runId:'token-fix',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       scheduleTokenRefresh();
     } else {
       _refreshRetryCount++;
@@ -1117,10 +1112,6 @@ export const useAuthStore = defineStore("auth", () => {
   // Sequential initialization: attempt startup recovery first, then start refresh cycle.
     // Goal: after a hard refresh, recover login state via stored refresh token.
   const bootstrapAuth = async () => {
-    // #region agent log
-    fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1167d'},body:JSON.stringify({sessionId:'f1167d',location:'auth.js:bootstrapAuth:start',message:'auth bootstrap start',data:{optimisticLogin:isLogin.value,hasHint:hasAuthHint.value,hasToken:!!getToken(),pageOrigin:typeof window!=='undefined'?window.location.origin:null,apiUrl:import.meta.env.VITE_APP_BASE_API||null},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
-
     try {
       const t = getToken();
       if (t) {
@@ -1144,10 +1135,6 @@ export const useAuthStore = defineStore("auth", () => {
     } finally {
       hasAuthHint.value = hasStoredAuthHintSync();
       authReady.value = true;
-
-      // #region agent log
-      fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f1167d'},body:JSON.stringify({sessionId:'f1167d',location:'auth.js:bootstrapAuth:done',message:'auth bootstrap done',data:{isLogin:isLogin.value,authReady:authReady.value,hasHint:hasAuthHint.value,username:user.value?.username},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
     }
   };
 

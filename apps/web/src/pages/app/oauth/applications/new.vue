@@ -194,6 +194,10 @@
     methods: {
       // 保存应用
       async saveApplication() {
+        if (this.$refs.scopeSelector?.hasInvalidScopes?.()) {
+          this.showError('请修正无效的应用权限')
+          return
+        }
         const selectedScopes = this.$refs.scopeSelector?.getSelectedScopes?.() || this.form.scopes
         if (!Array.isArray(selectedScopes) || selectedScopes.length === 0) {
           this.showError('请至少选择一项应用权限')

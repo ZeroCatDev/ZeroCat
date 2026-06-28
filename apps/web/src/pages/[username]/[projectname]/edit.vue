@@ -944,7 +944,7 @@ export default {
         let isValidJson;
         try { JSON.parse(contentToSave); isValidJson = true; } catch { isValidJson = false; }
         const saveResponse = await axios.post(
-          `/project/savefile?json=${isValidJson}&${isValidJson ? "source=index" : ""}`,
+          `/project/savefile?json=${isValidJson}&projectid=${encodeURIComponent(this.project.id)}&${isValidJson ? "source=index" : ""}`,
           isValidJson ? contentToSave : JSON.stringify({ index: this.fileContent }),
           { headers: { "Content-Type": "application/json", "X-Project-ID": this.project.id } }
         );

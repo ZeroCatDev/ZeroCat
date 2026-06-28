@@ -18,6 +18,7 @@ import zcconfig from "../../services/config/zcconfig.js";
 import {createNotification} from "../notifications.js";
 import {createEvent} from "../events.js";
 import gorseService from "../../services/gorse.js";
+import {assignDefaultRolesToUser} from "../../services/auth/policyEngine.js";
 
 /**
  * 开始注册 / 登录：用户仅输入邮箱
@@ -127,23 +128,27 @@ export const completeRegister = async (req, res) => {
             return res.status(200).json({status: "error", message: "该邮箱已被注册，请直接登录"});
         }
 
-        // 创建用户（邮箱已验证、账户激活）
-        const newUser = await prisma.ow_users.create({
-            data: {
-                username,
-                display_name: username,
-                password: hash(password),
-                status: "active",
-            },
-        });
-        await prisma.ow_users_contacts.create({
-            data: {
-                user_id: newUser.id,
-                contact_value: email,
-                contact_type: "email",
-                is_primary: true,
-                verified: true,
-            },
+        // 创建用户（邮箱已验证、账户激活）并授予默认用户角色
+        const newUser = await prisma.$transaction(async (tx) => {
+            const createdUser = await tx.ow_users.create({
+                data: {
+                    username,
+                    display_name: username,
+                    password: hash(password),
+                    status: "active",
+                },
+            });
+            await tx.ow_users_contacts.create({
+                data: {
+                    user_id: createdUser.id,
+                    contact_value: email,
+                    contact_type: "email",
+                    is_primary: true,
+                    verified: true,
+                },
+            });
+            await assignDefaultRolesToUser(createdUser.id, tx);
+            return createdUser;
         });
 
         // 同步推荐系统 + 注册事件

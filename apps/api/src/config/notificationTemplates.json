@@ -1,4 +1,20 @@
 {
+  "project_collaboration_invitation": {
+    "title": "项目合作邀请",
+    "template": "{{inviter_name}} 邀请你参与项目 {{project_name}}",
+    "icon": "account-group",
+    "requiresActor": false,
+    "requiresData": [
+      "project_name"
+    ]
+  },
+  "project_collaboration_accepted": {
+    "title": "合作邀请已被接受",
+    "template": "你的项目合作邀请已被接受",
+    "icon": "account-check",
+    "requiresActor": false,
+    "requiresData": []
+  },
   "project_comment": {
     "title": "项目评论",
     "template": "{{actor_name}} 评论了您的项目 {{target_name}}",

@@ -171,10 +171,6 @@ export function useAuthToken() {
         if (cancelled) return;
         setToken(getStoredToken());
         setReady(true);
-
-        // #region agent log
-        fetch('http://127.0.0.1:7940/ingest/a57d1d0d-c377-4302-a6d3-64f1aed9d512',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9c6b7d'},body:JSON.stringify({sessionId:'9c6b7d',location:'auth.ts:useAuthToken:ready',message:'blog auth ready',data:{hasToken:!!getStoredToken(),hasHint:hasStoredAuthHint()},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'B'})}).catch(()=>{});
-        // #endregion
       });
     }
 

@@ -1,9 +1,8 @@
 import { Router } from "express";
 import { needLogin } from "../middleware/auth.js";
 import { requireSudo } from "../middleware/sudo.js";
-import { requireScope } from "../middleware/scope.js";
+import { requireResource, requireScope } from "../middleware/scope.js";
 import logger from "../services/logger.js";
-import zcconfig from "../services/config/zcconfig.js";
 import {
     issueToken,
     listUserTokens,
@@ -15,11 +14,15 @@ import {
     SCOPE_CATALOG,
     SCOPE_CATEGORIES,
     SCOPE_PRESETS,
-    isScopeSubset,
     isValidScope,
     normalizeScopes,
+    parseScope,
+    scopeSatisfies,
+    tokenContextCanGrantScopes,
+    userCanAccessResourceScope,
     validateUserGrantableScopes,
 } from "../services/auth/scopes.js";
+import { getUserPolicy, userSatisfiesPolicy } from "../services/auth/policyEngine.js";
 import { prisma } from "../services/prisma.js";
 
 const router = Router();
@@ -34,7 +37,11 @@ router.use(needLogin);
 router.get("/scopes", async (req, res) => {
     const catalogChecks = await Promise.all(
         SCOPE_CATALOG.map(async (item) => {
-            if (!isScopeSubset([item.name], res.locals.scopes || [])) {
+            if (!tokenContextCanGrantScopes(
+                res.locals.tokenType,
+                res.locals.scopes || [],
+                [item.name]
+            )) {
                 return null;
             }
             const grantCheck = await validateUserGrantableScopes(res.locals.userid, [item.name]);
@@ -86,10 +93,8 @@ router.post("/introspect", requireScope("token:read"), async (req, res) => {
         }
 
         // 判定查看者权限
-        const adminUsers = (await zcconfig.get("security.adminusers")) || [];
-        const isAdmin = Array.isArray(adminUsers)
-            && adminUsers.includes(String(res.locals.userid));
-        const isOwner = info.user_id === res.locals.userid;
+        const isAdmin = await userSatisfiesPolicy(res.locals.userid, "admin:manage");
+        const isOwner = String(info.user_id) === String(res.locals.userid);
         const canSeeOwner = isAdmin || isOwner;
 
         const data = {
@@ -99,6 +104,9 @@ router.post("/introspect", requireScope("token:read"), async (req, res) => {
             expired: info.expired,
             type: info.type,
             scopes: info.scopes,
+            effective_scopes: info.effective_scopes,
+            stored_scopes: canSeeOwner ? info.stored_scopes : undefined,
+            scope_source: info.scope_source,
             token_prefix: info.token_prefix,
             expires_at: info.expires_at,
             created_at: info.created_at,
@@ -124,6 +132,143 @@ router.post("/introspect", requireScope("token:read"), async (req, res) => {
             status: "error",
             message: "查询令牌失败",
             code: "INTROSPECT_FAILED",
+        });
+    }
+});
+
+/**
+ * 当前请求令牌权限上下文 (调试工具)
+ * GET /tokens/debug/current
+ */
+router.get("/debug/current", async (req, res) => {
+    try {
+        const [token, policy] = await Promise.all([
+            res.locals.tokenId
+                ? prisma.ow_tokens.findUnique({
+                    where: { id: res.locals.tokenId },
+                    select: {
+                        id: true,
+                        type: true,
+                        name: true,
+                        token_prefix: true,
+                        scopes: true,
+                        application_id: true,
+                        expires_at: true,
+                        revoked: true,
+                        created_at: true,
+                        last_used_at: true,
+                    },
+                })
+                : null,
+            getUserPolicy(res.locals.userid, { useCache: false }),
+        ]);
+
+        res.json({
+            status: "success",
+            data: {
+                user: {
+                    id: res.locals.userid,
+                    username: res.locals.username,
+                    display_name: res.locals.display_name,
+                    email: res.locals.email,
+                },
+                token: token
+                    ? {
+                        id: token.id,
+                        type: token.type,
+                        name: token.name,
+                        token_prefix: token.token_prefix,
+                        stored_scopes: normalizeScopes(token.scopes),
+                        effective_scopes: normalizeScopes(res.locals.scopes || []),
+                        scope_source: token.type === "session"
+                            ? "current_user_policy"
+                            : "token_record",
+                        application_id: token.application_id,
+                        expires_at: token.expires_at,
+                        revoked: token.revoked,
+                        created_at: token.created_at,
+                        last_used_at: token.last_used_at,
+                    }
+                    : null,
+                policy,
+            },
+        });
+    } catch (error) {
+        logger.error("获取当前令牌调试上下文失败:", error);
+        res.status(500).json({
+            status: "error",
+            message: "获取当前令牌调试上下文失败",
+            code: "TOKEN_DEBUG_CONTEXT_FAILED",
+        });
+    }
+});
+
+/**
+ * 评估当前请求是否满足指定 scope (调试工具)
+ * POST /tokens/debug/evaluate  body: { scope: string|string[] }
+ */
+router.post("/debug/evaluate", async (req, res) => {
+    try {
+        const rawScopes = Array.isArray(req.body?.scope)
+            ? req.body.scope
+            : String(req.body?.scope || "").split(/[\s,，]+/);
+        const requiredScopes = [...new Set(
+            rawScopes.map((item) => String(item || "").trim()).filter(Boolean)
+        )];
+
+        if (requiredScopes.length === 0) {
+            return res.status(400).json({
+                status: "error",
+                message: "请提供要评估的 scope",
+                code: "INVALID_SCOPE",
+            });
+        }
+
+        const invalid = requiredScopes.filter((scopeName) => !isValidScope(scopeName));
+        if (invalid.length > 0) {
+            return res.status(400).json({
+                status: "error",
+                message: `存在非法的权限范围: ${invalid.join(", ")}`,
+                code: "INVALID_SCOPE",
+                invalid_scopes: invalid,
+            });
+        }
+
+        const tokenScopes = normalizeScopes(res.locals.scopes || []);
+        const results = await Promise.all(requiredScopes.map(async (scopeName) => {
+            const parsed = parseScope(scopeName);
+            const tokenAllowed = scopeSatisfies(tokenScopes, scopeName);
+            const policyAllowed = await userSatisfiesPolicy(res.locals.userid, scopeName);
+            const resourceAllowed = parsed?.id
+                ? await userCanAccessResourceScope(res.locals.userid, scopeName)
+                : true;
+
+            return {
+                scope: scopeName,
+                allowed: tokenAllowed && policyAllowed && resourceAllowed,
+                token_allowed: tokenAllowed,
+                policy_allowed: policyAllowed,
+                resource_allowed: resourceAllowed,
+                parsed,
+            };
+        }));
+
+        res.json({
+            status: "success",
+            data: {
+                allowed: results.every((item) => item.allowed),
+                token_type: res.locals.tokenType,
+                token_id: res.locals.tokenId,
+                effective_scopes: tokenScopes,
+                results,
+            },
+        });
+    } catch (error) {
+        logger.error("评估令牌权限时出错:", error);
+        res.status(500).json({
+            status: "error",
+            message: "评估令牌权限失败",
+            code: "TOKEN_DEBUG_EVALUATE_FAILED",
         });
     }
 });
@@ -179,7 +324,11 @@ router.post("/", requireScope("token:manage"), requireSudo, async (req, res) => 
                 code: "INVALID_SCOPES",
             });
         }
-        if (!isScopeSubset(normalizedScopes, res.locals.scopes || [])) {
+        if (!tokenContextCanGrantScopes(
+            res.locals.tokenType,
+            res.locals.scopes || [],
+            normalizedScopes
+        )) {
             return res.status(403).json({
                 status: "error",
                 message: "请求的权限范围不能超过当前令牌已有权限",
@@ -273,7 +422,7 @@ router.get("/", requireScope("token:read"), async (req, res) => {
  * 获取单个个人令牌详情
  * GET /tokens/:id
  */
-router.get("/:id", requireScope("token:read"), async (req, res) => {
+router.get("/:id", requireResource("token", "read", "id"), async (req, res) => {
     try {
         const tokenId = parseInt(req.params.id, 10);
         if (isNaN(tokenId)) {
@@ -302,7 +451,7 @@ router.get("/:id", requireScope("token:read"), async (req, res) => {
  * 吊销 (删除) 个人令牌
  * DELETE /tokens/:id
  */
-router.delete("/:id", requireScope("token:manage"), requireSudo, async (req, res) => {
+router.delete("/:id", requireResource("token", "manage", "id"), requireSudo, async (req, res) => {
     try {
         const tokenId = parseInt(req.params.id, 10);
         if (isNaN(tokenId)) {

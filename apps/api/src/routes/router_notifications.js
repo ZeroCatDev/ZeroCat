@@ -4,7 +4,7 @@
  */
 import express from "express";
 import {needLogin} from "../middleware/auth.js";
-import { requireScope } from "../middleware/scope.js";
+import { requireResource, requireScope } from "../middleware/scope.js";
 import logger from "../services/logger.js";
 import notificationUtils from "../controllers/notifications.js";
 import {prisma} from "../services/prisma.js";
@@ -78,7 +78,7 @@ router.get("/unread-count", needLogin, requireScope("notification:read"), async 
  * @desc 将通知标记为已读
  * @access Private
  */
-router.post("/mark-read", needLogin, requireScope("notification:update"), async (req, res) => {
+router.post("/mark-read", needLogin, requireResource("notification", "update", (req) => req.body?.notification_ids), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const {notification_ids} = req.body;
@@ -104,7 +104,7 @@ router.post("/mark-read", needLogin, requireScope("notification:update"), async 
  * @desc 将通知标记为已读 (兼容旧API)
  * @access Private
  */
-router.put("/read", needLogin, requireScope("notification:update"), async (req, res) => {
+router.put("/read", needLogin, requireResource("notification", "update", (req) => req.body?.notification_ids), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const {notification_ids} = req.body;
@@ -401,7 +401,7 @@ router.get("/templates", async (req, res) => {
  * @desc 获取通知的推送状态
  * @access Private
  */
-router.get("/push-status/:id", needLogin, requireScope("notification:read"), async (req, res) => {
+router.get("/push-status/:id", needLogin, requireResource("notification", "read", "id"), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const notificationId = parseInt(req.params.id, 10);
@@ -612,7 +612,7 @@ router.get("/settings/:targetType/:targetId", needLogin, requireScope("notificat
  * @desc 获取单个通知详情
  * @access Private
  */
-router.get("/:id", needLogin, requireScope("notification:read"), async (req, res) => {
+router.get("/:id", needLogin, requireResource("notification", "read", "id"), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const notificationId = parseInt(req.params.id, 10);

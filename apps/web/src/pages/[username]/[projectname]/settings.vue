@@ -171,6 +171,14 @@
         />
       </v-col>
 
+      <v-col cols="12"><h1>合作者</h1></v-col>
+      <v-col cols="12">
+        <ProjectCollaborators
+          :project-id="Number(projectID)"
+          :is-author="isAuthor"
+        />
+      </v-col>
+
       <v-col cols="12"><h1>危险</h1></v-col>
       <v-col cols="12">
         <v-card>
@@ -306,6 +314,7 @@ import { getProjectInfoByNamespace } from "@/services/projectService";
 import LicenseSelector from "@/components/LicenseSelector.vue";
 import LanguageSelector from "@/components/LanguageSelector.vue";
 import GitSyncManager from "@/components/GitSyncManager.vue";
+import ProjectCollaborators from "@/components/project/ProjectCollaborators.vue";
 import { useSudoManager } from "@/composables/useSudoManager";
 
 export default {
@@ -313,6 +322,7 @@ export default {
     LicenseSelector,
     LanguageSelector,
     GitSyncManager,
+    ProjectCollaborators,
   },
   data() {
     return {

@@ -1,7 +1,7 @@
 import {Router} from "express";
 import {needLogin} from "../middleware/auth.js";
 import { requireSudo } from "../middleware/sudo.js";
-import { requireScope } from "../middleware/scope.js";
+import { requireResource, requireScope } from "../middleware/scope.js";
 import {tokenAuthMiddleware} from "../middleware.js";
 import geetestMiddleware from "../middleware/geetest.js";
 import {
@@ -236,8 +236,8 @@ router.post("/unlink-oauth", needLogin, requireScope("user:update"), requireSudo
 
 // 令牌管理相关路由
 router.post("/refresh-token", tokenController.refreshToken);
-router.get("/token-details/:tokenId", needLogin, requireScope("token:read"), tokenController.getTokenDetails);
+router.get("/token-details/:tokenId", needLogin, requireResource("token", "read", "tokenId"), tokenController.getTokenDetails);
 router.get("/active-tokens", needLogin, requireScope("token:read"), tokenController.getActiveTokens);
-router.post("/revoke-token", needLogin, requireScope("token:manage"), tokenController.revokeToken);
+router.post("/revoke-token", needLogin, requireResource("token", "manage", "token_id"), tokenController.revokeToken);
 
 export default router;

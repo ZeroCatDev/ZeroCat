@@ -4,7 +4,14 @@ import {createTypedJWT} from "./tokenUtils.js";
 import logger from "../logger.js";
 import {prisma} from "../prisma.js";
 import crypto from "crypto";
-import {issueToken, hashToken, refreshAccessToken, revokeTokensWhere} from "./tokenService.js";
+import {
+    issueToken,
+    hashToken,
+    isValidRawTokenFormat,
+    refreshAccessToken,
+    revokeTokensWhere,
+    updateTokenActivity,
+} from "./tokenService.js";
 import { normalizeScopes as normalizeScopeCatalog } from "./scopes.js";
 
 /**
@@ -69,11 +76,13 @@ export async function generateOAuthTokens(userId, applicationId, authorizationId
 
 // 验证OAuth访问令牌 (从 ow_tokens 读取)
 export async function verifyOAuthAccessToken(accessToken) {
-    const token = await prisma.ow_tokens.findFirst({
+    if (!isValidRawTokenFormat(accessToken)) {
+        throw new Error("Invalid or expired access token");
+    }
+
+    const token = await prisma.ow_tokens.findUnique({
         where: {
             token_hash: hashToken(accessToken),
-            type: "oauth",
-            revoked: false,
         },
         include: {
             application: true,
@@ -83,19 +92,25 @@ export async function verifyOAuthAccessToken(accessToken) {
                     id: true,
                     username: true,
                     display_name: true,
+                    status: true,
                 },
             },
         },
     });
 
-    if (!token || (token.expires_at && token.expires_at < new Date())) {
+    if (
+        !token ||
+        token.type !== "oauth" ||
+        token.revoked ||
+        (token.expires_at && token.expires_at < new Date()) ||
+        token.user?.status !== "active"
+    ) {
         throw new Error("Invalid or expired access token");
     }
 
-    await prisma.ow_tokens.update({
-        where: { id: token.id },
-        data: { last_used_at: new Date() },
-    });
+    updateTokenActivity(token.id).catch((error) =>
+        logger.error(`更新 OAuth 令牌活动失败: ${error.message}`)
+    );
 
     return token;
 }
@@ -103,17 +118,23 @@ export async function verifyOAuthAccessToken(accessToken) {
 // 刷新OAuth令牌 (基于 ow_tokens)
 export async function refreshOAuthTokens(refreshToken, applicationId) {
     try {
+        if (!isValidRawTokenFormat(refreshToken)) {
+            throw new Error("Invalid or expired refresh token");
+        }
+
         // 校验刷新令牌属于该应用
-        const existing = await prisma.ow_tokens.findFirst({
+        const existing = await prisma.ow_tokens.findUnique({
             where: {
                 refresh_token_hash: hashToken(refreshToken),
-                type: "oauth",
-                application_id: applicationId,
-                revoked: false,
             },
         });
 
-        if (!existing) {
+        if (
+            !existing ||
+            existing.type !== "oauth" ||
+            existing.application_id !== applicationId ||
+            existing.revoked
+        ) {
             throw new Error("Invalid or expired refresh token");
         }
         if (existing.refresh_expires_at && existing.refresh_expires_at < new Date()) {
@@ -140,6 +161,10 @@ export async function refreshOAuthTokens(refreshToken, applicationId) {
 
 // 撤销OAuth令牌
 export async function revokeOAuthToken(token, tokenType = "access_token") {
+    if (!isValidRawTokenFormat(token)) {
+        return false;
+    }
+
     const tokenField = tokenType === "refresh_token" ? "refresh_token_hash" : "token_hash";
 
     const result = await revokeTokensWhere({

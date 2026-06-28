@@ -73,6 +73,28 @@ class RedisService {
         }
     }
 
+    // 仅当键不存在时设置键值，支持过期时间（秒）
+    async setIfNotExists(key, value, ttlSeconds = null) {
+        try {
+            if (!this.client || !this.isConnected) {
+                throw new Error('[redis] Redis未连接');
+            }
+
+            if (typeof value !== 'string') {
+                value = JSON.stringify(value);
+            }
+
+            const args = ttlSeconds
+                ? [key, value, 'EX', ttlSeconds, 'NX']
+                : [key, value, 'NX'];
+            const result = await this.client.set(...args);
+            return result === 'OK';
+        } catch (error) {
+            logger.error(`[redis] Redis setIfNotExists错误 [${key}]:`, error);
+            return false;
+        }
+    }
+
     // 获取键值
     async get(key) {
         try {
@@ -105,6 +127,24 @@ class RedisService {
             return true;
         } catch (error) {
             logger.error(`[redis] Redis delete错误 [${key}]:`, error);
+            return false;
+        }
+    }
+
+    // 批量删除键
+    async deleteMany(keys) {
+        try {
+            if (!Array.isArray(keys) || keys.length === 0) {
+                return true;
+            }
+            if (!this.client || !this.isConnected) {
+                throw new Error('[redis] Redis未连接');
+            }
+
+            await this.client.del(...keys);
+            return true;
+        } catch (error) {
+            logger.error('[redis] Redis deleteMany错误:', error);
             return false;
         }
     }

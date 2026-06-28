@@ -215,7 +215,7 @@ export const SCOPE_CATALOG = [
         action: "read",
         action_label: ACTION_DEFINITIONS.read.label,
     }),
-    scope("post:create", "发布推文", "发布推文、回复、引用、转发或上传推文图片。", "social", "medium", {
+    scope("post:create", "发布推文", "发布推文、回复、引用或上传推文图片。", "social", "medium", {
         resource: "post",
         action: "create",
         action_label: ACTION_DEFINITIONS.create.label,
@@ -225,7 +225,7 @@ export const SCOPE_CATALOG = [
         action: "update",
         action_label: ACTION_DEFINITIONS.update.label,
     }),
-    scope("post:interact", "推文互动", "点赞、取消点赞、收藏、取消收藏等社交互动。", "social", "medium", {
+    scope("post:interact", "推文互动", "点赞、收藏、转发、取消转发等社交互动。", "social", "medium", {
         resource: "post",
         action: "interact",
         action_label: ACTION_DEFINITIONS.interact.label,
@@ -530,7 +530,31 @@ export function scopeSatisfies(grantedScopes, required) {
 export function isScopeSubset(subset, allowed) {
     if (!Array.isArray(subset)) return false;
     if (!Array.isArray(allowed)) return false;
-    return subset.every((s) => scopeSatisfies(allowed, s));
+    const normalizedAllowed = normalizeScopes(allowed);
+    return subset.every((s) => {
+        const parsed = parseScope(s);
+        if (!parsed) return false;
+        if (parsed.wildcard) {
+            return normalizedAllowed.some((item) => parseScope(item)?.wildcard);
+        }
+        return scopeSatisfies(normalizedAllowed, s);
+    });
+}
+
+/**
+ * 判断当前请求 token 是否允许继续转授权这些 scope。
+ *
+ * session token 代表网页登录会话，不再独立记录权限，权限上限由用户当前角色策略决定；
+ * personal/oauth token 是受限令牌，创建下游 token/OAuth 授权时仍必须是当前 token scope 的子集。
+ *
+ * @param {string|null|undefined} tokenType
+ * @param {string[]} currentTokenScopes
+ * @param {string[]} requestedScopes
+ * @returns {boolean}
+ */
+export function tokenContextCanGrantScopes(tokenType, currentTokenScopes, requestedScopes) {
+    if (tokenType === "session") return true;
+    return isScopeSubset(requestedScopes, currentTokenScopes || []);
 }
 
 async function isAdminUser(userId) {
@@ -557,42 +581,268 @@ async function isAdminUser(userId) {
     }
 }
 
+const WRITE_LIKE_ACTIONS = new Set(["create", "update", "delete", "manage", "write"]);
+
+function parsedScopeToString(parsedScope) {
+    if (parsedScope?.wildcard) return "*";
+    if (!parsedScope?.resource || !parsedScope?.action) return "";
+    return parsedScope.id === null || parsedScope.id === undefined
+        ? `${parsedScope.resource}:${parsedScope.action}`
+        : `${parsedScope.resource}:${parsedScope.id}:${parsedScope.action}`;
+}
+
+function numericId(value) {
+    const numberValue = Number(value);
+    return Number.isInteger(numberValue) && numberValue > 0 ? numberValue : null;
+}
+
+function isWriteLikeAction(action) {
+    return WRITE_LIKE_ACTIONS.has(action);
+}
+
+async function canUseProjectLikeResource(userId, resourceId, action, { articleOnly = false } = {}) {
+    const projectId = numericId(resourceId);
+    if (!projectId) return false;
+
+    const { prisma } = await import("../prisma.js");
+    const project = await prisma.ow_projects.findUnique({
+        where: { id: projectId },
+        select: { authorid: true, state: true, type: true },
+    });
+
+    if (!project) return false;
+    if (articleOnly && String(project.type || "").toLowerCase() !== "article") return false;
+    if (Number(project.authorid) === Number(userId)) return true;
+
+    // 协作者放行：删除永远仅作者；其余动作看实例级协作角色覆盖的 scope。
+    if (action !== "delete") {
+        const { getCollabScopes } = await import("../projectCollaborationService.js");
+        const collabScopes = await getCollabScopes(userId, projectId);
+        if (scopeSatisfies(collabScopes, `project:${action}`)) return true;
+    }
+
+    if (!isWriteLikeAction(action)) return project.state === "public";
+    return false;
+}
+
+async function canUsePostResource(userId, resourceId, action) {
+    const postId = numericId(resourceId);
+    if (!postId) return false;
+
+    const { prisma } = await import("../prisma.js");
+    const post = await prisma.ow_posts.findUnique({
+        where: { id: postId },
+        select: { author_id: true, is_deleted: true },
+    });
+
+    if (!post || post.is_deleted) return false;
+    if (Number(post.author_id) === Number(userId)) return true;
+    return !isWriteLikeAction(action);
+}
+
+async function canUseListResource(userId, resourceId, action) {
+    const listId = numericId(resourceId);
+    if (!listId) return false;
+
+    const { prisma } = await import("../prisma.js");
+    const list = await prisma.ow_projects_lists.findUnique({
+        where: { id: listId },
+        select: { authorid: true, state: true },
+    });
+
+    if (!list) return false;
+    if (Number(list.authorid) === Number(userId)) return true;
+    return !isWriteLikeAction(action) && list.state === "public";
+}
+
+async function canUseExtensionResource(userId, resourceId, action) {
+    const extensionId = numericId(resourceId);
+    if (!extensionId) return false;
+
+    const { prisma } = await import("../prisma.js");
+    const extension = await prisma.ow_scratch_extensions.findUnique({
+        where: { id: extensionId },
+        select: {
+            status: true,
+            project: { select: { authorid: true, state: true } },
+        },
+    });
+
+    if (!extension) return false;
+    if (Number(extension.project?.authorid) === Number(userId)) return true;
+    if (isWriteLikeAction(action)) return false;
+    return ["verified", "approved"].includes(String(extension.status || "").toLowerCase())
+        || extension.project?.state === "public";
+}
+
+async function canUseCommentResource(userId, resourceId, action) {
+    const { prisma } = await import("../prisma.js");
+    const rawId = String(resourceId || "").trim();
+    if (!rawId) return false;
+
+    const space = await prisma.ow_comment_spaces.findUnique({
+        where: { cuid: rawId },
+        select: { owner_id: true, status: true },
+    });
+    if (space) {
+        if (Number(space.owner_id) === Number(userId)) return true;
+        return !isWriteLikeAction(action) && space.status === "active";
+    }
+
+    const commentId = numericId(rawId);
+    if (!commentId) return false;
+    const comment = await prisma.ow_comment_service.findUnique({
+        where: { id: commentId },
+        select: {
+            user_id: true,
+            space: { select: { owner_id: true, status: true } },
+        },
+    });
+    if (!comment) return false;
+    if (Number(comment.space?.owner_id) === Number(userId)) return true;
+    if (String(comment.user_id || "") === String(userId)) return true;
+    return !isWriteLikeAction(action) && comment.space?.status === "active";
+}
+
+async function canUseAssetResource(userId, resourceId, action) {
+    const { prisma } = await import("../prisma.js");
+    const assetId = numericId(resourceId);
+    const where = assetId
+        ? { id: assetId }
+        : { md5: String(resourceId || "").replace(/\.[a-z0-9]+$/i, "") };
+
+    const asset = await prisma.ow_assets.findUnique({
+        where,
+        select: { uploader_id: true, is_banned: true },
+    });
+    if (!asset || asset.is_banned) return false;
+    if (Number(asset.uploader_id) === Number(userId)) return true;
+    return !isWriteLikeAction(action);
+}
+
+async function canUseNotificationResource(userId, resourceId) {
+    const notificationId = numericId(resourceId);
+    if (!notificationId) return false;
+
+    const { prisma } = await import("../prisma.js");
+    const notification = await prisma.ow_notifications.findUnique({
+        where: { id: notificationId },
+        select: { user_id: true },
+    });
+    return Number(notification?.user_id) === Number(userId);
+}
+
+async function canUseOAuthApplicationResource(userId, resourceId, action) {
+    const { prisma } = await import("../prisma.js");
+    const appId = numericId(resourceId);
+    const application = await prisma.ow_oauth_applications.findUnique({
+        where: appId ? { id: appId } : { client_id: String(resourceId || "") },
+        select: { owner_id: true, is_public: true, status: true },
+    });
+    if (!application || application.status === "deleted") return false;
+    if (Number(application.owner_id) === Number(userId)) return true;
+    return !isWriteLikeAction(action) && application.is_public;
+}
+
+async function canUseTokenResource(userId, resourceId) {
+    const tokenId = numericId(resourceId);
+    if (!tokenId) return false;
+
+    const { prisma } = await import("../prisma.js");
+    const token = await prisma.ow_tokens.findUnique({
+        where: { id: tokenId },
+        select: { user_id: true },
+    });
+    return Number(token?.user_id) === Number(userId);
+}
+
+async function canUseEventResource(userId, resourceId, action) {
+    const eventId = numericId(resourceId);
+    if (!eventId) return false;
+
+    const { prisma } = await import("../prisma.js");
+    const event = await prisma.ow_events.findUnique({
+        where: { id: eventId },
+        select: { actor_id: true, public: true },
+    });
+    if (!event) return false;
+    if (Number(event.actor_id) === Number(userId)) return true;
+    return !isWriteLikeAction(action) && event.public;
+}
+
+/**
+ * 校验实例级 scope 是否仍落在当前用户自己的资源/可见资源边界内。
+ *
+ * 类型级 scope 没有具体资源 ID，必须由调用方路由保证其操作的是当前用户上下文；
+ * 实例级 scope 在这里做统一归属兜底，避免宽 scope 匹配到他人资源。
+ *
+ * @param {number} userId
+ * @param {string} requiredScope
+ * @returns {Promise<boolean>}
+ */
+export async function userCanAccessResourceScope(userId, requiredScope) {
+    const parsed = parseScope(requiredScope);
+    if (!parsed || parsed.wildcard) return false;
+    if (parsed.id === null || parsed.id === undefined) return true;
+
+    const normalizedUserId = Number(userId);
+    if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return false;
+
+    try {
+        switch (parsed.resource) {
+            case "user":
+                return String(parsed.id) === String(normalizedUserId);
+            case "project":
+                return canUseProjectLikeResource(normalizedUserId, parsed.id, parsed.action);
+            case "blog":
+                return canUseProjectLikeResource(normalizedUserId, parsed.id, parsed.action, { articleOnly: true });
+            case "post":
+                return canUsePostResource(normalizedUserId, parsed.id, parsed.action);
+            case "list":
+                return canUseListResource(normalizedUserId, parsed.id, parsed.action);
+            case "extension":
+                return canUseExtensionResource(normalizedUserId, parsed.id, parsed.action);
+            case "comment":
+                return canUseCommentResource(normalizedUserId, parsed.id, parsed.action);
+            case "asset":
+                return canUseAssetResource(normalizedUserId, parsed.id, parsed.action);
+            case "notification":
+                return canUseNotificationResource(normalizedUserId, parsed.id);
+            case "oauth_app":
+                return canUseOAuthApplicationResource(normalizedUserId, parsed.id, parsed.action);
+            case "token":
+                return canUseTokenResource(normalizedUserId, parsed.id);
+            case "event":
+                return canUseEventResource(normalizedUserId, parsed.id, parsed.action);
+            case "follow":
+            case "cachekv":
+            case "git_sync":
+            case "analytics":
+                return true;
+            case "admin":
+                return false;
+            default:
+                return true;
+        }
+    } catch (error) {
+        logger.error(`[scopes] 检查资源实例权限失败 ${requiredScope}: ${error.message}`);
+        return false;
+    }
+}
+
 async function canGrantInstanceScope(userId, parsedScope, isAdmin) {
     if (!parsedScope.id) return true;
     if (isAdmin) return true;
 
-    if (parsedScope.resource === "user") {
-        return String(parsedScope.id) === String(userId);
-    }
-
-    if (parsedScope.resource === "project") {
-        const projectId = Number(parsedScope.id);
-        if (!Number.isInteger(projectId) || projectId <= 0) return false;
-        try {
-            const { prisma } = await import("../prisma.js");
-            const project = await prisma.ow_projects.findUnique({
-                where: { id: projectId },
-                select: { authorid: true, state: true },
-            });
-            if (!project) return false;
-            if (project.authorid === Number(userId)) return true;
-            return parsedScope.action === "read" && project.state === "public";
-        } catch (error) {
-            logger.error(`[scopes] 检查项目实例权限失败: ${error.message}`);
-            return false;
-        }
-    }
-
-    return true;
+    return userCanAccessResourceScope(Number(userId), parsedScopeToString(parsedScope));
 }
 
 /**
  * 判断用户账号本身是否允许授予这些 scope。
  *
  * 注意：这不是请求时的资源所有权检查；它只限制“转授权上限”。
- * 任何用户都不能转授 * 或 token:manage；普通用户不能转授 admin 权限。
- * 这避免持久 API/OAuth 令牌获得完整会话能力、sudo 间接能力或继续签发其他令牌。
- * 实例级 user/project scope 会按本人/项目可见性额外校验，避免显式授予他人资源权限。
+ * 用户只能转授当前令牌已经覆盖、且账号本身可访问的 scope；普通用户不能转授 admin 权限。
+ * 实例级 scope 会按本人/资源可见性额外校验，避免显式授予他人私有资源权限。
  *
  * @param {number} userId
  * @param {string[]} scopes
@@ -604,7 +854,9 @@ export async function validateUserGrantableScopes(userId, scopes) {
         return { allowed: false, denied: normalized, admin: false };
     }
 
-    const isAdmin = await isAdminUser(userId);
+    const { canUserGrantScopes } = await import("./policyEngine.js");
+    const policyCheck = await canUserGrantScopes(userId, normalized);
+    const isAdmin = policyCheck.admin;
     const denied = [];
 
     for (const scopeName of normalized) {
@@ -614,20 +866,12 @@ export async function validateUserGrantableScopes(userId, scopes) {
             continue;
         }
 
-        if (parsed.wildcard) {
+        if (!policyCheck.allowed && policyCheck.denied.includes(scopeName)) {
             denied.push(scopeName);
             continue;
         }
 
-        if (scopeSatisfies([scopeName], "token:manage")) {
-            denied.push(scopeName);
-            continue;
-        }
-
-        if (parsed.resource === "admin" && !isAdmin) {
-            denied.push(scopeName);
-            continue;
-        }
+        if (parsed.wildcard) continue;
 
         if (!(await canGrantInstanceScope(Number(userId), parsed, isAdmin))) {
             denied.push(scopeName);
@@ -647,7 +891,18 @@ export async function validateUserGrantableScopes(userId, scopes) {
 export function normalizeScopes(scopes) {
     const input = typeof scopes === "string" ? scopes.split(/\s+/).filter(Boolean) : scopes || [];
     const valid = [...new Set(input.map(canonicalizeScope).filter(isValidScope))];
-    if (valid.includes("*")) return ["*"];
+    if (valid.includes("*")) {
+        const explicitAdminScopes = valid.filter((scopeName) => {
+            const parsed = parseScope(scopeName);
+            return scopeName !== "*" && parsed?.resource === "admin";
+        });
+        const compactAdminScopes = explicitAdminScopes.filter(
+            (scopeName) => !explicitAdminScopes.some(
+                (other) => other !== scopeName && singleSatisfies(other, scopeName)
+            )
+        );
+        return ["*", ...compactAdminScopes];
+    }
     return valid.filter(
         (s) => !valid.some((other) => other !== s && singleSatisfies(other, s))
     );
@@ -698,6 +953,8 @@ export default {
     actionSatisfies,
     scopeSatisfies,
     isScopeSubset,
+    tokenContextCanGrantScopes,
+    userCanAccessResourceScope,
     validateUserGrantableScopes,
     normalizeScopes,
     syncScopeCatalog,

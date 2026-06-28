@@ -145,6 +145,21 @@
               title="列表"
               to="/app/projectlist"
             />
+            <v-list-item
+              color="primary"
+              prepend-icon="mdi-account-group"
+              rounded="xl"
+              title="合作邀请"
+              to="/app/collaborations"
+            />
+            <v-list-item
+              v-if="localuser.user.value?.isAdmin"
+              color="primary"
+              prepend-icon="mdi-shield-crown-outline"
+              rounded="xl"
+              title="管理后台"
+              to="/app/admin"
+            />
           </v-list>
           <v-divider />
           <v-list>
@@ -224,6 +239,7 @@ import { useAuthStore } from "@/stores/auth";
 import { openPostDialog } from '@/composables/usePostDialog';
 import { useAccountState } from '@/composables/useAccountState';
 import AccountUserSkeleton from '@/components/account/AccountUserSkeleton.vue';
+import collaborationService from "@/services/collaborationService";
 
 export default {
   components: {
@@ -255,6 +271,7 @@ export default {
       isLogin: localuser.isLogin,
       items: this.initializeNavItems(),
       subNavItems: [],
+      projectAccess: null,
       hideNavPaths: ["/app", "/404"],
       hideExactPaths: ["/", "/index.html"],
       activeTab: "notifications",
@@ -484,6 +501,7 @@ export default {
           pathSegments[0]
         );
         this.activeTab = pathSegments[2] || "home";
+        this.loadProjectAccess(pathSegments[0], pathSegments[1]);
       }
     },
     getProxySubNavItems() {
@@ -509,24 +527,63 @@ export default {
       ];
     },
     getProjectSubNavItems(projectname, authorname) {
-      const isAuthor = localuser.user.value.username == authorname;
-      return [
+      const access = this.projectAccess;
+      const matched =
+        access &&
+        access._authorname === authorname &&
+        access._projectname === projectname;
+
+      // 权限数据就绪前的回退：作者按用户名判断，读取默认放行。
+      const isOwnerFallback = localuser.user.value?.username == authorname;
+      const isLoggedIn = localuser.isLogin.value;
+      const canEdit = matched ? access.can_edit : isOwnerFallback;
+      const canRead = matched ? access.can_read : true;
+
+      const items = [
         { title: "代码", link: `/${authorname}/${projectname}`, name: "home" },
-        {
+      ];
+      // 分析：需要登录且可读（成员或公开项目）
+      if (isLoggedIn && canRead) {
+        items.push({
           title: "分析",
           link: `/${authorname}/${projectname}/analytics`,
           name: "analytics",
-        },
-        ...(isAuthor
-          ? [
-              {
-                title: "设置",
-                link: `/${authorname}/${projectname}/settings`,
-                name: "settings",
-              },
-            ]
-          : []),
-      ];
+        });
+      }
+      // 设置：需要可编辑（作者或编辑者/管理员协作者）
+      if (canEdit) {
+        items.push({
+          title: "设置",
+          link: `/${authorname}/${projectname}/settings`,
+          name: "settings",
+        });
+      }
+      return items;
+    },
+    async loadProjectAccess(authorname, projectname) {
+      // 同一项目已加载则跳过，避免在标签间切换时重复请求
+      if (
+        this.projectAccess &&
+        this.projectAccess._authorname === authorname &&
+        this.projectAccess._projectname === projectname
+      ) {
+        return;
+      }
+      const access = await collaborationService.getMyProjectAccess({
+        author: authorname,
+        project: projectname,
+      });
+      if (!access) return; // 404 / 无权访问：保持回退，不改变菜单
+      this.projectAccess = {
+        ...access,
+        _authorname: authorname,
+        _projectname: projectname,
+      };
+      // 仍停留在该项目页时，按权限重建子菜单
+      const seg = this.getPathSegments;
+      if (seg[0] === authorname && seg[1] === projectname) {
+        this.subNavItems = this.getProjectSubNavItems(projectname, authorname);
+      }
     },
     // 编辑器标签页管理方法
     enableEditorTabs() {

@@ -54,3 +54,20 @@ export function introspectToken(token) {
     data: { token },
   });
 }
+
+// 当前请求令牌的权限上下文 (调试)
+export function getCurrentTokenDebugContext() {
+  return request({
+    url: "/tokens/debug/current",
+    method: "get",
+  });
+}
+
+// 评估当前请求是否满足指定 scope (调试)
+export function evaluateTokenScopes(scope) {
+  return request({
+    url: "/tokens/debug/evaluate",
+    method: "post",
+    data: { scope },
+  });
+}

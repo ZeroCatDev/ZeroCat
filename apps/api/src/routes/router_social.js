@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import logger from '../services/logger.js';
 import { needLogin } from '../middleware/auth.js';
-import { requireScope } from '../middleware/scope.js';
+import { requireResource, requireScope } from '../middleware/scope.js';
 import zcconfig from '../services/config/zcconfig.js';
 import memoryCache from '../services/memoryCache.js';
 import queueManager from '../services/queue/queueManager.js';
@@ -267,7 +267,7 @@ router.get('/bluesky/sync/oauth/callback', async (req, res) => {
     }
 });
 
-router.post('/sync/post/:postId', needLogin, requireScope("post:update"), async (req, res) => {
+router.post('/sync/post/:postId', needLogin, requireResource("post", "update", "postId"), async (req, res) => {
     try {
         const postId = Number(req.params.postId);
         if (!Number.isInteger(postId) || postId <= 0) {

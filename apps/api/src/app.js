@@ -132,8 +132,10 @@ class Application {
             try {
                 const { syncScopeCatalog } = await import('./services/auth/scopes.js');
                 await syncScopeCatalog();
+                const { syncRolePolicyCatalog } = await import('./services/auth/policyEngine.js');
+                await syncRolePolicyCatalog();
             } catch (error) {
-                logger.error('[app] 同步 scope 目录失败:', error);
+                logger.error('[app] 同步权限目录失败:', error);
             }
 
             // 初始化 ActivityPub（联邦启用时自动生成实例密钥）
