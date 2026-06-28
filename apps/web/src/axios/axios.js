@@ -7,9 +7,10 @@ const BASE_URL = import.meta.env.VITE_APP_BASE_API;
 // 业务请求实例
 const axiosInstance = axios.create({
   baseURL: BASE_URL,
+  withCredentials: true,
 });
 
-export const authClient = createBrowserAuthClient({ apiUrl: BASE_URL, persistTokenToStorage: true });
+export const authClient = createBrowserAuthClient({ apiUrl: BASE_URL, cookieRefresh: true });
 
 // 后端统一错误码
 const ZC_ERROR = {

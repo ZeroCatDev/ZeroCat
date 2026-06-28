@@ -676,6 +676,7 @@ export const logoutAllDevices = async (req, res) => {
         const result = await authUtils.revokeAllUserTokens(res.locals.userid, res.locals.tokeninfo.token_id);
 
         if (result.success) {
+            tokenUtils.clearAllRefreshTokenCookies(res);
             return res.status(200).json({
                 status: "success",
                 message: "已登出所有其他设备",

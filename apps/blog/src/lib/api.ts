@@ -17,7 +17,7 @@ export const API_URL =
   "http://localhost:3000";
 
 type FetchInit = RequestInit;
-const authClient = createBrowserAuthClient({ apiUrl: API_URL, persistTokenToStorage: true });
+const authClient = createBrowserAuthClient({ apiUrl: API_URL, cookieRefresh: true });
 
 export const getStoredToken = authClient.getStoredToken;
 export const clearStoredAuthState = authClient.clearStoredAuthState;
@@ -42,6 +42,7 @@ export async function apiFetch<T>(
 
   const res = await fetch(url, {
     ...rest,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",

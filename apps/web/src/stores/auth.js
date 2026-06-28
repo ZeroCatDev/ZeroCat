@@ -859,6 +859,7 @@ export const useAuthStore = defineStore("auth", () => {
           `${import.meta.env.VITE_APP_BASE_API}/account/logout`,
           {
             method: "POST",
+            credentials: "include",
             headers: {
               Authorization: `Bearer ${token.value}`,
               "Content-Type": "application/json",

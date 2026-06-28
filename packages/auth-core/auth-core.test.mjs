@@ -101,6 +101,49 @@ test("always sends refresh token from localStorage in request body", async () =>
   assert.equal(storage.getItem("refreshToken"), NEW_REFRESH_TOKEN);
 });
 
+test("cookie refresh mode uses credentials and does not persist refresh token", async () => {
+  const storage = createMemoryStorage({
+    token: "old-token",
+    tokenExpiresAt: String(Date.now() - 1000),
+  });
+
+  let refreshBody = null;
+  let refreshCredentials = null;
+  const fetchImpl = async (url, init = {}) => {
+    if (String(url).endsWith("/account/refresh-token")) {
+      refreshBody = init.body;
+      refreshCredentials = init.credentials;
+      return new Response(
+        JSON.stringify({
+          status: "success",
+          token: "new-token",
+          refresh_token: NEW_REFRESH_TOKEN,
+          expires_at: Date.now() + 60_000,
+          refresh_expires_at: Date.now() + 120_000,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    throw new Error(`unexpected fetch ${url}`);
+  };
+
+  const client = createBrowserAuthClient({
+    apiUrl: "https://api.example.test",
+    storage,
+    fetch: fetchImpl,
+    cookieRefresh: true,
+  });
+
+  const token = await client.refreshStoredAuthToken();
+  const refreshResult = JSON.parse(storage.getItem("authRefreshResult"));
+
+  assert.equal(token, "new-token");
+  assert.equal(refreshCredentials, "include");
+  assert.equal(refreshBody, JSON.stringify({}));
+  assert.equal(storage.getItem("refreshToken"), null);
+  assert.equal(refreshResult.refresh_token, null);
+});
+
 test("authedFetch retries once with a refreshed token after 401", async () => {
   const storage = createMemoryStorage({
     token: "stale-token",

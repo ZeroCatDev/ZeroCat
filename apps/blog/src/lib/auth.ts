@@ -11,6 +11,7 @@ import {
 import { resolveAvatarUrl } from "./avatar";
 
 const DEFAULT_ZC_WEB_URL = "http://localhost:3141";
+const ANONYMOUS_SESSION_KEY = "zc_blog_auth_anonymous";
 
 export interface StoredUserInfo {
   id?: number;
@@ -40,6 +41,27 @@ function writeStorage(key: string, value: string | null) {
   } catch {}
 }
 
+function writeSession(key: string, value: string | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (value) window.sessionStorage.setItem(key, value);
+    else window.sessionStorage.removeItem(key);
+  } catch {}
+}
+
+function hasAnonymousSession(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.sessionStorage.getItem(ANONYMOUS_SESSION_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setAnonymousSession(value: boolean) {
+  writeSession(ANONYMOUS_SESSION_KEY, value ? "1" : null);
+}
+
 function readStoredUser(): StoredUserInfo | null {
   try {
     const raw = readStorage(AUTH_STORAGE_KEYS.userInfo);
@@ -48,17 +70,6 @@ function readStoredUser(): StoredUserInfo | null {
   } catch {
     return null;
   }
-}
-
-/** Any sign of a prior session, used to decide whether mount needs hydration. */
-function hasAuthHint(): boolean {
-  return Boolean(
-    readStorage(AUTH_STORAGE_KEYS.token) ||
-      readStorage(AUTH_STORAGE_KEYS.refreshToken) ||
-      readStorage(AUTH_STORAGE_KEYS.userInfo) ||
-      readStorage(AUTH_STORAGE_KEYS.refreshTokenExpiresAt) ||
-      readStorage(AUTH_STORAGE_KEYS.tokenExpiresAt)
-  );
 }
 
 /* ------------------------------ user profile ------------------------------ */
@@ -99,6 +110,7 @@ async function fetchCurrentUser(token: string): Promise<StoredUserInfo | null> {
   try {
     const res = await fetch(`${API_URL}/user/me`, {
       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      credentials: "include",
       cache: "no-store",
     });
     if (!res.ok) return null;
@@ -119,12 +131,22 @@ async function fetchCurrentUser(token: string): Promise<StoredUserInfo | null> {
 let hydratePromise: Promise<void> | null = null;
 
 async function hydrate(): Promise<void> {
-  const token = await getFreshAuthToken(getStoredToken());
+  const storedToken = getStoredToken();
+  let refreshedFromCookie = false;
+  let token = storedToken ? await getFreshAuthToken(storedToken) : null;
+
+  if (!token && !hasAnonymousSession()) {
+    token = await getFreshAuthToken(null, { force: true });
+    refreshedFromCookie = Boolean(token);
+  }
+
   if (!token) {
+    setAnonymousSession(true);
     persistUser(null);
     return;
   }
-  if (!readStoredUser()) {
+  setAnonymousSession(false);
+  if (refreshedFromCookie || !readStoredUser()) {
     persistUser(await fetchCurrentUser(token));
   }
 }
@@ -152,8 +174,7 @@ function useAuthSync(sync: () => void, watchKey: string, authEvent: string) {
       if (alive) sync();
     };
 
-    if (hasAuthHint()) void hydrateOnce().finally(run);
-    else run();
+    void hydrateOnce().finally(run);
 
     const onStorage = (event: StorageEvent) => {
       if (event.key === watchKey) run();
@@ -174,6 +195,7 @@ function useAuthSync(sync: () => void, watchKey: string, authEvent: string) {
 /* ---------------------------------- API ----------------------------------- */
 
 export function buildZcLoginUrl(redirectUrl?: string): string {
+  setAnonymousSession(false);
   const configuredBase =
     process.env.NEXT_PUBLIC_ZC_WEB_URL || process.env.NEXT_PUBLIC_WEB_URL;
   const base =
@@ -204,6 +226,7 @@ export function useAuthToken() {
     if (active) {
       await fetch(`${API_URL}/account/logout`, {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",

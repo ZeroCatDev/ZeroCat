@@ -142,6 +142,7 @@ export function createBrowserAuthClient(options = {}) {
   const lockTtlMs = options.lockTtlMs ?? DEFAULT_LOCK_TTL_MS;
   const waitTimeoutMs = options.waitTimeoutMs ?? DEFAULT_WAIT_TIMEOUT_MS;
   const ownerId = options.ownerId || makeOwnerId();
+  const cookieRefresh = options.cookieRefresh === true;
 
   let refreshPromise = null;
   let lastRefreshAttemptAt = 0;
@@ -208,7 +209,10 @@ export function createBrowserAuthClient(options = {}) {
   function persistToken(payload) {
     bumpAuthCredentialGeneration();
 
-    if (payload?.refresh_token === null) {
+    if (cookieRefresh) {
+      memoryRefreshToken = null;
+      setStorageValue(AUTH_STORAGE_KEYS.refreshToken, null);
+    } else if (payload?.refresh_token === null) {
       memoryRefreshToken = null;
       setStorageValue(AUTH_STORAGE_KEYS.refreshToken, null);
     } else if (payload?.refresh_token) {
@@ -241,7 +245,7 @@ export function createBrowserAuthClient(options = {}) {
         token: payload.token,
         expires_at: tokenExpiresAt,
         refresh_expires_at: refreshTokenExpiresAt,
-        refresh_token: payload.refresh_token || getStoredRefreshToken(),
+        refresh_token: cookieRefresh ? null : payload.refresh_token || getStoredRefreshToken(),
         token_lifetime_sec: lifetimeSec,
         written_at: now(),
       })
@@ -335,21 +339,27 @@ export function createBrowserAuthClient(options = {}) {
     if (!fetchImpl) return null;
 
     const generationAtStart = authCredentialGeneration;
-    const storedRefreshToken = getStoredRefreshToken();
-    if (!storedRefreshToken) return null;
+    let storedRefreshToken = getStoredRefreshToken();
+    if (!cookieRefresh && !storedRefreshToken) return null;
 
-    if (!isLikelySessionRefreshToken(storedRefreshToken)) {
-      clearStoredAuthState();
-      return null;
+    if (storedRefreshToken && !isLikelySessionRefreshToken(storedRefreshToken)) {
+      if (!cookieRefresh) {
+        clearStoredAuthState();
+        return null;
+      }
+      memoryRefreshToken = null;
+      setStorageValue(AUTH_STORAGE_KEYS.refreshToken, null);
+      storedRefreshToken = null;
     }
 
     const response = await fetchImpl(`${apiUrl}/account/refresh-token`, {
       method: "POST",
+      ...(cookieRefresh ? { credentials: "include" } : {}),
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
       },
-      body: JSON.stringify({ refresh_token: storedRefreshToken }),
+      body: JSON.stringify(storedRefreshToken ? { refresh_token: storedRefreshToken } : {}),
       cache: "no-store",
     });
 
@@ -397,7 +407,7 @@ export function createBrowserAuthClient(options = {}) {
   }
 
   async function refreshStoredAuthToken() {
-    if (!getStoredRefreshToken()) {
+    if (!cookieRefresh && !getStoredRefreshToken()) {
       clearStoredAuthState();
       return null;
     }
@@ -459,6 +469,7 @@ export function createBrowserAuthClient(options = {}) {
 
     let response = await fetchImpl(url, {
       ...init,
+      ...(cookieRefresh ? { credentials: "include" } : {}),
       headers: mergeHeaders(init, useToken),
       cache: "no-store",
     });
@@ -469,6 +480,7 @@ export function createBrowserAuthClient(options = {}) {
         useToken = refreshedToken;
         response = await fetchImpl(url, {
           ...init,
+          ...(cookieRefresh ? { credentials: "include" } : {}),
           headers: mergeHeaders(init, useToken),
           cache: "no-store",
         });

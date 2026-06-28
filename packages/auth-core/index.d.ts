@@ -31,6 +31,8 @@ export type BrowserAuthClientOptions = {
   refreshMarginMs?: number;
   lockTtlMs?: number;
   waitTimeoutMs?: number;
+  cookieRefresh?: boolean;
+  /** @deprecated Tokens are always persisted by this browser client. */
   persistTokenToStorage?: boolean;
   ownerId?: string;
 };

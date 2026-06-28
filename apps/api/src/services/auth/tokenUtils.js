@@ -350,6 +350,10 @@ function buildRefreshCookieBaseOptions(res) {
     };
 }
 
+function isBrowserAuthRequest(req) {
+    return Boolean(req?.headers?.origin || req?.headers?.referer);
+}
+
 /**
  * 清除所有可能作用域下的 refresh_token cookie（host-only 与根域）
  * @param {object} res Express response 对象
@@ -411,7 +415,7 @@ export function extractRefreshTokenFromRequest(req) {
 }
 
 /**
- * 清除浏览器端遗留的认证 Cookie（令牌改由 localStorage 管理）
+ * 清除浏览器端遗留的 token Cookie 与重复作用域 refresh_token Cookie
  * @param {object} res Express response 对象
  */
 export function clearLegacyAuthCookies(res) {
@@ -425,21 +429,33 @@ export function clearLegacyAuthCookies(res) {
 }
 
 /**
- * @deprecated 浏览器认证已改用 localStorage，此函数仅清除遗留 Cookie
+ * @deprecated 使用 respondWithBrowserAuthTokens 统一下发 refresh_token Cookie
  */
 export function setRefreshTokenCookie(res) {
     clearLegacyAuthCookies(res);
 }
 
 /**
- * 返回浏览器登录/刷新令牌响应，并清除遗留 Cookie
+ * 返回登录/刷新令牌响应；浏览器请求使用 httpOnly Cookie 承载 refresh token。
  * @param {object} res Express response
  * @param {object} payload 响应体
  * @param {number} [statusCode=200]
  */
 export function respondWithBrowserAuthTokens(res, payload, statusCode = 200) {
     clearLegacyAuthCookies(res);
-    return res.status(statusCode).json(payload);
+
+    const responsePayload =
+        payload && typeof payload === "object" && !Array.isArray(payload)
+            ? { ...payload }
+            : payload;
+    const refreshToken = normalizeRefreshToken(payload?.refresh_token);
+
+    if (refreshToken && isBrowserAuthRequest(res?.req)) {
+        res.cookie("refresh_token", refreshToken, buildRefreshCookieBaseOptions(res));
+        delete responsePayload.refresh_token;
+    }
+
+    return res.status(statusCode).json(responsePayload);
 }
 
 /**

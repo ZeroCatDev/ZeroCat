@@ -162,25 +162,12 @@ export const AuthService = {
   // Refresh token
   refreshToken: async () => {
     try {
-      const refreshToken = authClient.getStoredRefreshToken();
-      if (!refreshToken) {
-        return { status: 'error', message: 'No refresh token in storage' };
+      const token = await authClient.refreshStoredAuthToken();
+      if (!token) {
+        return { status: 'error', message: 'Failed to refresh token' };
       }
-
-      const response = await axios.post('/account/refresh-token', {
-        refresh_token: refreshToken,
-      });
-
-      if (response.data.status === 'success') {
-        await localuser.setUser({
-          token: response.data.token,
-          expires_at: response.data.expires_at,
-          refresh_expires_at: response.data.refresh_expires_at,
-          refresh_token: response.data.refresh_token,
-        });
-      }
-
-      return response.data;
+      await localuser.loadUser(true);
+      return { status: 'success', token };
     } catch {
       return {status: 'error', message: 'Failed to refresh token'};
     }
