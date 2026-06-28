@@ -163,7 +163,7 @@ const loadingMore = ref(false);
 const cursor = ref(null);
 const recommendOffset = ref(0); // Gorse 推荐接口使用 offset 分页
 const hasMore = ref(true);
-const feedType = ref('recommend');
+const feedType = ref('for-you');
 
 const { isLogin, authPending, showGuestUI, showAuthenticatedUI } = useAccountState();
 
