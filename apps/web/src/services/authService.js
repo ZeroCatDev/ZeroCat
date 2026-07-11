@@ -79,9 +79,10 @@ export const AuthService = {
   },
 
   // Email-first registration: begin (email -> login link if exists, else register link; anti-enumeration)
-  beginRegister: async (email, captcha = null) => {
+  beginRegister: async (email, captcha = null, redirect = null) => {
     const data = {email};
     if (captcha) data.captcha = captcha;
+    if (redirect) data.redirect = redirect;
     const response = await axios.post('/account/register/begin', data);
     return response.data;
   },
@@ -148,9 +149,12 @@ export const AuthService = {
   },
 
   // OAuth login/registration
-  oauthRedirect: (provider) => {
+  oauthRedirect: (provider, postLoginRedirect = null) => {
     const token = localuser.getToken(); // Get current token if exists
-    const redirectUrl = `${import.meta.env.VITE_APP_BASE_API}/account/oauth/${provider}?token=${token}`;
+    let redirectUrl = `${import.meta.env.VITE_APP_BASE_API}/account/oauth/${provider}?token=${token}`;
+    if (postLoginRedirect) {
+      redirectUrl += `&redirect=${encodeURIComponent(postLoginRedirect)}`;
+    }
     return redirectUrl;
   },
 

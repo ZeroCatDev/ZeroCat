@@ -430,6 +430,10 @@ onMounted(async () => {
   const result = await AuthService.validateRegisterToken(token.value);
   if (result?.status === "success" && result.data?.email) {
     verifiedEmail.value = result.data.email;
+    // 从令牌恢复 redirect（注册邮件链接中携带的 redirect 参数）
+    if (result.data.redirect) {
+      authStore.setAuthRedirectUrl(result.data.redirect);
+    }
     view.value = "continue";
   } else {
     view.value = "invalid";
@@ -448,7 +452,8 @@ const submitEmail = async () => {
   loading.value = true;
   try {
     const captcha = recaptchaRef.value?.getResponse() || null;
-    const resp = await AuthService.beginRegister(email.value.trim(), captcha);
+    const redirect = authStore.authRedirectUrl || null;
+    const resp = await AuthService.beginRegister(email.value.trim(), captcha, redirect);
     if (resp?.status === "success") {
       view.value = "sent";
       startCountdown(60);
@@ -488,7 +493,7 @@ const complete = async () => {
       // 已自动登录
       authStore.navigateToAuthRedirect(router);
     } else if (resp?.status === "success") {
-      router.push("/app/account/login");
+      router.push(`/app/account/login${redirectQuery.value}`);
     } else {
       error.value = resp?.message || "注册失败";
       // 用户名/邮箱可能被占用，回到用户名步骤

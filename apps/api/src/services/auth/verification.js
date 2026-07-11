@@ -339,11 +339,15 @@ export async function invalidateTemporaryToken(token) {
 // 注册流程令牌（邮箱已验证，凭此完成注册）
 // 强随机令牌，存储于 Redis，尚无用户故不绑定 userId
 // ============================
-export async function createRegistrationToken(email, expiresInSeconds = 3600) {
+export async function createRegistrationToken(email, expiresInSeconds = 3600, redirect = null) {
     try {
         const token = generateToken(32);
         const key = `register_token:${token}`;
-        await redisClient.set(key, {email, createdAt: Date.now()}, expiresInSeconds);
+        const payload = {email, createdAt: Date.now()};
+        if (redirect) {
+            payload.redirect = redirect;
+        }
+        await redisClient.set(key, payload, expiresInSeconds);
         return {success: true, token, expiresIn: expiresInSeconds};
     } catch (error) {
         logger.error('创建注册令牌失败:', error);
@@ -360,7 +364,7 @@ export async function validateRegistrationToken(token) {
         if (!data || !data.email) {
             return {success: false, message: '注册链接无效或已过期'};
         }
-        return {success: true, email: data.email};
+        return {success: true, email: data.email, redirect: data.redirect || null};
     } catch (error) {
         logger.error('验证注册令牌失败:', error);
         return {success: false, message: '验证注册令牌失败'};

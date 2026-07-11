@@ -102,6 +102,7 @@ export const authWithOAuth = async (req, res) => {
     try {
         const {provider} = req.params;
         const tokenPurpose = 'auth';
+        const redirect = req.query?.redirect || null;
         const identifier = provider === 'bluesky'
             ? String(req.query?.identifier || req.query?.account || req.query?.domain || req.query?.pds || '').trim()
             : '';
@@ -129,6 +130,7 @@ export const authWithOAuth = async (req, res) => {
                 type: 'login',
                 context: {
                     tokenPurpose,
+                    redirect,
                     ...(identifier ? { identifier } : {}),
                     ...(blueskyScope ? { scope: blueskyScope } : {}),
                 },
@@ -352,10 +354,13 @@ export const handleOAuthCallbackRequest = async (req, res) => {
 
                     logger.info(`[oauthController] OAuth登录/注册成功: userId=${user.id}, username=${user.username}, provider=${provider}`);
 
-                    // 重定向到前端，并传递临时令牌
-                    return res.redirect(
-                        `${frontendUrl}/app/account/oauth/callback?temp_token=${tempToken}`
-                    );
+                    // 重定向到前端，并传递临时令牌和原始 redirect（如存在）
+                    let callbackUrl = `${frontendUrl}/app/account/oauth/callback?temp_token=${tempToken}`;
+                    const savedRedirect = cachedState?.context?.redirect;
+                    if (savedRedirect) {
+                        callbackUrl += `&redirect=${encodeURIComponent(savedRedirect)}`;
+                    }
+                    return res.redirect(callbackUrl);
                 } else {
                     logger.error(`[oauthController] OAuth回调结果无效:`, callbackResult);
                     return redirectTo('/app/account/oauth/login/error', '登录失败: 无效的OAuth响应');

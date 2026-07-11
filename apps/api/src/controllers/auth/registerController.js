@@ -28,7 +28,7 @@ import {assignDefaultRolesToUser} from "../../services/auth/policyEngine.js";
  */
 export const beginRegister = async (req, res) => {
     try {
-        const {email} = req.body;
+        const {email, redirect} = req.body;
         const responseMessage = "我们已向该邮箱发送了一封邮件，请查收以继续";
 
         if (!email || !emailTest(email)) {
@@ -52,16 +52,23 @@ export const beginRegister = async (req, res) => {
         const frontendUrl = await zcconfig.get("urls.frontend");
 
         if (existingUser && existingUser.status === "active" && contact.verified) {
-            // 已注册激活账户 → 发送登录魔术链接
-            const magicLinkResult = await generateMagicLinkForLogin(existingUser.id, email, {templateType: "login"});
+            // 已注册激活账户 → 发送登录魔术链接（保留 redirect）
+            const magicLinkOptions = {templateType: "login"};
+            if (redirect) {
+                magicLinkOptions.redirect = redirect;
+            }
+            const magicLinkResult = await generateMagicLinkForLogin(existingUser.id, email, magicLinkOptions);
             if (magicLinkResult.success) {
                 await sendMagicLinkEmail(email, magicLinkResult.magicLink, {templateType: "login", userId: existingUser.id});
             }
         } else {
             // 未注册 → 发送注册链接（尚无用户，直接发送到该邮箱）
-            const tokenResult = await createRegistrationToken(email, 3600); // 1小时有效
+            const tokenResult = await createRegistrationToken(email, 3600, redirect || null); // 1小时有效
             if (tokenResult.success) {
-                const registerLink = `${frontendUrl}/app/account/register?token=${tokenResult.token}`;
+                let registerLink = `${frontendUrl}/app/account/register?token=${tokenResult.token}`;
+                if (redirect) {
+                    registerLink += `&redirect=${encodeURIComponent(redirect)}`;
+                }
                 await sendEmail(email, "完成 ZeroCat 账户注册", buildRegisterEmailHtml(registerLink));
             }
         }
@@ -82,7 +89,7 @@ export const checkRegisterToken = async (req, res) => {
     if (!result.success) {
         return res.status(200).json({status: "error", message: result.message});
     }
-    return res.status(200).json({status: "success", data: {email: result.email}});
+    return res.status(200).json({status: "success", data: {email: result.email, redirect: result.redirect || null}});
 };
 
 /**

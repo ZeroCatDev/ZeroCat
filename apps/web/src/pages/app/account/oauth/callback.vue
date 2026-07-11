@@ -111,7 +111,10 @@ onMounted(async () => {
 });
 
 function goToLogin() {
-  router.push('/app/account/login');
+  const redirectQuery = authStore.authRedirectUrl
+    ? `?redirect=${encodeURIComponent(authStore.authRedirectUrl)}`
+    : '';
+  router.push(`/app/account/login${redirectQuery}`);
 }
 </script>
 

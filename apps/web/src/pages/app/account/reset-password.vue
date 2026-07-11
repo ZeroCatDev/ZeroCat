@@ -61,7 +61,7 @@
           color="primary"
           variant="flat"
           class="text-none"
-          to="/app/account/login"
+          :to="loginLink"
         >
           前往登录
         </v-btn>
@@ -118,15 +118,25 @@
 import { ref, computed, onBeforeUnmount } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useHead } from "@unhead/vue";
+import { useAuthStore } from "@/stores/auth";
 import AuthService from "@/services/authService";
 
 useHead({ title: "设置新密码" });
 
 const route = useRoute();
 const router = useRouter();
+const authStore = useAuthStore();
 
 const token = ref(typeof route.query.token === "string" ? route.query.token : "");
 const hasToken = computed(() => !!token.value);
+
+// Preserve redirect for post-reset login navigation
+const loginRedirectQuery = computed(() =>
+  authStore.authRedirectUrl
+    ? `?redirect=${encodeURIComponent(authStore.authRedirectUrl)}`
+    : ""
+);
+const loginLink = computed(() => `/app/account/login${loginRedirectQuery.value}`);
 
 const password = ref("");
 const confirm = ref("");
@@ -173,7 +183,7 @@ const submit = async () => {
         redirectCountdown.value -= 1;
         if (redirectCountdown.value <= 0) {
           clearInterval(redirectTimer);
-          router.push("/app/account/login");
+          router.push(loginLink.value);
         }
       }, 1000);
     } else {

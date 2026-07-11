@@ -30,6 +30,7 @@ import {ref, onMounted} from 'vue';
 import axios from '@/axios/axios';
 import oauthProviders from '@/constants/oauth_providers.json';
 import AuthService from '@/services/authService';
+import {useAuthStore} from '@/stores/auth';
 
 const props = defineProps({
   mode: {
@@ -75,10 +76,13 @@ const fetchAvailableProviders = async () => {
   }
 };
 
+const authStore = useAuthStore();
+
 const handleOAuthClick = async (providerId) => {
   loadingProvider.value = providerId;
   try {
-    window.location.href = AuthService.oauthRedirect(providerId, props.mode === 'register');
+    const redirect = authStore.authRedirectUrl || null;
+    window.location.href = AuthService.oauthRedirect(providerId, redirect);
   } catch (error) {
     console.error('Failed to redirect to OAuth provider:', error);
     loadingProvider.value = null;
