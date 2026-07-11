@@ -15,7 +15,7 @@ meta:
 
     <main class="oauth-main">
       <v-alert
-        v-if="error"
+        v-if="error && !isBusy"
         class="oauth-alert"
         closable
         density="comfortable"
@@ -26,143 +26,184 @@ meta:
         {{ error }}
       </v-alert>
 
-      <!-- 加载 / 自动授权 -->
-      <section v-if="showBusyState" class="oauth-panel oauth-panel--center">
-        <v-progress-circular color="primary" indeterminate size="40" width="3" />
-        <p class="oauth-busy-title">
-          {{ autoAuthorizing ? '正在自动授权' : '正在加载授权请求' }}
-        </p>
-        <p v-if="autoAuthorizing && application" class="oauth-busy-sub">
-          {{ application.name }} · 即将跳转
-        </p>
-      </section>
+      <!-- 授权卡片：加载时顶部条形进度 + 内容禁用 -->
+      <section
+        v-if="showCard"
+        class="oauth-panel"
+        :class="{ 'oauth-panel--disabled': isBusy }"
+        :aria-busy="isBusy ? 'true' : 'false'"
+      >
+        <v-progress-linear
+          v-if="isBusy"
+          class="oauth-panel__progress"
+          color="primary"
+          height="3"
+          indeterminate
+        />
 
-      <!-- 授权卡片 -->
-      <section v-else-if="application" class="oauth-panel">
-        <div class="oauth-app">
-          <v-avatar
-            class="oauth-app__avatar"
-            :image="application.logo_url || undefined"
-            rounded="lg"
-            size="48"
-          >
-            <v-icon icon="mdi-application-brackets-outline" size="26" />
-          </v-avatar>
-          <div class="oauth-app__meta">
-            <div class="oauth-app__name">
-              {{ application.name }}
-              <v-chip
-                v-if="application.is_verified"
-                class="ml-1"
-                color="success"
-                label
-                size="x-small"
-                variant="tonal"
-              >
-                已验证
-              </v-chip>
-            </div>
-            <div class="oauth-app__desc">
-              请求访问你的 ZeroCat 账号
-            </div>
-          </div>
-        </div>
-
-        <div class="oauth-field">
-          <label class="oauth-label">授权账号</label>
-          <v-select
-            v-model="selectedEmail"
-            density="comfortable"
-            :disabled="emails.length === 0 || authorizing"
-            hide-details="auto"
-            item-title="email"
-            item-value="email"
-            :items="emails"
-            placeholder="选择邮箱"
-            variant="outlined"
-          >
-            <template #item="{ props: itemProps, item }">
-              <v-list-item v-bind="itemProps">
-                <template #append>
-                  <v-chip v-if="item.raw.primary" color="primary" label size="x-small">
-                    主邮箱
-                  </v-chip>
-                </template>
-              </v-list-item>
-            </template>
-          </v-select>
-          <p v-if="emails.length === 0" class="oauth-hint oauth-hint--warn">
-            需要已验证邮箱才能授权。请先在账户设置中验证邮箱。
+        <div class="oauth-panel__body">
+          <p v-if="statusHint" class="oauth-status">
+            {{ statusHint }}
           </p>
-        </div>
 
-        <div class="oauth-field">
-          <div class="oauth-label-row">
-            <label class="oauth-label">将获得的权限</label>
-            <span class="oauth-count">{{ requestedScopeItems.length }} 项</span>
-          </div>
-          <ul class="oauth-scope-list">
-            <li
-              v-for="item in requestedScopeItems"
-              :key="item.name"
-              class="oauth-scope-item"
-            >
-              <v-icon
-                class="oauth-scope-item__icon"
-                :color="isSensitiveScope(item) ? 'error' : undefined"
-                :icon="item.icon"
-                size="20"
-              />
-              <div class="oauth-scope-item__body">
-                <div class="oauth-scope-item__title">
-                  {{ item.title }}
-                  <span v-if="isSensitiveScope(item)" class="oauth-sensitive">敏感</span>
+          <!-- 加载骨架 / 应用信息 -->
+          <div class="oauth-app">
+            <template v-if="application">
+              <v-avatar
+                class="oauth-app__avatar"
+                :image="application.logo_url || undefined"
+                rounded="lg"
+                size="48"
+              >
+                <v-icon icon="mdi-application-brackets-outline" size="26" />
+              </v-avatar>
+              <div class="oauth-app__meta">
+                <div class="oauth-app__name">
+                  {{ application.name }}
+                  <v-chip
+                    v-if="application.is_verified"
+                    class="ml-1"
+                    color="success"
+                    label
+                    size="x-small"
+                    variant="tonal"
+                  >
+                    已验证
+                  </v-chip>
                 </div>
-                <div class="oauth-scope-item__desc">{{ item.description }}</div>
+                <div class="oauth-app__desc">
+                  {{ autoAuthorizing ? '即将自动授权并跳转…' : '请求访问你的 ZeroCat 账号' }}
+                </div>
               </div>
-            </li>
-          </ul>
-        </div>
-
-        <div class="oauth-meta">
-          <div v-if="application.homepage_url" class="oauth-meta__row">
-            <span>主页</span>
-            <a :href="application.homepage_url" rel="noopener noreferrer" target="_blank">
-              {{ application.homepage_url }}
-            </a>
+            </template>
+            <template v-else>
+              <v-skeleton-loader
+                class="oauth-skeleton-avatar"
+                boilerplate
+                type="avatar"
+              />
+              <div class="oauth-app__meta flex-grow-1">
+                <v-skeleton-loader boilerplate type="text" width="60%" />
+                <v-skeleton-loader boilerplate type="text" width="40%" />
+              </div>
+            </template>
           </div>
-          <div class="oauth-meta__row">
-            <span>跳转至</span>
-            <strong>{{ redirectHost }}</strong>
-          </div>
-        </div>
 
-        <div class="oauth-actions">
-          <v-btn
-            class="oauth-actions__btn"
-            :disabled="authorizing"
-            size="large"
-            variant="text"
-            @click="cancel"
-          >
-            取消
-          </v-btn>
-          <v-btn
-            class="oauth-actions__btn oauth-actions__btn--primary"
-            color="primary"
-            :disabled="!canAuthorize"
-            :loading="authorizing"
-            size="large"
-            variant="flat"
-            @click="authorize"
-          >
-            授权并继续
-          </v-btn>
+          <div class="oauth-field">
+            <label class="oauth-label">授权账号</label>
+            <v-select
+              v-model="selectedEmail"
+              density="comfortable"
+              :disabled="isBusy || emails.length === 0"
+              hide-details="auto"
+              item-title="email"
+              item-value="email"
+              :items="emails"
+              :loading="loading && emails.length === 0"
+              placeholder="选择邮箱"
+              variant="outlined"
+            >
+              <template #item="{ props: itemProps, item }">
+                <v-list-item v-bind="itemProps">
+                  <template #append>
+                    <v-chip v-if="item.raw.primary" color="primary" label size="x-small">
+                      主邮箱
+                    </v-chip>
+                  </template>
+                </v-list-item>
+              </template>
+            </v-select>
+            <p
+              v-if="!loading && emails.length === 0 && application"
+              class="oauth-hint oauth-hint--warn"
+            >
+              需要已验证邮箱才能授权。请先在账户设置中验证邮箱。
+            </p>
+          </div>
+
+          <div class="oauth-field">
+            <div class="oauth-label-row">
+              <label class="oauth-label">将获得的权限</label>
+              <span class="oauth-count">
+                {{ loading && requestedScopeItems.length === 0 ? '…' : `${requestedScopeItems.length} 项` }}
+              </span>
+            </div>
+            <ul v-if="requestedScopeItems.length > 0" class="oauth-scope-list">
+              <li
+                v-for="item in requestedScopeItems"
+                :key="item.name"
+                class="oauth-scope-item"
+              >
+                <v-icon
+                  class="oauth-scope-item__icon"
+                  :color="isSensitiveScope(item) ? 'error' : undefined"
+                  :icon="item.icon"
+                  size="20"
+                />
+                <div class="oauth-scope-item__body">
+                  <div class="oauth-scope-item__title">
+                    {{ item.title }}
+                    <span v-if="isSensitiveScope(item)" class="oauth-sensitive">敏感</span>
+                  </div>
+                  <div class="oauth-scope-item__desc">{{ item.description }}</div>
+                </div>
+              </li>
+            </ul>
+            <div v-else class="oauth-scope-list oauth-scope-list--skeleton">
+              <v-skeleton-loader
+                v-for="n in 3"
+                :key="n"
+                boilerplate
+                class="oauth-scope-skeleton"
+                type="list-item-two-line"
+              />
+            </div>
+          </div>
+
+          <div class="oauth-meta">
+            <div v-if="application?.homepage_url" class="oauth-meta__row">
+              <span>主页</span>
+              <a
+                :href="application.homepage_url"
+                :tabindex="isBusy ? -1 : 0"
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                {{ application.homepage_url }}
+              </a>
+            </div>
+            <div class="oauth-meta__row">
+              <span>跳转至</span>
+              <strong>{{ redirectHost }}</strong>
+            </div>
+          </div>
+
+          <div class="oauth-actions">
+            <v-btn
+              class="oauth-actions__btn"
+              :disabled="isBusy"
+              size="large"
+              variant="text"
+              @click="cancel"
+            >
+              取消
+            </v-btn>
+            <v-btn
+              class="oauth-actions__btn oauth-actions__btn--primary"
+              color="primary"
+              :disabled="!canSubmit || isBusy"
+              size="large"
+              variant="flat"
+              @click="authorize"
+            >
+              {{ autoAuthorizing ? '授权中…' : authorizing ? '处理中…' : '授权并继续' }}
+            </v-btn>
+          </div>
         </div>
       </section>
 
       <!-- 无法加载应用 -->
-      <section v-else-if="!loading" class="oauth-panel oauth-panel--center">
+      <section v-else-if="loadFailed" class="oauth-panel oauth-panel--center">
         <v-icon color="error" icon="mdi-alert-circle-outline" size="40" />
         <p class="oauth-busy-title">无法完成授权</p>
         <p class="oauth-busy-sub">{{ error || '请检查链接参数后重试' }}</p>
@@ -266,12 +307,29 @@ meta:
     }
   })
 
-  const canAuthorize = computed(() => {
-    return Boolean(selectedEmail.value && requestedScopeItems.value.length > 0 && !authorizing.value)
+  const isBusy = computed(() => {
+    return loading.value || authorizing.value || autoAuthorizing.value
   })
 
-  const showBusyState = computed(() => {
-    return (loading.value && !application.value) || autoAuthorizing.value
+  /** 表单是否具备可提交条件（不含 loading/busy，避免自动授权被拦截） */
+  const canSubmit = computed(() => {
+    return Boolean(selectedEmail.value && requestedScopeItems.value.length > 0)
+  })
+
+  /** 有应用数据、或仍在首屏加载时展示卡片 */
+  const showCard = computed(() => {
+    return Boolean(application.value) || loading.value
+  })
+
+  const loadFailed = computed(() => {
+    return !loading.value && !application.value
+  })
+
+  const statusHint = computed(() => {
+    if (autoAuthorizing.value) return '正在自动授权，请稍候…'
+    if (authorizing.value) return '正在完成授权…'
+    if (loading.value) return '正在加载授权请求…'
+    return ''
   })
 
   function isSensitiveScope (item: { risk_level?: string } | null | undefined) {
@@ -361,10 +419,11 @@ meta:
   }
 
   async function authorize () {
-    if (!canAuthorize.value) {
+    if (!canSubmit.value) {
       error.value = '请选择授权邮箱和至少一项权限'
       return
     }
+    if (authorizing.value) return
 
     authorizing.value = true
     error.value = null
@@ -510,10 +569,31 @@ meta:
 }
 
 .oauth-panel {
+  position: relative;
+  overflow: hidden;
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   border-radius: 12px;
   background: rgb(var(--v-theme-surface));
+}
+
+.oauth-panel__progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  border-radius: 12px 12px 0 0;
+}
+
+.oauth-panel__body {
   padding: 20px 18px 16px;
+  transition: opacity 0.18s ease;
+}
+
+.oauth-panel--disabled .oauth-panel__body {
+  opacity: 0.55;
+  pointer-events: none;
+  user-select: none;
 }
 
 .oauth-panel--center {
@@ -524,6 +604,18 @@ meta:
   justify-content: center;
   text-align: center;
   gap: 8px;
+  padding: 28px 18px;
+}
+
+.oauth-status {
+  margin: 0 0 14px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(var(--v-theme-primary), 0.08);
+  color: rgb(var(--v-theme-primary));
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .oauth-busy-title {
@@ -536,6 +628,26 @@ meta:
   margin: 0;
   color: rgba(var(--v-theme-on-surface), 0.62);
   font-size: 0.875rem;
+}
+
+.oauth-skeleton-avatar {
+  flex-shrink: 0;
+  width: 48px !important;
+  height: 48px !important;
+}
+
+.oauth-skeleton-avatar :deep(.v-skeleton-loader__avatar) {
+  width: 48px;
+  height: 48px;
+  margin: 0;
+}
+
+.oauth-scope-list--skeleton {
+  padding: 4px 0;
+}
+
+.oauth-scope-skeleton {
+  background: transparent;
 }
 
 .oauth-app {
@@ -709,7 +821,7 @@ meta:
     padding: 40px 16px 48px;
   }
 
-  .oauth-panel {
+  .oauth-panel__body {
     padding: 24px 24px 18px;
   }
 
