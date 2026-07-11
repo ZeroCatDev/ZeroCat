@@ -36,6 +36,7 @@ export const authRequiredRoutes = [
       '/app/account/register',
       '/app/account/retrieve',
       '/app/account/reset-password',
+      '/app/account/logout',
       '/app/account/magiclink',
       '/app/account/magiclink/validate',
       '/app/account/email/verify',

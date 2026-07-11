@@ -109,6 +109,26 @@
         </v-window>
       </v-card-text>
     </v-card>
+
+    <!-- 退出账户 -->
+    <v-card border class="mt-4" color="error" variant="outlined">
+      <v-card-text class="d-flex align-center justify-space-between pa-4">
+        <div>
+          <div class="text-body-1 font-weight-medium">退出当前账户</div>
+          <div class="text-body-2 text-medium-emphasis mt-1">
+            退出后您需要重新登录才能访问需要认证的功能
+          </div>
+        </div>
+        <v-btn
+          color="error"
+          variant="flat"
+          prepend-icon="mdi-logout"
+          @click="handleLogout"
+        >
+          退出
+        </v-btn>
+      </v-card-text>
+    </v-card>
   </v-container>
 </template>
 
@@ -266,6 +286,9 @@ export default {
     },
     showToast(severity, summary, detail) {
       this.$toast.add({severity, summary, detail, life: 3000});
+    },
+    handleLogout() {
+      this.$router.push("/app/account/logout");
     },
   },
 };

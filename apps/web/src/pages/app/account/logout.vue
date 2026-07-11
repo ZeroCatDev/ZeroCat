@@ -32,10 +32,15 @@ const log = ref("");
 onMounted(async () => {
   log.value = "正在退出账户...";
 
-  try {
-    await authStore.logout(true);
-  } catch {
-    // 即使出错也继续清理
+  if (authStore.isLogin) {
+    try {
+      await authStore.logout(true);
+    } catch {
+      // 即使出错也继续清理
+    }
+  } else {
+    // 用户可能令牌已过期，直接清除本地状态（不调用服务端）
+    await authStore.logout(false);
   }
 
   // 清除其他 store 中的用户数据
