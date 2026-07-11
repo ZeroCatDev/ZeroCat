@@ -1,141 +1,177 @@
-<template>
-  <v-container class="oauth-authorize py-8" fluid>
-    <v-row justify="center">
-      <v-col cols="12" lg="5" md="7" xl="4">
-        <v-alert
-          v-if="error"
-          class="mb-4"
-          closable
-          type="error"
-          variant="tonal"
-          @click:close="error = null"
-        >
-          {{ error }}
-        </v-alert>
+<route lang="yaml">
+meta:
+  layout: simple
+</route>
 
-        <div v-if="loading && !application" class="loading-state">
-          <v-progress-circular color="primary" indeterminate size="42" />
-          <div class="text-body-2 text-medium-emphasis mt-3">正在加载授权请求</div>
+<template>
+  <div class="oauth-page">
+    <header class="oauth-topbar">
+      <div class="oauth-topbar__brand">
+        <span class="oauth-topbar__logo">Z</span>
+        <span class="oauth-topbar__name">ZeroCat</span>
+      </div>
+      <span class="oauth-topbar__hint">授权请求</span>
+    </header>
+
+    <main class="oauth-main">
+      <v-alert
+        v-if="error"
+        class="oauth-alert"
+        closable
+        density="comfortable"
+        type="error"
+        variant="tonal"
+        @click:close="error = null"
+      >
+        {{ error }}
+      </v-alert>
+
+      <!-- 加载 / 自动授权 -->
+      <section v-if="showBusyState" class="oauth-panel oauth-panel--center">
+        <v-progress-circular color="primary" indeterminate size="40" width="3" />
+        <p class="oauth-busy-title">
+          {{ autoAuthorizing ? '正在自动授权' : '正在加载授权请求' }}
+        </p>
+        <p v-if="autoAuthorizing && application" class="oauth-busy-sub">
+          {{ application.name }} · 即将跳转
+        </p>
+      </section>
+
+      <!-- 授权卡片 -->
+      <section v-else-if="application" class="oauth-panel">
+        <div class="oauth-app">
+          <v-avatar
+            class="oauth-app__avatar"
+            :image="application.logo_url || undefined"
+            rounded="lg"
+            size="48"
+          >
+            <v-icon icon="mdi-application-brackets-outline" size="26" />
+          </v-avatar>
+          <div class="oauth-app__meta">
+            <div class="oauth-app__name">
+              {{ application.name }}
+              <v-chip
+                v-if="application.is_verified"
+                class="ml-1"
+                color="success"
+                label
+                size="x-small"
+                variant="tonal"
+              >
+                已验证
+              </v-chip>
+            </div>
+            <div class="oauth-app__desc">
+              请求访问你的 ZeroCat 账号
+            </div>
+          </div>
         </div>
 
-        <v-card v-else-if="application" class="auth-shell" elevation="0">
-          <v-card-text class="auth-content">
-            <div class="brand-row mb-7">
-              <v-avatar
-                class="app-avatar"
-                :image="application.logo_url || '/default-app-logo.png'"
-                rounded="lg"
-                size="56"
-              >
-                <v-icon icon="mdi-application-brackets-outline" size="30" />
-              </v-avatar>
-              <v-icon class="brand-arrow" icon="mdi-arrow-right" size="22" />
-              <v-avatar class="zc-avatar" rounded="lg" size="56">
-                Z
-              </v-avatar>
-            </div>
-
-            <h1 class="auth-title">
-              {{ application.name }} 想访问你的 ZeroCat 账号
-            </h1>
-
-            <div class="account-select mt-5">
-              <v-select
-                v-model="selectedEmail"
-                density="comfortable"
-                :disabled="emails.length === 0"
-                hide-details="auto"
-                item-title="email"
-                item-value="email"
-                :items="emails"
-                label="账号"
-                variant="outlined"
-              >
-                <template #item="{ props, item }">
-                  <v-list-item v-bind="props">
-                    <template #append>
-                      <v-chip v-if="item.raw.primary" color="primary" label size="x-small">
-                        主邮箱
-                      </v-chip>
-                    </template>
-                  </v-list-item>
+        <div class="oauth-field">
+          <label class="oauth-label">授权账号</label>
+          <v-select
+            v-model="selectedEmail"
+            density="comfortable"
+            :disabled="emails.length === 0 || authorizing"
+            hide-details="auto"
+            item-title="email"
+            item-value="email"
+            :items="emails"
+            placeholder="选择邮箱"
+            variant="outlined"
+          >
+            <template #item="{ props: itemProps, item }">
+              <v-list-item v-bind="itemProps">
+                <template #append>
+                  <v-chip v-if="item.raw.primary" color="primary" label size="x-small">
+                    主邮箱
+                  </v-chip>
                 </template>
-              </v-select>
-            </div>
-
-            <v-divider class="my-6" />
-
-            <div class="text-subtitle-1 font-weight-bold mb-2">
-              此应用将可以：
-            </div>
-
-            <v-list class="permission-list" density="comfortable" lines="two">
-              <v-list-item
-                v-for="item in requestedScopeItems"
-                :key="item.name"
-                class="permission-item"
-              >
-                <template #prepend>
-                  <v-icon
-                    :color="isSensitiveScope(item) ? 'error' : 'medium-emphasis'"
-                    :icon="item.icon"
-                    size="22"
-                  />
-                </template>
-
-                <v-list-item-title class="permission-title">
-                  {{ item.title }}
-                  <span v-if="isSensitiveScope(item)" class="sensitive-mark">
-                    敏感
-                  </span>
-                </v-list-item-title>
-                <v-list-item-subtitle>
-                  {{ item.description }}
-                </v-list-item-subtitle>
               </v-list-item>
-            </v-list>
+            </template>
+          </v-select>
+          <p v-if="emails.length === 0" class="oauth-hint oauth-hint--warn">
+            需要已验证邮箱才能授权。请先在账户设置中验证邮箱。
+          </p>
+        </div>
 
-            <v-divider class="my-6" />
-
-            <div class="meta-list">
-              <div v-if="application.homepage_url" class="meta-row">
-                <span>应用主页</span>
-                <a :href="application.homepage_url" target="_blank">
-                  {{ application.homepage_url }}
-                </a>
-              </div>
-              <div class="meta-row">
-                <span>授权后跳转</span>
-                <strong>{{ redirectHost }}</strong>
-              </div>
-            </div>
-          </v-card-text>
-
-          <v-card-actions class="auth-actions">
-            <v-btn
-              color="primary"
-              size="large"
-              variant="text"
-              @click="cancel"
+        <div class="oauth-field">
+          <div class="oauth-label-row">
+            <label class="oauth-label">将获得的权限</label>
+            <span class="oauth-count">{{ requestedScopeItems.length }} 项</span>
+          </div>
+          <ul class="oauth-scope-list">
+            <li
+              v-for="item in requestedScopeItems"
+              :key="item.name"
+              class="oauth-scope-item"
             >
-              取消
-            </v-btn>
-            <v-spacer />
-            <v-btn
-              color="primary"
-              :disabled="!canAuthorize"
-              :loading="loading"
-              size="large"
-              variant="flat"
-              @click="authorize"
-            >
-              继续
-            </v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-col>
-    </v-row>
-  </v-container>
+              <v-icon
+                class="oauth-scope-item__icon"
+                :color="isSensitiveScope(item) ? 'error' : undefined"
+                :icon="item.icon"
+                size="20"
+              />
+              <div class="oauth-scope-item__body">
+                <div class="oauth-scope-item__title">
+                  {{ item.title }}
+                  <span v-if="isSensitiveScope(item)" class="oauth-sensitive">敏感</span>
+                </div>
+                <div class="oauth-scope-item__desc">{{ item.description }}</div>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <div class="oauth-meta">
+          <div v-if="application.homepage_url" class="oauth-meta__row">
+            <span>主页</span>
+            <a :href="application.homepage_url" rel="noopener noreferrer" target="_blank">
+              {{ application.homepage_url }}
+            </a>
+          </div>
+          <div class="oauth-meta__row">
+            <span>跳转至</span>
+            <strong>{{ redirectHost }}</strong>
+          </div>
+        </div>
+
+        <div class="oauth-actions">
+          <v-btn
+            class="oauth-actions__btn"
+            :disabled="authorizing"
+            size="large"
+            variant="text"
+            @click="cancel"
+          >
+            取消
+          </v-btn>
+          <v-btn
+            class="oauth-actions__btn oauth-actions__btn--primary"
+            color="primary"
+            :disabled="!canAuthorize"
+            :loading="authorizing"
+            size="large"
+            variant="flat"
+            @click="authorize"
+          >
+            授权并继续
+          </v-btn>
+        </div>
+      </section>
+
+      <!-- 无法加载应用 -->
+      <section v-else-if="!loading" class="oauth-panel oauth-panel--center">
+        <v-icon color="error" icon="mdi-alert-circle-outline" size="40" />
+        <p class="oauth-busy-title">无法完成授权</p>
+        <p class="oauth-busy-sub">{{ error || '请检查链接参数后重试' }}</p>
+        <v-btn class="mt-4" color="primary" variant="tonal" @click="goHome">
+          返回首页
+        </v-btn>
+      </section>
+    </main>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -143,12 +179,16 @@
   import { useRoute, useRouter } from 'vue-router'
   import axios from '@/axios/axios'
   import { getScopeCatalog } from '@/services/tokenService'
+  import { useAuthStore } from '@/stores/auth'
 
   const route = useRoute()
   const router = useRouter()
+  const authStore = useAuthStore()
 
   const application = ref(null)
-  const loading = ref(false)
+  const loading = ref(true)
+  const authorizing = ref(false)
+  const autoAuthorizing = ref(false)
   const error = ref(null)
   const emails = ref([])
   const selectedEmail = ref(null)
@@ -219,7 +259,7 @@
 
   const redirectHost = computed(() => {
     try {
-      const parsed = new URL(redirectUri)
+      const parsed = new URL(String(redirectUri || ''))
       return `${parsed.host}${parsed.pathname}`
     } catch {
       return redirectUri || '未提供'
@@ -227,7 +267,11 @@
   })
 
   const canAuthorize = computed(() => {
-    return Boolean(selectedEmail.value && requestedScopeItems.value.length > 0)
+    return Boolean(selectedEmail.value && requestedScopeItems.value.length > 0 && !authorizing.value)
+  })
+
+  const showBusyState = computed(() => {
+    return (loading.value && !application.value) || autoAuthorizing.value
   })
 
   function isSensitiveScope (item: { risk_level?: string } | null | undefined) {
@@ -246,10 +290,20 @@
     return true
   }
 
+  function ensureLoggedIn () {
+    if (authStore.isLogin) return true
+    const returnUrl = route.fullPath
+    authStore.setAuthRedirectUrl(returnUrl)
+    router.replace({
+      path: '/app/account/login',
+      query: { redirect: returnUrl }
+    })
+    return false
+  }
+
   async function loadApplication () {
     if (!validateParams()) return
 
-    loading.value = true
     try {
       const response = await axios.get(`/oauth/applications/${clientId}`)
       application.value = response.data
@@ -260,8 +314,10 @@
           : 'user:read'
       }
 
+      // 仅当服务端返回了 redirect_uris（通常为所有者）时做本地校验
       if (
         Array.isArray(application.value.redirect_uris) &&
+        application.value.redirect_uris.length > 0 &&
         !application.value.redirect_uris.includes(redirectUri)
       ) {
         error.value = '无效的回调地址'
@@ -270,15 +326,13 @@
     } catch (error_) {
       error.value = '无法加载应用信息'
       console.error('Failed to load application:', error_)
-    } finally {
-      loading.value = false
     }
   }
 
   async function loadEmails () {
     try {
       const response = await axios.get('/oauth/user/emails')
-      emails.value = response.data.map((email) => ({
+      emails.value = (response.data || []).map((email) => ({
         email: email.contact_value,
         primary: email.is_primary
       }))
@@ -287,7 +341,13 @@
         selectedEmail.value = primaryEmail ? primaryEmail.email : emails.value[0].email
       }
     } catch (error_) {
+      const code = error_?.response?.data?.code
+      if (code === 'ZC_ERROR_NEED_LOGIN' || error_?.response?.status === 401) {
+        ensureLoggedIn()
+        return
+      }
       console.error('Failed to load emails:', error_)
+      error.value = '无法加载账户邮箱'
     }
   }
 
@@ -306,7 +366,8 @@
       return
     }
 
-    loading.value = true
+    authorizing.value = true
+    error.value = null
     try {
       const response = await axios.post('/oauth/authorize/confirm', {
         client_id: clientId,
@@ -320,12 +381,24 @@
 
       if (response.data.redirect_url) {
         window.location.href = response.data.redirect_url
+        return
       }
+      error.value = '授权成功但未返回跳转地址'
     } catch (error_) {
-      error.value = error_.response?.data?.error_description || error_.response?.data?.error || '授权失败，请重试'
+      const code = error_?.response?.data?.code
+      if (code === 'ZC_ERROR_NEED_LOGIN' || error_?.response?.status === 401) {
+        ensureLoggedIn()
+        return
+      }
+      error.value =
+        error_.response?.data?.error_description ||
+        error_.response?.data?.error ||
+        error_.response?.data?.message ||
+        '授权失败，请重试'
       console.error('Authorization failed:', error_)
     } finally {
-      loading.value = false
+      authorizing.value = false
+      autoAuthorizing.value = false
     }
   }
 
@@ -340,140 +413,319 @@
     })
   }
 
+  function goHome () {
+    router.push('/')
+  }
+
   onMounted(async () => {
-    await Promise.all([
-      loadApplication(),
-      loadEmails(),
-      loadScopeCatalog()
-    ])
+    if (!ensureLoggedIn()) {
+      loading.value = false
+      return
+    }
+
+    loading.value = true
+    try {
+      await Promise.all([
+        loadApplication(),
+        loadEmails(),
+        loadScopeCatalog()
+      ])
+
+      // 管理员开启自动授权：页面打开后直接同意并跳转
+      if (
+        application.value?.auto_authorize &&
+        selectedEmail.value &&
+        requestedScopeItems.value.length > 0
+      ) {
+        autoAuthorizing.value = true
+        await authorize()
+      }
+    } finally {
+      loading.value = false
+    }
   })
 </script>
 
 <style scoped>
-.oauth-authorize {
+.oauth-page {
   min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
   background: rgb(var(--v-theme-background));
+  color: rgb(var(--v-theme-on-background));
 }
 
-.loading-state {
-  min-height: 420px;
+.oauth-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 52px;
+  padding: 0 16px;
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  background: rgb(var(--v-theme-surface));
+}
+
+.oauth-topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.oauth-topbar__logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-on-primary));
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.oauth-topbar__name {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.oauth-topbar__hint {
+  color: rgba(var(--v-theme-on-surface), 0.55);
+  font-size: 0.8125rem;
+}
+
+.oauth-main {
+  flex: 1;
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 20px 16px 32px;
+}
+
+.oauth-alert {
+  margin-bottom: 16px;
+}
+
+.oauth-panel {
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-radius: 12px;
+  background: rgb(var(--v-theme-surface));
+  padding: 20px 18px 16px;
+}
+
+.oauth-panel--center {
+  min-height: 280px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-}
-
-.auth-shell {
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  border-radius: 8px;
-  overflow: hidden;
-  background: rgb(var(--v-theme-surface));
-}
-
-.auth-content {
-  padding: 40px 40px 24px;
-}
-
-.brand-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-}
-
-.app-avatar,
-.zc-avatar {
-  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  background: rgb(var(--v-theme-surface));
-}
-
-.zc-avatar {
-  font-weight: 700;
-  color: rgb(var(--v-theme-primary));
-}
-
-.brand-arrow {
-  color: rgba(var(--v-theme-on-surface), 0.62);
-}
-
-.auth-title {
-  max-width: 420px;
-  margin: 0 auto;
-  font-size: 1.75rem;
-  font-weight: 500;
-  line-height: 1.25;
   text-align: center;
-  letter-spacing: 0;
+  gap: 8px;
 }
 
-.account-select {
-  max-width: 420px;
-  margin-right: auto;
-  margin-left: auto;
+.oauth-busy-title {
+  margin: 12px 0 0;
+  font-size: 1rem;
+  font-weight: 600;
 }
 
-.permission-list {
-  padding: 0;
-  background: transparent;
-}
-
-.permission-item {
-  padding-inline: 0;
-}
-
-.permission-title {
-  white-space: normal;
-}
-
-.sensitive-mark {
-  margin-left: 8px;
-  color: rgb(var(--v-theme-error));
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.meta-list {
-  display: grid;
-  gap: 10px;
+.oauth-busy-sub {
+  margin: 0;
+  color: rgba(var(--v-theme-on-surface), 0.62);
   font-size: 0.875rem;
 }
 
-.meta-row {
-  display: grid;
-  grid-template-columns: 92px minmax(0, 1fr);
+.oauth-app {
+  display: flex;
+  align-items: center;
   gap: 12px;
+  margin-bottom: 20px;
 }
 
-.meta-row span {
+.oauth-app__avatar {
+  flex-shrink: 0;
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  background: rgb(var(--v-theme-surface));
+}
+
+.oauth-app__meta {
+  min-width: 0;
+}
+
+.oauth-app__name {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.oauth-app__desc {
+  margin-top: 2px;
   color: rgba(var(--v-theme-on-surface), 0.62);
+  font-size: 0.875rem;
 }
 
-.meta-row a,
-.meta-row strong {
+.oauth-field {
+  margin-bottom: 18px;
+}
+
+.oauth-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.oauth-label {
+  display: block;
+  margin-bottom: 8px;
+  color: rgba(var(--v-theme-on-surface), 0.72);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.oauth-label-row .oauth-label {
+  margin-bottom: 0;
+}
+
+.oauth-count {
+  color: rgba(var(--v-theme-on-surface), 0.5);
+  font-size: 0.75rem;
+}
+
+.oauth-hint {
+  margin: 6px 0 0;
+  font-size: 0.75rem;
+  color: rgba(var(--v-theme-on-surface), 0.55);
+}
+
+.oauth-hint--warn {
+  color: rgb(var(--v-theme-warning));
+}
+
+.oauth-scope-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.oauth-scope-item {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.oauth-scope-item:last-child {
+  border-bottom: none;
+}
+
+.oauth-scope-item__icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  opacity: 0.75;
+}
+
+.oauth-scope-item__body {
+  min-width: 0;
+}
+
+.oauth-scope-item__title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.oauth-scope-item__desc {
+  margin-top: 2px;
+  color: rgba(var(--v-theme-on-surface), 0.58);
+  font-size: 0.8rem;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.oauth-sensitive {
+  margin-left: 6px;
+  color: rgb(var(--v-theme-error));
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.oauth-meta {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-top: 4px;
+  font-size: 0.8125rem;
+}
+
+.oauth-meta__row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.oauth-meta__row span {
+  color: rgba(var(--v-theme-on-surface), 0.55);
+}
+
+.oauth-meta__row a,
+.oauth-meta__row strong {
   min-width: 0;
   overflow-wrap: anywhere;
   font-weight: 500;
+  word-break: break-all;
 }
 
-.auth-actions {
-  padding: 16px 32px 28px;
+.oauth-actions {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 
-@media (max-width: 600px) {
-  .auth-content {
-    padding: 28px 22px 16px;
+.oauth-actions__btn {
+  width: 100%;
+  min-height: 44px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+@media (min-width: 600px) {
+  .oauth-main {
+    padding: 40px 16px 48px;
   }
 
-  .auth-title {
-    font-size: 1.45rem;
+  .oauth-panel {
+    padding: 24px 24px 18px;
   }
 
-  .auth-actions {
-    padding: 12px 18px 22px;
+  .oauth-actions {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
   }
 
-  .auth-actions .v-btn {
-    width: 100%;
+  .oauth-actions__btn {
+    width: auto;
+    min-width: 112px;
+  }
+
+  .oauth-actions__btn--primary {
+    min-width: 140px;
   }
 }
 </style>

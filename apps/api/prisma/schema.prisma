@@ -650,6 +650,8 @@ model ow_oauth_applications {
   status         String   @default("active") @db.VarChar(50)
   is_verified    Boolean  @default(false)
   is_public      Boolean  @default(false)
+  // 管理员可开启：用户打开授权页后自动同意并跳转（仍需已登录）
+  auto_authorize Boolean  @default(false)
   created_at     DateTime @default(now()) @db.Timestamp(6)
   updated_at     DateTime @updatedAt @db.Timestamp(6)
 

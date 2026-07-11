@@ -36,6 +36,34 @@ const clearLocalAuth = () => {
   localStorage.removeItem("sudo_token_duration");
 };
 
+const AUTH_REDIRECT_URL_KEY = "auth_redirect_url";
+
+/**
+ * 构建登录页 URL，并尽量保留当前页面以便登录后回跳
+ * （尤其是 OAuth 授权页等带 query 的完整路径）
+ */
+const buildLoginRedirectUrl = ({ reason } = {}) => {
+  const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  const isAlreadyOnLogin = currentPath.startsWith("/app/account/login");
+
+  if (!isAlreadyOnLogin && currentPath && currentPath !== "/") {
+    try {
+      sessionStorage.setItem(AUTH_REDIRECT_URL_KEY, currentPath);
+    } catch {
+      // sessionStorage 不可用时忽略
+    }
+  }
+
+  const params = new URLSearchParams();
+  if (reason) params.set("reason", reason);
+  if (!isAlreadyOnLogin && currentPath && currentPath !== "/") {
+    params.set("redirect", currentPath);
+  }
+
+  const query = params.toString();
+  return query ? `/app/account/login?${query}` : "/app/account/login";
+};
+
 /**
  * 处理 ZC_ERROR_NEED_LOGOUT：令牌已失效（过期/吊销/刷新失败等）
  * 清除本地令牌 → 通知 store → 跳转登录页
@@ -46,7 +74,7 @@ export const handleNeedLogout = () => {
 
   clearLocalAuth();
   window.dispatchEvent(new CustomEvent("forceLogout"));
-  window.location.href = "/?reason=session_expired";
+  window.location.href = buildLoginRedirectUrl({ reason: "session_expired" });
 };
 
 /**
@@ -59,7 +87,7 @@ export const handleNeedLogin = () => {
 
   clearLocalAuth();
   window.dispatchEvent(new CustomEvent("forceLogout"));
-  window.location.href = "/";
+  window.location.href = buildLoginRedirectUrl();
 };
 
 export const requestTokenRefresh = async () => {

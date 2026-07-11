@@ -1,147 +1,202 @@
+<route lang="yaml">
+meta:
+  layout: simple
+</route>
+
 <template>
-  <v-container class="d-flex align-center justify-center" style="min-height: 80vh">
-    <v-row justify="center">
-      <v-col cols="12" lg="5" md="6" sm="8">
-        <v-card class="error-card">
-          <v-card-item class="text-center">
-            <v-icon
-              class="mb-4"
-              color="error"
-              icon="mdi-alert-circle"
-              size="64"
-            ></v-icon>
-            <v-card-title class="text-h4 mb-2">
-              授权错误
-            </v-card-title>
-            <v-card-subtitle class="text-body-1 mb-4">
-              {{ errorCode }}
-            </v-card-subtitle>
-          </v-card-item>
+  <div class="oauth-error-page">
+    <header class="oauth-topbar">
+      <div class="oauth-topbar__brand">
+        <span class="oauth-topbar__logo">Z</span>
+        <span class="oauth-topbar__name">ZeroCat</span>
+      </div>
+      <span class="oauth-topbar__hint">授权错误</span>
+    </header>
 
-          <v-card-text class="text-center pb-4">
-            <p class="text-body-1">
-              {{ errorDescription }}
-            </p>
-          </v-card-text>
+    <main class="oauth-main">
+      <section class="oauth-panel">
+        <div class="oauth-panel__icon">
+          <v-icon color="error" icon="mdi-alert-circle-outline" size="40" />
+        </div>
+        <h1 class="oauth-title">{{ errorCode }}</h1>
+        <p class="oauth-desc">{{ errorDescription }}</p>
 
-          <v-card-actions class="justify-center pb-6">
-            <v-btn
-              color="primary"
-              prepend-icon="mdi-home"
-              variant="outlined"
-              @click="goHome"
-            >
-              返回首页
-            </v-btn>
-          </v-card-actions>
-        </v-card>
+        <div class="oauth-actions">
+          <v-btn
+            block
+            color="primary"
+            size="large"
+            variant="flat"
+            @click="goHome"
+          >
+            返回首页
+          </v-btn>
+        </div>
 
-        <!-- 技术细节折叠面板 -->
         <v-expansion-panels class="mt-4" variant="accordion">
           <v-expansion-panel>
-            <v-expansion-panel-title>
-              <div class="d-flex align-center">
-                <v-icon class="mr-2" icon="mdi-code-tags"></v-icon>
-                技术细节
-              </div>
+            <v-expansion-panel-title class="text-body-2">
+              技术细节
             </v-expansion-panel-title>
             <v-expansion-panel-text>
-              <v-list>
-                <v-list-item>
-                  <v-list-item-title class="font-weight-bold">
-                    错误代码
-                  </v-list-item-title>
-                  <v-list-item-subtitle>
-                    {{ error }}
-                  </v-list-item-subtitle>
-                </v-list-item>
-                <v-list-item>
-                  <v-list-item-title class="font-weight-bold">
-                    错误描述
-                  </v-list-item-title>
-                  <v-list-item-subtitle>
-                    {{ error_description }}
-                  </v-list-item-subtitle>
-                </v-list-item>
-                <v-list-item v-if="state">
-                  <v-list-item-title class="font-weight-bold">
-                    状态值
-                  </v-list-item-title>
-                  <v-list-item-subtitle>
-                    {{ state }}
-                  </v-list-item-subtitle>
-                </v-list-item>
-              </v-list>
+              <div class="detail-row">
+                <span>错误代码</span>
+                <code>{{ error }}</code>
+              </div>
+              <div class="detail-row">
+                <span>描述</span>
+                <code>{{ error_description }}</code>
+              </div>
+              <div v-if="state" class="detail-row">
+                <span>state</span>
+                <code>{{ state }}</code>
+              </div>
             </v-expansion-panel-text>
           </v-expansion-panel>
         </v-expansion-panels>
-      </v-col>
-    </v-row>
-  </v-container>
+      </section>
+    </main>
+  </div>
 </template>
 
 <script setup>
-import {computed} from 'vue'
-import {useRoute, useRouter} from 'vue-router'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
 const router = useRouter()
 
-// 从URL参数中获取错误信息
 const error = route.query.error || 'unknown_error'
 const error_description = route.query.error_description || '发生未知错误'
 const state = route.query.state
 
-// 错误代码映射
 const errorCodeMap = {
-  'access_denied': '访问被拒绝',
-  'invalid_request': '无效的请求',
-  'unauthorized_client': '未授权的客户端',
-  'unsupported_response_type': '不支持的响应类型',
-  'invalid_scope': '无效的权限范围',
-  'server_error': '服务器错误',
-  'temporarily_unavailable': '服务暂时不可用',
-  'unknown_error': '未知错误'
+  access_denied: '访问被拒绝',
+  invalid_request: '无效的请求',
+  unauthorized_client: '未授权的客户端',
+  unsupported_response_type: '不支持的响应类型',
+  invalid_scope: '无效的权限范围',
+  server_error: '服务器错误',
+  temporarily_unavailable: '服务暂时不可用',
+  unknown_error: '未知错误'
 }
 
-// 获取友好的错误代码显示
-const errorCode = computed(() => {
-  return errorCodeMap[error] || errorCodeMap.unknown_error
-})
+const errorCode = computed(() => errorCodeMap[error] || errorCodeMap.unknown_error)
 
-// 获取友好的错误描述
 const errorDescription = computed(() => {
   return error_description || '抱歉，授权过程中发生错误。请稍后重试或联系管理员。'
 })
 
-// 返回首页
 const goHome = () => {
   router.push('/')
 }
 </script>
 
 <style scoped>
-.error-card {
-  border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1) !important;
+.oauth-error-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: rgb(var(--v-theme-background));
 }
 
-.v-expansion-panels {
-  box-shadow: none !important;
-  background: transparent;
+.oauth-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 52px;
+  padding: 0 16px;
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  background: rgb(var(--v-theme-surface));
 }
 
-.v-expansion-panel {
-  background: transparent !important;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 8px !important;
+.oauth-topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.v-expansion-panel-title {
-  padding: 16px;
+.oauth-topbar__logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-on-primary));
+  font-size: 0.9rem;
+  font-weight: 700;
 }
 
-.v-list-item {
-  padding: 12px 0;
+.oauth-topbar__name {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.oauth-topbar__hint {
+  color: rgba(var(--v-theme-on-surface), 0.55);
+  font-size: 0.8125rem;
+}
+
+.oauth-main {
+  flex: 1;
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 24px 16px 40px;
+}
+
+.oauth-panel {
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-radius: 12px;
+  background: rgb(var(--v-theme-surface));
+  padding: 28px 20px 20px;
+  text-align: center;
+}
+
+.oauth-panel__icon {
+  margin-bottom: 12px;
+}
+
+.oauth-title {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.oauth-desc {
+  margin: 0 0 20px;
+  color: rgba(var(--v-theme-on-surface), 0.68);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.oauth-actions {
+  max-width: 280px;
+  margin: 0 auto;
+}
+
+.detail-row {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+  text-align: left;
+  font-size: 0.8125rem;
+}
+
+.detail-row span {
+  color: rgba(var(--v-theme-on-surface), 0.55);
+}
+
+.detail-row code {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(var(--v-theme-on-surface), 0.05);
+  word-break: break-all;
+  white-space: pre-wrap;
 }
 </style>

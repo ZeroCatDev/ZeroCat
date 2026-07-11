@@ -66,6 +66,17 @@
               ></v-select>
             </v-col>
             <v-col cols="12" md="2" sm="6">
+              <v-select
+                v-model="filters.autoAuthorize"
+                :items="booleanFilterOptions"
+                clearable
+                hide-details
+                label="自动授权"
+                prepend-icon="mdi-lightning-bolt"
+                @update:model-value="applyFilters"
+              ></v-select>
+            </v-col>
+            <v-col cols="12" md="2" sm="6">
               <v-text-field
                 v-model="filters.ownerId"
                 clearable
@@ -156,6 +167,16 @@
             </v-chip>
           </template>
 
+          <template v-slot:item.auto_authorize="{ item }">
+            <v-chip
+              :color="item.auto_authorize ? 'warning' : 'default'"
+              size="small"
+              variant="tonal"
+            >
+              {{ item.auto_authorize ? "自动授权" : "手动" }}
+            </v-chip>
+          </template>
+
           <template v-slot:item.owner="{ item }">
             <div>
               <div class="font-weight-medium">{{ getOwnerDisplay(item.owner) }}</div>
@@ -195,9 +216,9 @@
         </v-data-table-server>
       </v-card>
 
-      <v-dialog v-model="detailDialog" max-width="960">
+      <v-dialog v-model="detailDialog" :fullscreen="$vuetify.display.xs" max-width="960">
         <v-card>
-          <v-card-title class="d-flex align-center">
+          <v-card-title class="d-flex align-center flex-wrap ga-2">
             <span class="text-h6">OAuth 应用详情</span>
             <v-spacer></v-spacer>
             <v-chip
@@ -221,10 +242,19 @@
             <v-chip
               v-if="selectedApplication"
               :color="selectedApplication.is_public ? 'info' : 'default'"
+              class="mr-2"
               size="small"
               variant="tonal"
             >
               {{ selectedApplication.is_public ? "公开" : "私有" }}
+            </v-chip>
+            <v-chip
+              v-if="selectedApplication"
+              :color="selectedApplication.auto_authorize ? 'warning' : 'default'"
+              size="small"
+              variant="tonal"
+            >
+              {{ selectedApplication.auto_authorize ? "自动授权" : "手动授权" }}
             </v-chip>
           </v-card-title>
 
@@ -304,8 +334,20 @@
                   <v-switch
                     v-model="editForm.isPublic"
                     color="primary"
+                    hide-details
                     label="公开应用"
                   ></v-switch>
+
+                  <v-switch
+                    v-model="editForm.autoAuthorize"
+                    class="mt-2"
+                    color="warning"
+                    hide-details
+                    label="自动授权（登录后打开授权页直接同意并跳转）"
+                  ></v-switch>
+                  <div class="text-caption text-medium-emphasis mt-1 mb-2">
+                    仅信任的第一方 / 内部应用建议开启。用户仍需已登录且拥有已验证邮箱。
+                  </div>
                 </v-form>
               </v-col>
 
@@ -350,7 +392,7 @@
 
           <v-divider></v-divider>
 
-          <v-card-actions class="pa-4">
+          <v-card-actions class="pa-4 detail-actions">
             <v-btn
               :disabled="!selectedApplication || detailLoading"
               :loading="verifying"
@@ -359,6 +401,15 @@
               @click="setVerified(!selectedApplication?.is_verified)"
             >
               {{ selectedApplication?.is_verified ? "取消验证" : "设为已验证" }}
+            </v-btn>
+            <v-btn
+              :disabled="!selectedApplication || detailLoading"
+              :loading="togglingAutoAuth"
+              color="warning"
+              variant="tonal"
+              @click="setAutoAuthorize(!selectedApplication?.auto_authorize)"
+            >
+              {{ selectedApplication?.auto_authorize ? "关闭自动授权" : "开启自动授权" }}
             </v-btn>
             <v-btn
               :disabled="!selectedApplication"
@@ -376,7 +427,7 @@
             >
               下线应用
             </v-btn>
-            <v-spacer></v-spacer>
+            <v-spacer class="d-none d-sm-inline-flex"></v-spacer>
             <v-btn variant="text" @click="detailDialog = false">关闭</v-btn>
           </v-card-actions>
         </v-card>
@@ -442,6 +493,7 @@ export default {
       detailLoading: false,
       saving: false,
       verifying: false,
+      togglingAutoAuth: false,
       deleting: false,
       applications: [],
       totalItems: 0,
@@ -456,6 +508,7 @@ export default {
         { title: "状态", value: "status", width: "120px", sortable: false },
         { title: "验证", value: "is_verified", width: "110px", sortable: false },
         { title: "公开", value: "is_public", width: "110px", sortable: false },
+        { title: "授权方式", value: "auto_authorize", width: "120px", sortable: false },
         { title: "所有者", value: "owner", width: "180px", sortable: false },
         { title: "授权/令牌", value: "usage", width: "140px", sortable: false },
         { title: "创建时间", value: "created_at", width: "180px", sortable: false },
@@ -467,6 +520,7 @@ export default {
         ownerId: "",
         isVerified: "",
         isPublic: "",
+        autoAuthorize: "",
         sortBy: "updated_at",
         sortOrder: "desc",
       },
@@ -499,6 +553,7 @@ export default {
         { title: "type", value: "type" },
         { title: "is_verified", value: "is_verified" },
         { title: "is_public", value: "is_public" },
+        { title: "auto_authorize", value: "auto_authorize" },
         { title: "created_at", value: "created_at" },
         { title: "updated_at", value: "updated_at" },
         { title: "owner_id", value: "owner_id" },
@@ -520,6 +575,7 @@ export default {
         termsUrl: "",
         status: "active",
         isPublic: false,
+        autoAuthorize: false,
       },
       deleteDialog: false,
       deleteTarget: null,
@@ -555,10 +611,10 @@ export default {
           icon: "mdi-shield-check",
         },
         {
-          title: "公开应用",
-          value: this.applications.filter((item) => item.is_public).length,
+          title: "自动授权",
+          value: this.applications.filter((item) => item.auto_authorize).length,
           type: "public",
-          icon: "mdi-earth",
+          icon: "mdi-lightning-bolt",
         },
       ];
     },
@@ -610,6 +666,7 @@ export default {
         ownerId: "",
         isVerified: "",
         isPublic: "",
+        autoAuthorize: "",
         sortBy: "updated_at",
         sortOrder: "desc",
       };
@@ -692,6 +749,11 @@ export default {
         params.is_public = isPublic;
       }
 
+      const autoAuthorize = this.parseBooleanFilter(this.filters.autoAuthorize);
+      if (autoAuthorize !== undefined) {
+        params.auto_authorize = autoAuthorize;
+      }
+
       return params;
     },
 
@@ -702,6 +764,7 @@ export default {
         _count: item?._count || {},
         is_public: Boolean(item?.is_public),
         is_verified: Boolean(item?.is_verified),
+        auto_authorize: Boolean(item?.auto_authorize),
       };
     },
 
@@ -780,6 +843,7 @@ export default {
         scopes: this.normalizeArrayField(app?.scopes),
         is_public: Boolean(app?.is_public),
         is_verified: Boolean(app?.is_verified),
+        auto_authorize: Boolean(app?.auto_authorize),
       };
     },
 
@@ -794,6 +858,7 @@ export default {
         termsUrl: app?.terms_url || "",
         status: app?.status || "active",
         isPublic: Boolean(app?.is_public),
+        autoAuthorize: Boolean(app?.auto_authorize),
       };
     },
 
@@ -874,6 +939,7 @@ export default {
         terms_url: this.toNullableString(this.editForm.termsUrl),
         status,
         is_public: Boolean(this.editForm.isPublic),
+        auto_authorize: Boolean(this.editForm.autoAuthorize),
       };
     },
 
@@ -956,6 +1022,33 @@ export default {
         console.error("Error updating OAuth application verified status:", error);
       } finally {
         this.verifying = false;
+      }
+    },
+
+    async setAutoAuthorize(nextAuto) {
+      if (!this.selectedApplication || !this.detailIdentifier) return;
+
+      this.togglingAutoAuth = true;
+      try {
+        await axios.put(
+          `/admin/oauth/applications/${encodeURIComponent(this.detailIdentifier)}/auto-authorize`,
+          { auto_authorize: Boolean(nextAuto) }
+        );
+        this.editForm.autoAuthorize = Boolean(nextAuto);
+        this.showSuccess(
+          nextAuto
+            ? "已开启自动授权：用户登录后打开授权页将直接同意并跳转"
+            : "已关闭自动授权"
+        );
+        await Promise.all([
+          this.loadApplicationDetail(this.detailIdentifier),
+          this.loadApplications(),
+        ]);
+      } catch (error) {
+        this.showError(error.response?.data?.message || "更新自动授权失败");
+        console.error("Error updating OAuth auto_authorize:", error);
+      } finally {
+        this.togglingAutoAuth = false;
       }
     },
 
@@ -1094,6 +1187,23 @@ export default {
     &:hover {
       opacity: 1;
       transform: scale(1.1);
+    }
+  }
+
+  .detail-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  @media (max-width: 600px) {
+    .detail-actions {
+      flex-direction: column;
+      align-items: stretch;
+
+      .v-btn {
+        width: 100%;
+        margin: 0 !important;
+      }
     }
   }
 

@@ -51,6 +51,13 @@ export const authRequiredRoutes = [
     description: '账户管理页面'
   },
 
+  // 精确匹配 - OAuth 授权同意页（未登录需带完整 query 回跳）
+  {
+    type: 'exact',
+    path: '/app/oauth/authorize',
+    description: 'OAuth授权同意'
+  },
+
   // 前缀匹配 - OAuth 应用管理
   {
     type: 'prefix',

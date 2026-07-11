@@ -81,7 +81,25 @@ export const needLogin = async (req, res, next) => {
                 code: "ZC_ERROR_NEED_LOGIN",
             });
         } else {
-            return res.redirect(await zcconfig.get("urls.frontend") + "/app/login");
+            const frontendUrl = await zcconfig.get("urls.frontend");
+            const loginUrl = new URL("/app/account/login", frontendUrl);
+            // 尽量带回当前完整路径，便于登录后继续业务（如 OAuth 授权）
+            const referer = req.get("referer");
+            if (referer) {
+                try {
+                    const refererUrl = new URL(referer);
+                    const frontendOrigin = new URL(frontendUrl).origin;
+                    if (refererUrl.origin === frontendOrigin) {
+                        loginUrl.searchParams.set(
+                            "redirect",
+                            `${refererUrl.pathname}${refererUrl.search}${refererUrl.hash}`
+                        );
+                    }
+                } catch {
+                    // ignore invalid referer
+                }
+            }
+            return res.redirect(loginUrl.toString());
         }
     }
     next();

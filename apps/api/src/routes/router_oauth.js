@@ -243,6 +243,8 @@ router.get("/applications", needLogin, requireScope("oauth_app:read"), async (re
                 created_at: true,
                 is_public: true,
                 is_verified: true,
+                auto_authorize: true,
+                logo_url: true,
             },
         });
         res.json(applications);
@@ -268,6 +270,8 @@ router.get("/applications/:client_id", async (req, res) => {
                 terms_url: true,
                 privacy_url: true,
                 is_verified: true,
+                is_public: true,
+                auto_authorize: true,
                 type: true,
                 scopes: true,
                 client_id: true,

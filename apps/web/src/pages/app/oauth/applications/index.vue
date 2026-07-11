@@ -1,112 +1,95 @@
 <template>
-  <v-container fluid>
-    <v-row class="mb-4">
-      <v-col>
-        <div class="d-flex align-center">
-          <h1 class="text-h4">OAuth 应用</h1>
-          <v-spacer></v-spacer>
-          <v-btn
-            :to="'/app/oauth/applications/new'"
-            color="primary"
-            prepend-icon="mdi-plus"
-          >
-            新建应用
-          </v-btn>
-        </div>
-      </v-col>
-    </v-row>
+  <v-container class="oauth-apps-page" fluid>
+    <div class="page-header mb-4">
+      <div class="page-header__text">
+        <h1 class="text-h5 font-weight-medium mb-1">OAuth 应用</h1>
+        <p class="text-body-2 text-medium-emphasis mb-0">
+          管理你创建的第三方应用凭据与回调地址
+        </p>
+      </div>
+      <v-btn
+        color="primary"
+        prepend-icon="mdi-plus"
+        :to="'/app/oauth/applications/new'"
+      >
+        新建应用
+      </v-btn>
+    </div>
 
-    <!-- 应用列表 -->
-    <v-row>
-      <v-col>
-        <v-card>
-          <!-- 加载状态 -->
-          <v-card-text v-if="loading" class="text-center py-8">
-            <v-progress-circular indeterminate></v-progress-circular>
-          </v-card-text>
+    <v-card border flat>
+      <v-card-text v-if="loading" class="text-center py-12">
+        <v-progress-circular color="primary" indeterminate />
+      </v-card-text>
 
-          <!-- 空状态 -->
-          <v-card-text
-            v-else-if="applications.length === 0"
-            class="text-center py-8"
-          >
-            <v-icon
-              class="mb-4"
-              color="grey"
-              icon="mdi-apps"
-              size="64"
-            ></v-icon>
-            <h3 class="text-h6 mb-2">还没有OAuth应用</h3>
-            <p class="text-body-1 text-grey">
-              创建一个新的OAuth应用来让其他用户通过OAuth授权访问你的应用。
-            </p>
-            <v-btn
-              :to="'/app/oauth/applications/new'"
-              class="mt-4"
-              color="primary"
+      <v-card-text
+        v-else-if="visibleApps.length === 0"
+        class="text-center py-12"
+      >
+        <v-icon class="mb-3" color="medium-emphasis" icon="mdi-shield-key-outline" size="48" />
+        <h2 class="text-h6 mb-1">还没有 OAuth 应用</h2>
+        <p class="text-body-2 text-medium-emphasis mb-4">
+          创建一个应用，让其他服务通过 OAuth 安全访问用户授权的数据。
+        </p>
+        <v-btn color="primary" :to="'/app/oauth/applications/new'">
+          创建第一个应用
+        </v-btn>
+      </v-card-text>
+
+      <v-list v-else lines="two" class="py-0">
+        <v-list-item
+          v-for="app in visibleApps"
+          :key="app.client_id"
+          :to="`/app/oauth/applications/${app.client_id}`"
+          class="app-item"
+        >
+          <template #prepend>
+            <v-avatar
+              class="mr-3"
+              :image="app.logo_url || undefined"
+              rounded="lg"
+              size="40"
             >
-              创建第一个应用
-            </v-btn>
-          </v-card-text>
-
-          <!-- 应用列表 -->
-          <template v-else>
-            <v-list lines="two">
-              <v-list-item
-                v-for="app in applications"
-                :key="app.client_id"
-                :style="{ display: app.status == 'deleted' ? 'none' : '' }"
-                :to="`/app/oauth/applications/${app.client_id}`"
-                class="app-list-item"
-              >
-                <template v-slot:prepend>
-                  <v-avatar
-                    :image="app.logo_url || '/default-app-logo.png'"
-                    class="mr-4"
-                    size="48"
-                  ></v-avatar>
-                </template>
-
-                <v-list-item-title class="text-h6 mb-1">
-                  {{ app.name }}
-                  <v-chip
-                    v-if="app.is_verified"
-                    class="ml-2"
-                    color="success"
-                    size="small"
-                  >
-                    已验证
-                  </v-chip>
-                </v-list-item-title>
-
-                <v-list-item-subtitle>
-                  <div class="d-flex align-center text-grey">
-                    <v-icon
-                      class="mr-1"
-                      icon="mdi-identifier"
-                      size="small"
-                    ></v-icon>
-                    <span class="mr-4">{{ app.client_id }}</span>
-                    <v-icon
-                      class="mr-1"
-                      icon="mdi-clock-outline"
-                      size="small"
-                    ></v-icon>
-                    <span
-                    >创建于
-                      {{ new Date(app.created_at).toLocaleDateString() }}</span
-                    >
-                  </div>
-                  <div class="mt-1">{{ app.description || "暂无描述" }}</div>
-                </v-list-item-subtitle>
-              </v-list-item>
-            </v-list>
+              <v-icon icon="mdi-application-brackets-outline" />
+            </v-avatar>
           </template>
-        </v-card>
-      </v-col>
-    </v-row>
 
-    <!-- 错误提示 -->
+          <v-list-item-title class="d-flex align-center flex-wrap ga-1">
+            <span class="font-weight-medium">{{ app.name }}</span>
+            <v-chip
+              v-if="app.is_verified"
+              color="success"
+              label
+              size="x-small"
+              variant="tonal"
+            >
+              已验证
+            </v-chip>
+            <v-chip
+              v-if="app.auto_authorize"
+              color="warning"
+              label
+              size="x-small"
+              variant="tonal"
+            >
+              自动授权
+            </v-chip>
+          </v-list-item-title>
+
+          <v-list-item-subtitle class="mt-1">
+            <span class="app-meta">{{ app.client_id }}</span>
+            <span class="app-meta-sep">·</span>
+            <span class="app-meta">
+              {{ formatDate(app.created_at) }}
+            </span>
+          </v-list-item-subtitle>
+
+          <template #append>
+            <v-icon icon="mdi-chevron-right" size="20" />
+          </template>
+        </v-list-item>
+      </v-list>
+    </v-card>
+
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="3000">
       {{ snackbar.text }}
     </v-snackbar>
@@ -114,10 +97,9 @@
 </template>
 
 <script setup>
-import {ref, onMounted} from "vue";
+import { computed, onMounted, ref } from "vue";
 import axios from "@/axios/axios";
 
-// 状态变量
 const applications = ref([]);
 const loading = ref(false);
 const snackbar = ref({
@@ -126,44 +108,80 @@ const snackbar = ref({
   color: "error",
 });
 
-// 加载应用列表
+const visibleApps = computed(() =>
+  applications.value.filter((app) => app.status !== "deleted")
+);
+
+const formatDate = (value) => {
+  if (!value) return "";
+  try {
+    return new Date(value).toLocaleDateString("zh-CN");
+  } catch {
+    return String(value);
+  }
+};
+
 const loadApplications = async () => {
   loading.value = true;
   try {
     const response = await axios.get("/oauth/applications");
-    applications.value = response.data;
+    applications.value = Array.isArray(response.data) ? response.data : [];
   } catch (error) {
-    showError("加载应用列表失败");
+    snackbar.value = {
+      show: true,
+      text: "加载应用列表失败",
+      color: "error",
+    };
     console.error("Failed to load applications:", error);
   }
   loading.value = false;
 };
 
-// 显示错误信息
-const showError = (text) => {
-  snackbar.value = {
-    show: true,
-    text,
-    color: "error",
-  };
-};
-
-// 页面加载时获取数据
 onMounted(() => {
   loadApplications();
 });
 </script>
 
 <style scoped>
-.app-list-item {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
-.app-list-item:last-child {
+.page-header__text {
+  min-width: 0;
+  flex: 1 1 220px;
+}
+
+.app-item {
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  min-height: 72px;
+}
+
+.app-item:last-child {
   border-bottom: none;
 }
 
-.app-list-item:hover {
-  background-color: rgba(var(--v-theme-primary), 0.05);
+.app-meta {
+  font-size: 0.78rem;
+  word-break: break-all;
+}
+
+.app-meta-sep {
+  margin: 0 6px;
+  opacity: 0.45;
+}
+
+@media (max-width: 600px) {
+  .oauth-apps-page {
+    padding-inline: 12px;
+  }
+
+  .page-header .v-btn {
+    width: 100%;
+  }
 }
 </style>
