@@ -162,7 +162,7 @@ export function UserProfilePageClient({ username }: { username: string }) {
             {tags.length === 0 ? (
               <p className="text-sm text-muted-foreground">暂无标签。</p>
             ) : (
-              <div className="rounded-xl bg-card ring-border p-6">
+              <div className="rounded-xl bg-card border p-6">
                 <div className="flex flex-wrap gap-2">
                   {tags.map((tag) => (
                     <TagChip
@@ -178,7 +178,7 @@ export function UserProfilePageClient({ username }: { username: string }) {
           </TabsContent>
 
           <TabsContent value="about" className="mt-0 space-y-4">
-            <div className="rounded-xl bg-card ring-border p-6 space-y-3">
+            <div className="rounded-xl bg-card border p-6 space-y-3">
               <h3 className="font-semibold tracking-tight">个人简介</h3>
               {user.bio ? (
                 <p className="text-sm leading-relaxed text-foreground/80 whitespace-pre-wrap">
@@ -191,7 +191,7 @@ export function UserProfilePageClient({ username }: { username: string }) {
               )}
             </div>
 
-            <div className="rounded-xl bg-card ring-border p-6 space-y-3">
+            <div className="rounded-xl bg-card border p-6 space-y-3">
               <h3 className="font-semibold tracking-tight">资料</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                 <InfoRow
@@ -351,7 +351,7 @@ function InfoRow({
     <div className="flex items-start gap-3 rounded-lg bg-muted/40 p-3">
       <Icon className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
       <div className="min-w-0">
-        <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+        <p className="text-xs text-muted-foreground">
           {label}
         </p>
         <p className="text-sm truncate">{value}</p>

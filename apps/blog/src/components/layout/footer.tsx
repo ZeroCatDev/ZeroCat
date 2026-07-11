@@ -17,7 +17,7 @@ export function Footer() {
           </p>
         </div>
         <div>
-          <h3 className="font-mono uppercase tracking-wider text-xs text-muted-foreground mb-3">
+          <h3 className="text-xs font-medium text-muted-foreground mb-3">
             浏览
           </h3>
           <ul className="space-y-2 text-sm">
@@ -39,7 +39,7 @@ export function Footer() {
           </ul>
         </div>
         <div>
-          <h3 className="font-mono uppercase tracking-wider text-xs text-muted-foreground mb-3">
+          <h3 className="text-xs font-medium text-muted-foreground mb-3">
             账户
           </h3>
           <ul className="space-y-2 text-sm">
@@ -61,7 +61,7 @@ export function Footer() {
           <p className="text-xs text-muted-foreground">
             © {new Date().getFullYear()} ZeroCat. 全部内容遵循各作者授权。
           </p>
-          <p className="font-mono uppercase tracking-wider text-[11px] text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             Built with ZeroCat · Next.js
           </p>
         </div>

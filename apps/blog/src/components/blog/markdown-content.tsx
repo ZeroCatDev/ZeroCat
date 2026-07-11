@@ -63,7 +63,7 @@ const markdownComponents: Components = {
     <hr className={cn("my-12 border-border/70", className)} {...props} />
   ),
   table: ({ className, ...props }) => (
-    <div className="my-8 overflow-x-auto rounded-2xl border border-border/70 bg-card/80 shadow-sm">
+    <div className="my-8 overflow-x-auto rounded-lg border border-border/70 bg-card/80 shadow-sm">
       <table className={cn("w-full border-collapse text-sm", className)} {...props} />
     </div>
   ),
@@ -77,7 +77,7 @@ const markdownComponents: Components = {
     <td className={cn("border-t border-border/60 px-4 py-3 align-top", className)} {...props} />
   ),
   img: ({ className, ...props }) => (
-    <img className={cn("my-8 rounded-2xl border border-border/60 shadow-card", className)} {...props} alt={props.alt ?? ""} />
+    <img className={cn("my-8 rounded-lg border border-border/60 shadow-sm", className)} {...props} alt={props.alt ?? ""} />
   ),
   code: ({ className, ...props }) => {
     const inline = !String(className ?? "").includes("language-");
@@ -92,7 +92,7 @@ const markdownComponents: Components = {
   },
   pre: ({ className, ...props }) => (
     <pre
-      className={cn("my-8 overflow-x-auto rounded-2xl border border-border/70 bg-[#fafafa] p-5 text-sm shadow-sm dark:bg-[#111111]", className)}
+      className={cn("my-8 overflow-x-auto rounded-lg border border-border/70 bg-[#fafafa] p-5 text-sm shadow-sm dark:bg-[#111111]", className)}
       {...props}
     />
   ),

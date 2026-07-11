@@ -16,7 +16,7 @@ export function CardGridSkeleton({
   return (
     <div className={className}>
       {Array.from({ length: count }).map((_, index) => (
-        <div key={index} className="overflow-hidden rounded-2xl bg-card ring-border shadow-card">
+        <div key={index} className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm">
           <Skeleton className="aspect-[16/9] w-full" />
           <div className="space-y-3 p-5">
             <div className="flex items-center gap-2">
@@ -28,8 +28,8 @@ export function CardGridSkeleton({
             <Skeleton className="h-4 w-2/3" />
             <div className="flex items-center justify-between pt-2">
               <div className="flex gap-2">
-                <Skeleton className="h-6 w-14 rounded-full" />
-                <Skeleton className="h-6 w-16 rounded-full" />
+                <Skeleton className="h-6 w-14 rounded-md" />
+                <Skeleton className="h-6 w-16 rounded-md" />
               </div>
               <Skeleton className="h-4 w-12" />
             </div>
@@ -44,7 +44,7 @@ export function AuthorGridSkeleton({ count = 6 }: { count?: number }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {Array.from({ length: count }).map((_, index) => (
-        <div key={index} className="rounded-lg bg-card p-5 text-center ring-border shadow-card">
+        <div key={index} className="rounded-lg border bg-card text-card-foreground shadow-sm p-5 text-center">
           <Skeleton className="mx-auto h-16 w-16 rounded-full" />
           <Skeleton className="mx-auto mt-3 h-5 w-28" />
           <Skeleton className="mx-auto mt-2 h-4 w-20" />
@@ -60,7 +60,7 @@ export function TagListSkeleton({ count = 16 }: { count?: number }) {
   return (
     <div className="flex flex-wrap gap-2">
       {Array.from({ length: count }).map((_, index) => (
-        <Skeleton key={index} className="h-9 w-24 rounded-full" />
+        <Skeleton key={index} className="h-9 w-24 rounded-md" />
       ))}
     </div>
   );

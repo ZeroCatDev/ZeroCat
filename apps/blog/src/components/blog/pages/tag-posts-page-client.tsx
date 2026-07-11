@@ -55,13 +55,11 @@ export function TagPostsPageClient({
   return (
     <section className="mx-auto w-full max-w-6xl px-4 md:px-6 py-10">
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-        <div className="space-y-2">
-          <p className="text-mono-label text-muted-foreground/70">Tag Stream</p>
+        <div>
           <h1 className="text-3xl md:text-4xl font-semibold tracking-[-0.025em] inline-flex items-center gap-2">
             <Hash className="h-8 w-8" />
             {tag}
           </h1>
-          <p className="text-sm text-muted-foreground">共 {posts.total} 篇文章</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -95,7 +93,7 @@ export function TagPostsPageClient({
         </div>
       )}
 
-      <div className="mt-10 flex items-center justify-between rounded-xl bg-card p-4 ring-border">
+      <div className="mt-10 flex items-center justify-between rounded-lg border bg-card p-4">
         <p className="text-sm text-muted-foreground">
           第 {page} / {totalPages} 页
         </p>

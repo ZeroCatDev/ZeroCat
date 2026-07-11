@@ -52,7 +52,7 @@ export function TableOfContents({ items }: { items: TocItem[] }) {
 
   return (
     <nav className="sticky top-20 self-start">
-      <p className="font-mono uppercase tracking-wider text-xs text-muted-foreground mb-3">
+      <p className="text-xs font-medium text-muted-foreground mb-3">
         On this page
       </p>
       <ul className="space-y-1 text-sm">

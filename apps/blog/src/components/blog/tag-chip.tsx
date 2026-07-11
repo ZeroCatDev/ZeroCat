@@ -25,7 +25,7 @@ export function TagChip({
 
   const defaultClass = active
     ? "border-transparent bg-[var(--color-brand)] text-white shadow-sm"
-    : "border-border/70 bg-card/88 text-foreground/84 hover:border-[var(--color-brand)]/28 hover:bg-[var(--color-brand-soft)] hover:text-[var(--color-brand)] dark:bg-card/72 dark:hover:bg-[color-mix(in_oklab,var(--color-brand)_18%,transparent)] dark:hover:text-[color-mix(in_oklab,var(--color-brand)_90%,white)]";
+    : "border-border bg-card text-foreground hover:border-[var(--color-brand)]/40 hover:bg-[var(--color-brand-soft)] hover:text-[var(--color-brand)]";
 
   const inverseClass = active
     ? "border-transparent bg-white text-[rgb(95,58,73)] shadow-sm"
@@ -35,7 +35,7 @@ export function TagChip({
     <Link
       href={href || buildPostsHref({ tag: tag.name })}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border font-medium backdrop-blur-md transition-colors duration-150",
+        "inline-flex items-center gap-1.5 rounded-full border font-medium transition-colors duration-150",
         sizeClass,
         tone === "inverse" ? inverseClass : defaultClass
       )}

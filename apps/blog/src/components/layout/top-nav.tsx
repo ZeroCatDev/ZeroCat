@@ -17,7 +17,7 @@ export function TopNav() {
     return (
         <header className={cn(
             "app-topbar",
-            "sticky top-0 z-40 flex h-14 w-full items-center justify-between gap-3 border-b border-border/60 bg-background/85 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70",
+            "sticky top-0 z-40 flex h-14 w-full items-center justify-between gap-3 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80",
             "md:hidden"
         )}>
             <div className="flex items-center gap-3 min-w-0">
