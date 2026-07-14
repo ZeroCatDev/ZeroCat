@@ -1,18 +1,5 @@
-<route lang="yaml">
-meta:
-  layout: simple
-</route>
-
 <template>
   <div class="oauth-page">
-    <header class="oauth-topbar">
-      <div class="oauth-topbar__brand">
-        <span class="oauth-topbar__logo">Z</span>
-        <span class="oauth-topbar__name">ZeroCat</span>
-      </div>
-      <span class="oauth-topbar__hint">授权请求</span>
-    </header>
-
     <main class="oauth-main">
       <v-alert
         v-if="error && !isBusy"
@@ -507,57 +494,10 @@ meta:
 
 <style scoped>
 .oauth-page {
-  min-height: 100vh;
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  background: rgb(var(--v-theme-background));
   color: rgb(var(--v-theme-on-background));
 }
 
-.oauth-topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  height: 52px;
-  padding: 0 16px;
-  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
-  background: rgb(var(--v-theme-surface));
-}
-
-.oauth-topbar__brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.oauth-topbar__logo {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: rgb(var(--v-theme-primary));
-  color: rgb(var(--v-theme-on-primary));
-  font-size: 0.9rem;
-  font-weight: 700;
-}
-
-.oauth-topbar__name {
-  font-size: 0.95rem;
-  font-weight: 600;
-}
-
-.oauth-topbar__hint {
-  color: rgba(var(--v-theme-on-surface), 0.55);
-  font-size: 0.8125rem;
-}
-
 .oauth-main {
-  flex: 1;
   width: 100%;
   max-width: 440px;
   margin: 0 auto;
