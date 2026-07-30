@@ -154,6 +154,33 @@ const TokenManager = {
   access: null,
   refreshPromise: null,
 
+  storageKey: function (projectId) {
+    return `zc:scratchtool:editor-token:${projectId}`;
+  },
+
+  restoreStoredToken: function (projectId) {
+    try {
+      const raw = localStorage.getItem(this.storageKey(projectId));
+      if (!raw) return null;
+      const stored = JSON.parse(raw);
+      const expiresAt = this.parseTimestamp(stored?.expires_at);
+      if (
+        !stored?.token ||
+        Number(stored?.project_id) !== Number(projectId) ||
+        !expiresAt ||
+        expiresAt <= Date.now()
+      ) {
+        localStorage.removeItem(this.storageKey(projectId));
+        return null;
+      }
+      this.saveTokens(stored.token, stored);
+      return this.token;
+    } catch (error) {
+      console.warn("[scratchtool] restore editor token failed:", error);
+      return null;
+    }
+  },
+
   // 获取当前令牌
   getToken: function () {
     return this.token || "";
@@ -163,12 +190,26 @@ const TokenManager = {
   saveTokens: function (accessToken, meta = {}) {
     this.token = accessToken || null;
     this.tokenExpiresAt = meta.expires_at || meta.expiresAt || this.tokenExpiresAt || null;
-    this.projectId = meta.project_id || meta.projectId || this.projectId || null;
+    const nextProjectId = meta.project_id || meta.projectId || this.projectId || null;
+    this.projectId = nextProjectId === null ? null : Number(nextProjectId);
     this.access = meta.access || this.access || null;
     AppState.auth.projectId = this.projectId;
     AppState.auth.access = this.access;
     if (meta.user?.id) {
       currentUserId = meta.user.id;
+    }
+    if (this.token && this.projectId) {
+      try {
+        localStorage.setItem(this.storageKey(this.projectId), JSON.stringify({
+          token: this.token,
+          expires_at: this.tokenExpiresAt,
+          project_id: this.projectId,
+          access: this.access,
+          user: meta.user || null,
+        }));
+      } catch (error) {
+        console.warn("[scratchtool] persist editor token failed:", error);
+      }
     }
 
     window.dispatchEvent(new CustomEvent("auth:token-refreshed", {
@@ -201,38 +242,13 @@ const TokenManager = {
     if (!Number.isInteger(projectId) || projectId <= 0) {
       return null;
     }
+    if (!force && (!this.getToken() || Number(this.projectId) !== projectId)) {
+      this.restoreStoredToken(projectId);
+    }
     if (!force && this.getToken() && this.projectId === projectId && !this.shouldRefresh(false)) {
       return this.getToken();
     }
-
-    if (!this.refreshPromise) {
-      this.refreshPromise = (async () => {
-        const response = await fetch(ZCConfig.api.getPath("/account/editor-session"), {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          body: JSON.stringify({ project_id: projectId }),
-          cache: "no-store",
-        });
-
-        if (!response.ok) {
-          if ([400, 401, 403].includes(response.status)) this.clear();
-          return null;
-        }
-
-        const payload = await response.json().catch(() => null);
-        if (!payload || payload.status !== "success" || !payload.token) return null;
-        this.saveTokens(payload.token, payload);
-        return payload.token;
-      })().finally(() => {
-        this.refreshPromise = null;
-      });
-    }
-
-    return this.refreshPromise;
+    return null;
   },
 
   getFreshToken: async function (force = false) {
@@ -240,12 +256,20 @@ const TokenManager = {
   },
 
   clear: function () {
+    const projectId = this.projectId;
     this.token = null;
     this.tokenExpiresAt = null;
     this.projectId = null;
     this.access = null;
     AppState.auth.projectId = null;
     AppState.auth.access = null;
+    if (projectId) {
+      try {
+        localStorage.removeItem(this.storageKey(projectId));
+      } catch (error) {
+        console.warn("[scratchtool] clear editor token failed:", error);
+      }
+    }
     window.dispatchEvent(new CustomEvent("auth:token-refreshed", { detail: { token: null } }));
   },
 };
@@ -1548,14 +1572,33 @@ function checkUrlForTokens() {
   const token = urlParams.get("token");
 
   if (token) {
-    // 编辑器页不再接收 URL 中的完整会话 token，统一从 HttpOnly refresh cookie 换取项目限定 token。
+    const projectId = Number(urlParams.get("editor_project_id") || urlParams.get("project_id") || urlParams.get("id"));
+    const canEdit = urlParams.get("can_edit") === "1" || urlParams.get("can_edit") === "true";
+    const canManage = urlParams.get("can_manage") === "1" || urlParams.get("can_manage") === "true";
+    const userId = Number(urlParams.get("user_id"));
+    TokenManager.saveTokens(token, {
+      expires_at: urlParams.get("expires_at"),
+      project_id: Number.isInteger(projectId) && projectId > 0 ? projectId : null,
+      access: {
+        can_read: true,
+        can_edit: canEdit,
+        can_manage: canManage,
+      },
+      user: Number.isInteger(userId) && userId > 0 ? { id: userId } : null,
+    });
+
+    // 清除 URL 中的令牌参数，避免被复制、记录或泄漏到后续导航。
     const url = new URL(window.location.href);
     url.searchParams.delete("token");
     url.searchParams.delete("refreshToken");
     url.searchParams.delete("expires_at");
     url.searchParams.delete("refresh_expires_at");
+    url.searchParams.delete("editor_project_id");
+    url.searchParams.delete("project_id");
+    url.searchParams.delete("can_edit");
+    url.searchParams.delete("can_manage");
+    url.searchParams.delete("user_id");
     window.history.replaceState({}, "", url);
-    console.warn("[scratchtool] ignored token query parameter; editor session token will be requested instead.");
     return true;
   }
 
@@ -1747,12 +1790,11 @@ async function initialize() {
     if (msg === "401") alert("未登录");
   }
 
-  // 尝试从 HttpOnly refresh cookie 换取项目限定编辑器 token（非阻塞但优先尝试）
+  // 从 URL 或编辑器域本地存储恢复项目限定 editor token；不做刷新请求。
   try {
-    // TokenManager.getFreshToken 只在内存中保存短期 editor token。
     await TokenManager.getFreshToken();
   } catch (err) {
-    console.warn("[scratchtool] editor session bootstrap failed:", err);
+    console.warn("[scratchtool] editor token bootstrap failed:", err);
   }
 
   await loadUserInfo();

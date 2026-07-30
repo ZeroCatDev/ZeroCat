@@ -14,7 +14,7 @@ import {
 } from "../../services/auth/tokenService.js";
 import { userCanAccessResourceScope } from "../../services/auth/scopes.js";
 
-const EDITOR_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7;
+const EDITOR_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 365;
 
 async function getSessionFromRefreshTokenCandidates(refreshTokens, ipAddress) {
     const candidates = Array.isArray(refreshTokens) && refreshTokens.length > 0
@@ -27,6 +27,73 @@ async function getSessionFromRefreshTokenCandidates(refreshTokens, ipAddress) {
         }
     }
     return { session: null, refreshToken: null };
+}
+
+async function issueEditorTokenForUser({ userId, user = null, projectId, req, res }) {
+    const readScope = `project:${projectId}:read`;
+    const updateScope = `project:${projectId}:update`;
+    const manageScope = `project:${projectId}:manage`;
+    const [canRead, canUpdate, canManage] = await Promise.all([
+        userCanAccessResourceScope(userId, readScope),
+        userCanAccessResourceScope(userId, updateScope),
+        userCanAccessResourceScope(userId, manageScope),
+    ]);
+
+    if (!canRead) {
+        return {
+            statusCode: 404,
+            payload: {
+                status: "error",
+                message: "项目不存在或无权访问",
+                code: "ZC_ERROR_PROJECT_NOT_ACCESSIBLE",
+            },
+        };
+    }
+
+    const scopes = ["user:read", readScope];
+    if (canUpdate) {
+        scopes.push(updateScope, `project:${projectId}:interact`);
+    }
+    if (canManage) {
+        scopes.push(manageScope);
+    }
+
+    const issued = await issueToken({
+        userId,
+        type: "editor",
+        name: `scratch-editor:${projectId}`,
+        scopes,
+        accessTokenExpiry: EDITOR_TOKEN_TTL_SECONDS,
+        ip: req.ipInfo?.clientIP || req.ip,
+        userAgent: req.headers["user-agent"],
+    });
+    if (!issued.success) {
+        logger.error(`[token] 签发编辑器令牌失败: ${issued.message || "unknown"}`);
+        return {
+            statusCode: issued.code === "ZC_ERROR_SCOPE_ESCALATION" ? 403 : 500,
+            payload: {
+                status: "error",
+                message: issued.message || "签发编辑器令牌失败",
+                code: issued.code || "EDITOR_TOKEN_ISSUE_FAILED",
+            },
+        };
+    }
+
+    return {
+        statusCode: 200,
+        payload: {
+            status: "success",
+            token: issued.accessToken,
+            expires_at: toIsoOrValue(issued.expiresAt),
+            project_id: projectId,
+            user: user || { id: userId },
+            access: {
+                can_read: canRead,
+                can_edit: canUpdate,
+                can_manage: canManage,
+            },
+        },
+    };
 }
 
 /**
@@ -149,71 +216,67 @@ export const issueEditorSession = async (req, res) => {
             });
         }
 
-        const readScope = `project:${projectId}:read`;
-        const updateScope = `project:${projectId}:update`;
-        const manageScope = `project:${projectId}:manage`;
-        const [canRead, canUpdate, canManage] = await Promise.all([
-            userCanAccessResourceScope(session.userId, readScope),
-            userCanAccessResourceScope(session.userId, updateScope),
-            userCanAccessResourceScope(session.userId, manageScope),
-        ]);
-
-        if (!canRead) {
-            return res.status(404).json({
-                status: "error",
-                message: "项目不存在或无权访问",
-                code: "ZC_ERROR_PROJECT_NOT_ACCESSIBLE",
-            });
-        }
-
-        const scopes = ["user:read", readScope];
-        if (canUpdate) {
-            scopes.push(
-                updateScope,
-                `project:${projectId}:interact`
-            );
-        }
-        if (canManage) {
-            scopes.push(manageScope);
-        }
-
-        const issued = await issueToken({
+        const result = await issueEditorTokenForUser({
             userId: session.userId,
-            type: "editor",
-            name: `scratch-editor:${projectId}`,
-            scopes,
-            accessTokenExpiry: EDITOR_TOKEN_TTL_SECONDS,
-            ip: req.ipInfo?.clientIP || req.ip,
-            userAgent: req.headers["user-agent"],
-        });
-        if (!issued.success) {
-            logger.error(`[token] 签发编辑器会话失败: ${issued.message || "unknown"}`);
-            return res.status(500).json({
-                status: "error",
-                message: "签发编辑器会话失败",
-                code: "EDITOR_SESSION_ISSUE_FAILED",
-            });
-        }
-
-        res.set("Cache-Control", "no-store");
-        return res.json({
-            status: "success",
-            token: issued.accessToken,
-            expires_at: toIsoOrValue(issued.expiresAt),
-            project_id: projectId,
             user: session.user,
-            access: {
-                can_read: canRead,
-                can_edit: canUpdate,
-                can_manage: canManage,
-            },
+            projectId,
+            req,
+            res,
         });
+        res.set("Cache-Control", "no-store");
+        return res.status(result.statusCode).json(result.payload);
     } catch (error) {
         logger.error(`签发编辑器会话时出错: ${error.message}`);
         return res.status(500).json({
             status: "error",
             message: "签发编辑器会话失败",
             code: "EDITOR_SESSION_ISSUE_FAILED",
+        });
+    }
+};
+
+/**
+ * 使用当前 access token 签发 Scratch 编辑器项目限定长效 token。
+ * 不依赖 refresh cookie，供主站打开编辑器前直接传给沙盒编辑器页面。
+ */
+export const issueEditorToken = async (req, res) => {
+    try {
+        const projectId = Number(req.body?.project_id || req.query?.project_id || req.query?.projectid);
+        if (!Number.isInteger(projectId) || projectId <= 0) {
+            return res.status(400).json({
+                status: "error",
+                message: "无效的项目 ID",
+                code: "INVALID_PROJECT_ID",
+            });
+        }
+
+        if (!res.locals.userid) {
+            return res.status(401).json({
+                status: "error",
+                message: "需要登录",
+                code: "ZC_ERROR_NEED_LOGIN",
+            });
+        }
+
+        const result = await issueEditorTokenForUser({
+            userId: res.locals.userid,
+            user: {
+                id: res.locals.userid,
+                username: res.locals.username,
+                display_name: res.locals.display_name,
+            },
+            projectId,
+            req,
+            res,
+        });
+        res.set("Cache-Control", "no-store");
+        return res.status(result.statusCode).json(result.payload);
+    } catch (error) {
+        logger.error(`签发编辑器令牌时出错: ${error.message}`);
+        return res.status(500).json({
+            status: "error",
+            message: "签发编辑器令牌失败",
+            code: "EDITOR_TOKEN_ISSUE_FAILED",
         });
     }
 };

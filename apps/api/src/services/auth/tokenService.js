@@ -8,7 +8,7 @@
  *   - session  : 用户登录会话 (不保存权限快照，运行时使用当前用户角色策略，带刷新令牌)
  *   - personal : 用户自建的个人 API 令牌 (自定义 scope, 无刷新令牌)
  *   - oauth    : 第三方应用授权令牌 (用户授予的 scope 子集, 带刷新令牌)
- *   - editor   : 编辑器短令牌 (项目实例级 scope, 无刷新令牌)
+ *   - editor   : 编辑器长效令牌 (项目实例级 scope, 无刷新令牌)
  */
 
 import crypto from "crypto";
@@ -36,8 +36,8 @@ const DEFAULT_SESSION_ACCESS_EXPIRY = 60 * 60 * 24; // 24 小时
 const DEFAULT_SESSION_REFRESH_EXPIRY = 60 * 60 * 24 * 30; // 30 天
 const DEFAULT_OAUTH_ACCESS_EXPIRY = 60 * 60; // 1 小时
 const DEFAULT_OAUTH_REFRESH_EXPIRY = 60 * 60 * 24 * 30; // 30 天
-const DEFAULT_EDITOR_ACCESS_EXPIRY = 60 * 60 * 24 * 7; // 7 天
-const MAX_EDITOR_ACCESS_EXPIRY = 60 * 60 * 24 * 30; // 30 天
+const DEFAULT_EDITOR_ACCESS_EXPIRY = 60 * 60 * 24 * 365; // 1 年
+const MAX_EDITOR_ACCESS_EXPIRY = 60 * 60 * 24 * 365; // 1 年
 const TOKEN_TYPES = new Set(["session", "personal", "oauth", "editor"]);
 
 /**

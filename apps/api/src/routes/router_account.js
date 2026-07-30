@@ -237,6 +237,7 @@ router.post("/unlink-oauth", needLogin, requireScope("user:update"), requireSudo
 // 令牌管理相关路由
 router.post("/refresh-token", tokenController.refreshToken);
 router.post("/editor-session", tokenController.issueEditorSession);
+router.post("/editor-token", needLogin, tokenController.issueEditorToken);
 router.get("/token-details/:tokenId", needLogin, requireResource("token", "read", "tokenId"), tokenController.getTokenDetails);
 router.get("/active-tokens", needLogin, requireScope("token:read"), tokenController.getActiveTokens);
 router.post("/revoke-token", needLogin, requireResource("token", "manage", "token_id"), tokenController.revokeToken);
