@@ -334,9 +334,13 @@ function buildRefreshCookieSharedOptions(res) {
 function buildRefreshCookieClearVariants(res) {
     const shared = buildRefreshCookieSharedOptions(res);
     const domain = resolveRefreshCookieDomain(res?.req);
-    const variants = [{ ...shared }];
-    if (domain) {
-        variants.push({ ...shared, domain });
+    const paths = ['/account', '/'];
+    const variants = [];
+    for (const path of paths) {
+        variants.push({ ...shared, path });
+        if (domain) {
+            variants.push({ ...shared, path, domain });
+        }
     }
     return variants;
 }
@@ -385,7 +389,7 @@ export { toIsoOrValue };
 export function extractRefreshTokenFromRequest(req) {
     const bodyToken = normalizeRefreshToken(req.body?.refresh_token);
     if (bodyToken) {
-        return { fromCookie: false, refresh_token: bodyToken, duplicateCount: 0 };
+        return { fromCookie: false, refresh_token: bodyToken, refresh_tokens: [bodyToken], duplicateCount: 0 };
     }
 
     const raw = req.headers?.cookie || '';
@@ -402,16 +406,18 @@ export function extractRefreshTokenFromRequest(req) {
     }
 
     if (values.length > 0) {
-        const preferred = values.find((v) => v.startsWith('zc_')) || values[values.length - 1];
-        return { fromCookie: true, refresh_token: preferred, duplicateCount: values.length };
+        const uniqueValues = [...new Set(values.filter(Boolean))];
+        const zcValues = uniqueValues.filter((v) => v.startsWith('zc_'));
+        const candidates = [...zcValues.slice().reverse(), ...uniqueValues.filter((v) => !v.startsWith('zc_')).reverse()];
+        return { fromCookie: true, refresh_token: candidates[0], refresh_tokens: candidates, duplicateCount: values.length };
     }
 
     const fromParser = req.cookies?.refresh_token;
     if (fromParser) {
-        return { fromCookie: true, refresh_token: fromParser, duplicateCount: 1 };
+        return { fromCookie: true, refresh_token: fromParser, refresh_tokens: [fromParser], duplicateCount: 1 };
     }
 
-    return { fromCookie: false, refresh_token: req.body?.refresh_token, duplicateCount: 0 };
+    return { fromCookie: false, refresh_token: req.body?.refresh_token, refresh_tokens: [], duplicateCount: 0 };
 }
 
 /**
@@ -425,6 +431,7 @@ export function clearLegacyAuthCookies(res) {
     const variants = buildRefreshCookieClearVariants(res);
     for (const options of variants) {
         res.clearCookie('token', { ...options, path: '/' });
+        res.clearCookie('token', { ...options, path: '/account' });
     }
 }
 

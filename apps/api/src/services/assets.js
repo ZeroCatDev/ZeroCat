@@ -147,7 +147,53 @@ export function getMimeType(filename) {
 }
 
 /**
- * 上传文件到S3
+ * 判断错误是否为可重试的瞬时错误（网络/TLS/连接相关）
+ * @param {Error} error 错误对象
+ * @returns {boolean}
+ */
+function isRetryableError(error) {
+  const message = error.message || '';
+  // TLS/SSL 相关瞬时错误
+  if (message.includes('Client network socket disconnected before secure TLS connection was established')) return true;
+  if (message.includes('socket hang up')) return true;
+  // 网络相关错误码
+  const codes = ['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN',
+    'EPIPE', 'ERR_TLS_SOCKET_DISCONNECTED', 'ETLS'];
+  if (codes.includes(error.code)) return true;
+  // AWS SDK 特定：服务端限流/内部错误（5xx）
+  if (error.$metadata && error.$metadata.httpStatusCode >= 500) return true;
+  if (error.$metadata && error.$metadata.httpStatusCode === 429) return true;
+  return false;
+}
+
+/**
+ * 带指数退避重试的异步操作包装器
+ * @param {Function} fn 异步操作
+ * @param {number} maxRetries 最大重试次数
+ * @param {number} baseDelayMs 基础延迟（毫秒）
+ * @returns {Promise<any>}
+ */
+async function withRetry(fn, maxRetries = 3, baseDelayMs = 500) {
+  let lastError;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (attempt < maxRetries && isRetryableError(error)) {
+        const delay = baseDelayMs * Math.pow(2, attempt) + Math.random() * 200;
+        logger.warn(`S3操作失败 (尝试 ${attempt + 1}/${maxRetries + 1}): ${error.message}，${delay.toFixed(0)}ms 后重试...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        throw error;
+      }
+    }
+  }
+  throw lastError;
+}
+
+/**
+ * 上传文件到S3（带自动重试）
  * @param {Buffer} buffer 文件缓冲区
  * @param {string} key S3键
  * @param {string} contentType 内容类型
@@ -162,7 +208,7 @@ export async function uploadToS3(buffer, key, contentType) {
     ACL: 'public-read',
   });
 
-  await s3Client.send(command);
+  await withRetry(() => s3Client.send(command));
   return `${await zcconfig.get("s3.staticurl")}/${key}`;
 }
 
@@ -188,7 +234,7 @@ export async function downloadFromS3(key) {
     Key: key,
   });
 
-  const response = await s3Client.send(command);
+  const response = await withRetry(() => s3Client.send(command));
   const buffer = await streamToBuffer(response.Body);
   return {
     buffer,

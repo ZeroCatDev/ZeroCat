@@ -8,11 +8,12 @@ import {createHash} from "crypto";
 import {prisma} from "../services/prisma.js";
 import {S3update} from "../services/global.js";
 import {needLogin} from "../middleware/auth.js";
-import { requireResource, requireScope } from "../middleware/scope.js";
+import { requireResource } from "../middleware/scope.js";
 import {getProjectById, getProjectFile} from "../controllers/projects.js";
 import multer from "multer";
 import { validateFileTypeFromContent, uploadFile, handleAssetUpload, processImage, generateMD5, uploadToS3 } from "../services/assets.js";
 import redisClient from "../services/redis.js";
+import { userCanActOnProject } from "../services/projectCollaborationService.js";
 
 var router = Router();
 
@@ -28,6 +29,18 @@ const CLOUD_CONFIG_CACHE_TTL_SECONDS = 604800;
 const cloudVarsRedisKey = (projectId) => `scratch:cloud:${projectId}:vars`;
 const cloudSnapshotDbKey = (projectId) => `scratch:cloud:${projectId}:vars`;
 const cloudConfigRedisKey = (projectId) => `scratch:cloud:${projectId}:config`;
+
+const requireProjectIdQuery = (req, res, next) => {
+    const projectId = Number(req.query?.projectid);
+    if (!Number.isInteger(projectId) || projectId <= 0) {
+        return res.status(400).json({
+            status: "error",
+            message: "缺少有效的项目 ID",
+            code: "INVALID_PROJECT_ID",
+        });
+    }
+    return next();
+};
 
 const parseBooleanInput = (value) => {
     if (typeof value === "boolean") return value;
@@ -201,7 +214,7 @@ const getCloudProject = async (projectId, userId) => {
         return {ok: false, status: 400, message: "仅支持Scratch项目"};
     }
 
-    if (project.state !== "public" && project.authorid !== userId) {
+    if (project.state !== "public" && !(await userCanActOnProject(userId, project.id, "read"))) {
         return {ok: false, status: 403, message: "无权访问此项目"};
     }
 
@@ -337,8 +350,11 @@ const processCloudMessage = async ({
         };
     }
 
-    if (!allowNonAuthorWrite && project.authorid !== userId) {
-        return {status: 403, data: {status: "error", message: "仅项目作者可修改云变量"}};
+    if (
+        !allowNonAuthorWrite
+        && !(await userCanActOnProject(userId, project.id, "update"))
+    ) {
+        return {status: 403, data: {status: "error", message: "无权修改云变量"}};
     }
 
     const vars = await loadCloudState(project);
@@ -769,13 +785,6 @@ router.post(
                     error: "作品不存在"
                 };
             }
-            if (project.authorid !== res.locals.userid) {
-                return {
-                    success: false,
-                    status: 403,
-                    error: "无权访问此项目"
-                };
-            }
             return { success: true, project };
         };
 
@@ -849,11 +858,12 @@ router.post(
     }
 );
 
-//新作品：保存作品素材
+// 保存 Scratch 项目素材：必须绑定到一个可更新的项目。
 router.post(
     "/assets/:filename",
     needLogin,
-    requireScope("asset:create"),
+    requireProjectIdQuery,
+    requireResource("project", "update", "projectid"),
     upload.single("file"),
     async (req, res, next) => {
         // Scratch素材成功回调

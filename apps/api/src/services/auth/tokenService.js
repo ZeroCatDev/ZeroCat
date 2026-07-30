@@ -8,6 +8,7 @@
  *   - session  : 用户登录会话 (不保存权限快照，运行时使用当前用户角色策略，带刷新令牌)
  *   - personal : 用户自建的个人 API 令牌 (自定义 scope, 无刷新令牌)
  *   - oauth    : 第三方应用授权令牌 (用户授予的 scope 子集, 带刷新令牌)
+ *   - editor   : 编辑器短令牌 (项目实例级 scope, 无刷新令牌)
  */
 
 import crypto from "crypto";
@@ -35,6 +36,9 @@ const DEFAULT_SESSION_ACCESS_EXPIRY = 60 * 60 * 24; // 24 小时
 const DEFAULT_SESSION_REFRESH_EXPIRY = 60 * 60 * 24 * 30; // 30 天
 const DEFAULT_OAUTH_ACCESS_EXPIRY = 60 * 60; // 1 小时
 const DEFAULT_OAUTH_REFRESH_EXPIRY = 60 * 60 * 24 * 30; // 30 天
+const DEFAULT_EDITOR_ACCESS_EXPIRY = 60 * 60 * 24 * 7; // 7 天
+const MAX_EDITOR_ACCESS_EXPIRY = 60 * 60 * 24 * 30; // 30 天
+const TOKEN_TYPES = new Set(["session", "personal", "oauth", "editor"]);
 
 /**
  * 返回 token 在当前时刻实际参与 scope 匹配的权限。
@@ -131,7 +135,7 @@ async function getSessionRefreshExpiry() {
  * 签发令牌
  * @param {object} params
  * @param {number} params.userId 用户ID
- * @param {"session"|"personal"|"oauth"} params.type 令牌类型
+ * @param {"session"|"personal"|"oauth"|"editor"} params.type 令牌类型
  * @param {string[]} params.scopes 授予的 scope 列表
  * @param {string} [params.name] 令牌名称 (personal/oauth)
  * @param {number} [params.applicationId] OAuth 应用ID
@@ -158,6 +162,10 @@ export async function issueToken(params) {
     } = params;
 
     try {
+        if (!TOKEN_TYPES.has(type)) {
+            return { success: false, message: "不支持的令牌类型" };
+        }
+
         // 解析有效期
         let accessTokenExpiry = params.accessTokenExpiry;
         let refreshTokenExpiry = params.refreshTokenExpiry;
@@ -171,6 +179,22 @@ export async function issueToken(params) {
             if (accessTokenExpiry === undefined) accessTokenExpiry = DEFAULT_OAUTH_ACCESS_EXPIRY;
             if (refreshTokenExpiry === undefined) refreshTokenExpiry = DEFAULT_OAUTH_REFRESH_EXPIRY;
             if (withRefreshToken === undefined) withRefreshToken = true;
+        } else if (type === "editor") {
+            if (accessTokenExpiry === undefined) accessTokenExpiry = DEFAULT_EDITOR_ACCESS_EXPIRY;
+            const editorExpiry = Number(accessTokenExpiry);
+            if (
+                !Number.isInteger(editorExpiry)
+                || editorExpiry <= 0
+                || editorExpiry > MAX_EDITOR_ACCESS_EXPIRY
+            ) {
+                return {
+                    success: false,
+                    message: `编辑器令牌有效期必须在 1 到 ${MAX_EDITOR_ACCESS_EXPIRY} 秒之间`,
+                };
+            }
+            accessTokenExpiry = editorExpiry;
+            withRefreshToken = false;
+            refreshTokenExpiry = null;
         } else {
             // personal: 默认永不过期, 无刷新令牌
             if (accessTokenExpiry === undefined) accessTokenExpiry = null;
@@ -382,6 +406,61 @@ export async function verifyToken(rawToken, ipAddress = null) {
     } catch (error) {
         logger.error(`验证令牌时出错: ${error.message}`);
         return { valid: false, message: "验证令牌时发生错误" };
+    }
+}
+
+/**
+ * 使用 HttpOnly refresh token 识别浏览器登录会话。
+ * 不轮换 refresh token，也不会向调用方返回完整会话 access token。
+ */
+export async function getSessionFromRefreshToken(rawRefreshToken, ipAddress = null) {
+    try {
+        const normalizedRefreshToken = normalizeRawToken(rawRefreshToken);
+        if (!isValidRawTokenFormat(normalizedRefreshToken)) {
+            return null;
+        }
+
+        const record = await prisma.ow_tokens.findUnique({
+            where: { refresh_token_hash: hashToken(normalizedRefreshToken) },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        username: true,
+                        display_name: true,
+                        status: true,
+                    },
+                },
+            },
+        });
+
+        if (
+            !record
+            || record.type !== "session"
+            || record.revoked
+            || (record.refresh_expires_at && record.refresh_expires_at < new Date())
+            || !record.user
+            || record.user.status !== "active"
+        ) {
+            return null;
+        }
+
+        updateTokenActivity(record.id, normalizeIpAddress(ipAddress)).catch((error) =>
+            logger.warn(`[token] 更新编辑器会话来源活动失败: ${error.message}`)
+        );
+
+        return {
+            tokenId: record.id,
+            userId: record.user.id,
+            user: {
+                id: record.user.id,
+                username: record.user.username,
+                display_name: record.user.display_name,
+            },
+        };
+    } catch (error) {
+        logger.error(`读取浏览器登录会话失败: ${error.message}`);
+        return null;
     }
 }
 
@@ -623,6 +702,31 @@ export async function revokeToken(tokenId) {
 }
 
 /**
+ * 通过刷新令牌吊销其对应会话。用于 access token 已过期但浏览器仍有 HttpOnly refresh cookie 的登出场景。
+ * @param {string} rawRefreshToken
+ * @returns {Promise<object>}
+ */
+export async function revokeTokenByRefreshToken(rawRefreshToken) {
+    try {
+        const normalizedRefreshToken = normalizeRawToken(rawRefreshToken);
+        if (!isValidRawTokenFormat(normalizedRefreshToken)) {
+            return { success: false, message: "无效的刷新令牌" };
+        }
+
+        const refreshHash = hashToken(normalizedRefreshToken);
+        const record = await prisma.ow_tokens.findUnique({
+            where: { refresh_token_hash: refreshHash },
+            select: { id: true },
+        });
+        if (!record) return { success: false, message: "刷新令牌不存在" };
+        return revokeToken(record.id);
+    } catch (error) {
+        logger.error(`通过刷新令牌吊销会话出错: ${error.message}`);
+        return { success: false, message: "吊销令牌时出错" };
+    }
+}
+
+/**
  * 吊销某用户的全部令牌 (可排除当前令牌)
  * @param {number} userId
  * @param {number|null} [excludeTokenId]
@@ -800,11 +904,13 @@ export default {
     verifyToken,
     refreshAccessToken,
     revokeToken,
+    revokeTokenByRefreshToken,
     revokeTokensWhere,
     revokeAllUserTokens,
     listUserTokens,
     introspectToken,
     getEffectiveTokenScopes,
+    getSessionFromRefreshToken,
     updateTokenActivity,
     isValidRawTokenFormat,
     hashToken,

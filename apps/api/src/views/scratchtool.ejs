@@ -15,6 +15,10 @@ const AppState = {
     inFlight: false,
     phase: "idle",
   },
+  auth: {
+    projectId: null,
+    access: null,
+  },
   load: {
     seq: 0,
     activeSeq: 0,
@@ -146,35 +150,33 @@ function initUIComponents() {
 const TokenManager = {
   token: null,
   tokenExpiresAt: null,
-  refreshTokenExpiresAt: null,
+  projectId: null,
+  access: null,
   refreshPromise: null,
 
   // 获取当前令牌
   getToken: function () {
-    if (this.token) return this.token;
-    try {
-      this.token = localStorage.getItem("token");
-      this.tokenExpiresAt = localStorage.getItem("tokenExpiresAt");
-    } catch {}
     return this.token || "";
   },
 
   // 保存令牌信息
-  saveTokens: function (accessToken, refreshToken, meta = {}) {
+  saveTokens: function (accessToken, meta = {}) {
     this.token = accessToken || null;
     this.tokenExpiresAt = meta.expires_at || meta.expiresAt || this.tokenExpiresAt || null;
-    this.refreshTokenExpiresAt = meta.refresh_expires_at || meta.refreshExpiresAt || this.refreshTokenExpiresAt || null;
-    if (refreshToken) {
-      try {
-        sessionStorage.setItem("refreshToken", refreshToken);
-      } catch {}
+    this.projectId = meta.project_id || meta.projectId || this.projectId || null;
+    this.access = meta.access || this.access || null;
+    AppState.auth.projectId = this.projectId;
+    AppState.auth.access = this.access;
+    if (meta.user?.id) {
+      currentUserId = meta.user.id;
     }
 
     window.dispatchEvent(new CustomEvent("auth:token-refreshed", {
       detail: {
         token: this.token,
         expires_at: this.tokenExpiresAt,
-        refresh_expires_at: this.refreshTokenExpiresAt,
+        project_id: this.projectId,
+        access: this.access,
       },
     }));
   },
@@ -189,40 +191,30 @@ const TokenManager = {
 
   shouldRefresh: function (force = false) {
     if (force) return true;
-    let storedExpiresAt = null;
-    try {
-      storedExpiresAt = localStorage.getItem("tokenExpiresAt");
-    } catch {}
-    const expiresAt = this.parseTimestamp(this.tokenExpiresAt || storedExpiresAt);
+    const expiresAt = this.parseTimestamp(this.tokenExpiresAt);
     if (!expiresAt) return false;
     return expiresAt - Date.now() <= 60000;
   },
 
-  getBodyRefreshToken: function () {
-    try {
-      return sessionStorage.getItem("refreshToken") || "";
-    } catch {
-      return "";
-    }
-  },
-
   refresh: async function (force = false) {
-    if (!force && this.getToken() && !this.shouldRefresh(false)) {
+    const projectId = Number(_pid || getQueryStringParameter("id"));
+    if (!Number.isInteger(projectId) || projectId <= 0) {
+      return null;
+    }
+    if (!force && this.getToken() && this.projectId === projectId && !this.shouldRefresh(false)) {
       return this.getToken();
     }
 
     if (!this.refreshPromise) {
       this.refreshPromise = (async () => {
-        const refreshToken = this.getBodyRefreshToken();
-        const body = refreshToken ? { refresh_token: refreshToken } : {};
-        const response = await fetch(ZCConfig.api.getPath("/account/refresh-token"), {
+        const response = await fetch(ZCConfig.api.getPath("/account/editor-session"), {
           method: "POST",
           credentials: "include",
           headers: {
             "Content-Type": "application/json",
             Accept: "application/json",
           },
-          body: JSON.stringify(body),
+          body: JSON.stringify({ project_id: projectId }),
           cache: "no-store",
         });
 
@@ -233,7 +225,7 @@ const TokenManager = {
 
         const payload = await response.json().catch(() => null);
         if (!payload || payload.status !== "success" || !payload.token) return null;
-        this.saveTokens(payload.token, payload.refresh_token || refreshToken, payload);
+        this.saveTokens(payload.token, payload);
         return payload.token;
       })().finally(() => {
         this.refreshPromise = null;
@@ -250,13 +242,10 @@ const TokenManager = {
   clear: function () {
     this.token = null;
     this.tokenExpiresAt = null;
-    this.refreshTokenExpiresAt = null;
-    try {
-      localStorage.removeItem("token");
-      localStorage.removeItem("tokenExpiresAt");
-      localStorage.removeItem("refreshTokenExpiresAt");
-      sessionStorage.removeItem("refreshToken");
-    } catch {}
+    this.projectId = null;
+    this.access = null;
+    AppState.auth.projectId = null;
+    AppState.auth.access = null;
     window.dispatchEvent(new CustomEvent("auth:token-refreshed", { detail: { token: null } }));
   },
 };
@@ -428,6 +417,10 @@ function buildErrorDescription(error, prefix = "错误") {
   return `${prefix}: ${getErrorMessage(error)}`;
 }
 
+function canEditCurrentProject() {
+  return AppState.auth.access?.can_edit === true;
+}
+
 function getActiveVm() {
   return zcvm || window.vm || null;
 }
@@ -448,8 +441,6 @@ function getCloudUsername() {
 }
 
 function getCloudToken() {
-  const localStrongsToken = window.localstrongs?.getItem?.("token") || window.localstrongs?.token;
-  if (localStrongsToken) return localStrongsToken;
   return TokenManager.getToken();
 }
 
@@ -953,7 +944,7 @@ async function connectCloudWs(options = {}) {
     return false;
   }
 
-  const token = String(options.token || await TokenManager.getFreshToken() || getCloudToken() || "").trim();
+  const token = String(options.token || await TokenManager.getFreshToken() || "").trim();
   if (!token) {
     appendCloudLog("[auth] token missing, try anonymous handshake");
   }
@@ -1380,6 +1371,14 @@ function updateAssetUploadDialog(description, { open } = {}) {
 // --- Refactored uploadProjectAssets ---
 async function uploadProjectAssets() {
   try {
+    if (!canEditCurrentProject()) {
+      showSnackbar("只读访问，无法保存媒体库");
+      return;
+    }
+    if (!Number.isInteger(_pid) || _pid <= 0) {
+      showSnackbar("缺少项目 ID，无法保存媒体库");
+      return;
+    }
     if (!zcvm || !Array.isArray(zcvm.assets)) {
       showSnackbar("Scratch 引擎尚未就绪，无法保存媒体库");
       return;
@@ -1430,7 +1429,7 @@ async function uploadProjectAssets() {
       );
 
       await apiRequest({
-        url: `${ZCConfig.api.getPath("/scratch/assets/" + asset.assetId + "." + asset.dataFormat)}`,
+        url: `${ZCConfig.api.getPath("/scratch/assets/" + asset.assetId + "." + asset.dataFormat)}?projectid=${_pid}`,
         type: "POST",
         data: formData,
         processData: false,
@@ -1508,13 +1507,9 @@ async function fetchProjectInfo() {
       authorinfocard.style.cursor = "pointer";
       authorinfoavatar.src = `${ZCConfig.s3.staticUrl}/assets/${result.author.profile.id.slice(0,2)}/${result.author.profile.id.slice(2,4)}/${result.author.profile.id}.webp`;
       zctab.headline = `${result.title} #${result.id}`;
-      zctab.description = `${
-        String(result.author.id) === String(currentUserId)
-          ? "是你的作品"
-          : "不是你的作品"
-      }`;
+      zctab.description = canEditCurrentProject() ? "你有编辑权限" : "只读访问";
 
-      if (String(result.author.id) !== String(currentUserId)) {
+      if (!canEditCurrentProject()) {
         setButton("push-button", "改编", () => window.open(`${ZCConfig.frontend.getPath("/projects/")}${_pid}/fork`));
       }
     }
@@ -1551,27 +1546,16 @@ async function getZerocatUserInfo(userid) {
 function checkUrlForTokens() {
   const urlParams = new URLSearchParams(window.location.search);
   const token = urlParams.get("token");
-  const refreshToken = urlParams.get("refreshToken");
-  const expiresAt = urlParams.get("expires_at");
-  const refreshExpiresAt = urlParams.get("refresh_expires_at");
 
   if (token) {
-    // 保存从URL获取的token
-    TokenManager.saveTokens(token, refreshToken, {
-      expires_at: expiresAt,
-      refresh_expires_at: refreshExpiresAt,
-    });
-
-    // 清除URL中的token参数
+    // 编辑器页不再接收 URL 中的完整会话 token，统一从 HttpOnly refresh cookie 换取项目限定 token。
     const url = new URL(window.location.href);
     url.searchParams.delete("token");
     url.searchParams.delete("refreshToken");
     url.searchParams.delete("expires_at");
     url.searchParams.delete("refresh_expires_at");
     window.history.replaceState({}, "", url);
-
-    // 重新加载用户信息
-    loadUserInfo();
+    console.warn("[scratchtool] ignored token query parameter; editor session token will be requested instead.");
     return true;
   }
 
@@ -1734,6 +1718,11 @@ async function initialize() {
   const tokenFromUrl = checkUrlForTokens();
   const urlParams = new URLSearchParams(window.location.search);
   isEmbed = urlParams.get("embed") === "true";
+  const initialProjectId = Number(urlParams.get("id"));
+  if (Number.isInteger(initialProjectId) && initialProjectId > 0) {
+    _pid = initialProjectId;
+    AppState.auth.projectId = initialProjectId;
+  }
 
   mountScratchToolShell();
   cacheScratchToolElements();
@@ -1758,12 +1747,12 @@ async function initialize() {
     if (msg === "401") alert("未登录");
   }
 
-  // 尝试从 HttpOnly refresh cookie 引导恢复登录（非阻塞但优先尝试）
+  // 尝试从 HttpOnly refresh cookie 换取项目限定编辑器 token（非阻塞但优先尝试）
   try {
-    // TokenManager.getFreshToken 会在需要时向后端请求刷新并持久化 token
+    // TokenManager.getFreshToken 只在内存中保存短期 editor token。
     await TokenManager.getFreshToken();
   } catch (err) {
-    console.warn("[scratchtool] token refresh bootstrap failed:", err);
+    console.warn("[scratchtool] editor session bootstrap failed:", err);
   }
 
   await loadUserInfo();
@@ -1953,85 +1942,12 @@ async function extractInlineExtensions(projectJsonStr) {
 
     if (inlineKeys.length === 0) return projectJsonStr;
 
-    try {
-      await mdui.confirm({
-        headline: "检测到内联扩展",
-        description: "作品包含内联 JavaScript 扩展代码，是否将其自动上传为扩展项目？点击「取消」将不会保存。",
-        confirmText: "确认上传",
-        cancelText: "取消",
-      });
-    } catch {
-      return null;
-    }
-
-    for (const key of inlineKeys) {
-      const dataUrl = extensionURLs[key];
-      const base64 = dataUrl.replace('data:text/javascript;base64,', '');
-      const jsSource = new TextDecoder().decode(Uint8Array.from(atob(base64), c => c.charCodeAt(0)));
-
-      const randomSuffix = Math.floor(Math.random() * 900000) + 100000;
-      const createResponse = await apiRequest({
-        url: ZCConfig.api.getPath("/project/"),
-        type: "POST",
-        data: JSON.stringify({
-          name: `${key}_${randomSuffix}`,
-          title: key,
-          type: "scratch-extension",
-          state: "public",
-          description: `由作品「${projectinfo?.title || _pid}」(ID: ${_pid}) 自动创建的扩展`,
-        }),
-        contentType: "application/json",
-      });
-
-      const newProjectId = createResponse.id;
-      if (!newProjectId) {
-        throw new Error(createResponse.message || "创建扩展项目失败");
-      }
-
-      const saveResponse = await apiRequest({
-        url: ZCConfig.api.getPath("/project/savefile"),
-        type: "POST",
-        data: jsSource,
-        contentType: "text/plain; charset=UTF-8",
-        processData: false,
-      });
-      if (!saveResponse.accessFileToken) {
-        throw new Error(saveResponse.message || "保存扩展源码失败");
-      }
-
-      const accessFileToken = saveResponse.accessFileToken;
-
-      const commitResponse = await apiRequest({
-        url: `${ZCConfig.api.getPath("/project/commit/id/")}${newProjectId}`,
-        type: "PUT",
-        data: JSON.stringify({
-          projectid: newProjectId,
-          branch: "main",
-          accessFileToken,
-          message: "自动上传内联扩展",
-        }),
-        contentType: "application/json",
-      });
-      if (commitResponse.status === "error") {
-        throw new Error(commitResponse.message || "提交扩展失败");
-      }
-
-      const extResponse = await apiRequest({
-        url: ZCConfig.api.getPath("/extensions/manager/create"),
-        type: "POST",
-        data: JSON.stringify({
-          projectid: newProjectId,
-          branch: "main",
-        }),
-        contentType: "application/json",
-      });
-
-      const extId = extResponse.data.id;
-      extensionURLs[key] = `${ZCConfig.api.url}/extensions/${extId}.js`;
-    }
-
-    showSnackbar(`已成功创建 ${inlineKeys.length} 个扩展项目`);
-    return JSON.stringify(projectData);
+    showErrorAlert(
+      "检测到内联扩展",
+      "编辑器安全令牌不支持自动创建扩展项目，请先通过受信任页面创建扩展项目后再引用。",
+      "关闭"
+    );
+    return null;
   } catch (error) {
     console.error("Error extracting inline extensions:", error);
     showSnackbar(`提取内联扩展失败: ${error.responseJSON?.message || error.message || error.statusText}`);
@@ -2669,6 +2585,19 @@ async function submitProject({
   let finalButtonHandler = idleButtonHandler;
 
   try {
+    if (!canEditCurrentProject()) {
+      showSnackbar("只读访问，无法保存作品");
+      finalButtonText = "只读访问";
+      finalButtonHandler = () => {};
+      return;
+    }
+    if (!Number.isInteger(_pid) || _pid <= 0) {
+      showSnackbar("缺少项目 ID，无法保存作品");
+      finalButtonText = "保存失败";
+      finalButtonHandler = idleButtonHandler;
+      return;
+    }
+
     AppState.save.phase = "uploadingAssets";
     setProgressButton(progressTexts.uploadingAssets);
     await uploadProjectAssets();
@@ -2680,13 +2609,6 @@ async function submitProject({
     AppState.save.phase = "serializing";
     setProgressButton(progressTexts.serializing);
     const currentProjectJson = zcvm.toJSON();
-
-    if (String(projectinfo?.author?.id) !== String(currentUserId)) {
-      showSnackbar("无权限");
-      finalButtonText = "无权限";
-      finalButtonHandler = () => {};
-      return;
-    }
 
     AppState.save.phase = "checkingRemote";
     setProgressButton(progressTexts.checkingRemote);
@@ -2719,7 +2641,7 @@ async function submitProject({
     AppState.save.phase = "savingFile";
     setProgressButton(progressTexts.savingFile);
     const saveResponse = await apiRequest({
-      url: `${ZCConfig.api.getPath("/project/savefile")}?json=true`,
+      url: `${ZCConfig.api.getPath("/project/savefile")}?json=true&projectid=${_pid}`,
       type: "post",
       data: projectjson,
       contentType: "application/json",

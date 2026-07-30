@@ -44,7 +44,7 @@ router.post("/send-login-code", geetestMiddleware, loginController.sendLoginCode
 router.post("/login-with-code", loginController.loginWithCode);
 router.post("/magiclink/generate", geetestMiddleware, loginController.sendMagicLinkForLogin);
 router.get("/magiclink/validate", loginController.validateMagicLinkAndLogin);
-router.post("/logout", tokenAuthMiddleware, loginController.logout);
+router.post("/logout", loginController.logout);
 router.post("/logout-all-devices", tokenAuthMiddleware, requireScope("token:manage"), requireSudo, loginController.logoutAllDevices);
 router.get("/logout", (req, res) => {
     res.locals.userid = null;
@@ -236,6 +236,7 @@ router.post("/unlink-oauth", needLogin, requireScope("user:update"), requireSudo
 
 // 令牌管理相关路由
 router.post("/refresh-token", tokenController.refreshToken);
+router.post("/editor-session", tokenController.issueEditorSession);
 router.get("/token-details/:tokenId", needLogin, requireResource("token", "read", "tokenId"), tokenController.getTokenDetails);
 router.get("/active-tokens", needLogin, requireScope("token:read"), tokenController.getActiveTokens);
 router.post("/revoke-token", needLogin, requireResource("token", "manage", "token_id"), tokenController.revokeToken);

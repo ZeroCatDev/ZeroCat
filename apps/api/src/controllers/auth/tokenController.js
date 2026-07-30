@@ -8,13 +8,33 @@ import {
     respondWithBrowserAuthTokens,
     toIsoOrValue,
 } from "../../services/auth/tokenUtils.js";
+import {
+    getSessionFromRefreshToken,
+    issueToken,
+} from "../../services/auth/tokenService.js";
+import { userCanAccessResourceScope } from "../../services/auth/scopes.js";
+
+const EDITOR_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7;
+
+async function getSessionFromRefreshTokenCandidates(refreshTokens, ipAddress) {
+    const candidates = Array.isArray(refreshTokens) && refreshTokens.length > 0
+        ? refreshTokens
+        : [];
+    for (const refreshToken of candidates) {
+        const session = await getSessionFromRefreshToken(refreshToken, ipAddress);
+        if (session) {
+            return { session, refreshToken };
+        }
+    }
+    return { session: null, refreshToken: null };
+}
 
 /**
  * 验证 Origin/Referer 是否在允许的来源列表中（CSRF 防护）
  * @param {object} req Express request 对象
  * @returns {Promise<{valid: boolean, message?: string}>}
  */
-async function validateOriginForCSRF(req) {
+export async function validateOriginForCSRF(req) {
     let origin = req.headers['origin'];
 
     // 如果没有 Origin，尝试从 Referer 提取
@@ -40,11 +60,26 @@ async function validateOriginForCSRF(req) {
 
         // 检查 CORS 白名单
         const corslist = await zcconfig.get("cors");
-        if (
-            Array.isArray(corslist) &&
-            (corslist.includes("*") || corslist.includes(originHostname))
-        ) {
-            return { valid: true };
+        if (Array.isArray(corslist)) {
+            const corsHosts = corslist
+                .filter((item) => item !== "*")
+                .map((item) => {
+                    const value = String(item || "").trim().toLowerCase();
+                    if (!value) return "";
+                    try {
+                        return new URL(value).hostname.toLowerCase();
+                    } catch {
+                        try {
+                            return new URL(`http://${value}`).hostname.toLowerCase();
+                        } catch {
+                            return value;
+                        }
+                    }
+                })
+                .filter(Boolean);
+            if (corsHosts.includes(originHostname)) {
+                return { valid: true };
+            }
         }
 
         // 检查 urls.frontend
@@ -66,12 +101,130 @@ async function validateOriginForCSRF(req) {
 }
 
 /**
+ * 从浏览器 HttpOnly refresh cookie 换取项目限定的编辑器 token。
+ * 编辑器页面永远不会读取、持久化或接收完整 session token。
+ */
+export const issueEditorSession = async (req, res) => {
+    try {
+        const projectId = Number(req.body?.project_id);
+        if (!Number.isInteger(projectId) || projectId <= 0) {
+            return res.status(400).json({
+                status: "error",
+                message: "无效的项目 ID",
+                code: "INVALID_PROJECT_ID",
+            });
+        }
+
+        const {
+            fromCookie,
+            refresh_token: refreshToken,
+            refresh_tokens: refreshTokens,
+        } = extractRefreshTokenFromRequest(req);
+        if (!fromCookie || !refreshToken) {
+            return res.status(401).json({
+                status: "error",
+                message: "需要浏览器登录会话",
+                code: "ZC_ERROR_EDITOR_SESSION_REQUIRED",
+            });
+        }
+
+        const csrfCheck = await validateOriginForCSRF(req);
+        if (!csrfCheck.valid) {
+            return res.status(403).json({
+                status: "error",
+                message: csrfCheck.message || "CSRF 验证失败",
+                code: "ZC_ERROR_CSRF_FORBIDDEN",
+            });
+        }
+
+        const { session } = await getSessionFromRefreshTokenCandidates(
+            refreshTokens || [refreshToken],
+            req.ipInfo?.clientIP || req.ip
+        );
+        if (!session) {
+            return res.status(401).json({
+                status: "error",
+                message: "登录会话已失效",
+                code: "ZC_ERROR_NEED_LOGIN",
+            });
+        }
+
+        const readScope = `project:${projectId}:read`;
+        const updateScope = `project:${projectId}:update`;
+        const manageScope = `project:${projectId}:manage`;
+        const [canRead, canUpdate, canManage] = await Promise.all([
+            userCanAccessResourceScope(session.userId, readScope),
+            userCanAccessResourceScope(session.userId, updateScope),
+            userCanAccessResourceScope(session.userId, manageScope),
+        ]);
+
+        if (!canRead) {
+            return res.status(404).json({
+                status: "error",
+                message: "项目不存在或无权访问",
+                code: "ZC_ERROR_PROJECT_NOT_ACCESSIBLE",
+            });
+        }
+
+        const scopes = ["user:read", readScope];
+        if (canUpdate) {
+            scopes.push(
+                updateScope,
+                `project:${projectId}:interact`
+            );
+        }
+        if (canManage) {
+            scopes.push(manageScope);
+        }
+
+        const issued = await issueToken({
+            userId: session.userId,
+            type: "editor",
+            name: `scratch-editor:${projectId}`,
+            scopes,
+            accessTokenExpiry: EDITOR_TOKEN_TTL_SECONDS,
+            ip: req.ipInfo?.clientIP || req.ip,
+            userAgent: req.headers["user-agent"],
+        });
+        if (!issued.success) {
+            logger.error(`[token] 签发编辑器会话失败: ${issued.message || "unknown"}`);
+            return res.status(500).json({
+                status: "error",
+                message: "签发编辑器会话失败",
+                code: "EDITOR_SESSION_ISSUE_FAILED",
+            });
+        }
+
+        res.set("Cache-Control", "no-store");
+        return res.json({
+            status: "success",
+            token: issued.accessToken,
+            expires_at: toIsoOrValue(issued.expiresAt),
+            project_id: projectId,
+            user: session.user,
+            access: {
+                can_read: canRead,
+                can_edit: canUpdate,
+                can_manage: canManage,
+            },
+        });
+    } catch (error) {
+        logger.error(`签发编辑器会话时出错: ${error.message}`);
+        return res.status(500).json({
+            status: "error",
+            message: "签发编辑器会话失败",
+            code: "EDITOR_SESSION_ISSUE_FAILED",
+        });
+    }
+};
+
+/**
  * 刷新令牌
  */
 export const refreshToken = async (req, res) => {
     try {
         // 优先从 cookie 读取 refresh token，回退到 body（兼容非浏览器客户端）
-        const { fromCookie, refresh_token } = extractRefreshTokenFromRequest(req);
+        const { fromCookie, refresh_token, refresh_tokens: refreshTokens } = extractRefreshTokenFromRequest(req);
         const csrfCheck = fromCookie ? await validateOriginForCSRF(req) : { valid: true, skipped: true };
 
         if (!refresh_token) {
@@ -91,11 +244,18 @@ export const refreshToken = async (req, res) => {
             }
         }
 
-        const result = await authUtils.refreshAccessToken(
-            refresh_token,
-            req.ip,
-            req.headers["user-agent"]
-        );
+        let result = { success: false, message: "刷新令牌失败" };
+        const candidates = Array.isArray(refreshTokens) && refreshTokens.length > 0
+            ? refreshTokens
+            : [refresh_token].filter(Boolean);
+        for (const candidate of candidates) {
+            result = await authUtils.refreshAccessToken(
+                candidate,
+                req.ip,
+                req.headers["user-agent"]
+            );
+            if (result.success) break;
+        }
 
         if (result.success) {
             return respondWithBrowserAuthTokens(res, {

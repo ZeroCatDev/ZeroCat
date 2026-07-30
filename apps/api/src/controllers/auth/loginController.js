@@ -19,6 +19,7 @@ import {
 import { createNotification } from "../notifications.js";
 import tokenUtils from "../../services/auth/tokenUtils.js";
 import twoFactor from "../../services/auth/twoFactor.js";
+import { revokeTokenByRefreshToken } from "../../services/auth/tokenService.js";
 
 /**
  * 通过用户名或邮箱解析用户（邮箱优先匹配已验证/主邮箱联系方式，其次按用户名）
@@ -643,23 +644,24 @@ export const validateMagicLinkAndLogin = async (req, res) => {
  */
 export const logout = async (req, res) => {
     try {
-        // 使用中间件验证后的用户信息
-        const result = await authUtils.revokeToken(res.locals.tokeninfo.token_id);
-
-        if (result.success) {
-            tokenUtils.clearRefreshTokenCookie(res);
-            return res.status(200).json({
-                status: "success",
-                message: "登出成功",
-            });
-        } else {
-            return res.status(200).json({
-                status: "error",
-                message: result.message || "登出失败",
-            });
+        const tokenId = res.locals.tokenId || res.locals.tokeninfo?.token_id || null;
+        if (tokenId) {
+            await authUtils.revokeToken(tokenId);
         }
+
+        const { refresh_tokens: refreshTokens } = tokenUtils.extractRefreshTokenFromRequest(req);
+        for (const refreshToken of refreshTokens || []) {
+            await revokeTokenByRefreshToken(refreshToken);
+        }
+
+        tokenUtils.clearRefreshTokenCookie(res);
+        return res.status(200).json({
+            status: "success",
+            message: "登出成功",
+        });
     } catch (error) {
         logger.error("登出时出错:", error);
+        tokenUtils.clearRefreshTokenCookie(res);
         return res.status(500).json({
             status: "error",
             message: "登出失败",

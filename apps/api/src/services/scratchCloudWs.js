@@ -3,6 +3,7 @@ import logger from "./logger.js";
 import {prisma} from "./prisma.js";
 import redisClient from "./redis.js";
 import {verifyToken} from "./auth/tokenService.js";
+import {scopeSatisfies, userCanAccessResourceScope} from "./auth/scopes.js";
 
 const CLOUD_EVENT_TARGET_TYPE = "scratch_cloud";
 const TARGET_CONFIG_TYPE_PROJECT = "project";
@@ -261,6 +262,8 @@ const authenticateRequest = async (req) => {
             userid: result.user.userid,
             username: result.user.username,
         },
+        scopes: result.scopes || [],
+        tokenType: result.tokenType || null,
     };
 };
 
@@ -282,6 +285,13 @@ const getScratchProject = async (projectId) => {
         return null;
     }
     return project;
+};
+
+const wsTokenAllowsProject = async (ws, projectId, action) => {
+    if (!ws.authUser || typeof ws.authUser.userid !== "number") return false;
+    const requiredScope = `project:${projectId}:${action}`;
+    if (!scopeSatisfies(ws.authScopes || [], requiredScope)) return false;
+    return userCanAccessResourceScope(ws.authUser.userid, requiredScope);
 };
 
 const loadCloudState = async (project) => {
@@ -548,11 +558,14 @@ const handleHandshake = async (ws, message) => {
     }
 
     const userProvidedName = typeof message.user === "string" ? message.user : "";
+    const projectConfig = await getProjectCloudConfig(project.id);
 
     if (ws.authUser && typeof ws.authUser.userid === "number") {
-        if (project.state !== "public" && project.authorid !== ws.authUser.userid) {
+        if (!(await wsTokenAllowsProject(ws, project.id, "read"))) {
             throw new CloudWsError(WS_CLOSE_PROJECT_UNAVAILABLE, "project unavailable");
         }
+        ws.canWriteCloud = Boolean(projectConfig.anonymousWriteEnabled)
+            || await wsTokenAllowsProject(ws, project.id, "update");
         ws.user = {
             userid: ws.authUser.userid,
             username: ws.authUser.username || String(ws.authUser.userid),
@@ -561,10 +574,10 @@ const handleHandshake = async (ws, message) => {
         if (project.state !== "public") {
             throw new CloudWsError(WS_CLOSE_PROJECT_UNAVAILABLE, "project unavailable");
         }
-        const {anonymousWriteEnabled} = await getProjectCloudConfig(project.id);
-        if (!anonymousWriteEnabled) {
+        if (!projectConfig.anonymousWriteEnabled) {
             throw new CloudWsError(WS_CLOSE_PROJECT_UNAVAILABLE, "anonymous disabled");
         }
+        ws.canWriteCloud = true;
         const resolvedInputName = sanitizeAnonymousInputName(userProvidedName);
         ws.user = {
             userid: null,
@@ -611,6 +624,9 @@ const processRawMessage = async (ws, rawText) => {
         if (!ws.project) {
             throw new CloudWsError(WS_CLOSE_ERROR, "handshake required");
         }
+        if (!ws.canWriteCloud) {
+            throw new CloudWsError(WS_CLOSE_PROJECT_UNAVAILABLE, "write not allowed");
+        }
 
         const {historyEnabled} = await getProjectCloudConfig(ws.project.id);
         const update = await processCloudWrite(ws.project, ws, message, historyEnabled);
@@ -650,6 +666,8 @@ export function attachScratchCloudWebSocket(server) {
 
             req.wsUser = authResult.user;
             req.wsHasToken = Boolean(authResult.hasToken);
+            req.wsScopes = authResult.scopes || [];
+            req.wsTokenType = authResult.tokenType || null;
             req.wsClientIp = extractClientIpFromUpgradeRequest(req);
             wss.handleUpgrade(req, socket, head, (ws) => {
                 wss.emit("connection", ws, req);
@@ -662,10 +680,13 @@ export function attachScratchCloudWebSocket(server) {
 
     wss.on("connection", (ws, req) => {
         ws.authUser = req.wsUser || null;
+        ws.authScopes = Array.isArray(req.wsScopes) ? req.wsScopes : [];
+        ws.tokenType = req.wsTokenType || null;
         ws.hasToken = Boolean(req.wsHasToken);
         ws.user = null;
         ws.project = null;
         ws.projectId = null;
+        ws.canWriteCloud = false;
         ws.ip = req.wsClientIp || extractClientIpFromUpgradeRequest(req);
 
         ws.on("message", async (data, isBinary) => {
