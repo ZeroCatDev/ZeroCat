@@ -51,7 +51,7 @@ jobs:
       - name: Build web app
         working-directory: apps/web
         env:
-          VITE_APP_BASE_API: https://api.zcservice.houlang.cloud
+          VITE_APP_BASE_API: https://api.zerocat.dev
         run: pnpm run build
 
       - name: Setup Pages
