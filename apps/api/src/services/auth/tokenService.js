@@ -32,8 +32,8 @@ const ACTIVITY_UPDATE_INTERVAL_SEC = 60;
 const localActivityThrottle = new Map();
 
 // 默认有效期 (秒)
-const DEFAULT_SESSION_ACCESS_EXPIRY = 60 * 60 * 24; // 24 小时
-const DEFAULT_SESSION_REFRESH_EXPIRY = 60 * 60 * 24 * 30; // 30 天
+const DEFAULT_SESSION_ACCESS_EXPIRY = 60 * 60 * 24 * 7; // 7 天
+const DEFAULT_SESSION_REFRESH_EXPIRY = 60 * 60 * 24 * 90; // 90 天
 const DEFAULT_OAUTH_ACCESS_EXPIRY = 60 * 60; // 1 小时
 const DEFAULT_OAUTH_REFRESH_EXPIRY = 60 * 60 * 24 * 30; // 30 天
 const DEFAULT_EDITOR_ACCESS_EXPIRY = 60 * 60 * 24 * 365; // 1 年
@@ -617,12 +617,16 @@ export async function refreshAccessToken(rawRefreshToken, ipAddress = null, user
 
         const accessTokenExpiry =
             record.type === "oauth" ? DEFAULT_OAUTH_ACCESS_EXPIRY : await getSessionAccessExpiry();
+        const refreshTokenExpiry =
+            record.type === "oauth" ? DEFAULT_OAUTH_REFRESH_EXPIRY : await getSessionRefreshExpiry();
         const now = Date.now();
         const rawAccess = generateRawToken();
         const rawRefresh = generateRawToken();
         const accessHash = hashToken(rawAccess);
         const newRefreshHash = hashToken(rawRefresh);
         const accessExpiresAt = new Date(now + accessTokenExpiry * 1000);
+        // 滚动刷新令牌过期时间：每次刷新都延长，保持用户活跃时不过期
+        const refreshExpiresAt = new Date(now + refreshTokenExpiry * 1000);
 
         const updateResult = await prisma.ow_tokens.updateMany({
             where: {
@@ -635,6 +639,7 @@ export async function refreshAccessToken(rawRefreshToken, ipAddress = null, user
                 token_prefix: tokenDisplayPrefix(rawAccess),
                 refresh_token_hash: newRefreshHash,
                 expires_at: accessExpiresAt,
+                refresh_expires_at: refreshExpiresAt,
                 last_used_at: new Date(now),
                 last_used_ip: normalizedIp,
                 user_agent: userAgent?.substring(0, 255) || record.user_agent,
@@ -656,7 +661,7 @@ export async function refreshAccessToken(rawRefreshToken, ipAddress = null, user
             accessToken: rawAccess,
             refreshToken: rawRefresh,
             expiresAt: accessExpiresAt,
-            refreshExpiresAt: record.refresh_expires_at,
+            refreshExpiresAt: refreshExpiresAt,
             tokenId: record.id,
             scopes: await getEffectiveTokenScopes({
                 userId: record.user.id,

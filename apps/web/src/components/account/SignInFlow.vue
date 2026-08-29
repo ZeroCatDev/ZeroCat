@@ -60,7 +60,32 @@
             :disabled="loading"
             prepend-inner-icon="mdi-account-outline"
           />
+
+          <v-expand-transition>
+            <v-alert
+              v-if="accountNotFound"
+              type="info"
+              variant="tonal"
+              density="comfortable"
+              class="mb-4"
+            >
+              <div class="text-body-2 mb-2">该用户名尚未注册</div>
+              <v-btn
+                size="small"
+                rounded="lg"
+                color="primary"
+                variant="flat"
+                class="text-none"
+                :to="registerLink"
+                @click="onClose"
+              >
+                创建新账户
+              </v-btn>
+            </v-alert>
+          </v-expand-transition>
+
           <v-btn
+            v-if="!accountNotFound"
             type="submit"
             block
             size="large"
@@ -76,7 +101,7 @@
         </v-form>
 
         <v-btn
-          v-if="passkeySupported"
+          v-if="passkeySupported && !accountNotFound"
           block
           size="large"
           rounded="lg"
@@ -90,7 +115,7 @@
           使用通行密钥登录
         </v-btn>
 
-        <OAuthButtons mode="login" divider-text="或使用以下方式登录" />
+        <OAuthButtons v-if="!accountNotFound" mode="login" divider-text="或使用以下方式登录" />
 
         <div class="d-flex justify-space-between mt-4">
           <v-btn
@@ -473,6 +498,7 @@ const {
   countdown,
   totpCountdown,
   passkeySupported,
+  accountNotFound,
   // 计算
   hasPasskey,
   chooserMethods,
