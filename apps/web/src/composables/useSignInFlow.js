@@ -50,6 +50,7 @@ export function useSignInFlow(options = {}) {
   const availableMethods = ref([]); // 来自 /auth/methods 的原始数组
   const challenge = ref(null); // 2FA: { challenge_id, expires_in }
   const displayName = ref("");
+  const accountNotFound = ref(false); // 标识符解析后账户不存在
 
   // —— UI 状态 ——
   const loading = ref(false);
@@ -164,6 +165,7 @@ export function useSignInFlow(options = {}) {
   // —— 动作：标识符解析 ——
   const submitIdentifier = async () => {
     error.value = "";
+    accountNotFound.value = false;
     const id = identifier.value.trim();
     if (!id) {
       error.value = "请输入邮箱或用户名";
@@ -172,9 +174,8 @@ export function useSignInFlow(options = {}) {
     loading.value = true;
     try {
       const result = await AuthService.getAuthMethods(id, "login");
-      // 用户名（非邮箱）明确不存在时直接提示；邮箱不透露存在性（防扫号）
       if (result.accountExists === false) {
-        error.value = "用户不存在，请检查用户名或注册新账户";
+        accountNotFound.value = true;
         return;
       }
       availableMethods.value = result.availableMethods || [];
@@ -370,6 +371,7 @@ export function useSignInFlow(options = {}) {
     error.value = "";
     codeSent.value = false;
     magicLinkSent.value = false;
+    accountNotFound.value = false;
   };
 
   // —— 条件式 UI（通行密钥自动填充）——
@@ -439,6 +441,7 @@ export function useSignInFlow(options = {}) {
     countdown,
     totpCountdown,
     passkeySupported,
+    accountNotFound,
     // 计算
     isEmail,
     hasPasskey,

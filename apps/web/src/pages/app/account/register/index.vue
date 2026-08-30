@@ -122,107 +122,59 @@
           </v-chip>
         </div>
 
-        <v-progress-linear
-          :model-value="(step / 3) * 100"
-          color="primary"
-          height="4"
-          rounded
-          class="mb-5"
-        />
+        <v-form @submit.prevent="complete">
+          <v-text-field
+            v-model="username"
+            label="用户名"
+            type="text"
+            variant="outlined"
+            autocomplete="username"
+            autofocus
+            prepend-inner-icon="mdi-account-outline"
+            :hint="usernameCheck.status === 'idle' ? '2-20 位，小写字母开头，仅含小写字母、数字与单个下划线' : ''"
+            persistent-hint
+            :loading="usernameCheck.status === 'checking'"
+            :error="usernameCheck.status === 'error'"
+            :error-messages="usernameCheck.status === 'error' ? [usernameCheck.message] : []"
+            :messages="usernameCheck.status === 'ok' ? [usernameCheck.message] : []"
+            class="mb-1"
+          >
+            <template #append-inner>
+              <v-icon v-if="usernameCheck.status === 'ok'" color="success">mdi-check-circle</v-icon>
+              <v-icon v-else-if="usernameCheck.status === 'error'" color="error">mdi-alert-circle</v-icon>
+            </template>
+          </v-text-field>
 
-        <v-window v-model="step" :touch="false">
-          <!-- 用户名（实时校验格式与占用） -->
-          <v-window-item :value="1">
-            <v-form @submit.prevent="next">
-              <v-text-field
-                v-model="username"
-                label="用户名"
-                type="text"
-                variant="outlined"
-                autocomplete="username"
-                autofocus
-                prepend-inner-icon="mdi-account-outline"
-                :hint="usernameCheck.status === 'idle' ? '2-20 位，小写字母开头，仅含小写字母、数字与单个下划线' : ''"
-                persistent-hint
-                :loading="usernameCheck.status === 'checking'"
-                :error="usernameCheck.status === 'error'"
-                :error-messages="usernameCheck.status === 'error' ? [usernameCheck.message] : []"
-                :messages="usernameCheck.status === 'ok' ? [usernameCheck.message] : []"
-              >
-                <template #append-inner>
-                  <v-icon v-if="usernameCheck.status === 'ok'" color="success">mdi-check-circle</v-icon>
-                  <v-icon v-else-if="usernameCheck.status === 'error'" color="error">mdi-alert-circle</v-icon>
-                </template>
-              </v-text-field>
-              <v-btn
-                type="submit"
-                block
-                size="large"
-                rounded="lg"
-                color="primary"
-                variant="flat"
-                class="text-none mt-1"
-                append-icon="mdi-arrow-right"
-                :disabled="!canProceed"
-              >
-                继续
-              </v-btn>
-            </v-form>
-          </v-window-item>
+          <v-text-field
+            v-model="password"
+            label="设置密码"
+            variant="outlined"
+            autocomplete="new-password"
+            :type="showPassword ? 'text' : 'password'"
+            prepend-inner-icon="mdi-lock-outline"
+            :error="password.length > 0 && !passwordValid"
+            :error-messages="password.length > 0 && !passwordValid ? ['密码至少 8 位，且需包含字母和数字'] : []"
+          >
+            <template #append-inner>
+              <v-icon style="cursor: pointer" @click="showPassword = !showPassword">
+                {{ showPassword ? "mdi-eye" : "mdi-eye-off" }}
+              </v-icon>
+            </template>
+          </v-text-field>
+          <div v-if="password" class="mb-3">
+            <v-progress-linear
+              :model-value="passwordStrength.percent"
+              :color="passwordStrength.color"
+              height="6"
+              rounded
+              class="mb-1"
+            />
+            <span class="text-caption" :class="`text-${passwordStrength.color}`">
+              密码强度：{{ passwordStrength.label }}
+            </span>
+          </div>
 
-          <!-- 密码（实时强度） -->
-          <v-window-item :value="2">
-            <v-form @submit.prevent="next">
-              <v-text-field
-                v-model="password"
-                label="设置密码"
-                variant="outlined"
-                autocomplete="new-password"
-                autofocus
-                :type="showPassword ? 'text' : 'password'"
-                prepend-inner-icon="mdi-lock-outline"
-                :error="password.length > 0 && !passwordValid"
-                :error-messages="password.length > 0 && !passwordValid ? ['密码至少 8 位，且需包含字母和数字'] : []"
-              >
-                <template #append-inner>
-                  <v-icon style="cursor: pointer" @click="showPassword = !showPassword">
-                    {{ showPassword ? "mdi-eye" : "mdi-eye-off" }}
-                  </v-icon>
-                </template>
-              </v-text-field>
-              <div v-if="password" class="mb-4">
-                <v-progress-linear
-                  :model-value="passwordStrength.percent"
-                  :color="passwordStrength.color"
-                  height="6"
-                  rounded
-                  class="mb-1"
-                />
-                <span class="text-caption" :class="`text-${passwordStrength.color}`">
-                  密码强度：{{ passwordStrength.label }}
-                </span>
-              </div>
-              <v-btn
-                type="submit"
-                block
-                size="large"
-                rounded="lg"
-                color="primary"
-                variant="flat"
-                class="text-none"
-                append-icon="mdi-arrow-right"
-                :disabled="!canProceed"
-              >
-                继续
-              </v-btn>
-            </v-form>
-          </v-window-item>
-
-          <!-- 条款并完成 -->
-          <v-window-item :value="3">
-            <p class="text-body-2 text-medium-emphasis mb-2">
-              请阅读并同意以下条款以完成注册：
-            </p>
+          <div class="mb-4">
             <v-checkbox v-model="agreement.privacy" density="compact" hide-details>
               <template #label>
                 <span class="text-body-2">我已阅读并同意
@@ -249,34 +201,22 @@
                 <span class="text-body-2">我理解数据存储于中国大陆且需联系管理员删除</span>
               </template>
             </v-checkbox>
+          </div>
 
-            <v-btn
-              block
-              size="large"
-              rounded="lg"
-              color="primary"
-              variant="flat"
-              class="text-none mt-4"
-              :loading="loading"
-              :disabled="!canProceed"
-              @click="complete"
-            >
-              完成注册
-            </v-btn>
-          </v-window-item>
-        </v-window>
-
-        <div v-if="step > 1" class="mt-4">
           <v-btn
-            variant="text"
-            size="small"
+            type="submit"
+            block
+            size="large"
+            rounded="lg"
+            color="primary"
+            variant="flat"
             class="text-none"
-            prepend-icon="mdi-arrow-left"
-            @click="step -= 1"
+            :loading="loading"
+            :disabled="!canComplete"
           >
-            上一步
+            完成注册
           </v-btn>
-        </div>
+        </v-form>
       </template>
     </v-card>
   </v-container>
@@ -301,7 +241,6 @@ const recaptchaRef = ref(null);
 
 const token = ref(typeof route.query.token === "string" ? route.query.token : "");
 const view = ref(token.value ? "loading" : "email"); // loading | invalid | email | sent | continue
-const step = ref(1);
 const loading = ref(false);
 const error = ref("");
 const countdown = ref(0);
@@ -327,9 +266,7 @@ const headerIcon = computed(() =>
   view.value === "continue" ? "mdi-account-check-outline" : "mdi-account-plus-outline"
 );
 const subtitle = computed(() => {
-  if (view.value === "continue") {
-    return { 1: "为你的账户取一个用户名", 2: "设置一个安全的密码", 3: "最后一步：同意条款" }[step.value] || "";
-  }
+  if (view.value === "continue") return "填写以下信息完成注册";
   if (view.value === "sent") return "邮件已发送";
   return "输入你的邮箱";
 });
@@ -362,12 +299,9 @@ const passwordStrength = computed(() => {
 
 const allAgreed = computed(() => Object.values(agreement.value).every(Boolean));
 
-const canProceed = computed(() => {
-  if (step.value === 1) return usernameCheck.value.status === "ok";
-  if (step.value === 2) return passwordValid.value;
-  if (step.value === 3) return allAgreed.value;
-  return false;
-});
+const canComplete = computed(() =>
+  usernameCheck.value.status === "ok" && passwordValid.value && allAgreed.value
+);
 
 const redirectQuery = computed(() =>
   authStore.authRedirectUrl
@@ -468,19 +402,9 @@ const submitEmail = async () => {
   }
 };
 
-// 模式 B：步骤导航
-const next = () => {
-  error.value = "";
-  if (!canProceed.value) return;
-  if (step.value < 3) step.value += 1;
-};
-
 // 模式 B：完成注册
 const complete = async () => {
-  if (!allAgreed.value) {
-    error.value = "请先阅读并同意相关条款";
-    return;
-  }
+  if (!canComplete.value) return;
   error.value = "";
   loading.value = true;
   try {
@@ -496,8 +420,6 @@ const complete = async () => {
       router.push(`/app/account/login${redirectQuery.value}`);
     } else {
       error.value = resp?.message || "注册失败";
-      // 用户名/邮箱可能被占用，回到用户名步骤
-      if (resp?.message && resp.message.includes("用户名")) step.value = 1;
     }
   } catch (e) {
     error.value = e?.response?.data?.message || e?.message || "注册失败，请稍后再试";
