@@ -280,6 +280,9 @@ const createInitialAuthState = () => {
     user: cached ? { ...DEFAULT_USER, ...cached } : { ...DEFAULT_USER },
     isLogin: !!(hasToken || cached),
     hasHint,
+    // 已经缓存了用户信息时无需等待网络校验，直接渲染已登录 UI，
+    // 避免头像/侧栏长时间停留在骨架屏。
+    ready: !hasHint || !!cached,
   };
 };
 
@@ -342,7 +345,7 @@ export const useAuthStore = defineStore("auth", () => {
   const user = ref(initialAuthState.user);
   const isLogin = ref(initialAuthState.isLogin);
   const hasAuthHint = ref(initialAuthState.hasHint);
-  const authReady = ref(!initialAuthState.hasHint);
+  const authReady = ref(initialAuthState.ready);
   const devices = ref([]);
   const activeTokens = ref([]);
   const currentTokenDetails = ref(null);
@@ -532,34 +535,50 @@ export const useAuthStore = defineStore("auth", () => {
   // User loading
   // ============================
 
+  // Single-flight lock for /user/me so concurrent callers share one request.
+  let userInfoPromise = null;
+
   const fetchUserInfo = async () => {
-    try {
-      const response = await axiosInstance({
-        url: "/user/me",
-        method: "get",
-      });
+    // Reuse an in-flight request instead of stacking duplicate /user/me calls.
+    if (userInfoPromise) return userInfoPromise;
 
-      const data = response.data;
-      if (data.status !== "success") {
-        console.warn("fetchUserInfo: non-success response", data.message);
-        return;
+    userInfoPromise = (async () => {
+      try {
+        const response = await axiosInstance({
+          url: "/user/me",
+          method: "get",
+        });
+
+        const data = response.data;
+        if (data.status !== "success") {
+          console.warn("fetchUserInfo: non-success response", data.message);
+          return null;
+        }
+
+        user.value = {
+          id: data.data.id,
+          display_name: data.data.display_name,
+          bio: data.data.bio,
+          avatar: data.data.avatar,
+          regTime: data.data.regTime,
+          sex: data.data.sex,
+          username: data.data.username,
+          type: data.data.type,
+          isAdmin: data.data.isAdmin === true,
+        };
+        localStorage.setItem(USER_INFO_KEY, JSON.stringify(user.value));
+        isLogin.value = true;
+        return user.value;
+      } catch (error) {
+        console.error("fetchUserInfo failed:", error);
+        return null;
       }
+    })();
 
-      user.value = {
-        id: data.data.id,
-        display_name: data.data.display_name,
-        bio: data.data.bio,
-        avatar: data.data.avatar,
-        regTime: data.data.regTime,
-        sex: data.data.sex,
-        username: data.data.username,
-        type: data.data.type,
-        isAdmin: data.data.isAdmin === true,
-      };
-      localStorage.setItem(USER_INFO_KEY, JSON.stringify(user.value));
-      isLogin.value = true;
-    } catch (error) {
-      console.error("fetchUserInfo failed:", error);
+    try {
+      return await userInfoPromise;
+    } finally {
+      userInfoPromise = null;
     }
   };
 
@@ -568,32 +587,28 @@ export const useAuthStore = defineStore("auth", () => {
     if (!t) {
       isLogin.value = false;
       user.value = { ...DEFAULT_USER };
-      return;
+      return user.value;
     }
 
     // If token expired on load, try refreshing first
     const exp = getTokenExpirationTime();
     if (exp === 0) {
       const ok = await refreshAccessToken();
-      if (!ok) return;
+      if (!ok) return user.value;
     }
 
     if (force === true) {
-      await fetchUserInfo();
-      return;
+      return await fetchUserInfo();
     }
 
-    const cached = localStorage.getItem(USER_INFO_KEY);
+    const cached = readCachedUserSync();
     if (cached) {
-      try {
-        isLogin.value = true;
-        user.value = JSON.parse(cached);
-      } catch {
-        await fetchUserInfo();
-      }
-    } else {
-      await fetchUserInfo();
+      isLogin.value = true;
+      user.value = { ...DEFAULT_USER, ...cached };
+      return user.value;
     }
+
+    return await fetchUserInfo();
   };
 
   // ============================
@@ -639,6 +654,9 @@ export const useAuthStore = defineStore("auth", () => {
     refreshTokenExpiresAt.value = data.refresh_expires_at || null;
 
     await loadUser(true);
+
+    // 登录后本地状态已确定，无需再展示鉴权骨架屏
+    authReady.value = true;
 
     // Start proactive refresh cycle after login
     _refreshRetryCount = 0;
@@ -1038,7 +1056,10 @@ export const useAuthStore = defineStore("auth", () => {
   const getUserAvatar = (avatar) => {
     const a = avatar ?? user.value.avatar;
     if (!a) return "";
-    return `${s3BucketUrl}/assets/${a.slice(0, 2)}/${a.slice(2, 4)}/${a}.webp`;
+    // s3BucketUrl 在 store 创建时可能尚未从配置接口就绪，这里回退到最新配置，
+    // 避免首次访问时头像地址缺少域名前缀而加载失败。
+    const base = s3BucketUrl || get("s3.staticurl") || "";
+    return `${base}/assets/${a.slice(0, 2)}/${a.slice(2, 4)}/${a}.webp`;
   };
 
   // ============================
@@ -1117,7 +1138,11 @@ export const useAuthStore = defineStore("auth", () => {
       const t = getToken();
       if (t) {
         await loadUser();
-        await initializeTokenRefresh();
+        // 本地状态可用后立即放行 UI，令牌维护放到后台，不阻塞首屏。
+        authReady.value = true;
+        void initializeTokenRefresh().catch((err) =>
+          console.error("[Auth] Token refresh init failed:", err)
+        );
         return;
       }
 
@@ -1126,8 +1151,11 @@ export const useAuthStore = defineStore("auth", () => {
         console.log("[Auth] No access token on init, attempting refresh from localStorage...");
         const ok = await refreshAccessToken();
         if (ok) {
-          await loadUser(true);
-          await initializeTokenRefresh();
+          await loadUser();
+          authReady.value = true;
+          void initializeTokenRefresh().catch((err) =>
+            console.error("[Auth] Token refresh init failed:", err)
+          );
           return;
         }
       }

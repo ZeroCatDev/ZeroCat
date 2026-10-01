@@ -44,7 +44,6 @@
 <script>
 import {localuser} from "@/services/localAccount";
 import {useHead} from "@unhead/vue";
-import {getAccount} from "@/services/accountService";
 import UserFollowing from "@/components/user/UserFollowing.vue";
 import UserFollowers from "@/components/user/UserFollowers.vue";
 import UserBlocked from "@/components/user/UserBlocked.vue";
@@ -59,7 +58,7 @@ export default {
     return {
       tab: "following",
       localuser: localuser,
-      userInfo: {},
+      userInfo: { ...localuser.user.value },
       loading: false
     };
   },
@@ -82,19 +81,23 @@ export default {
     }
   },
   async created() {
-    await this.getUserById();
+    await this.syncUserInfo();
   },
   methods: {
-    async getUserById() {
-      this.loading = true;
-      try {
-        const response = await getAccount(localuser.user.value.id);
-        this.userInfo = response.data.data;
-      } catch (error) {
-        this.showToast("error", "获取用户信息失败", error.message);
-      } finally {
-        this.loading = false;
+    /**
+     * 复用 store 中已加载的用户信息，避免额外的 /user/me 请求；
+     * 仅当本地没有用户信息时才真正发起请求。
+     */
+    async syncUserInfo() {
+      if (!localuser.user.value?.id) {
+        this.loading = true;
+        try {
+          await localuser.fetchUserInfo();
+        } finally {
+          this.loading = false;
+        }
       }
+      this.userInfo = { ...localuser.user.value };
     },
     showToast(severity, summary, detail) {
       this.$toast.add({severity, summary, detail, life: 3000});

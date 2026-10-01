@@ -3,9 +3,8 @@
 </template>
 
 <script setup>
-import {onMounted, watch} from 'vue'
-import * as FingerprintJS from '@fingerprintjs/fingerprintjs'
-import axios from '@/axios/axios'
+import { watch } from 'vue'
+import { sendAnalyticsEvent } from '@/services/analyticsService'
 
 const props = defineProps({
   targetType: {
@@ -22,49 +21,22 @@ const props = defineProps({
   }
 })
 
-const sendAnalytics = async () => {
-  // Only proceed if both targetType and targetId are valid
-  if (!props.targetType || !props.targetId) {
-    return
-  }
-
-  try {
-    // Get fingerprint
-    const fpPromise = FingerprintJS.load()
-    const fp = await fpPromise
-    const result = await fp.get()
-
-    // Prepare analytics data
-    const analyticsData = {
-      visitor_id: result.visitorId,
-      fingerprint: result.visitorId, // Using visitorId as fingerprint
-      hostname: window.location.hostname,
-      screen: `${window.screen.width}x${window.screen.height}`,
-      language: navigator.language,
-      url: window.location.href,
-      referrer: document.referrer,
-      page_title: document.title,
-      target_type: props.targetType,
-      target_id: Number(props.targetId) // Ensure number type for API
-    }
-
-    // Send analytics data
-    await axios.post('/analytics/send', analyticsData)
-  } catch (error) {
-    console.error('Analytics error:', error)
-    // Silently fail to not disturb user experience
-  }
-}
-
-// Watch for changes in both props
+// 使用本地生成并缓存的访客指纹发送分析事件，
+// 避免在首屏加载 FingerprintJS 并执行同步指纹计算。
 watch(
   [() => props.targetType, () => props.targetId],
-  ([newTargetType, newTargetId], [oldTargetType, oldTargetId]) => {
-    // Only send analytics when both new values are present
-    if (newTargetType && newTargetId) {
-      sendAnalytics()
+  ([type, id]) => {
+    if (!type || id === null || id === undefined || `${id}` === '') {
+      return
     }
+
+    sendAnalyticsEvent({
+      targetType: type,
+      targetId: Number(id),
+    }).catch(() => {
+      // 静默失败，不影响用户体验
+    })
   },
-  {immediate: true}
+  { immediate: true }
 )
 </script>

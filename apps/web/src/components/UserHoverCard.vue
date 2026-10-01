@@ -252,13 +252,16 @@ async function toggleFollow() {
   }
 }
 
-// 监听用户数据加载完成后检查关注状态
+// 监听用户数据加载完成后检查关注状态（仅用户变化时检查，统计数据刷新不重复请求）
 import { watch } from "vue";
-watch(userData, (val) => {
-  if (val?.id) {
-    checkFollowStatus();
+watch(
+  () => userData.value?.id,
+  (id) => {
+    if (id) {
+      checkFollowStatus();
+    }
   }
-});
+);
 
 // ==================== 数字格式化 ====================
 function formatCount(num) {

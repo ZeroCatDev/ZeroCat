@@ -13,6 +13,8 @@ import request from "@/axios/axios";
 const userCache = shallowReactive(new Map());
 // 正在请求中的 Promise 缓存（防止并发重复请求）
 const pendingRequests = new Map();
+// 已补充过统计数据的用户名（避免重复请求粉丝/关注/作品数）
+const enrichedUsers = new Set();
 
 /**
  * 获取用户基础信息后，并行补充统计数据（关注数、粉丝数、作品数）
@@ -70,7 +72,8 @@ export function useUserHoverCard(options = {}) {
   let leaveTimer = null;
 
   /**
-   * 根据用户名获取用户信息（带缓存）
+   * 根据用户名获取用户基础信息（带缓存、带并发去重）。
+   * 统计数据在后台补充，不阻塞卡片展示。
    */
   async function fetchUser(username) {
     if (!username) return null;
@@ -86,12 +89,9 @@ export function useUserHoverCard(options = {}) {
     }
 
     const promise = getUserByUsername(username)
-      .then(async (data) => {
+      .then((data) => {
         if (data && data.id) {
-          // 补充统计数据（关注、粉丝、作品数）
-          const enriched = await enrichUserStats(data);
-          userCache.set(username, enriched);
-          return enriched;
+          userCache.set(username, data);
         }
         return data;
       })
@@ -101,6 +101,29 @@ export function useUserHoverCard(options = {}) {
 
     pendingRequests.set(username, promise);
     return promise;
+  }
+
+  /**
+   * 后台补充统计数据（关注数、粉丝数、作品数），完成后更新缓存；
+   * 若当前卡片仍展示该用户则同步刷新，避免等待统计接口。
+   */
+  function enrichInBackground(username, baseData) {
+    if (!baseData?.id || enrichedUsers.has(username)) return;
+
+    enrichUserStats(baseData)
+      .then((enriched) => {
+        enrichedUsers.add(username);
+        userCache.set(username, enriched);
+        if (
+          userData.value?.id === baseData.id &&
+          userData.value?.username === username
+        ) {
+          userData.value = enriched;
+        }
+      })
+      .catch((e) => {
+        console.warn("[useUserHoverCard] 补充用户统计失败:", e);
+      });
   }
 
   /**
@@ -125,10 +148,12 @@ export function useUserHoverCard(options = {}) {
       try {
         const data = await fetchUser(username);
         userData.value = data;
+        isLoading.value = false;
+        // 基础信息先渲染，统计信息后台补齐
+        enrichInBackground(username, data);
       } catch (e) {
         console.error("[UserHoverCard] 获取用户信息失败:", e);
         userData.value = null;
-      } finally {
         isLoading.value = false;
       }
     }, hoverDelay);
@@ -182,9 +207,8 @@ export function useUserHoverCard(options = {}) {
    * 预热缓存（不显示卡片）
    */
   function prefetch(username) {
-    if (username && !userCache.has(username)) {
-      fetchUser(username);
-    }
+    if (!username) return;
+    fetchUser(username).then((data) => enrichInBackground(username, data));
   }
 
   /**
@@ -192,6 +216,7 @@ export function useUserHoverCard(options = {}) {
    */
   function invalidateCache(username) {
     userCache.delete(username);
+    enrichedUsers.delete(username);
   }
 
   return {

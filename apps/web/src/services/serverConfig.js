@@ -47,9 +47,12 @@ function needsRefresh() {
   const now = Date.now();
   return now - lastFetch > CONFIG_CONSTANTS.MAX_AGE;
 }
-// 获取配置数据
+// 获取配置数据（单飞：并发调用共享同一个请求，避免重复请求 /api/config）
+let fetchPromise = null;
 export function fetchConfig() {
-  return axios.get('/api/config')
+  if (fetchPromise) return fetchPromise;
+
+  fetchPromise = axios.get('/api/config')
     .then(response => {
       setStoredData(response.data);
       updateLastFetchTime();
@@ -59,7 +62,12 @@ export function fetchConfig() {
       console.error('Failed to fetch config:', error);
       // 如果获取失败，返回缓存的数据
       return getStoredData();
+    })
+    .finally(() => {
+      fetchPromise = null;
     });
+
+  return fetchPromise;
 }
 
 

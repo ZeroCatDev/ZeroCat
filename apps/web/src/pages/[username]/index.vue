@@ -363,7 +363,9 @@ export default {
       readmeContent: "",
       readmeExists: false,
       readmeLoading: false,
-      readmeChecking: true,
+      readmeChecking: false,
+      readmeLoaded: false,
+      timelineLoaded: false,
       isLoadingMore: false,
       targetConfigHeaders: [
         {title: "Key", key: "key", width: "240px"},
@@ -437,13 +439,27 @@ export default {
   },
   async created() {
     await this.fetchUser();
-    await this.fetchReadmeContent();
-    await this.fetchTimeline();
+    // 按当前 tab 懒加载内容，避免为无关 tab 预先发起请求。
+    this.ensureTabContent();
     if (this.isAdminViewer && this.user.id) {
       await this.loadTargetConfigs();
     }
   },
+  watch: {
+    "$route.query.tab"() {
+      this.ensureTabContent();
+    },
+  },
   methods: {
+    /** 根据当前 tab 决定需要加载哪些内容（仅在首次进入对应 tab 时请求）。 */
+    ensureTabContent() {
+      if (this.currentTab === "home" && !this.readmeLoaded && !this.readmeChecking) {
+        this.fetchReadmeContent();
+      }
+      if (this.currentTab === "timeline" && !this.timelineLoaded) {
+        this.fetchTimeline();
+      }
+    },
     async fetchUser() {
       this.user = await getUserByUsername(this.username);
       this.pageTitle = "" + this.user.display_name;
@@ -471,6 +487,8 @@ export default {
         }
       } catch (error) {
         console.error("Failed to fetch timeline:", error);
+      } finally {
+        this.timelineLoaded = true;
       }
     },
     async fetchReadmeContent() {
@@ -506,6 +524,7 @@ export default {
         this.readmeExists = false;
       } finally {
         this.readmeChecking = false;
+        this.readmeLoaded = true;
       }
     },
     async openOrCreateReadmeProject() {

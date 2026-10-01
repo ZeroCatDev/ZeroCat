@@ -135,7 +135,6 @@
 <script>
 import {localuser} from "@/services/localAccount";
 import {useHead} from "@unhead/vue";
-import {getAccount} from "@/services/accountService";
 import {ref, onMounted} from "vue";
 import {get} from "@/services/serverConfig";
 
@@ -178,7 +177,7 @@ export default {
     return {
       userCardLoading: false,
       localuser: localuser,
-      userInfo: {},
+      userInfo: { ...localuser.user.value },
       tab: "userInfo",
       tabItems: [
         {title: "用户信息", value: "userInfo", icon: "mdi-account-circle"},
@@ -196,14 +195,13 @@ export default {
       ],
       loading: false,
       error: null,
-      s3BucketUrl: '',
     };
   },
   setup() {
     useHead({title: "账户设置"});
     const s3BucketUrl = ref(null);
 
-    onMounted(async () => {
+    onMounted(() => {
       s3BucketUrl.value = get('s3.staticurl');
     });
 
@@ -211,20 +209,29 @@ export default {
       s3BucketUrl,
     };
   },
-  async mounted() {
-    this.s3BucketUrl = get('s3.staticurl');
-  },
   async created() {
-    await this.getUserById();
+    await this.syncUserInfo();
   },
   methods: {
-    async getUserById() {
+    /**
+     * 同步用户信息。
+     * 默认直接复用 store 中已加载的用户信息，只有本地不存在时才请求 /user/me，
+     * 避免与启动引导（bootstrap）产生重复并发请求。
+     */
+    async syncUserInfo(force = false) {
+      if (!force && !localuser.user.value?.id) {
+        force = true;
+      }
+
+      if (!force) {
+        this.userInfo = { ...localuser.user.value };
+        return;
+      }
+
       this.userCardLoading = true;
       try {
-        const response = await getAccount(localuser.user.value.id);
-        this.userInfo = response.data.data;
-      } catch (error) {
-        this.handleError(error);
+        const info = await localuser.fetchUserInfo();
+        if (info) this.userInfo = { ...info };
       } finally {
         this.userCardLoading = false;
       }
@@ -235,7 +242,7 @@ export default {
         "修改个人信息",
         response.data.message
       );
-      this.getUserById();
+      this.syncUserInfo(true);
     },
     handleUsernameUpdate(response) {
       this.showToast(
@@ -243,7 +250,7 @@ export default {
         "修改用户名",
         response.data.message
       );
-      this.getUserById();
+      this.syncUserInfo(true);
     },
     handlePasswordUpdate(response) {
       this.showToast(
@@ -258,7 +265,7 @@ export default {
         "修改头像",
         response.data.message
       );
-      this.getUserById();
+      this.syncUserInfo(true);
     },
     handleTokenCreated(response) {
       this.showToast(

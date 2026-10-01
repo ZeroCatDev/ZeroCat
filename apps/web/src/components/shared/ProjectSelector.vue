@@ -233,7 +233,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, nextTick } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import axios from '@/axios/axios';
 import { localuser } from '@/services/localAccount';
 import { getS3staticurl, getProjectInfoByNamespace } from '@/services/projectService';
@@ -485,9 +485,8 @@ watch(onlyMine, () => {
   }
 });
 
-onMounted(() => {
-  if (!props.compact) loadProjects();
-});
+// 注意：标准模式不在挂载时预取项目列表（对话框打开时按需加载），
+// 避免账户等页面在首屏产生额外并发请求。
 </script>
 
 <style scoped>

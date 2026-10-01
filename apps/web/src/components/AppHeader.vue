@@ -328,7 +328,7 @@ export default {
       this.$emit('open-composer');
     },
     reloadinfos() {
-      localuser.loadUser(true);
+      // 直接使用本地已有的用户信息跳转，避免点击头像时再发一次 /user/me
       this.$router.push('/' + localuser.user.value.username);
     },
     goHome() {
