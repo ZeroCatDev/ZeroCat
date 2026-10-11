@@ -1093,6 +1093,16 @@ const formattedContent = computed(() => {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
+  // HTML 属性级转义（用于 href 等属性值，须转义 & < > " 全部字符）
+  const escapeAttr = (s) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+  // twemoji 必须在还原 URL/提及 占位符之前执行：
+  // 否则 parse 会作用于已拼好的 <a href="..."> 属性值，把 emoji 替换成含字面引号的
+  // <img> 标签，导致 href 提前闭合而逃逸出属性上下文（存储型 XSS）。
+  // 此处文本里只剩纯文本与占位符（\x00..._\d+\x00 均不含 emoji），twemoji 输出安全。
+  text = twemoji.parse(text, TWEMOJI_SVG_OPTIONS);
+
   // @提及：先处理联邦式 @user@domain.tld，用占位符保护，防止本地提及正则破坏已生成的 HTML
   const mentionSegments = [];
   text = text.replace(
@@ -1119,11 +1129,11 @@ const formattedContent = computed(() => {
   // 还原联邦提及占位符
   text = text.replace(/\x00MENTION_(\d+)\x00/g, (_, idx) => mentionSegments[Number(idx)]);
 
-  // 还原 URL 占位符为 <a> 标签（href 使用原始 URL，不含 HTML 实体）
+  // 还原 URL 占位符为 <a> 标签（href 与显示文本均做完整属性转义）
   text = text.replace(/\x00URL_(\d+)\x00/g, (_, idx) => {
     const url = urlSegments[Number(idx)];
-    const safeHref = url.replace(/"/g, '&quot;');
-    const displayUrl = url.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const safeHref = escapeAttr(url);
+    const displayUrl = escapeAttr(url);
     return `<a href="${safeHref}" class="post-link" target="_blank" rel="noopener" onclick="event.stopPropagation()">${displayUrl}</a>`;
   });
 
@@ -1139,7 +1149,7 @@ const formattedContent = computed(() => {
     return `<pre class="blocks">${code}</pre>`;
   });
 
-  return twemoji.parse(text, TWEMOJI_SVG_OPTIONS);
+  return text;
 });
 
 const translationSourceText = computed(() => {
