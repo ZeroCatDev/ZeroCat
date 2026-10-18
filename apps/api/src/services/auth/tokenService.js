@@ -109,10 +109,53 @@ function refreshGraceKey(hash) {
     return REFRESH_GRACE_PREFIX + hash;
 }
 
-async function deleteTokenCacheKeys(keys) {
+export function tokenCacheKeysForRecords(records) {
+    return [...new Set(records.flatMap((record) => [
+        record.token_hash ? tokenCacheKey(record.token_hash) : null,
+        record.refresh_token_hash ? refreshGraceKey(record.refresh_token_hash) : null,
+    ]).filter(Boolean))];
+}
+
+/** Call only after the transaction that revoked/deleted these tokens commits. */
+export async function invalidateTokenCaches(keys) {
     const uniqueKeys = [...new Set(keys.filter(Boolean))];
-    if (uniqueKeys.length === 0) return;
-    await redisClient.deleteMany(uniqueKeys);
+    if (uniqueKeys.length === 0) return { success: true };
+    try {
+        if (await redisClient.deleteMany(uniqueKeys) !== true) {
+            throw new Error("Redis cache deletion returned false");
+        }
+        return { success: true };
+    } catch (error) {
+        logger.warn(`[token] 令牌缓存清理失败（数据库状态仍为鉴权依据）: ${error.message}`);
+        return { success: false };
+    }
+}
+
+async function findCurrentRefreshPair(tokenId, accessToken, refreshToken) {
+    if (
+        !Number.isInteger(tokenId) || tokenId <= 0
+        || !isValidRawTokenFormat(accessToken)
+        || !isValidRawTokenFormat(refreshToken)
+    ) return null;
+    const record = await prisma.ow_tokens.findUnique({
+        where: { id: tokenId },
+        select: {
+            id: true, type: true, token_hash: true, refresh_token_hash: true,
+            revoked: true, expires_at: true, refresh_expires_at: true, scopes: true,
+            user: { select: { id: true, status: true } },
+        },
+    });
+    const now = Date.now();
+    if (
+        !record || record.revoked
+        || !["session", "oauth"].includes(record.type)
+        || record.token_hash !== hashToken(accessToken)
+        || record.refresh_token_hash !== hashToken(refreshToken)
+        || record.user?.status !== "active"
+        || (record.expires_at && record.expires_at.getTime() <= now)
+        || (record.refresh_expires_at && record.refresh_expires_at.getTime() <= now)
+    ) return null;
+    return record;
 }
 
 async function getSessionAccessExpiry() {
@@ -304,29 +347,44 @@ export async function verifyToken(rawToken, ipAddress = null) {
         const cacheKey = tokenCacheKey(hash);
         const normalizedIp = normalizeIpAddress(ipAddress);
 
-        // 1. 尝试 Redis 缓存
-        let cached = await redisClient.get(cacheKey);
+        // 缓存只保存展示信息，令牌/账户是否有效始终以当前数据库记录为准。
+        const cached = await redisClient.get(cacheKey);
         if (cached) {
-            if (cached.expires_at && cached.expires_at < Date.now()) {
-                await redisClient.delete(cacheKey);
-            } else {
-                updateTokenActivity(cached.tokenId, normalizedIp).catch((e) =>
-                    logger.error(`更新令牌活动失败: ${e.message}`)
-                );
-                const scopes = await getEffectiveTokenScopes({
-                    userId: cached.user?.userid,
-                    type: cached.type,
-                    scopes: cached.scopes,
-                });
-                return {
-                    valid: true,
-                    user: cached.user,
-                    scopes,
-                    tokenType: cached.type,
-                    tokenId: cached.tokenId,
-                    applicationId: cached.applicationId || null,
-                };
+            const current = Number.isInteger(cached.tokenId) && cached.tokenId > 0
+                ? await prisma.ow_tokens.findUnique({
+                    where: { id: cached.tokenId },
+                    select: {
+                        token_hash: true, revoked: true, expires_at: true, type: true,
+                        user: { select: { id: true, status: true } },
+                    },
+                })
+                : null;
+            if (
+                !current || current.revoked || current.token_hash !== hash
+                || current.type !== cached.type
+                || current.user?.status !== "active"
+                || current.user.id !== cached.user?.userid
+                || (current.expires_at && current.expires_at.getTime() <= Date.now())
+            ) {
+                await invalidateTokenCaches([cacheKey]);
+                return { valid: false, message: "令牌已失效或用户账户状态异常" };
             }
+            updateTokenActivity(cached.tokenId, normalizedIp).catch((e) =>
+                logger.error(`更新令牌活动失败: ${e.message}`)
+            );
+            const scopes = await getEffectiveTokenScopes({
+                userId: current.user.id,
+                type: current.type,
+                scopes: cached.scopes,
+            });
+            return {
+                valid: true,
+                user: cached.user,
+                scopes,
+                tokenType: current.type,
+                tokenId: cached.tokenId,
+                applicationId: cached.applicationId || null,
+            };
         }
 
         // 2. 回落数据库
@@ -539,15 +597,25 @@ function serializeGracePayload(payload) {
 async function readGraceRefreshResult(refreshHash) {
     try {
         const cached = await redisClient.get(refreshGraceKey(refreshHash));
-        if (!cached?.accessToken) return null;
+        if (!cached?.accessToken || !cached.refreshToken) return null;
+        const current = await findCurrentRefreshPair(cached.tokenId, cached.accessToken, cached.refreshToken);
+        if (!current) {
+            await invalidateTokenCaches([refreshGraceKey(refreshHash)]);
+            return null;
+        }
+        const scopes = await getEffectiveTokenScopes({
+            userId: current.user.id, type: current.type, scopes: current.scopes,
+        });
+        // 获取策略期间可能有吊销/封禁或下一次轮换，返回前再核对当前令牌对。
+        if (!await findCurrentRefreshPair(cached.tokenId, cached.accessToken, cached.refreshToken)) return null;
         return {
             success: true,
             accessToken: cached.accessToken,
             refreshToken: cached.refreshToken,
-            expiresAt: cached.expiresAt ? new Date(cached.expiresAt) : null,
-            refreshExpiresAt: cached.refreshExpiresAt ? new Date(cached.refreshExpiresAt) : null,
-            tokenId: cached.tokenId,
-            scopes: normalizeScopes(cached.scopes),
+            expiresAt: current.expires_at,
+            refreshExpiresAt: current.refresh_expires_at,
+            tokenId: current.id,
+            scopes,
             fromGrace: true,
         };
     } catch {
@@ -558,11 +626,12 @@ async function readGraceRefreshResult(refreshHash) {
 async function storeGraceRefreshResult(refreshHash, payload) {
     if (!refreshHash) return;
     try {
-        await redisClient.set(
+        const stored = await redisClient.set(
             refreshGraceKey(refreshHash),
             serializeGracePayload(payload),
             REFRESH_GRACE_TTL_SEC
         );
+        if (!stored) logger.warn("[token] 写入刷新宽限期缓存失败");
     } catch (error) {
         logger.warn(`[token] 写入刷新宽限期缓存失败: ${error.message}`);
     }
@@ -612,9 +681,6 @@ export async function refreshAccessToken(rawRefreshToken, ipAddress = null, user
         const previousAccessHash = record.token_hash;
         const previousRefreshHash = refreshHash;
 
-        // 失效旧访问令牌缓存
-        await redisClient.delete(tokenCacheKey(previousAccessHash));
-
         const accessTokenExpiry =
             record.type === "oauth" ? DEFAULT_OAUTH_ACCESS_EXPIRY : await getSessionAccessExpiry();
         const refreshTokenExpiry =
@@ -632,7 +698,11 @@ export async function refreshAccessToken(rawRefreshToken, ipAddress = null, user
             where: {
                 id: record.id,
                 refresh_token_hash: previousRefreshHash,
+                token_hash: previousAccessHash,
                 revoked: false,
+                type: record.type,
+                user: { is: { status: "active" } },
+                OR: [{ refresh_expires_at: null }, { refresh_expires_at: { gt: new Date() } }],
             },
             data: {
                 token_hash: accessHash,
@@ -670,8 +740,14 @@ export async function refreshAccessToken(rawRefreshToken, ipAddress = null, user
             }),
         };
 
+        // 数据库轮换成功后再清理缓存；Redis 故障不能撤销已提交的轮换。
+        await invalidateTokenCaches([tokenCacheKey(previousAccessHash)]);
         // 旧刷新令牌宽限期：并发请求仍可拿到同一组最新令牌
         await storeGraceRefreshResult(previousRefreshHash, result);
+        // 吊销可能发生在轮换或策略查询之后，不能把已被踢出的令牌作为成功返回。
+        if (!await findCurrentRefreshPair(record.id, rawAccess, rawRefresh)) {
+            return { success: false, message: "令牌已失效或用户账户状态异常" };
+        }
 
         return result;
     } catch (error) {
@@ -685,21 +761,14 @@ export async function refreshAccessToken(rawRefreshToken, ipAddress = null, user
  * @param {number} tokenId
  * @returns {Promise<object>}
  */
-export async function revokeToken(tokenId) {
+export async function revokeToken(tokenId, options = {}) {
     try {
-        const record = await prisma.ow_tokens.findUnique({ where: { id: tokenId } });
+        const db = options.db ?? prisma;
+        const record = await db.ow_tokens.findUnique({ where: { id: tokenId } });
         if (!record) return { success: false, message: "令牌不存在" };
-        if (record.revoked) return { success: true, message: "令牌已被吊销" };
-
-        await prisma.ow_tokens.update({
-            where: { id: tokenId },
-            data: { revoked: true, revoked_at: new Date() },
-        });
-        await deleteTokenCacheKeys([
-            tokenCacheKey(record.token_hash),
-            record.refresh_token_hash ? refreshGraceKey(record.refresh_token_hash) : null,
-        ]);
-        return { success: true, message: "令牌已吊销" };
+        const result = await revokeTokensWhere({ id: tokenId }, options);
+        if (!result.success) return result;
+        return { ...result, message: record.revoked ? "令牌已被吊销" : "令牌已吊销" };
     } catch (error) {
         logger.error(`吊销令牌出错: ${error.message}`);
         return { success: false, message: "吊销令牌时出错" };
@@ -711,7 +780,7 @@ export async function revokeToken(tokenId) {
  * @param {string} rawRefreshToken
  * @returns {Promise<object>}
  */
-export async function revokeTokenByRefreshToken(rawRefreshToken) {
+export async function revokeTokenByRefreshToken(rawRefreshToken, options = {}) {
     try {
         const normalizedRefreshToken = normalizeRawToken(rawRefreshToken);
         if (!isValidRawTokenFormat(normalizedRefreshToken)) {
@@ -719,12 +788,13 @@ export async function revokeTokenByRefreshToken(rawRefreshToken) {
         }
 
         const refreshHash = hashToken(normalizedRefreshToken);
-        const record = await prisma.ow_tokens.findUnique({
+        const db = options.db ?? prisma;
+        const record = await db.ow_tokens.findUnique({
             where: { refresh_token_hash: refreshHash },
             select: { id: true },
         });
         if (!record) return { success: false, message: "刷新令牌不存在" };
-        return revokeToken(record.id);
+        return revokeToken(record.id, options);
     } catch (error) {
         logger.error(`通过刷新令牌吊销会话出错: ${error.message}`);
         return { success: false, message: "吊销令牌时出错" };
@@ -737,71 +807,49 @@ export async function revokeTokenByRefreshToken(rawRefreshToken) {
  * @param {number|null} [excludeTokenId]
  * @returns {Promise<object>}
  */
-export async function revokeAllUserTokens(userId, excludeTokenId = null) {
-    try {
-        const normalizedUserId = Number(userId);
-        if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) {
-            return { success: false, message: "无效的用户ID" };
-        }
-
-        const tokens = await prisma.ow_tokens.findMany({
-            where: {
-                user_id: normalizedUserId,
-                revoked: false,
-                ...(excludeTokenId ? { id: { not: excludeTokenId } } : {}),
-            },
-            select: { id: true, token_hash: true, refresh_token_hash: true },
-        });
-
-        await deleteTokenCacheKeys(tokens.flatMap((token) => [
-            tokenCacheKey(token.token_hash),
-            token.refresh_token_hash ? refreshGraceKey(token.refresh_token_hash) : null,
-        ]));
-
-        const result = await prisma.ow_tokens.updateMany({
-            where: {
-                user_id: normalizedUserId,
-                revoked: false,
-                ...(excludeTokenId ? { id: { not: excludeTokenId } } : {}),
-            },
-            data: { revoked: true, revoked_at: new Date() },
-        });
-
-        return { success: true, count: result.count };
-    } catch (error) {
-        logger.error(`吊销用户全部令牌出错: ${error.message}`);
-        return { success: false, message: "吊销失败" };
+export async function revokeAllUserTokens(userId, excludeTokenId = null, options = {}) {
+    const normalizedUserId = Number(userId);
+    if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) {
+        return { success: false, message: "无效的用户ID" };
     }
+    return revokeTokensWhere({
+        user_id: normalizedUserId,
+        ...(excludeTokenId ? { id: { not: excludeTokenId } } : {}),
+    }, options);
 }
 
 /**
  * 按条件吊销一批令牌并清理缓存。调用方必须传入收窄后的 where 条件。
  * @param {object} where Prisma ow_tokens where 条件
- * @returns {Promise<object>}
+ * @param {{db?:object,invalidateCache?:boolean}} [options] 事务客户端默认不清缓存，提交后调用 invalidateTokenCaches(cacheKeys)
+ * @returns {Promise<object>} DB 成功后 success 始终为 true；cacheInvalidated/warning 单独报告缓存故障
  */
-export async function revokeTokensWhere(where) {
+export async function revokeTokensWhere(where, { db = prisma, invalidateCache = db === prisma } = {}) {
     try {
-        if (!where || typeof where !== "object" || Object.keys(where).length === 0) {
+        if (!where || typeof where !== "object" || Array.isArray(where) || Object.keys(where).length === 0) {
             return { success: false, message: "缺少吊销条件" };
         }
 
-        const narrowedWhere = { ...where, revoked: false };
-        const tokens = await prisma.ow_tokens.findMany({
+        const narrowedWhere = { AND: [where, { revoked: false }] };
+        const tokens = await db.ow_tokens.findMany({
             where: narrowedWhere,
             select: { token_hash: true, refresh_token_hash: true },
         });
-
-        await deleteTokenCacheKeys(tokens.flatMap((token) => [
-            tokenCacheKey(token.token_hash),
-            token.refresh_token_hash ? refreshGraceKey(token.refresh_token_hash) : null,
-        ]));
-
-        const result = await prisma.ow_tokens.updateMany({
+        const result = await db.ow_tokens.updateMany({
             where: narrowedWhere,
             data: { revoked: true, revoked_at: new Date() },
         });
 
-        return { success: true, count: result.count };
+        // DB-first：任何旧缓存命中仍会检查当前行，Redis 故障不能复活已吊销令牌。
+        const cacheKeys = tokenCacheKeysForRecords(tokens);
+        const cacheResult = invalidateCache ? await invalidateTokenCaches(cacheKeys) : null;
+        return {
+            success: true,
+            count: result.count,
+            cacheKeys,
+            cacheInvalidated: cacheResult?.success ?? false,
+            ...(cacheResult && !cacheResult.success ? { warning: "令牌已吊销，但缓存清理失败" } : {}),
+        };
     } catch (error) {
         logger.error(`批量吊销令牌出错: ${error.message}`);
         return { success: false, message: "批量吊销令牌失败" };
@@ -911,6 +959,8 @@ export default {
     revokeToken,
     revokeTokenByRefreshToken,
     revokeTokensWhere,
+    invalidateTokenCaches,
+    tokenCacheKeysForRecords,
     revokeAllUserTokens,
     listUserTokens,
     introspectToken,

@@ -116,6 +116,9 @@
               v-user-hover
               v-html="formattedContent"
             />
+            <div v-if="isUnavailableRetweet" class="post-deleted-notice">
+              原帖已删除或不可用
+            </div>
 
             <div
               v-if="canTranslateFeatured"
@@ -458,6 +461,9 @@
             v-user-hover
             v-html="formattedContent"
           />
+          <div v-if="isUnavailableRetweet" class="post-deleted-notice">
+            原帖已删除或不可用
+          </div>
 
           <!-- 媒体展示 -->
           <div
@@ -933,6 +939,7 @@ const postId = computed(() => props.post?.id ?? props.post?.postId);
 const postType = computed(() => props.post?.type || "normal");
 const isDeleted = computed(() => props.post?.is_deleted === true);
 const isRetweet = computed(() => postType.value === "retweet");
+const isUnavailableRetweet = computed(() => isRetweet.value && !props.post?.retweet_of_id && !props.post?.retweet_post_id);
 
 // Author data
 const author = computed(() => props.post?.author || props.post?.user || {});

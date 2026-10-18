@@ -31,7 +31,7 @@
                 hide-details
                 label="搜索用户"
                 prepend-icon="mdi-magnify"
-                @input="debouncedSearch"
+                @update:model-value="debouncedSearch"
               ></v-text-field>
             </v-col>
             <v-col cols="12" sm="3">
@@ -42,7 +42,7 @@
                 hide-details
                 label="状态过滤"
                 prepend-icon="mdi-filter"
-                @change="loadUsers"
+                @update:model-value="applyFilters"
               ></v-select>
             </v-col>
             <v-col cols="12" sm="3">
@@ -53,7 +53,7 @@
                 hide-details
                 label="类型过滤"
                 prepend-icon="mdi-account-filter"
-                @change="loadUsers"
+                @update:model-value="applyFilters"
               ></v-select>
             </v-col>
             <v-col class="d-flex justify-end" cols="12" sm="2">
@@ -82,11 +82,12 @@
           :headers="headers"
           :items="users"
           :items-length="total"
+          :items-per-page-options="[10, 20, 50, 100, 200]"
           :loading="loading"
           :loading-text="'加载中...'"
           :no-data-text="'暂无数据'"
           :no-results-text="'未找到匹配的数据'"
-          @update:options="loadUsers"
+          @update:options="onTableOptions"
         >
           <!-- 用户头像和名称列 -->
           <template v-slot:item.username="{ item }">
@@ -140,64 +141,38 @@
               >
                 <v-icon>mdi-pencil</v-icon>
               </v-btn>
-              <v-btn
-                v-if="item.type !== 'administrator'"
-                v-tooltip="'删除用户'"
-                class="action-btn"
-                icon
-                small
-                @click.stop="confirmDelete(item)"
-              >
-                <v-icon>mdi-delete</v-icon>
-              </v-btn>
+              <v-menu>
+                <template #activator="{ props }">
+                  <v-btn v-bind="props" v-tooltip="'管理用户'" class="action-btn" icon="mdi-dots-vertical" size="small" variant="text" :aria-label="`管理用户 ${item.username}`" />
+                </template>
+                <v-list density="compact">
+                  <v-list-item title="账号状态 / 封禁与恢复" prepend-icon="mdi-account-lock" @click="manageUser(item, 'account')" />
+                  <v-list-item title="登录设备" prepend-icon="mdi-devices" @click="manageUser(item, 'sessions')" />
+                  <v-list-item title="分类清理 / 永久删除" prepend-icon="mdi-database-cog" @click="manageUser(item, 'data')" />
+                </v-list>
+              </v-menu>
             </v-slide-x-transition>
           </template>
         </v-data-table-server>
       </v-card>
 
       <!-- 用户编辑对话框 -->
-      <user-editor v-model="editDialog" :user="selectedUser" @save="saveUser"/>
-
-      <!-- 删除确认对话框 -->
-      <v-dialog
-        v-model="deleteDialog"
-        max-width="400px"
-        transition="dialog-bottom-transition"
-      >
-        <v-card>
-          <v-card-title class="headline error--text">确认删除</v-card-title>
-          <v-card-text class="pt-4">
-            <v-alert dense text type="warning">
-              此操作将永久删除用户
-              <strong>{{ selectedUser?.username }}</strong>
-              及其所有相关数据，此操作不可撤销。
-            </v-alert>
-            <v-text-field
-              v-model="deleteConfirmation"
-              :rules="[
-                (v) => !v || v === selectedUser?.username || '用户名不匹配',
-              ]"
-              class="mt-4"
-              dense
-              label="请输入用户名以确认删除"
-              outlined
-            ></v-text-field>
-          </v-card-text>
-          <v-card-actions>
-            <v-spacer></v-spacer>
-            <v-btn text @click="deleteDialog = false">取消</v-btn>
-            <v-btn
-              :disabled="deleteConfirmation !== selectedUser?.username"
-              :loading="deleting"
-              color="error"
-              text
-              @click="deleteUser"
-            >
-              确认删除
-            </v-btn>
-          </v-card-actions>
-        </v-card>
-      </v-dialog>
+      <user-editor
+        v-if="selectedUser"
+        :key="`${selectedUser.id}-${editorVersion}`"
+        v-model="editDialog"
+        :user="selectedUser"
+        :saving="saving"
+        :save-error="saveError"
+        @save="saveUser"
+      />
+      <user-management-dialog
+        v-if="managedUser"
+        v-model="managementDialog"
+        :user="managedUser"
+        :initial-tab="managementTab"
+        @changed="onManagementChanged"
+      />
 
       <!-- 全局提示 -->
       <v-snackbar
@@ -224,6 +199,7 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/zh-cn";
 import UserEditor from "@/components/admin/UserEditor.vue";
+import UserManagementDialog from "@/components/admin/UserManagementDialog.vue";
 
 dayjs.extend(relativeTime);
 dayjs.locale("zh-cn");
@@ -231,7 +207,8 @@ dayjs.locale("zh-cn");
 export default {
   name: 'UsersPage',
   components: {
-    UserEditor
+    UserEditor,
+    UserManagementDialog,
   },
   data() {
     return {
@@ -248,6 +225,13 @@ export default {
       total: 0,
       loading: false,
       refreshing: false,
+      saving: false,
+      saveError: "",
+      editorVersion: 0,
+      listRequest: 0,
+      managementDialog: false,
+      managementTab: "account",
+      managedUser: null,
       options: {
         page: 1,
         itemsPerPage: 10,
@@ -273,6 +257,7 @@ export default {
         },
       ],
       searchQuery: "",
+      debouncedSearch: null,
       statusFilter: "",
       typeFilter: "",
       statusOptions: [
@@ -284,13 +269,11 @@ export default {
       typeOptions: [
         {title: "访客", value: "guest"},
         {title: "普通用户", value: "user"},
-        {title: "管理员", value: "administrator"},
+        {title: "管理员", value: "admin"},
+        {title: "管理员（兼容类型）", value: "administrator"},
       ],
       editDialog: false,
-      deleteDialog: false,
-      deleteConfirmation: "",
       selectedUser: null,
-      deleting: false,
       snackbar: {
         show: false,
         text: "",
@@ -299,40 +282,52 @@ export default {
       }
     }
   },
+  created() {
+    this.debouncedSearch = debounce(() => this.applyFilters(), 300);
+  },
+  mounted() {
+    this.loadUserStats();
+  },
+  beforeUnmount() {
+    this.debouncedSearch.cancel();
+    this.listRequest++;
+  },
   methods: {
-    async loadUsers() {
+    async loadUsers({silent = false} = {}) {
+      const request = ++this.listRequest;
       this.loading = true;
       try {
+        const sort = this.options.sortBy[0];
         const params = {
           page: this.options.page,
           itemsPerPage: this.options.itemsPerPage,
-          sort_by: this.options.sortBy[0] || "id",
-          sort_order: this.options.sortDesc[0] ? "desc" : "asc",
+          sort_by: typeof sort === "object" ? sort.key : (sort || "id"),
+          sort_order: typeof sort === "object" ? sort.order : (this.options.sortDesc[0] ? "desc" : "asc"),
         };
-
         if (this.searchQuery) params.search = this.searchQuery;
         if (this.statusFilter) params.status = this.statusFilter;
         if (this.typeFilter) params.type = this.typeFilter;
-
         const {data} = await axios.get("/admin/users", {params});
-
+        if (request !== this.listRequest) return false;
+        const total = Number(data.total);
+        const maxPage = this.options.itemsPerPage > 0 ? Math.max(1, Math.ceil(total / this.options.itemsPerPage)) : 1;
+        if (this.options.page > maxPage) {
+          this.options.page = maxPage;
+          return await this.loadUsers({silent});
+        }
         this.users = data.items.map((user) => ({
           ...user,
-          id: user.id,
-          username: user.username,
           email: user.email || "",
           status: user.status || "pending",
           type: user.type || "user",
-          regTime: user.regTime,
-          avatar: user.avatar,
         }));
-
-        this.total = Number(data.total);
+        this.total = total;
+        return true;
       } catch (error) {
-        this.showError("加载用户列表失败");
-        console.error("Error loading users:", error);
+        if (request === this.listRequest && !silent) this.showError(this.errorMessage(error, "加载用户列表失败"));
+        return false;
       } finally {
-        this.loading = false;
+        if (request === this.listRequest) this.loading = false;
       }
     },
 
@@ -340,72 +335,97 @@ export default {
       try {
         const {data} = await axios.get("/admin/users/stats/overview");
         this.userStats[0].value = data.totalUsers;
-        this.userStats[1].value = data.usersByStatus.find((s) => s.status === "active")?._count || 0;
-      } catch (error) {
-        console.error("Error loading user stats:", error);
+        const activeCount = data.usersByStatus.find((s) => s.status === "active")?._count;
+        this.userStats[1].value = typeof activeCount === "number" ? activeCount : (activeCount?._all || 0);
+        return true;
+      } catch {
+        return false;
       }
     },
 
     async refreshData() {
       if (this.refreshing || this.loading) return;
-
       this.refreshing = true;
       try {
-        await Promise.all([this.loadUsers(), this.loadUserStats()]);
-        this.showSuccess("数据已更新");
-      } catch (error) {
-        this.showError("刷新数据失败");
-        console.error("Error refreshing data:", error);
+        const refreshed = await Promise.all([this.loadUsers({silent: true}), this.loadUserStats()]);
+        if (refreshed.every(Boolean)) this.showSuccess("数据已更新");
+        else this.showError("部分数据刷新失败，请重试");
       } finally {
         this.refreshing = false;
       }
     },
 
+    onTableOptions(options) {
+      this.options.page = options.page;
+      this.options.itemsPerPage = options.itemsPerPage;
+      this.options.sortBy = options.sortBy || [];
+      this.loadUsers();
+    },
+
+    applyFilters() {
+      this.options.page = 1;
+      this.loadUsers();
+    },
+
     editUser(user) {
-      this.selectedUser = user;
+      if (this.saving) return;
+      this.selectedUser = {...user};
+      this.editorVersion++;
+      this.saveError = "";
       this.editDialog = true;
     },
 
     async saveUser(userData) {
+      if (this.saving) return;
+      this.saving = true;
+      this.saveError = "";
       try {
-        const {data} = await axios.put(
-          `/admin/users/${userData.id}`,
-          userData
-        );
-
+        // PUT returns the user DTO itself, not a {user} wrapper.
+        const {data} = await axios.put(`/admin/users/${userData.id}`, userData);
         const index = this.users.findIndex((u) => u.id === userData.id);
-        if (index !== -1) {
-          this.users[index] = {...this.users[index], ...data};
-        }
-
-        this.showSuccess("用户信息更新成功");
+        if (index !== -1) this.users[index] = {...this.users[index], ...data};
+        this.editDialog = false;
+        await this.refreshAfterChange("用户信息更新成功");
       } catch (error) {
-        this.showError(error.response?.data?.error || "保存用户信息失败");
-        console.error("Error saving user:", error);
-        throw error;
-      }
-    },
-
-    confirmDelete(user) {
-      this.selectedUser = user;
-      this.deleteConfirmation = "";
-      this.deleteDialog = true;
-    },
-
-    async deleteUser() {
-      this.deleting = true;
-      try {
-        await axios.delete(`/admin/users/${this.selectedUser.id}`);
-        this.showSuccess("用户删除成功");
-        this.loadUsers();
-        this.loadUserStats();
-        this.deleteDialog = false;
-      } catch (error) {
-        this.showError("删除用户失败");
-        console.error("Error deleting user:", error);
+        this.saveError = this.errorMessage(error, "保存用户信息失败");
+        this.showError(this.saveError);
       } finally {
-        this.deleting = false;
+        this.saving = false;
       }
+    },
+
+    manageUser(user, tab) {
+      this.managedUser = {...user};
+      this.managementTab = tab;
+      this.managementDialog = true;
+    },
+
+    async onManagementChanged({user, deleted, result}) {
+      if (deleted) {
+        this.users = this.users.filter(item => item.id !== user.id);
+        this.total = Math.max(0, this.total - 1);
+      } else {
+        const index = this.users.findIndex(item => item.id === user.id);
+        if (index !== -1) this.users[index] = {...this.users[index], ...user};
+      }
+      // Non-delete results remain visible, with counts and warnings, in the dialog.
+      await this.refreshAfterChange(deleted ? (result?.message || "账号已永久删除") : "操作已完成", result?.warnings || [], deleted);
+    },
+
+    async refreshAfterChange(message, warnings = [], notify = true) {
+      const refreshed = await Promise.all([this.loadUsers({silent: true}), this.loadUserStats()]);
+      const messages = [message, ...warnings];
+      if (refreshed.some(ok => !ok)) messages.push("操作已完成，但列表或统计刷新失败，请手动刷新；勿重复提交操作");
+      if (!notify && refreshed.every(Boolean)) return;
+      if (warnings.length > 0 || refreshed.some(ok => !ok)) {
+        this.snackbar = {show: true, text: messages.join("；"), color: "warning", timeout: 10_000};
+      } else {
+        this.showSuccess(message);
+      }
+    },
+
+    errorMessage(error, fallback) {
+      return error.response?.data?.message || error.response?.data?.error || fallback;
     },
 
     getStatusText(status) {
@@ -414,6 +434,7 @@ export default {
     },
 
     getTypeText(type) {
+      if (["admin", "administrator"].includes(type)) return "管理员";
       const option = this.typeOptions.find((opt) => opt.value === type);
       return option ? option.title : type;
     },
@@ -460,14 +481,6 @@ export default {
         timeout: 5000,
       };
     },
-
-    debouncedSearch: debounce(function () {
-      this.loadUsers();
-    }, 300)
-  },
-  mounted() {
-    this.loadUsers();
-    this.loadUserStats();
   }
 }
 </script>

@@ -16,7 +16,7 @@
           {{ userData.username }}
         </v-card-subtitle>
         <template v-slot:append>
-          <v-btn icon @click="close">
+          <v-btn :disabled="saving" icon @click="close">
             <v-icon>mdi-close</v-icon>
           </v-btn>
         </template>
@@ -24,7 +24,10 @@
       <v-divider></v-divider>
 
       <v-card-text class="pt-4">
-        <v-form ref="editForm" v-model="formValid">
+        <v-alert v-if="saveError" class="mb-4" type="error" variant="tonal">
+          {{ saveError }}
+        </v-alert>
+        <v-form ref="editForm" v-model="formValid" :disabled="saving">
           <v-tabs
             :model-value="tabIndex"
             @update:model-value="onTabChange"
@@ -399,9 +402,9 @@
       <v-divider></v-divider>
       <v-card-actions>
         <v-spacer></v-spacer>
-        <v-btn text @click="close">取消</v-btn>
+        <v-btn :disabled="saving" text @click="close">取消</v-btn>
         <v-btn
-          :disabled="!formValid || saving"
+          :disabled="!formValid || saving || validating"
           :loading="saving"
           color="primary"
           @click="save"
@@ -646,6 +649,14 @@ export default {
       type: Boolean,
       required: true,
     },
+    saving: {
+      type: Boolean,
+      default: false,
+    },
+    saveError: {
+      type: String,
+      default: "",
+    },
     user: {
       type: Object,
       required: true,
@@ -660,7 +671,7 @@ export default {
       // 表单控制
       tabIndex: 1,
       formValid: true,
-      saving: false,
+      validating: false,
       showRegionSelector: false,
       selectedRegion: null,
       regionOptions: [], // 添加regionOptions到data中
@@ -677,6 +688,7 @@ export default {
         {text: "访客", value: "guest"},
         {text: "普通用户", value: "user"},
         {text: "管理员", value: "admin"},
+        {text: "管理员（兼容类型）", value: "administrator"},
       ],
       sexOptions: [
         {text: "男", value: "male"},
@@ -764,9 +776,9 @@ export default {
 
   computed: {
     isCurrentUserAdmin() {
-      const currentUser = this.localuser.user?.value || {};
+      const currentUser = localuser.user.value || {};
       return (
-        currentUser.type === "administrator" || currentUser.role === "admin"
+        ["admin", "administrator"].includes(currentUser.type) || currentUser.role === "admin"
       );
     },
   },
@@ -914,6 +926,7 @@ export default {
     },
 
     close() {
+      if (this.saving) return;
       this.$emit("update:modelValue", false);
     },
 
@@ -1074,15 +1087,15 @@ export default {
     },
 
     async save() {
-      if (!this.$refs.editForm.validate()) return;
-
-      this.saving = true;
+      if (this.saving || this.validating) return;
+      this.validating = true;
       try {
-        await this.$emit("save", this.userData);
-        this.close();
+        const {valid} = await this.$refs.editForm.validate();
+        if (valid) this.$emit("save", {...this.userData});
       } finally {
-        this.saving = false;
+        this.validating = false;
       }
+      // The parent owns the HTTP request and closes only after it succeeds.
     },
 
     // 初始化连接数据

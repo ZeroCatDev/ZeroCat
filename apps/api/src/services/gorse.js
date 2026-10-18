@@ -413,7 +413,7 @@ export async function insertProjects(projects) {
 /**
  * 将项目标记为隐藏（删除/私有时）
  */
-export async function hideProject(projectId) {
+export async function hideProject(projectId, { throwOnError = false } = {}) {
     try {
         const client = await getClient();
         if (!client) return;
@@ -424,6 +424,7 @@ export async function hideProject(projectId) {
         logger.debug(`[gorse] 项目已隐藏: ${projectId}`);
     } catch (error) {
         logger.warn(`[gorse] 隐藏项目 ${projectId} 失败:`, error.message);
+        if (throwOnError) throw error;
     }
 }
 
@@ -480,7 +481,7 @@ export async function insertPosts(posts) {
 /**
  * 将帖子标记为隐藏（删除时）
  */
-export async function hidePost(postId) {
+export async function hidePost(postId, { throwOnError = false } = {}) {
     try {
         const client = await getClient();
         if (!client) return;
@@ -491,6 +492,7 @@ export async function hidePost(postId) {
         logger.debug(`[gorse] 帖子已隐藏: ${postId}`);
     } catch (error) {
         logger.warn(`[gorse] 隐藏帖子 ${postId} 失败:`, error.message);
+        if (throwOnError) throw error;
     }
 }
 

@@ -1,6 +1,14 @@
 import {Router} from "express";
 import {prisma} from "../../services/prisma.js";
 import {validateUsername} from "../../services/global.js";
+import logger from "../../services/logger.js";
+import zcconfig from "../../services/config/zcconfig.js";
+import {requireSudo} from "../../middleware/sudo.js";
+import * as tokenService from "../../services/auth/tokenService.js";
+import {
+    createUserManagementService, USER_FIELDS, CONTACT_FIELDS, SESSION_FIELDS,
+    safeContact, safeUser, UserManagementError,
+} from "../../services/admin/userManagementService.js";
 import {
     assignDefaultRolesToUser,
     assignRoleToUser,
@@ -8,11 +16,48 @@ import {
     getUserRoleAssignments,
     listRoles,
     replaceUserRoles,
+    clearUserPolicyCache,
+    policyAllowsScope,
     revokeRoleFromUser,
     SYSTEM_ROLE_KEYS,
 } from "../../services/auth/policyEngine.js";
 
 const router = Router();
+
+const userManagement = createUserManagementService({
+    db: prisma,
+    tokens: tokenService,
+    policyAllowsScope,
+    getConfiguredAdmins: () => zcconfig.get("security.adminusers"),
+    assignAdminRole: (id, actorId, db) => assignRoleToUser(id, SYSTEM_ROLE_KEYS.ADMIN, {
+        assignedBy: actorId, reason: "admin-update-user-type", db,
+    }),
+    revokeAdminRole: (id, db) => revokeRoleFromUser(id, SYSTEM_ROLE_KEYS.ADMIN, { db }),
+    clearPolicyCache: clearUserPolicyCache,
+    afterCleanup: async (result) => {
+        const gorse = await import("../../services/gorse.js");
+        const jobs = [
+            ...(result.postIds || []).map((id) => () => gorse.hidePost(id, { throwOnError: true })),
+            ...(result.projectIds || []).map((id) => () => gorse.hideProject(id, { throwOnError: true })),
+        ];
+        let failures = 0;
+        for (let offset = 0; offset < jobs.length; offset += 10) {
+            const results = await Promise.allSettled(jobs.slice(offset, offset + 10).map((run) => run()));
+            failures += results.filter(({ status }) => status === "rejected").length;
+        }
+        return failures ? [`本站数据已清理，但 ${failures} 项推荐数据隐藏失败，请稍后检查服务日志`] : [];
+    },
+});
+
+function managementError(res, error) {
+    const status = error instanceof UserManagementError ? error.status
+        : error.status || (String(error.code || "").startsWith("CLEANUP_") ? 409 : 500);
+    logger.error("[admin-users] 管理操作失败", { code: error.code, message: error.message });
+    return res.status(status).json({
+        code: status === 500 ? "USER_OPERATION_FAILED" : error.code,
+        message: status === 500 ? "操作失败，数据未完成变更，请联系管理员检查日志" : error.message,
+    });
+}
 
 const USER_TARGET_TYPE = "user";
 const MAX_ITEMS_PER_PAGE = 200;
@@ -447,18 +492,20 @@ router.get("/", async (req, res) => {
             where.AND.push({type});
         }
 
-        // Build sort object
-        const orderBy = {
-            [sortBy]: sortDesc ? "desc" : "asc",
-        };
+        const requestedSort = req.query.sort_by || sortBy;
+        const sortable = new Set(["id", "username", "display_name", "email", "status", "type", "regTime", "loginTime"]);
+        const direction = req.query.sort_order === "desc" || sortDesc === true || sortDesc === "true" ? "desc" : "asc";
+        const orderBy = { [sortable.has(requestedSort) ? requestedSort : "id"]: direction };
+        const currentPage = Math.max(1, Number.parseInt(page, 10) || 1);
+        const pageSize = Math.min(MAX_ITEMS_PER_PAGE, Math.max(1, Number.parseInt(itemsPerPage, 10) || 10));
 
         // Execute query with pagination
         const [items, total] = await Promise.all([
             prisma.ow_users.findMany({
                 where,
                 orderBy,
-                skip: (page - 1) * itemsPerPage,
-                take: Number(itemsPerPage),
+                skip: (currentPage - 1) * pageSize,
+                take: pageSize,
                 select: {
                     id: true,
                     username: true,
@@ -504,40 +551,21 @@ router.get("/", async (req, res) => {
  */
 router.get("/:id", async (req, res) => {
     try {
+        const userId = parseUserId(req.params.id);
+        if (!userId) throw new UserManagementError(400, "INVALID_USER_ID", "无效用户 ID");
         const user = await prisma.ow_users.findUnique({
-            where: {id: parseInt(req.params.id)},
-            include: {
-                contacts: true,
-                authored_projects: {
-                    select: {
-                        id: true,
-                        name: true,
-                        title: true,
-                        state: true,
-                        time: true,
-                    },
-                },
-                auth_tokens: {
-                    select: {
-                        id: true,
-                        created_at: true,
-                        last_used_at: true,
-                        last_used_ip: true,
-                        user_agent: true,
-                        revoked: true,
-                    },
-                },
+            where: { id: userId },
+            select: {
+                ...USER_FIELDS,
+                contacts: { select: CONTACT_FIELDS },
+                authored_projects: { select: { id: true, name: true, title: true, state: true, time: true } },
+                tokens: { select: SESSION_FIELDS, take: 20, orderBy: { created_at: "desc" } },
             },
         });
-
-        if (!user) {
-            return res.status(404).json({error: "User not found"});
-        }
-
-        res.json(user);
+        if (!user) throw new UserManagementError(404, "USER_NOT_FOUND", "用户不存在");
+        res.json({ ...safeUser(user), authored_projects: user.authored_projects, auth_tokens: user.tokens });
     } catch (error) {
-        console.error("Error fetching user:", error);
-        res.status(500).json({error: "Internal server error"});
+        managementError(res, error);
     }
 });
 
@@ -614,7 +642,7 @@ router.post("/", async (req, res) => {
             return createdUser;
         });
 
-        res.status(201).json(user);
+        res.status(201).json(safeUser(user));
     } catch (error) {
         console.error("Error creating user:", error);
         res.status(500).json({error: "Internal server error"});
@@ -650,16 +678,11 @@ router.post("/", async (req, res) => {
  */
 router.put("/:id", async (req, res) => {
     try {
-        const userId = parseInt(req.params.id);
-        const updates = req.body;
+        const userId = parseUserId(req.params.id);
+        if (!userId) throw new UserManagementError(400, "INVALID_USER_ID", "无效用户 ID");
+        const updates = { ...req.body };
 
-        // Validate user exists
-        const existingUser = await prisma.ow_users.findUnique({
-            where: {id: userId},
-            include: {
-                contacts: true,
-            },
-        });
+        const existingUser = await userManagement.findUser(userId);
 
         if (!existingUser) {
             return res.status(404).json({error: "User not found"});
@@ -686,49 +709,8 @@ router.put("/:id", async (req, res) => {
             }
         }
 
-        // Remove sensitive fields that shouldn't be updated directly
-        delete updates.id;
-        delete updates.regTime;
-        delete updates.password; // Password should be handled separately with proper hashing
-
-        // Handle contact updates if provided
-        if (updates.contacts) {
-            // Validate contacts array
-            if (!Array.isArray(updates.contacts)) {
-                return res.status(400).json({error: "Contacts must be an array"});
-            }
-
-            // Process each contact
-            await Promise.all(
-                updates.contacts.map((contact) =>
-                    prisma.ow_users_contacts.upsert({
-                        where: {
-                            contact_value: contact.contact_value,
-                        },
-                        update: {
-                            contact_type: contact.contact_type,
-                            contact_info: contact.contact_info,
-                            is_primary: contact.is_primary,
-                            verified: contact.verified,
-                            metadata: contact.metadata,
-                            updated_at: new Date(),
-                        },
-                        create: {
-                            user_id: userId,
-                            contact_type: contact.contact_type,
-                            contact_value: contact.contact_value,
-                            contact_info: contact.contact_info,
-                            is_primary: contact.is_primary,
-                            verified: contact.verified,
-                            metadata: contact.metadata,
-                        },
-                    })
-                )
-            );
-
-            // Remove contacts from updates object as it's handled separately
-            delete updates.contacts;
-        }
+        // Connections have their own ownership-checked management endpoints.
+        delete updates.contacts;
 
         // Handle avatar update
         if (updates.avatar) {
@@ -758,45 +740,18 @@ router.put("/:id", async (req, res) => {
                     }
                     break;
                 case "featured_projects":
-                    // Only include if it's a non-empty array
-                    if (Array.isArray(value) && value.length > 0) {
-                        cleanUpdates[key] = value;
-                    }
+                    cleanUpdates[key] = Array.isArray(value) ? (value[0] ? Number(value[0]) : null)
+                        : value === null ? null : Number(value);
                     break;
                 default:
                     cleanUpdates[key] = value;
             }
         }
 
-        // Add updatedAt timestamp
-        cleanUpdates.updatedAt = new Date();
-
-        // Update user record
-        const user = await prisma.ow_users.update({
-            where: {id: userId},
-            data: cleanUpdates,
-            include: {
-                contacts: true,
-            },
-        });
-        if (Object.prototype.hasOwnProperty.call(cleanUpdates, "type")) {
-            const normalizedType = String(cleanUpdates.type || "").toLowerCase();
-            if (["admin", "administrator"].includes(normalizedType)) {
-                await assignRoleToUser(userId, SYSTEM_ROLE_KEYS.ADMIN, {
-                    assignedBy: res.locals.userid || null,
-                    reason: "admin-update-user-type",
-                });
-            } else {
-                await revokeRoleFromUser(userId, SYSTEM_ROLE_KEYS.ADMIN);
-            }
-        }
-
-        res.json(user);
+        const user = await userManagement.update(userId, res.locals.userid, cleanUpdates);
+        res.json({ ...safeUser(user), warnings: user.warnings });
     } catch (error) {
-        console.error("Error updating user:", error);
-        res
-            .status(500)
-            .json({error: "Internal server error", details: error.message});
+        managementError(res, error);
     }
 });
 
@@ -808,87 +763,53 @@ router.put("/:id", async (req, res) => {
  *
  * @apiParam {Number} id User ID
  */
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireSudo, async (req, res) => {
     try {
-        const userId = parseInt(req.params.id);
-
-        // Optional: Check if user exists
-        const user = await prisma.ow_users.findUnique({
-            where: {id: userId},
-        });
-
-        if (!user) {
-            return res.status(404).json({error: "User not found"});
-        }
-
-        // Delete user and all related data in a transaction
-        await prisma.$transaction(async (prisma) => {
-            // Delete events where user is actor
-            await prisma.ow_events.deleteMany({
-                where: {actor_id: userId},
-            });
-
-            // Delete notifications
-            await prisma.ow_notifications.deleteMany({
-                where: {
-                    OR: [{user_id: userId}, {actor_id: userId}],
-                },
-            });
-
-            // Delete auth tokens
-            await prisma.ow_tokens.deleteMany({
-                where: {user_id: userId},
-            });
-
-            // Delete user contacts
-            await prisma.ow_users_contacts.deleteMany({
-                where: {user_id: userId},
-            });
-
-            // Delete user relationships
-            await prisma.ow_user_relationships.deleteMany({
-                where: {
-                    OR: [{source_user_id: userId}, {target_user_id: userId}],
-                },
-            });
-
-            // Delete OAuth related data
-            await prisma.ow_oauth_access_tokens.deleteMany({
-                where: {user_id: userId},
-            });
-
-            await prisma.ow_oauth_authorizations.deleteMany({
-                where: {user_id: userId},
-            });
-
-            // Delete user's OAuth applications
-            await prisma.ow_oauth_applications.deleteMany({
-                where: {owner_id: userId},
-            });
-
-            // Delete user's comments
-            await prisma.ow_comment.deleteMany({
-                where: {user_id: userId},
-            });
-
-            // Delete user's KV store data
-            await prisma.ow_cache_kv.deleteMany({
-                where: {user_id: userId},
-            });
-
-            // Finally delete the user
-            await prisma.ow_users.delete({
-                where: {id: userId},
-            });
-        });
-
-        res.status(204).send();
+        res.json(await userManagement.cleanup(req.params.id, res.locals.userid, req.body || {}, true));
     } catch (error) {
-        console.error("Error deleting user:", error);
-        res.status(500).json({
-            error: "Internal server error",
-            details: error.message,
-        });
+        managementError(res, error);
+    }
+});
+
+router.get("/:id/data-summary", async (req, res) => {
+    try {
+        res.json(await userManagement.summary(req.params.id, res.locals.userid));
+    } catch (error) {
+        managementError(res, error);
+    }
+});
+
+router.post("/:id/cleanup", requireSudo, async (req, res) => {
+    try {
+        res.json(await userManagement.cleanup(req.params.id, res.locals.userid, req.body || {}));
+    } catch (error) {
+        managementError(res, error);
+    }
+});
+
+router.get("/:id/sessions", async (req, res) => {
+    try {
+        const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+        const limit = Math.min(MAX_ITEMS_PER_PAGE, Math.max(1, Number.parseInt(req.query.itemsPerPage, 10) || 20));
+        res.json(await userManagement.sessions(req.params.id, page, limit));
+    } catch (error) {
+        managementError(res, error);
+    }
+});
+
+router.delete("/:id/sessions/:tokenId", async (req, res) => {
+    try {
+        res.json(await userManagement.revokeSessions(req.params.id, res.locals.userid, req.params.tokenId));
+    } catch (error) {
+        managementError(res, error);
+    }
+});
+
+router.post("/:id/sessions/revoke-all", async (req, res) => {
+    try {
+        res.json(await userManagement.revokeSessions(req.params.id, res.locals.userid));
+    } catch (error) {
+        managementError(res, error);
     }
 });
 
@@ -903,25 +824,10 @@ router.delete("/:id", async (req, res) => {
  */
 router.post("/:id/status", async (req, res) => {
     try {
-        const userId = parseInt(req.params.id);
-        const {status} = req.body;
-
-        if (!["active", "suspended", "banned", "pending"].includes(status)) {
-            return res.status(400).json({error: "Invalid status"});
-        }
-
-        const user = await prisma.ow_users.update({
-            where: {id: userId},
-            data: {
-                status,
-                updatedAt: new Date(),
-            },
-        });
-
-        res.json(user);
+        const user = await userManagement.changeStatus(req.params.id, res.locals.userid, req.body?.status);
+        res.json({ ...user, message: "用户状态已更新" });
     } catch (error) {
-        console.error("Error updating user status:", error);
-        res.status(500).json({error: "Internal server error"});
+        managementError(res, error);
     }
 });
 
@@ -1008,7 +914,7 @@ router.put("/:id/profile", async (req, res) => {
             },
         });
 
-        res.json(user);
+        res.json(safeUser(user));
     } catch (error) {
         console.error("Error updating user profile:", error);
         res.status(500).json({error: "Internal server error"});
@@ -1038,7 +944,7 @@ router.put("/:id/avatar", async (req, res) => {
             },
         });
 
-        res.json(user);
+        res.json(safeUser(user));
     } catch (error) {
         console.error("Error updating user avatar:", error);
         res.status(500).json({error: "Internal server error"});
@@ -1127,6 +1033,7 @@ router.get("/:id/activity", async (req, res) => {
             // Get auth tokens
             prisma.ow_tokens.findMany({
                 where: {user_id: userId},
+                select: SESSION_FIELDS,
                 orderBy: {last_used_at: "desc"},
                 take: 5,
             }),
@@ -1257,12 +1164,13 @@ router.get("/:id/connections", async (req, res) => {
 
         const connections = await prisma.ow_users_contacts.findMany({
             where,
+            select: CONTACT_FIELDS,
             orderBy: {
                 created_at: "desc",
             },
         });
 
-        res.json(connections);
+        res.json(connections.map(safeContact));
     } catch (error) {
         console.error("Error fetching user connections:", error);
         res.status(500).json({error: "Internal server error"});

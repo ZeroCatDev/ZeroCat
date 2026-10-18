@@ -25,6 +25,8 @@
     "lint:all": "turbo run lint",
     "typecheck:all": "turbo run typecheck",
     "test:permissions": "node scripts/test-token-permissions.js",
+    "test:admin-users": "node --experimental-test-module-mocks --test apps/api/src/services/admin/*.test.js apps/api/src/services/auth/tokenService.test.js",
+    "test:admin-users:db": "pnpm --filter ./apps/api exec node --import tsx --test src/services/admin/userManagement.integration.test.js",
     "dev:blog": "pnpm --filter ./apps/blog dev",
     "build:blog": "pnpm --filter ./apps/blog build"
   },
