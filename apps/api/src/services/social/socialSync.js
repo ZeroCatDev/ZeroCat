@@ -3,6 +3,7 @@ import { Client as TwitterClient, auth as twitterAuth } from 'twitter-api-sdk';
 import { prisma } from '../prisma.js';
 import zcconfig from '../config/zcconfig.js';
 import logger from '../logger.js';
+import { visibleWhere, assertCanWrite } from '../moderation/visibility.js';
 import { getUserAtprotoSyncDid, restoreAtprotoSyncAgent } from './atprotoSyncOAuth.js';
 
 const USER_TARGET_TYPE = 'user';
@@ -475,9 +476,9 @@ function normalizePlatformRefs(refs) {
     return refs;
 }
 
-async function getPostForEvent(postId) {
-    return prisma.ow_posts.findUnique({
-        where: { id: Number(postId) },
+async function getPostForEvent(postId, { includeHidden = false } = {}) {
+    return prisma.ow_posts.findFirst({
+        where: { id: Number(postId), ...(includeHidden ? {} : { AND: [await visibleWhere('post')] }) },
         select: {
             id: true,
             author_id: true,
@@ -607,8 +608,8 @@ async function resolveExternalFromOriginalEmbed(embed, frontend) {
     const staticBase = await getStaticBaseUrl();
 
     if (embed.type === 'user' && embed.id) {
-        const user = await prisma.ow_users.findUnique({
-            where: { id: Number(embed.id) },
+        const user = await prisma.ow_users.findFirst({
+            where: { id: Number(embed.id), AND: [await visibleWhere('profile')] },
             select: {
                 username: true,
                 display_name: true,
@@ -626,8 +627,8 @@ async function resolveExternalFromOriginalEmbed(embed, frontend) {
     }
 
     if (embed.type === 'project' && embed.id) {
-        const project = await prisma.ow_projects.findUnique({
-            where: { id: Number(embed.id) },
+        const project = await prisma.ow_projects.findFirst({
+            where: { id: Number(embed.id), state: 'public', AND: [await visibleWhere('project')] },
             select: {
                 id: true,
                 name: true,
@@ -654,8 +655,8 @@ async function resolveExternalFromOriginalEmbed(embed, frontend) {
     }
 
     if (embed.type === 'list' && embed.id) {
-        const list = await prisma.ow_projects_lists.findUnique({
-            where: { id: Number(embed.id) },
+        const list = await prisma.ow_projects_lists.findFirst({
+            where: { id: Number(embed.id), state: 'public', AND: [await visibleWhere('list')] },
             select: {
                 id: true,
                 title: true,
@@ -678,8 +679,8 @@ async function resolveExternalFromOriginalEmbed(embed, frontend) {
     }
 
     if (embed.type === 'post' && embed.id) {
-        const refPost = await prisma.ow_posts.findUnique({
-            where: { id: Number(embed.id) },
+        const refPost = await prisma.ow_posts.findFirst({
+            where: { id: Number(embed.id), AND: [await visibleWhere('post')] },
             select: {
                 id: true,
                 content: true,
@@ -1191,6 +1192,20 @@ export async function syncSocialEvent({ actorUserId, postId, eventType }) {
         return { skipped: true, reason: 'invalid_event_payload' };
     }
 
+    try {
+        await assertCanWrite(uid, 'posts', 'sync');
+    } catch (error) {
+        if (error.statusCode === 403 || error.status === 403) return { skipped: true, reason: 'actor_restricted' };
+        throw error;
+    }
+    if (type !== SOCIAL_EVENT_TYPES.POST_DELETE) {
+        const current = await prisma.ow_posts.findFirst({ where: { id: pid, AND: [await visibleWhere('post')] } });
+        if (!current) return { skipped: true, reason: 'post_unavailable' };
+        if ([SOCIAL_EVENT_TYPES.POST_CREATE, SOCIAL_EVENT_TYPES.POST_REPLY, SOCIAL_EVENT_TYPES.POST_QUOTE].includes(type) && current.author_id !== uid) {
+            return { skipped: true, reason: 'actor_mismatch' };
+        }
+    }
+
     // ActivityPub 联邦同步（独立于平台同步设置）
     try {
         const { syncPostToActivityPub } = await import('../activitypub/outbox.js');
@@ -1205,7 +1220,7 @@ export async function syncSocialEvent({ actorUserId, postId, eventType }) {
         return { skipped: true, reason: 'sync_disabled' };
     }
 
-    const post = await getPostForEvent(pid);
+    const post = await getPostForEvent(pid, { includeHidden: type === SOCIAL_EVENT_TYPES.POST_DELETE });
     if (!post) {
         return { skipped: true, reason: 'post_not_found' };
     }

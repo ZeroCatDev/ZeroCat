@@ -1,4 +1,5 @@
-import { ref } from "vue";
+import { computed, ref } from "vue";
+import { canAccessAdmin, hasCapability } from '@/services/permissions';
 import { defineStore } from "pinia";
 import axiosInstance, {
   authClient,
@@ -346,6 +347,10 @@ export const useAuthStore = defineStore("auth", () => {
   const isLogin = ref(initialAuthState.isLogin);
   const hasAuthHint = ref(initialAuthState.hasHint);
   const authReady = ref(initialAuthState.ready);
+  const readonly = computed(() => user.value.readonly === true);
+  const isReadonly = (category) => readonly.value || (user.value.restrictions || []).some(item => item.type === 'readonly' && !item.revoked_at && (!item.expires_at || new Date(item.expires_at).getTime() > Date.now()) && (item.categories || []).some(value => value === '*' || value === category));
+  const canAdmin = computed(() => canAccessAdmin(user.value));
+  const can = (scope) => hasCapability(user.value, scope);
   const devices = ref([]);
   const activeTokens = ref([]);
   const currentTokenDetails = ref(null);
@@ -565,6 +570,9 @@ export const useAuthStore = defineStore("auth", () => {
           username: data.data.username,
           type: data.data.type,
           isAdmin: data.data.isAdmin === true,
+          capabilities: Array.isArray(data.data.capabilities) ? data.data.capabilities : [],
+          readonly: data.data.readonly === true,
+          restrictions: (Array.isArray(data.data.restrictions) ? data.data.restrictions : []).filter(item => item.type === 'readonly'),
         };
         localStorage.setItem(USER_INFO_KEY, JSON.stringify(user.value));
         isLogin.value = true;
@@ -1013,6 +1021,7 @@ export const useAuthStore = defineStore("auth", () => {
   // ============================
 
   const updateUserProfile = async (profileData) => {
+    if (isReadonly('profile')) return false;
     try {
       const response = await axiosInstance({
         url: "/user/update-profile",
@@ -1075,6 +1084,11 @@ export const useAuthStore = defineStore("auth", () => {
       resetStoreState();
     });
 
+    window.addEventListener('accountReadonly', () => {
+      user.value = { ...user.value, readonly: true };
+      void fetchUserInfo();
+    });
+
     // Axios layer completed a reactive token refresh (e.g., on 401 retry).
     // Sync store state. Only reschedule if this wasn't triggered by our own
     // proactive doRefreshCycle (which handles its own rescheduling).
@@ -1097,6 +1111,7 @@ export const useAuthStore = defineStore("auth", () => {
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState !== "visible") return;
       if (!getToken()) return;
+      void fetchUserInfo();
 
       if (
         TokenRefreshScheduler.isOverdue() ||
@@ -1140,6 +1155,7 @@ export const useAuthStore = defineStore("auth", () => {
         await loadUser();
         // 本地状态可用后立即放行 UI，令牌维护放到后台，不阻塞首屏。
         authReady.value = true;
+        void fetchUserInfo();
         void initializeTokenRefresh().catch((err) =>
           console.error("[Auth] Token refresh init failed:", err)
         );
@@ -1153,6 +1169,7 @@ export const useAuthStore = defineStore("auth", () => {
         if (ok) {
           await loadUser();
           authReady.value = true;
+          void fetchUserInfo();
           void initializeTokenRefresh().catch((err) =>
             console.error("[Auth] Token refresh init failed:", err)
           );
@@ -1178,6 +1195,10 @@ export const useAuthStore = defineStore("auth", () => {
     tokenExpiresAt,
     refreshTokenExpiresAt,
     user,
+    readonly,
+    isReadonly,
+    canAdmin,
+    can,
     isLogin,
     authReady,
     hasAuthHint,

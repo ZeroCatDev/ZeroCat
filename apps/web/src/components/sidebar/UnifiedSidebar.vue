@@ -50,7 +50,7 @@
 
       <!-- Post Button -->
       <v-btn
-        v-if="isLogin && !authPending"
+        v-if="isLogin && !authPending && !localuser.isReadonly('posts')"
         color="primary"
         :size="isSmallScreen ? 'large' : 'x-large'"
         rounded="pill"
@@ -98,6 +98,7 @@ import { useDisplay } from 'vuetify';
 import { useSidebarContent } from '@/composables/useSidebarContent';
 import { openPostDialog } from '@/composables/usePostDialog';
 import AccountUserSkeleton from '@/components/account/AccountUserSkeleton.vue';
+import { localuser } from '@/services/localAccount';
 
 const props = defineProps({
   mode: {

@@ -57,6 +57,14 @@ model ow_projects {
   history        Boolean   @default(true)
   fork           Int?
   star_count     Int       @default(0)
+  deleted_at     DateTime? @db.Timestamp(6)
+  deleted_by     Int?
+  deletion_source String?  @db.VarChar(32)
+  deletion_reason String?  @db.VarChar(1000)
+  is_shadowbanned Boolean  @default(false)
+  shadowban_expires_at DateTime? @db.Timestamp(6)
+  shadowban_by   Int?
+  shadowban_reason String? @db.VarChar(1000)
 
   // 关联
   author            ow_users?                   @relation("ProjectAuthor", fields: [authorid], references: [id], onDelete: SetNull, onUpdate: SetNull)
@@ -70,6 +78,9 @@ model ow_projects {
   collaboration_invitations ow_project_collaboration_invitations[] @relation("ProjectCollaborationInvitations")
 
   @@index([state])
+  @@index([deleted_at, state, time(sort: Desc)])
+  @@index([authorid, deleted_at])
+  @@index([is_shadowbanned, shadowban_expires_at])
   @@index([authorid])
   @@index([time(sort: Desc)])
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_ow_projects_name_trgm")
@@ -138,6 +149,11 @@ model ow_users {
   comment_service_users   ow_comment_service_users[] @relation("CommentServiceUser")
   embedding_updates       ow_user_embedding_updates[]
   notification_settings ow_notification_settings[]
+  restrictions            ow_user_restrictions[] @relation("UserRestrictions")
+  direct_permissions      ow_user_permissions[]  @relation("UserDirectPermissions")
+  delegations_sent        ow_permission_delegations[] @relation("DelegationGrantor")
+  delegations_received    ow_permission_delegations[] @relation("DelegationDelegate")
+  linked_service_comments ow_comment_service[] @relation("CommentAccountUser")
   role_assignments        ow_user_roles[]         @relation("UserRoleAssignments")
   assigned_role_records   ow_user_roles[]         @relation("UserRoleAssignedBy")
   sent_project_collaboration_invitations ow_project_collaboration_invitations[] @relation("ProjectCollaborationInviter")
@@ -168,6 +184,8 @@ model ow_roles {
 
   permissions ow_role_permissions[] @relation("RolePermissions")
   users       ow_user_roles[]        @relation("RoleAssignments")
+  parents     ow_role_inheritance[]  @relation("InheritedRole")
+  children    ow_role_inheritance[]  @relation("ParentRole")
 
   @@index([system])
   @@index([priority])
@@ -219,6 +237,81 @@ model ow_user_roles {
   @@index([grant_type])
   @@index([target_type, target_id])
   @@map("ow_user_roles")
+}
+
+// 子角色继承父角色的权限，写入服务以串行事务检查有向无环关系。
+model ow_role_inheritance {
+  role_id        Int
+  parent_role_id Int
+  created_at     DateTime @default(now()) @db.Timestamp(6)
+  role           ow_roles @relation("InheritedRole", fields: [role_id], references: [id], onDelete: Cascade)
+  parent_role    ow_roles @relation("ParentRole", fields: [parent_role_id], references: [id], onDelete: Cascade)
+
+  @@id([role_id, parent_role_id])
+  @@index([parent_role_id])
+}
+
+model ow_user_permissions {
+  id          Int @id @default(autoincrement())
+  user_id     Int
+  scope       String @db.VarChar(160)
+  effect      String @default("allow") @db.VarChar(16)
+  target_type String @default("global") @db.VarChar(64)
+  target_id   String @default("global") @db.VarChar(64)
+  assigned_by Int?
+  reason      String? @db.VarChar(1000)
+  expires_at  DateTime? @db.Timestamp(6)
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+  updated_at  DateTime @default(now()) @updatedAt @db.Timestamp(6)
+  user        ow_users @relation("UserDirectPermissions", fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, scope, effect, target_type, target_id])
+  @@index([user_id, target_type, target_id])
+  @@index([expires_at])
+  @@index([assigned_by])
+}
+
+model ow_permission_delegations {
+  id          Int @id @default(autoincrement())
+  grantor_id  Int
+  delegate_id Int
+  target_type String @db.VarChar(64)
+  target_id   String @db.VarChar(64)
+  scopes      Json
+  status      String @default("pending") @db.VarChar(16)
+  reason      String? @db.VarChar(1000)
+  expires_at  DateTime? @db.Timestamp(6)
+  accepted_at DateTime? @db.Timestamp(6)
+  revoked_at  DateTime? @db.Timestamp(6)
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+  updated_at  DateTime @default(now()) @updatedAt @db.Timestamp(6)
+  grantor     ow_users @relation("DelegationGrantor", fields: [grantor_id], references: [id], onDelete: Cascade)
+  delegate    ow_users @relation("DelegationDelegate", fields: [delegate_id], references: [id], onDelete: Cascade)
+
+  @@index([grantor_id, status])
+  @@index([delegate_id, status])
+  @@index([target_type, target_id])
+  @@index([expires_at])
+}
+
+model ow_user_restrictions {
+  id          Int @id @default(autoincrement())
+  user_id     Int
+  type        String @db.VarChar(16)
+  categories  String[] @default(["*"])
+  reason      String? @db.VarChar(1000)
+  starts_at   DateTime @default(now()) @db.Timestamp(6)
+  expires_at  DateTime? @db.Timestamp(6)
+  created_by  Int?
+  revoked_at  DateTime? @db.Timestamp(6)
+  revoked_by  Int?
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+  user        ow_users @relation("UserRestrictions", fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, type, revoked_at, expires_at])
+  @@index([type, starts_at, expires_at])
+  @@index([created_by])
+  @@index([revoked_by])
 }
 
 // 项目合作者邀请表
@@ -1009,6 +1102,14 @@ model ow_posts {
   like_count        Int       @default(0)
   bookmark_count    Int       @default(0)
   is_deleted        Boolean   @default(false)
+  deleted_at        DateTime? @db.Timestamp(6)
+  deleted_by        Int?
+  deletion_source   String? @db.VarChar(32)
+  deletion_reason   String? @db.VarChar(1000)
+  is_shadowbanned   Boolean @default(false)
+  shadowban_expires_at DateTime? @db.Timestamp(6)
+  shadowban_by      Int?
+  shadowban_reason  String? @db.VarChar(1000)
   embed             Json?     // 嵌入资源 { type: 'project'|'list'|'user', id, ...其他参数 }
   platform_refs     Json?     // 各平台关联ID映射 { bluesky: { uri, cid }, twitter: { id } }
   created_at        DateTime  @default(now()) @db.Timestamp(6)
@@ -1040,6 +1141,8 @@ model ow_posts {
   @@index([post_type])
   @@index([is_deleted])
   @@index([is_deleted, created_at(sort: Desc)])
+  @@index([author_id, is_deleted, created_at(sort: Desc)])
+  @@index([is_shadowbanned, shadowban_expires_at])
   @@index([thread_root_id, created_at(sort: Asc)])
   @@index([embedding_at])
   @@index([content(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_ow_posts_content_trgm")
@@ -1144,6 +1247,8 @@ model ow_comment_service {
   id          Int       @id @default(autoincrement())
   space_id    Int
   user_id     String?   @db.VarChar(64)
+  account_user_id Int?
+  account_user ow_users? @relation("CommentAccountUser", fields: [account_user_id], references: [id], onDelete: SetNull)
   nick        String?   @db.VarChar(128)
   mail        String?   @db.VarChar(255)
   link        String?   @db.VarChar(255)
@@ -1166,6 +1271,7 @@ model ow_comment_service {
   @@index([space_id, insertedAt(sort: Desc)])
   @@index([space_id, rid])
   @@index([space_id, user_id])
+  @@index([account_user_id])
   @@index([space_id, ip])
   @@index([comment(ops: raw("gin_trgm_ops"))], type: Gin, map: "idx_ow_comment_service_comment_trgm")
   @@map("ow_comment_service")

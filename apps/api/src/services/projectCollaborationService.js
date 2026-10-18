@@ -22,6 +22,8 @@ import {
     SYSTEM_ROLE_KEYS,
 } from "./auth/rolePermissions.js";
 import { createNotification } from "../controllers/notifications.js";
+import { visibleWhere, canViewContent, sanitizeProfile } from "./moderation/visibility.js";
+import { assertCanWrite } from "./moderation/restrictions.js";
 
 export const PROJECT_TARGET_TYPE = "project";
 export const COLLABORATION_GRANT_TYPE = "collaboration";
@@ -52,7 +54,7 @@ async function getProject(projectId) {
     if (!Number.isInteger(id) || id <= 0) return null;
     return prisma.ow_projects.findUnique({
         where: { id },
-        select: { id: true, name: true, title: true, authorid: true, state: true, type: true },
+        select: { id: true, name: true, title: true, authorid: true, state: true, type: true, deleted_at: true, is_shadowbanned: true, shadowban_expires_at: true },
     });
 }
 
@@ -80,29 +82,22 @@ export async function getCollabScopes(userId, projectId) {
     return getUserResourceRoleScopes(userId, PROJECT_TARGET_TYPE, String(projectId));
 }
 
-/** 用户能否对项目执行某动作：作者放行全部；删除永远仅作者；其余看协作角色 scope。 */
+/** 通过统一策略检查项目动作，协作管理员角色本身不授予删除权。 */
 export async function userCanActOnProject(userId, projectId, action) {
-    const project = await getProject(projectId);
-    if (!project) return false;
-    if (Number(project.authorid) === Number(userId)) return true;
-    if (action === "delete") return false;
-    const scopes = await getCollabScopes(userId, project.id);
-    return scopeSatisfies(scopes, `project:${action}`);
+    const { authorize } = await import("./auth/authorization.js");
+    const decision = await authorize({ userId, requiredScope: `project:${Number(projectId)}:${action}`, tokenType: "session" });
+    return decision.allowed;
 }
 
-/** 是否可管理协作者（邀请/移除/改角色）：作者或拥有 project:manage 的管理员协作者。 */
+/** 是否可管理协作者（邀请/移除/改角色）。 */
 export async function canManageCollaborators(userId, projectId) {
-    const project = await getProject(projectId);
-    if (!project) return false;
-    if (Number(project.authorid) === Number(userId)) return true;
-    const scopes = await getCollabScopes(userId, project.id);
-    return scopeSatisfies(scopes, "project:manage");
+    return userCanActOnProject(userId, projectId, "manage");
 }
 
 /** 是否为项目作者或在册协作者（用于成员名单可见性）。 */
 export async function isProjectMemberOrOwner(userId, projectId) {
     const project = await getProject(projectId);
-    if (!project) return false;
+    if (!project || !(await canViewContent("project", project, userId))) return false;
     if (Number(project.authorid) === Number(userId)) return true;
     const scopes = await getCollabScopes(userId, project.id);
     return scopes.length > 0;
@@ -120,7 +115,7 @@ export async function getMyProjectAccess(userId, { projectId, authorname, projec
         if (Number.isInteger(id) && id > 0) {
             project = await prisma.ow_projects.findUnique({
                 where: { id },
-                select: { id: true, authorid: true, state: true },
+                select: { id: true, authorid: true, state: true, type: true, deleted_at: true, is_shadowbanned: true, shadowban_expires_at: true },
             });
         }
     } else if (authorname && projectname) {
@@ -131,45 +126,27 @@ export async function getMyProjectAccess(userId, { projectId, authorname, projec
         if (author) {
             project = await prisma.ow_projects.findFirst({
                 where: { name: String(projectname), authorid: author.id },
-                select: { id: true, authorid: true, state: true },
+                select: { id: true, authorid: true, state: true, type: true, deleted_at: true, is_shadowbanned: true, shadowban_expires_at: true },
             });
         }
     }
-    if (!project) return null;
+    if (!project || !(await canViewContent("project", project, userId))) return null;
 
     const uid = Number(userId) || 0;
     const isOwner = uid > 0 && Number(project.authorid) === uid;
-    if (isOwner) {
-        return {
-            project_id: project.id,
-            is_owner: true,
-            role_key: "owner",
-            can_read: true,
-            can_edit: true,
-            can_manage: true,
-        };
-    }
-
-    const isPublic = project.state === "public";
     const scopes = uid > 0 ? await getCollabScopes(uid, project.id) : [];
-    const canReadViaCollab = scopeSatisfies(scopes, "project:read");
-    if (!isPublic && !canReadViaCollab) return null; // 私有且无权访问：当作不存在
-
-    const canManage = scopeSatisfies(scopes, "project:manage");
-    const canEdit = scopeSatisfies(scopes, "project:update");
-    const roleKey = canManage
-        ? "project_manager"
-        : canEdit
-            ? "project_editor"
-            : canReadViaCollab
-                ? "project_viewer"
-                : null;
-
+    const [canEdit, canManage] = uid > 0 ? await Promise.all([
+        userCanActOnProject(uid, project.id, "update"),
+        userCanActOnProject(uid, project.id, "manage"),
+    ]) : [false, false];
+    const roleKey = isOwner ? "owner" : scopeSatisfies(scopes, "project:manage")
+        ? "project_manager" : scopeSatisfies(scopes, "project:update")
+            ? "project_editor" : scopeSatisfies(scopes, "project:read") ? "project_viewer" : null;
     return {
         project_id: project.id,
-        is_owner: false,
+        is_owner: isOwner,
         role_key: roleKey,
-        can_read: isPublic || canReadViaCollab,
+        can_read: true,
         can_edit: canEdit,
         can_manage: canManage,
     };
@@ -222,8 +199,10 @@ function formatInvitation(invitation) {
 
 /** 邀请合作者。 */
 export async function inviteCollaborator({ projectId, inviterId, inviteeIdentifier, roleKey, message }) {
+    await assertCanWrite(inviterId, "project", "manage");
     const project = await getProject(projectId);
-    if (!project) throw new CollaborationError("项目不存在", 404);
+    if (!project || !(await canViewContent("project", project, inviterId))) throw new CollaborationError("项目不存在", 404);
+    if (project.type === "article") await assertCanWrite(inviterId, "blog", "manage");
     if (!isCollaborationRole(roleKey)) throw new CollaborationError("无效的协作角色", 400);
     if (!(await canManageCollaborators(inviterId, project.id))) {
         throw new CollaborationError("无权管理该项目的合作者", 403);
@@ -286,6 +265,7 @@ export async function inviteCollaborator({ projectId, inviterId, inviteeIdentifi
 
 /** 受邀者接受 / 拒绝邀请。 */
 export async function respondToInvitation({ invitationId, userId, accept }) {
+    await assertCanWrite(userId, "project", "manage");
     const invitation = await prisma.ow_project_collaboration_invitations.findUnique({
         where: { id: Number(invitationId) },
     });
@@ -310,6 +290,14 @@ export async function respondToInvitation({ invitationId, userId, accept }) {
         return { status: "declined" };
     }
 
+    const project = await getProject(invitation.project_id);
+    if (!project || !(await canViewContent("project", project, userId, { ignorePrivacy: true }))) throw new CollaborationError("项目不存在", 404);
+    if (!(await canManageCollaborators(invitation.inviter_id, project.id))) throw new CollaborationError("邀请已失效", 409);
+    await assertCanWrite(invitation.inviter_id, "project", "manage");
+    if (project.type === "article") {
+        await assertCanWrite(invitation.inviter_id, "blog", "manage");
+        await assertCanWrite(userId, "blog", "manage");
+    }
     await prisma.$transaction(async (tx) => {
         await tx.ow_project_collaboration_invitations.update({
             where: { id: invitation.id },
@@ -326,7 +314,6 @@ export async function respondToInvitation({ invitationId, userId, accept }) {
         });
     });
 
-    const project = await getProject(invitation.project_id);
     const responder = await prisma.ow_users.findUnique({
         where: { id: Number(userId) },
         select: { username: true, display_name: true },
@@ -357,32 +344,41 @@ export async function listReceivedInvitations(userId) {
             project: {
                 select: {
                     id: true, name: true, title: true, state: true, type: true,
-                    author: { select: { username: true, display_name: true } },
+                    authorid: true, deleted_at: true, is_shadowbanned: true, shadowban_expires_at: true,
+                    author: { select: { id: true, username: true, display_name: true } },
                 },
             },
             inviter: { select: { id: true, username: true, display_name: true, avatar: true } },
         },
     });
-    return rows.map(formatInvitation);
+    const visible = await Promise.all(rows.map(async (invitation) => {
+        if (!(await canViewContent("project", invitation.project, userId, { ignorePrivacy: true }))) return null;
+        return formatInvitation({
+            ...invitation,
+            project: { ...invitation.project, author: await sanitizeProfile(invitation.project.author, userId) },
+            inviter: await sanitizeProfile(invitation.inviter, userId),
+        });
+    }));
+    return visible.filter(Boolean);
 }
 
 /** 项目作者/成员：成员名单 + 待处理邀请。 */
-export async function listProjectMembers(projectId) {
+export async function listProjectMembers(projectId, viewerId) {
     const project = await getProject(projectId);
-    if (!project) throw new CollaborationError("项目不存在", 404);
+    if (!project || !(await isProjectMemberOrOwner(viewerId, projectId))) throw new CollaborationError("项目不存在", 404);
 
     const grants = await listResourceGrants(PROJECT_TARGET_TYPE, String(project.id));
-    const collaborators = grants
+    const collaborators = await Promise.all(grants
         .filter((grant) => isCollaborationRole(grant.role_key))
-        .map((grant) => ({
+        .map(async (grant) => ({
             user_id: grant.user_id,
-            user: grant.user,
+            user: await sanitizeProfile(grant.user, viewerId),
             role_key: grant.role_key,
             role_label: COLLABORATION_ROLE_LABELS[grant.role_key] || grant.role_name,
             grant_type: grant.grant_type,
-            assigned_by_user: grant.assigned_by_user,
+            assigned_by_user: await sanitizeProfile(grant.assigned_by_user, viewerId),
             created_at: grant.created_at,
-        }));
+        })));
 
     const invitationRows = await prisma.ow_project_collaboration_invitations.findMany({
         where: {
@@ -402,14 +398,18 @@ export async function listProjectMembers(projectId) {
             authorid: project.authorid,
         },
         collaborators,
-        invitations: invitationRows.map(formatInvitation),
+        invitations: await Promise.all(invitationRows.map(async (invitation) => formatInvitation({
+            ...invitation, invitee: await sanitizeProfile(invitation.invitee, viewerId),
+        }))),
     };
 }
 
 /** 作者/管理员：修改某成员的协作角色。 */
 export async function updateMemberRole({ projectId, actorId, memberUserId, roleKey }) {
+    await assertCanWrite(actorId, "project", "manage");
     const project = await getProject(projectId);
-    if (!project) throw new CollaborationError("项目不存在", 404);
+    if (!project || !(await canViewContent("project", project, actorId))) throw new CollaborationError("项目不存在", 404);
+    if (project.type === "article") await assertCanWrite(actorId, "blog", "manage");
     if (!isCollaborationRole(roleKey)) throw new CollaborationError("无效的协作角色", 400);
     if (!(await canManageCollaborators(actorId, project.id))) {
         throw new CollaborationError("无权管理该项目的合作者", 403);
@@ -453,8 +453,10 @@ async function revokeAllCollaborationRoles(tx, userId, projectId) {
 
 /** 作者/管理员：移除成员。 */
 export async function removeMember({ projectId, actorId, memberUserId }) {
+    await assertCanWrite(actorId, "project", "manage");
     const project = await getProject(projectId);
-    if (!project) throw new CollaborationError("项目不存在", 404);
+    if (!project || !(await canViewContent("project", project, actorId))) throw new CollaborationError("项目不存在", 404);
+    if (project.type === "article") await assertCanWrite(actorId, "blog", "manage");
     if (!(await canManageCollaborators(actorId, project.id))) {
         throw new CollaborationError("无权管理该项目的合作者", 403);
     }
@@ -467,8 +469,10 @@ export async function removeMember({ projectId, actorId, memberUserId }) {
 
 /** 协作者：主动离开项目（自助解除）。 */
 export async function leaveProject({ projectId, userId }) {
+    await assertCanWrite(userId, "project", "manage");
     const project = await getProject(projectId);
-    if (!project) throw new CollaborationError("项目不存在", 404);
+    if (!project || !(await canViewContent("project", project, userId))) throw new CollaborationError("项目不存在", 404);
+    if (project.type === "article") await assertCanWrite(userId, "blog", "manage");
     if (Number(project.authorid) === Number(userId)) {
         throw new CollaborationError("项目作者不能离开自己的项目", 400);
     }
@@ -478,6 +482,10 @@ export async function leaveProject({ projectId, userId }) {
 
 /** 作者/管理员：取消待处理邀请。 */
 export async function cancelInvitation({ projectId, actorId, invitationId }) {
+    await assertCanWrite(actorId, "project", "manage");
+    const project = await getProject(projectId);
+    if (!project || !(await canViewContent("project", project, actorId))) throw new CollaborationError("项目不存在", 404);
+    if (project.type === "article") await assertCanWrite(actorId, "blog", "manage");
     const invitation = await prisma.ow_project_collaboration_invitations.findUnique({
         where: { id: Number(invitationId) },
     });
@@ -505,16 +513,17 @@ export async function listMyCollaborations(userId) {
     const projectIds = [...new Set(projectGrants.map((grant) => Number(grant.target_id)).filter(Boolean))];
     const projects = projectIds.length
         ? await prisma.ow_projects.findMany({
-            where: { id: { in: projectIds } },
+            where: { AND: [{ id: { in: projectIds } }, await visibleWhere("project", userId)] },
             select: {
                 id: true, name: true, title: true, state: true, type: true,
-                author: { select: { username: true, display_name: true } },
+                author: { select: { id: true, username: true, display_name: true } },
             },
         })
         : [];
-    const projectMap = new Map(projects.map((project) => [project.id, project]));
+    const safeProjects = await Promise.all(projects.map(async (project) => ({ ...project, author: await sanitizeProfile(project.author, userId) })));
+    const projectMap = new Map(safeProjects.map((project) => [project.id, project]));
 
-    return projectGrants.map((grant) => ({
+    return projectGrants.filter((grant) => projectMap.has(Number(grant.target_id))).map((grant) => ({
         grant_id: grant.id,
         role_key: grant.role_key,
         role_label: COLLABORATION_ROLE_LABELS[grant.role_key] || grant.role_name,

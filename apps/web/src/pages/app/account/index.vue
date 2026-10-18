@@ -190,6 +190,8 @@ export default {
         {title: "关系", value: "relationships", icon: "mdi-account-group", to: "/app/account/relationships"},
         {title: "通知", value: "notifications", icon: "mdi-bell"},
         {title: "令牌", value: "tokens", icon: "mdi-key"},
+        {title: "授权委托", value: "delegations", icon: "mdi-account-arrow-right", to: "/app/account/delegations"},
+        {title: "回收站", value: "recycle-bin", icon: "mdi-delete-restore", to: "/app/account/recycle-bin"},
         {title: "开发者", value: "developer", icon: "mdi-account-group", to: "/app/services"},
 
       ],

@@ -63,6 +63,7 @@ function validateStatus(status) {
 
 export function createUserManagementService({
     db, tokens, policyAllowsScope, getConfiguredAdmins,
+    getPolicy = async (userId, options) => (await import("../auth/policyEngine.js")).getUserPolicy(userId, options),
     assignAdminRole, revokeAdminRole, clearPolicyCache, afterCleanup = async () => [],
     cleanupData = cleanupUserData, summarizeData = getUserDataSummary,
 }) {
@@ -86,18 +87,19 @@ export function createUserManagementService({
     }
 
     async function protections(user, actorId, client = db, configuredAdmins = null) {
-        const [configured, assignments] = await Promise.all([
+        const [configured, assignments, effectivePolicy] = await Promise.all([
             configuredAdmins ?? getConfiguredAdmins(),
             client.ow_user_roles.findMany({
                 where: { user_id: user.id, target_type: "global", OR: [{ expires_at: null }, { expires_at: { gt: new Date() } }] },
                 select: { role: { select: { key: true, permissions: { select: { scope: true, effect: true } } } } },
             }),
+            getPolicy(user.id, { db: client, useCache: false }),
         ]);
         const assignedAdmin = assignments.some(({ role }) => role.key === "admin"
             || role.permissions.some((permission) => permission.effect === "allow"
                 && policyAllowsScope({ allow: [permission.scope], deny: [], roles: [] }, "admin:manage")));
         const self = user.id === Number(actorId);
-        const admin = assignedAdmin || ADMIN_TYPES.has(String(user.type).toLowerCase())
+        const admin = assignedAdmin || policyAllowsScope(effectivePolicy, "admin:manage") || ADMIN_TYPES.has(String(user.type).toLowerCase())
             || (Array.isArray(configured) && configured.map(String).includes(String(user.id)));
         return {
             self, admin, canManage: !self && !admin,

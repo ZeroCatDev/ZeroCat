@@ -14,6 +14,24 @@ import multer from "multer";
 import { validateFileTypeFromContent, uploadFile, handleAssetUpload, processImage, generateMD5, uploadToS3 } from "../services/assets.js";
 import redisClient from "../services/redis.js";
 import { userCanActOnProject } from "../services/projectCollaborationService.js";
+import { authorize } from "../services/auth/authorization.js";
+import { canViewContent, sanitizeProfile, visibleWhere } from "../services/moderation/visibility.js";
+
+async function scratchProjectVisible(project, res, context = null) {
+    if (!project || !await canViewContent('project', project, res.locals.userid)) return false;
+    if (!res.locals.userid) return project.state === 'public';
+    const contexts = [];
+    if (res.locals.tokenType) contexts.push({ tokenType: res.locals.tokenType, tokenScopes: res.locals.scopes || [] });
+    if (context) contexts.push(context);
+    if (!contexts.length) return false;
+    for (const tokenContext of contexts) {
+        const decision = await authorize({
+            ...tokenContext, actorId: res.locals.userid, requiredScope: `project:${project.id}:read`,
+        });
+        if (!decision.allowed) return false;
+    }
+    return true;
+}
 
 var router = Router();
 
@@ -206,7 +224,7 @@ const getCloudProject = async (projectId, userId) => {
         },
     });
 
-    if (!project) {
+    if (!project || !await canViewContent('project', project, userId)) {
         return {ok: false, status: 404, message: "项目不存在"};
     }
 
@@ -538,6 +556,7 @@ router.get("/projectinfo", async function (req, res, next) {
                 id: Number(req.query.id),
                 state: "public",
                 type: "scratch",
+                AND: [await visibleWhere('project', res.locals.userid)],
             },
             select: {
                 id: true,
@@ -557,7 +576,7 @@ router.get("/projectinfo", async function (req, res, next) {
             },
         });
         logger.debug(project)
-        if (!project) {
+        if (!await scratchProjectVisible(project, res)) {
             res.status(404).send({
                 code: 404,
                 status: "404",
@@ -566,23 +585,24 @@ router.get("/projectinfo", async function (req, res, next) {
             return;
         }
 
-        const author = await prisma.ow_users.findFirst({
+        const author = await sanitizeProfile(await prisma.ow_users.findFirst({
             where: {id: project.authorid},
             select: {
+                id: true,
                 display_name: true,
                 avatar: true,
                 bio: true,
 
             },
-        });
+        }), res.locals.userid);
 
         res.locals.is_author = project.authorid == res.locals.userid;
 
         res.json({
             ...project,
-            author_display_name: author.display_name,
-            author_images: author.avatar,
-            author_bio: author.bio,
+            author_display_name: author?.display_name || '',
+            author_images: author?.avatar || '',
+            author_bio: author?.bio || '',
         });
     } catch (err) {
         next(err);
@@ -596,11 +616,12 @@ router.get("/projectinfo2", async function (req, res, next) {
                 id: Number(req.query.id),
             },
         });
-        var author = await prisma.ow_users.findFirst({
-            where: {
-                id: result.authorid,
-            },
-        });
+        if (!await scratchProjectVisible(result, res)) {
+            return res.status(404).send({ status: 'error', message: '项目不存在' });
+        }
+        var author = await sanitizeProfile(await prisma.ow_users.findFirst({
+            where: { id: result.authorid },
+        }), res.locals.userid) || {};
         res.locals.is_author = result.authorid == res.locals.userid;
         logger.debug(result);
         var project_token = jsonwebtoken.sign(
@@ -612,11 +633,14 @@ router.get("/projectinfo2", async function (req, res, next) {
                     issuer: await zcconfig.get("site.domain"),
                     projectid: result.id,
                     userid: res.locals.userid,
+                    authorizationContext: {
+                        tokenType: res.locals.tokenType,
+                        tokenScopes: res.locals.scopes || [],
+                    },
                 },
             },
             await zcconfig.get("security.jwttoken")
         );
-        logger.debug(project_token);
         var jsonscratch = {
             id: result.id,
             title: result.title,
@@ -638,10 +662,10 @@ router.get("/projectinfo2", async function (req, res, next) {
                 profile: {
                     id: author.avatar,
                     images: {
-                        "90x90": `${global.config["s3.staticurl"]}/assets/${author.avatar.slice(0,2)}/${author.avatar.slice(2,4)}/${author.avatar}`,
-                        "60x60": `${global.config["s3.staticurl"]}/assets/${author.avatar.slice(0,2)}/${author.avatar.slice(2,4)}/${author.avatar}`,
-                        "55x55": `${global.config["s3.staticurl"]}/assets/${author.avatar.slice(0,2)}/${author.avatar.slice(2,4)}/${author.avatar}`,
-                        "50x50": `${global.config["s3.staticurl"]}/assets/${author.avatar.slice(0,2)}/${author.avatar.slice(2,4)}/${author.avatar}`,
+                        "90x90": `${global.config["s3.staticurl"]}/assets/${(author.avatar || '').slice(0,2)}/${(author.avatar || '').slice(2,4)}/${author.avatar}`,
+                        "60x60": `${global.config["s3.staticurl"]}/assets/${(author.avatar || '').slice(0,2)}/${(author.avatar || '').slice(2,4)}/${author.avatar}`,
+                        "55x55": `${global.config["s3.staticurl"]}/assets/${(author.avatar || '').slice(0,2)}/${(author.avatar || '').slice(2,4)}/${author.avatar}`,
+                        "50x50": `${global.config["s3.staticurl"]}/assets/${(author.avatar || '').slice(0,2)}/${(author.avatar || '').slice(2,4)}/${author.avatar}`,
                         "32x32": `${global.config["s3.staticurl"]}/assets/${author.avatar}`,
                     },
                 },
@@ -689,12 +713,10 @@ router.get("/project/:id", async (req, res, next) => {
         let project_token;
         if (req.query.token) {
             try {
-                logger.debug(await zcconfig.get("security.jwttoken"));
                 project_token = jsonwebtoken.verify(
                     req.query.token,
                     await zcconfig.get("security.jwttoken")
                 );
-                logger.debug(project_token);
             } catch (err) {
                 logger.debug("Error verifying project token:", err);
                 return res
@@ -739,10 +761,10 @@ router.get("/project/:id", async (req, res, next) => {
             where: {id: Number(project_token.data.projectid)},
         });
 
-        if (!project) {
-            return res
-                .status(404)
-                .send({status: "error", message: "作品不存在或无权打开"});
+        const viewerId = res.locals.userid || project_token.data.userid;
+        const context = project_token.data.authorizationContext;
+        if (!await scratchProjectVisible(project, { locals: { ...res.locals, userid: viewerId } }, context)) {
+            return res.status(404).send({status: 'error', message: '作品不存在或无权打开'});
         }
 
         const source =
@@ -935,6 +957,12 @@ router.post("/cloud/:projectid/message", needLogin, requireResource("project", "
 
         const cachedConfig = await getCachedCloudConfig(projectResult.project.id);
         const {anonymousWriteEnabled, historyEnabled} = cachedConfig || await getProjectCloudConfig(projectResult.project.id);
+        const decision = await authorize({
+            actorId: res.locals.userid, tokenType: res.locals.tokenType, tokenScopes: res.locals.scopes || [],
+            requiredScope: `project:${projectId}:${body.method === 'handshake' ? 'read' : anonymousWriteEnabled ? 'interact' : 'update'}`,
+            category: 'projects', action: body.method === 'handshake' ? 'read' : 'interact',
+        });
+        if (!decision.allowed) return res.status(decision.status).json({status: 'error', code: decision.code, message: decision.message});
         const result = await processCloudMessage({
             project: projectResult.project,
             userId: res.locals.userid,
@@ -1035,15 +1063,19 @@ const handleCloudUpdatesRequest = async (req, res, next) => {
                 },
             })
             : [];
-        const userMap = new Map(users.map((u) => [u.id, u]));
+        const userMap = new Map(await Promise.all(users.map(async (user) => [user.id, await sanitizeProfile(user, res.locals.userid)])));
 
-        const mappedUpdates = updates.map((row) => ({
-            id: row.id,
-            actor_id: row.actor_id,
-            actor: row.actor_id ? userMap.get(row.actor_id) || null : null,
-            created_at: row.created_at,
-            ...(typeof row.event_data === "object" && row.event_data !== null ? row.event_data : {}),
-        }));
+        const mappedUpdates = updates.map((row) => {
+            const data = typeof row.event_data === 'object' && row.event_data !== null ? { ...row.event_data } : {};
+            if (row.actor_id && !userMap.get(row.actor_id)) data.user = null;
+            return {
+                ...data,
+                id: row.id,
+                actor_id: row.actor_id,
+                actor: row.actor_id ? userMap.get(row.actor_id) || null : null,
+                created_at: row.created_at,
+            };
+        });
 
         res.json({
             status: "success",
@@ -1117,7 +1149,7 @@ router.get("/cloud/:projectid/history", needLogin, requireResource("project", "r
                 },
             })
             : [];
-        const userMap = new Map(users.map((u) => [u.id, u]));
+        const userMap = new Map(await Promise.all(users.map(async (user) => [user.id, await sanitizeProfile(user, res.locals.userid)])));
 
         const history = rows.map((row) => ({
             id: row.id,
@@ -1126,7 +1158,7 @@ router.get("/cloud/:projectid/history", needLogin, requireResource("project", "r
             value: row.value,
             actor_id: row.actor_id,
             actor: row.actor_id ? userMap.get(row.actor_id) || null : null,
-            actor_name: row.actor_name,
+            actor_name: row.actor_id && !userMap.get(row.actor_id) ? null : row.actor_name,
             ip: row.actor_id ? null : row.ip,
             created_at: row.created_at,
         }));

@@ -1,5 +1,5 @@
 <template>
-  <v-form v-model="valid" @submit.prevent="updateProfile">
+  <v-form v-model="valid" :disabled="localuser.isReadonly('profile')" @submit.prevent="updateProfile">
     <v-row>
       <v-col cols="12" md="6">
         <v-text-field
@@ -113,7 +113,7 @@
               variant="elevated"
               prepend-icon="mdi-book-open-page-variant-outline"
               :loading="readmeLoading"
-              :disabled="readmeChecking"
+              :disabled="readmeChecking || localuser.isReadonly('profile')"
               @click="openOrCreateReadmeProject"
             >{{ readmeChecking ? '检测 README 项目中...' : (readmeExists ? '打开 README 项目' : '创建并编辑 README 项目') }}</v-btn>
 
@@ -147,7 +147,7 @@
       </v-col>
       <v-col cols="12">
         <v-btn
-          :disabled="!valid"
+          :disabled="!valid || localuser.isReadonly('profile')"
           :loading="loading"
           class="px-6"
           color="primary"
@@ -171,6 +171,7 @@
 
 <script>
 import {updateUserInfo} from "@/services/accountService";
+import { localuser } from '@/services/localAccount';
 import { getProjectInfoByNamespace, initProject } from "@/services/projectService";
 import request from "@/axios/axios";
 import region_zh_CN from "@/constants/region_zh-CN.json";
@@ -191,6 +192,7 @@ export default {
   },
   data() {
     return {
+      localuser,
       loading: false,
       valid: false,
       showRegionDialog: false,
@@ -358,6 +360,7 @@ export default {
       this.showRegionDialog = false;
     },
     async updateProfile() {
+      if (localuser.isReadonly('profile')) return;
       if (!this.valid) return;
 
       this.loading = true;

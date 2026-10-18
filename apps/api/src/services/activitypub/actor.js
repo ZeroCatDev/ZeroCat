@@ -5,6 +5,7 @@
 
 import { prisma } from '../prisma.js';
 import logger from '../logger.js';
+import { visibleWhere } from '../moderation/visibility.js';
 import { AP_CONTEXT, getApEndpointBaseUrl, getInstanceBaseUrl, getStaticUrl } from './config.js';
 import { getUserPublicKey } from './keys.js';
 
@@ -13,7 +14,7 @@ import { getUserPublicKey } from './keys.js';
  */
 export async function getLocalUserByUsername(username) {
     return prisma.ow_users.findFirst({
-        where: { username, status: 'active' },
+        where: { username, status: 'active', AND: [await visibleWhere('profile')] },
         select: {
             id: true,
             username: true,
@@ -36,7 +37,7 @@ export async function getLocalUserByUsername(username) {
  */
 export async function getLocalUserById(userId) {
     return prisma.ow_users.findFirst({
-        where: { id: userId, status: 'active' },
+        where: { id: userId, status: 'active', AND: [await visibleWhere('profile')] },
         select: {
             id: true,
             username: true,

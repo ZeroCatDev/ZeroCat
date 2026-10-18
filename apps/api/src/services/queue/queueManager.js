@@ -12,6 +12,7 @@ import { closeAll as closeAllConnections } from './redisConnectionFactory.js';
 import zcconfig from '../config/zcconfig.js';
 import logger from '../logger.js';
 import { getProjectGitSyncSettings } from '../gitSync/storage.js';
+import { loadSyncProject, moderationRemovalProject } from '../gitSync/authorization.js';
 
 let initialized = false;
 
@@ -605,33 +606,35 @@ const queueManager = {
         const emailQueue = getEmailQueue();
         if (!emailQueue || !initialized) {
             logger.warn('[queue-manager] Queue not initialized, sending email directly');
-            return this._sendEmailDirect(to, subject, html);
+            return this._sendEmailDirect(to, subject, html, options);
         }
 
         try {
             const maxRetries = await zcconfig.get('bullmq.email.maxRetries') || 3;
             const retryDelay = await zcconfig.get('bullmq.email.retryDelay') || 60000;
 
-            const job = await emailQueue.add('send-email', { to, subject, html }, {
+            const { notificationId, ...jobOptions } = options;
+            const job = await emailQueue.add('send-email', { to, subject, html, notificationId, deliveryVersion: 1 }, {
                 attempts: maxRetries,
                 backoff: {
                     type: 'exponential',
                     delay: retryDelay,
                 },
-                ...options,
+                ...jobOptions,
             });
 
             logger.info(`[queue-manager] Email job ${job.id} enqueued for ${to}`);
             return { jobId: job.id, queued: true };
         } catch (error) {
             logger.error('[queue-manager] Failed to enqueue email, sending directly:', error.message);
-            return this._sendEmailDirect(to, subject, html);
+            return this._sendEmailDirect(to, subject, html, options);
         }
     },
 
-    async _sendEmailDirect(to, subject, html) {
-        const { sendMail } = await import('../email/emailSender.js');
-        await sendMail({ to, subject, html });
+    async _sendEmailDirect(to, subject, html, options = {}) {
+        const { sendEmailDirect } = await import('../email/emailService.js');
+        const result = await sendEmailDirect(to, subject, html, options);
+        if (result?.skipped) return result;
         return { queued: false, sentDirectly: true };
     },
 
@@ -1226,6 +1229,7 @@ const queueManager = {
     },
 
     async enqueueGitSyncCommit(projectId, commitId, options = {}) {
+        await loadSyncProject({ projectId, actorId: options.actorId, authorizationContext: options.authorizationContext });
         const queue = getGitSyncQueue();
         if (!queue || !initialized) {
             logger.warn('[queue-manager] Git sync queue not available');
@@ -1260,6 +1264,7 @@ const queueManager = {
                 commitId: parsedCommitId,
                 triggeredBy: options.triggeredBy || 'project-commit',
                 actorId: options.actorId || null,
+                authorizationContext: options.authorizationContext || null,
                 requestedAt: new Date().toISOString(),
             }, {
                 jobId,
@@ -1278,6 +1283,7 @@ const queueManager = {
     },
 
     async enqueueBlogSyncArticle(projectId, userId, options = {}) {
+        await loadSyncProject({ projectId, userId, actorId: options.actorId, authorizationContext: options.authorizationContext }, { blog: true });
         const queue = getGitSyncQueue();
         if (!queue || !initialized) {
             logger.warn('[queue-manager] Git sync queue not available');
@@ -1304,6 +1310,8 @@ const queueManager = {
                 type: 'blog-sync-article',
                 projectId: parsedProjectId,
                 userId: parsedUserId,
+                actorId: options.actorId || null,
+                authorizationContext: options.authorizationContext || null,
                 reason,
                 commitId: commitId || null,
                 requestedAt: new Date().toISOString(),
@@ -1323,6 +1331,13 @@ const queueManager = {
     },
 
     async enqueueBlogSyncRemove(projectId, userId, options = {}) {
+        const payload = { projectId, userId, actorId: options.actorId,
+            authorizationContext: options.authorizationContext, systemModeration: options.systemModeration === true };
+        if (payload.systemModeration) {
+            if (!await moderationRemovalProject(payload)) return { queued: false, reason: 'content_visible' };
+        } else {
+            await loadSyncProject(payload, { blog: true });
+        }
         const queue = getGitSyncQueue();
         if (!queue || !initialized) return null;
         const enabled = await zcconfig.get('git.sync.enabled', false);
@@ -1337,7 +1352,10 @@ const queueManager = {
                 type: 'blog-sync-remove',
                 projectId: parsedProjectId,
                 userId: parsedUserId,
+                actorId: options.actorId || null,
+                authorizationContext: options.authorizationContext || null,
                 reason: options.reason || 'removed',
+                systemModeration: payload.systemModeration,
                 requestedAt: new Date().toISOString(),
             }, {
                 jobId,

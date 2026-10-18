@@ -5,6 +5,8 @@ import logger from "../../services/logger.js";
 import zcconfig from "../../services/config/zcconfig.js";
 import {requireSudo} from "../../middleware/sudo.js";
 import * as tokenService from "../../services/auth/tokenService.js";
+import { setUserRoles } from "../../services/auth/permissionAdministration.js";
+import { requireScope } from "../../middleware/scope.js";
 import {
     createUserManagementService, USER_FIELDS, CONTACT_FIELDS, SESSION_FIELDS,
     safeContact, safeUser, UserManagementError,
@@ -15,7 +17,6 @@ import {
     getUserPolicy,
     getUserRoleAssignments,
     listRoles,
-    replaceUserRoles,
     clearUserPolicyCache,
     policyAllowsScope,
     revokeRoleFromUser,
@@ -176,7 +177,7 @@ router.get("/:id/permissions", async (req, res) => {
  *
  * @apiBody {String[]} role_keys 用户应拥有的角色 key 列表
  */
-router.put("/:id/permissions", async (req, res) => {
+router.put("/:id/permissions", requireScope("admin:permissions:manage"), async (req, res) => {
     try {
         const userId = parseUserId(req.params.id);
         if (!userId) {
@@ -204,20 +205,7 @@ router.put("/:id/permissions", async (req, res) => {
             });
         }
 
-        const isSelf = String(userId) === String(res.locals.userid);
-        if (isSelf && !roleKeys.includes(SYSTEM_ROLE_KEYS.ADMIN)) {
-            const currentPolicy = await getUserPolicy(userId, { useCache: false });
-            if (currentPolicy.roles.includes(SYSTEM_ROLE_KEYS.ADMIN)) {
-                return res.status(400).json({
-                    status: "error",
-                    message: "不能在当前会话中移除自己的管理员权限",
-                    code: "CANNOT_REMOVE_SELF_ADMIN",
-                });
-            }
-        }
-
-        await replaceUserRoles(userId, roleKeys, {
-            assignedBy: res.locals.userid || null,
+        await setUserRoles(res.locals.userid, userId, roleKeys, {
             reason: "admin-permission-page",
         });
 
@@ -238,9 +226,10 @@ router.put("/:id/permissions", async (req, res) => {
     } catch (error) {
         console.error("Error updating user permissions:", error);
         const badRole = /角色不存在|未知系统角色/.test(error.message || "");
-        res.status(badRole ? 400 : 500).json({
+        res.status(error.status || (badRole ? 400 : 500)).json({
             status: "error",
-            message: error.message || "更新用户权限失败",
+            code: error.code || "PERMISSION_OPERATION_FAILED",
+            message: error.status || badRole ? error.message : "更新用户权限失败",
         });
     }
 });

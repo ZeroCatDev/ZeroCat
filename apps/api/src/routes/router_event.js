@@ -10,6 +10,7 @@ import {
     getTargetEvents,
 } from "../controllers/events.js";
 import logger from "../services/logger.js";
+import { assertCanWrite } from "../services/moderation/visibility.js";
 
 const router = express.Router();
 
@@ -22,14 +23,15 @@ router.get("/target/:targetType/:targetId" , async (req, res) => {
     try {
         const {targetType, targetId} = req.params;
         const {limit = 10, offset = 0} = req.query;
-        const includePrivate = !!res.locals.userid;
+        const includePrivate = false;
 
         const events = await getTargetEvents(
             targetType,
             parseInt(targetId, 10),
             parseInt(limit, 10),
             parseInt(offset, 10),
-            includePrivate
+            includePrivate,
+            res.locals.userid
         );
 
         res.json({
@@ -61,7 +63,8 @@ router.get("/actor/:actorId", async (req, res) => {
             parseInt(actorId, 10),
             parseInt(limit, 10),
             parseInt(offset, 10),
-            includePrivate
+            includePrivate,
+            res.locals.userid
         );
 
         res.json({
@@ -94,6 +97,7 @@ router.post("/", needLogin, requireScope("event:create"), async (req, res) => {
 
         // Use current user as actor
         const actorId = res.locals.userid;
+        await assertCanWrite(Number(actorId), 'activity', 'create');
 
         const event = await createEvent(
             eventType,

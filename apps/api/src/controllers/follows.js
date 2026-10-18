@@ -3,6 +3,7 @@ import logger from "../services/logger.js";
 import {createEvent} from "./events.js";
 import gorseService from "../services/gorse.js";
 import { buildAvatarURL } from "../utils/avatarUrl.js";
+import { visibleWhere, canViewContent, assertCanWrite } from "../services/moderation/visibility.js";
 
 // 延迟导入 AP 关注同步模块，避免循环依赖
 let _apFollowSync = null;
@@ -60,6 +61,7 @@ function formatFollowerName(user) {
  * @returns {Promise<Object>} Follow information
  */
 export async function followUser(followerId, followedId, note = "") {
+    await assertCanWrite(Number(followerId), "relations", "create");
     try {
         // Don't allow following yourself
         if (followerId === followedId) {
@@ -67,8 +69,8 @@ export async function followUser(followerId, followedId, note = "") {
         }
 
         // Check if followed user exists
-        const followedUser = await prisma.ow_users.findUnique({
-            where: {id: followedId},
+        const followedUser = await prisma.ow_users.findFirst({
+            where: {id: followedId, AND: [await visibleWhere("profile", followerId)] },
         });
 
         if (!followedUser) {
@@ -184,6 +186,7 @@ export async function followUser(followerId, followedId, note = "") {
  * @returns {Promise<Object>} Unfollow information
  */
 export async function unfollowUser(followerId, followedId) {
+    await assertCanWrite(Number(followerId), "relations", "delete");
     try {
         // 如果取消关注的用户是远程代理用户，异步同步取消关注到远端
         try {
@@ -256,6 +259,7 @@ export async function unfollowUser(followerId, followedId) {
  * @returns {Promise<Object>} Block information
  */
 export async function blockUser(blockerId, blockedId, reason = "") {
+    await assertCanWrite(Number(blockerId), "relations", "create");
     try {
         // Don't allow blocking yourself
         if (blockerId === blockedId) {
@@ -326,6 +330,7 @@ export async function blockUser(blockerId, blockedId, reason = "") {
  * @returns {Promise<Object>} Unblock information
  */
 export async function unblockUser(blockerId, blockedId) {
+    await assertCanWrite(Number(blockerId), "relations", "delete");
     try {
         // Delete relationship if it exists
         const result = await prisma.ow_user_relationships.deleteMany({
@@ -351,13 +356,14 @@ export async function unblockUser(blockerId, blockedId) {
  * @param {number} offset - Offset for pagination
  * @returns {Promise<Object>} Followers information
  */
-export async function getUserFollowers(userId, limit = 20, offset = 0) {
+export async function getUserFollowers(userId, limit = 20, offset = 0, viewerId = null) {
     try {
         // Find all users who follow the target user
         const relationships = await prisma.ow_user_relationships.findMany({
             where: {
                 target_user_id: userId,
                 relationship_type: "follow",
+                AND: [await visibleWhere("relation", viewerId), { source_user: await visibleWhere("profile", viewerId) }, { target_user: await visibleWhere("profile", viewerId) }],
             },
             include: {
                 // Join with ow_users to get follower details
@@ -408,6 +414,7 @@ export async function getUserFollowers(userId, limit = 20, offset = 0) {
             where: {
                 target_user_id: userId,
                 relationship_type: "follow",
+                AND: [await visibleWhere("relation", viewerId), { source_user: await visibleWhere("profile", viewerId) }, { target_user: await visibleWhere("profile", viewerId) }],
             },
         });
 
@@ -445,13 +452,14 @@ export async function getUserFollowers(userId, limit = 20, offset = 0) {
  * @param {number} offset - Offset for pagination
  * @returns {Promise<Object>} Following information
  */
-export async function getUserFollowing(userId, limit = 20, offset = 0) {
+export async function getUserFollowing(userId, limit = 20, offset = 0, viewerId = null) {
     try {
         // Find all users who the source user follows
         const relationships = await prisma.ow_user_relationships.findMany({
             where: {
                 source_user_id: userId,
                 relationship_type: "follow",
+                AND: [await visibleWhere("relation", viewerId), { source_user: await visibleWhere("profile", viewerId) }, { target_user: await visibleWhere("profile", viewerId) }],
             },
             orderBy: {created_at: "desc"},
             take: limit,
@@ -498,6 +506,7 @@ export async function getUserFollowing(userId, limit = 20, offset = 0) {
             where: {
                 source_user_id: userId,
                 relationship_type: "follow",
+                AND: [await visibleWhere("relation", viewerId), { source_user: await visibleWhere("profile", viewerId) }, { target_user: await visibleWhere("profile", viewerId) }],
             },
         });
 
@@ -720,6 +729,7 @@ export async function getRelationshipsBetweenUsers(userId1, userId2) {
  * @returns {Promise<Object>} Updated follow relationship
  */
 export async function updateFollowNote(followerId, followedId, note) {
+    await assertCanWrite(Number(followerId), "relations", "update");
     try {
         // Check if relationship exists
         const existingFollow = await prisma.ow_user_relationships.findUnique({
@@ -765,6 +775,7 @@ export async function updateFollowNote(followerId, followedId, note) {
  * @returns {Promise<Object>} Updated block relationship
  */
 export async function updateBlockReason(blockerId, blockedId, reason) {
+    await assertCanWrite(Number(blockerId), "relations", "update");
     try {
         // Check if relationship exists
         const existingBlock = await prisma.ow_user_relationships.findUnique({

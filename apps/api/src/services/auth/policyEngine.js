@@ -4,6 +4,7 @@ import { prisma } from "../prisma.js";
 import redisClient from "../redis.js";
 import {
     normalizeScopes,
+    isValidScope,
     parseScope,
     scopeSatisfies,
 } from "./scopes.js";
@@ -25,86 +26,20 @@ export {
     SYSTEM_ROLES,
 };
 
-const ROLE_CACHE_TTL_MS = 30_000;
-const ROLE_CACHE_REDIS_TTL_SEC = 5 * 60;
-const POLICY_CACHE_VERSION_TTL_MS = 5_000;
-const POLICY_CACHE_PREFIX = "auth:policy:user:";
 const POLICY_CACHE_VERSION_KEY = "auth:policy:version";
-const policyCache = new Map();
-let policyCacheVersion = {
-    value: "1",
-    expiresAt: 0,
-};
 
 function normalizeUserId(userId) {
     const value = Number(userId);
     return Number.isInteger(value) && value > 0 ? value : null;
 }
 
-function cacheKey(userId) {
-    return String(userId);
-}
-
-function redisPolicyCacheKey(userId, version = policyCacheVersion.value) {
-    return `${POLICY_CACHE_PREFIX}${version}:${userId}`;
-}
-
-function normalizeCachedPolicy(value) {
-    if (!value || typeof value !== "object") return null;
-    return {
-        roles: Array.isArray(value.roles) ? value.roles.filter(Boolean) : [],
-        allow: normalizeScopes(value.allow || []),
-        deny: normalizeScopes(value.deny || []),
-    };
-}
-
-async function getPolicyCacheVersion() {
-    const now = Date.now();
-    if (policyCacheVersion.expiresAt > now) {
-        return policyCacheVersion.value;
-    }
-
-    const cached = await redisClient.get(POLICY_CACHE_VERSION_KEY);
-    const value = cached ? String(cached) : "1";
-    policyCacheVersion = {
-        value,
-        expiresAt: now + POLICY_CACHE_VERSION_TTL_MS,
-    };
-
-    if (!cached) {
-        await redisClient.set(POLICY_CACHE_VERSION_KEY, value);
-    }
-
-    return value;
-}
-
-function setLocalPolicyCache(key, policy) {
-    policyCache.set(key, {
-        policy,
-        expiresAt: Date.now() + ROLE_CACHE_TTL_MS,
-    });
-}
-
-export function clearUserPolicyCache(userId) {
-    const normalizedUserId = normalizeUserId(userId);
-    if (normalizedUserId) {
-        policyCache.delete(cacheKey(normalizedUserId));
-        getPolicyCacheVersion()
-            .then((version) => redisClient.delete(redisPolicyCacheKey(normalizedUserId, version)))
-            .catch((error) =>
-                logger.warn(`[policy] 清理用户策略缓存失败 user=${normalizedUserId}: ${error.message}`)
-            );
-    }
+export function clearUserPolicyCache() {
+    clearPolicyCache();
 }
 
 export function clearPolicyCache() {
-    policyCache.clear();
-    const nextVersion = String(Date.now());
-    policyCacheVersion = {
-        value: nextVersion,
-        expiresAt: Date.now() + POLICY_CACHE_VERSION_TTL_MS,
-    };
-    redisClient.set(POLICY_CACHE_VERSION_KEY, nextVersion).catch((error) =>
+    // Invalidate older process caches too; this process reads policy directly.
+    redisClient.set(POLICY_CACHE_VERSION_KEY, String(Date.now())).catch((error) =>
         logger.warn(`[policy] 更新策略缓存版本失败: ${error.message}`)
     );
 }
@@ -143,27 +78,18 @@ async function upsertRolePermission(db, roleId, scope, effect = "allow") {
     `;
 }
 
-async function replaceRoleAllowPermissions(db, roleId, permissions) {
-    await db.$executeRaw`
-        DELETE FROM "ow_role_permissions"
-        WHERE "role_id" = ${roleId}
-          AND "effect" = 'allow'
-    `;
-    for (const permission of permissions) {
-        await upsertRolePermission(db, roleId, permission, "allow");
-    }
-}
-
 async function ensureSystemRole(db, roleKey, { syncPermissions = false } = {}) {
     const roleDefinition = getSystemRoleDefinition(roleKey);
     if (!roleDefinition) {
         throw new Error(`未知系统角色: ${roleKey}`);
     }
 
+    const existing = await findRoleByKey(db, roleKey);
+    if (existing) return existing;
     const role = await upsertRole(db, roleDefinition);
     if (syncPermissions) {
         const permissions = getSystemRolePermissions(roleKey);
-        await replaceRoleAllowPermissions(db, role.id, permissions);
+        for (const permission of permissions) await upsertRolePermission(db, role.id, permission);
     }
     return role;
 }
@@ -212,26 +138,25 @@ async function backfillRoleToActiveLocalUsers(db, roleId, reason) {
     `;
 }
 
-async function backfillDefaultUserRoles(db) {
-    for (const roleKey of DEFAULT_USER_ROLE_KEYS) {
-        const role = await ensureSystemRoleForAssignment(db, roleKey);
-        await backfillRoleToActiveLocalUsers(db, role.id, `system-default-${roleKey}`);
-    }
-}
-
 /**
  * 同步系统角色和默认策略。这个函数是幂等的，可在应用启动时重复执行。
  */
 export async function syncRolePolicyCatalog() {
     try {
         assertSystemRoleDefinitions();
-        await prisma.$transaction(async (tx) => {
+        const bootstrapAdmins = await prisma.$transaction(async (tx) => {
+            let bootstrap = false;
             for (const role of SYSTEM_ROLES) {
-                await ensureSystemRole(tx, role.key, { syncPermissions: true });
+                const existing = await findRoleByKey(tx, role.key);
+                const created = await ensureSystemRole(tx, role.key, { syncPermissions: true });
+                if (!existing && role.key === SYSTEM_ROLE_KEYS.ADMIN) bootstrap = true;
+                if (!existing && DEFAULT_USER_ROLE_KEYS.includes(role.key)) {
+                    await backfillRoleToActiveLocalUsers(tx, created.id, `system-default-${role.key}`);
+                }
             }
-            await backfillDefaultUserRoles(tx);
-        });
-        await syncConfiguredAdminRoles(prisma, { syncPermissions: false });
+            return bootstrap;
+        }, { isolationLevel: "Serializable" });
+        if (bootstrapAdmins) await syncConfiguredAdminRoles(prisma, { syncPermissions: false });
         clearPolicyCache();
         logger.info("[policy] 已同步角色策略目录");
     } catch (error) {
@@ -435,25 +360,19 @@ export async function revokeScopedRole(userId, roleKey, { targetType, targetId, 
  * 资源边界检查用它判断协作者能否操作。
  */
 export async function getUserResourceRoleScopes(userId, targetType, targetId, { db = prisma } = {}) {
-    const normalizedUserId = normalizeUserId(userId);
-    if (!normalizedUserId) return [];
-    const tType = String(targetType || "").trim();
-    const tId = String(targetId ?? "").trim();
-    if (!tType || !tId || tType === SCOPED_GRANT_RESERVED_TARGET) return [];
-
-    const rows = await db.$queryRaw`
-        SELECT rp."scope" AS "scope"
-        FROM "ow_user_roles" ur
-        INNER JOIN "ow_roles" r ON r."id" = ur."role_id"
-        INNER JOIN "ow_role_permissions" rp ON rp."role_id" = r."id"
-        WHERE ur."user_id" = ${normalizedUserId}
-          AND ur."target_type" = ${tType}
-          AND ur."target_id" = ${tId}
-          AND (ur."expires_at" IS NULL OR ur."expires_at" > CURRENT_TIMESTAMP)
-          AND rp."effect" = 'allow'
-    `;
-
-    return normalizeScopes(rows.map((row) => String(row.scope || "")).filter(Boolean));
+    const policy = await getUserPolicy(userId, { db, targetType, targetId });
+    if (!policy.valid) return [];
+    const scopes = [];
+    // Return explicit actions rather than a broad manage that could conceal a deny.
+    for (const action of ["read", "create", "update", "delete", "interact", "manage"]) {
+        const required = `${targetType}:${targetId}:${action}`;
+        const broadGrantWouldHideDeny = action === "manage" && ["read", "create", "update", "delete", "interact"]
+            .some((covered) => scopeSatisfies(policy.deny, `${targetType}:${targetId}:${covered}`));
+        if (!broadGrantWouldHideDeny && policyAllowsScope(policy, required) && resourcePolicyAllowsScope(policy, required)) {
+            scopes.push(`${targetType}:${action}`);
+        }
+    }
+    return scopes;
 }
 
 /**
@@ -587,6 +506,16 @@ export async function listRoles({ db = prisma } = {}) {
 
     const roles = [];
     const roleMap = new Map();
+    const inheritance = await db.$queryRaw`
+        SELECT ri."role_id", ri."parent_role_id", parent."key" AS parent_role_key
+        FROM "ow_role_inheritance" ri JOIN "ow_roles" parent ON parent."id" = ri."parent_role_id"
+        ORDER BY ri."role_id", ri."parent_role_id"
+    `;
+    const parents = new Map();
+    for (const edge of inheritance) {
+        if (!parents.has(edge.role_id)) parents.set(edge.role_id, []);
+        parents.get(edge.role_id).push({ id: edge.parent_role_id, key: edge.parent_role_key });
+    }
     for (const row of rows) {
         let role = roleMap.get(row.role_id);
         if (!role) {
@@ -600,6 +529,8 @@ export async function listRoles({ db = prisma } = {}) {
                 created_at: row.role_created_at,
                 updated_at: row.role_updated_at,
                 permissions: [],
+                parentRoleIds: (parents.get(row.role_id) || []).map((parent) => parent.id),
+                parents: parents.get(row.role_id) || [],
             };
             roleMap.set(row.role_id, role);
             roles.push(role);
@@ -713,76 +644,116 @@ export async function replaceUserRoles(userId, roleKeys, {
     clearUserPolicyCache(normalizedUserId);
 }
 
-export async function getUserPolicy(userId, { useCache = true } = {}) {
+export function assertSupportedConditions(conditions) {
+    if (conditions === null || conditions === undefined) return;
+    if (typeof conditions === "object" && !Array.isArray(conditions)
+        && Object.keys(conditions).length === 0) return;
+    const error = new Error("不支持非空权限条件");
+    error.code = "ZC_ERROR_UNSUPPORTED_POLICY_CONDITIONS";
+    error.status = 400;
+    throw error;
+}
+
+export function assertRoleInheritanceGraph(edges) {
+    const parents = new Map();
+    for (const edge of edges) {
+        const roleId = String(edge.role_id), parentId = String(edge.parent_role_id);
+        if (!parents.has(roleId)) parents.set(roleId, []);
+        parents.get(roleId).push(parentId);
+    }
+    const visited = new Set(), visiting = new Set();
+    const visit = (id) => {
+        if (visiting.has(id)) {
+            const error = new Error("角色继承不能包含循环");
+            error.status = 409;
+            error.code = "ZC_ERROR_ROLE_INHERITANCE_CYCLE";
+            throw error;
+        }
+        if (visited.has(id)) return;
+        visiting.add(id);
+        for (const parent of parents.get(id) || []) visit(parent);
+        visiting.delete(id);
+        visited.add(id);
+    };
+    for (const id of parents.keys()) visit(id);
+}
+
+// Keep every source for explanations; compact only the matching allow/deny sets.
+export function policyFromRows(rows) {
+    const sources = [], roles = new Set(), roleIds = new Set();
+    for (const row of rows) {
+        if (row.expires_at && new Date(row.expires_at) <= new Date()) continue;
+        assertSupportedConditions(row.conditions);
+        if (row.role_key) roles.add(row.role_key);
+        if (row.role_id) roleIds.add(Number(row.role_id));
+        if (!row.scope) continue;
+        if (!isValidScope(row.scope) || !["allow", "deny"].includes(row.effect)) {
+            throw new Error("无效的权限策略");
+        }
+        let scope = row.scope;
+        const targetType = row.target_type || "global";
+        const targetId = String(row.target_id ?? "global");
+        if (targetType !== "global") {
+            const parsed = parseScope(scope);
+            // A scoped role cannot leak unrelated capabilities into another resource.
+            if (targetType === "admin" || (!parsed.wildcard && parsed.resource !== targetType)) continue;
+            if (parsed.id !== null && parsed.id !== targetId) continue;
+            scope = `${targetType}:${targetId}:${parsed.wildcard ? "*" : parsed.action}`;
+        }
+        sources.push({
+            scope, effect: row.effect, source: row.role_key ? "role" : "user",
+            root_role_key: row.root_role_key || row.role_key || null,
+            restrict_project_delete: row.restrict_project_delete === true,
+            role_key: row.role_key || null, role_id: row.role_id || null,
+            assignment_id: row.assignment_id || null, permission_id: row.permission_id || null,
+            target_type: targetType, target_id: targetId, expires_at: row.expires_at || null,
+        });
+    }
+    return {
+        roles: [...roles], roleIds: [...roleIds], valid: true, sources,
+        allow: normalizeScopes(sources.filter((source) => source.effect === "allow").map((source) => source.scope)),
+        deny: normalizeScopes(sources.filter((source) => source.effect === "deny").map((source) => source.scope)),
+    };
+}
+
+// Authorization never trusts an allow cached before a revocation or an expiry.
+// useCache remains accepted by existing callers, but all decisions read current rows.
+export async function getUserPolicy(userId, { db = prisma, targetType = null, targetId = null } = {}) {
     const normalizedUserId = normalizeUserId(userId);
-    if (!normalizedUserId) {
-        return { roles: [], allow: [], deny: [] };
-    }
-
-    const key = cacheKey(normalizedUserId);
-    const cached = policyCache.get(key);
-    if (useCache && cached && cached.expiresAt > Date.now()) {
-        return cached.policy;
-    }
-
+    if (!normalizedUserId) return { roles: [], allow: [], deny: [], sources: [], valid: false };
+    const type = targetType && String(targetType);
+    const id = targetId === null || targetId === undefined ? null : String(targetId);
     try {
-        const version = await getPolicyCacheVersion();
-        if (useCache) {
-            const distributedCached = normalizeCachedPolicy(
-                await redisClient.get(redisPolicyCacheKey(normalizedUserId, version))
-            );
-            if (distributedCached) {
-                setLocalPolicyCache(key, distributedCached);
-                return distributedCached;
-            }
-        }
-
-        const rows = await prisma.$queryRaw`
-            SELECT
-                r."key" AS "role_key",
-                r."priority" AS "priority",
-                rp."scope" AS "scope",
-                rp."effect" AS "effect"
-            FROM "ow_user_roles" ur
-            INNER JOIN "ow_roles" r ON r."id" = ur."role_id"
-            INNER JOIN "ow_role_permissions" rp ON rp."role_id" = r."id"
-            WHERE ur."user_id" = ${normalizedUserId}
-              AND ur."target_type" = 'global'
-              AND (ur."expires_at" IS NULL OR ur."expires_at" > CURRENT_TIMESTAMP)
-            ORDER BY r."priority" DESC, r."key" ASC
+        const rows = await db.$queryRaw`
+            WITH RECURSIVE assigned AS (
+                SELECT ur."id" AS assignment_id, ur."role_id", ur."target_type", ur."target_id", ur."expires_at", root."key" AS root_role_key,
+                       root."key" = 'project_manager' AS restrict_project_delete
+                FROM "ow_user_roles" ur JOIN "ow_roles" root ON root."id" = ur."role_id"
+                WHERE ur."user_id" = ${normalizedUserId}
+                  AND (ur."target_type" = 'global' OR (ur."target_type" = ${type} AND ur."target_id" = ${id}))
+                  AND (ur."expires_at" IS NULL OR ur."expires_at" > CURRENT_TIMESTAMP)
+                UNION
+                SELECT a.assignment_id, ri."parent_role_id", a."target_type", a."target_id", a."expires_at", a.root_role_key,
+                       a.restrict_project_delete OR parent."key" = 'project_manager'
+                FROM assigned a JOIN "ow_role_inheritance" ri ON ri."role_id" = a."role_id"
+                JOIN "ow_roles" parent ON parent."id" = ri."parent_role_id"
+            )
+            SELECT a.assignment_id, a."role_id", r."key" AS role_key, a."target_type", a."target_id", a."expires_at",
+                   rp."id" AS permission_id, rp."scope", rp."effect", rp."conditions", a.root_role_key, a.restrict_project_delete
+            FROM assigned a JOIN "ow_roles" r ON r."id" = a."role_id"
+            LEFT JOIN "ow_role_permissions" rp ON rp."role_id" = a."role_id"
+            UNION ALL
+            SELECT NULL::integer, NULL::integer, NULL::varchar, up."target_type", up."target_id", up."expires_at",
+                   up."id", up."scope", up."effect", NULL::jsonb, NULL::varchar, false
+            FROM "ow_user_permissions" up
+            WHERE up."user_id" = ${normalizedUserId}
+              AND (up."target_type" = 'global' OR (up."target_type" = ${type} AND up."target_id" = ${id}))
+              AND (up."expires_at" IS NULL OR up."expires_at" > CURRENT_TIMESTAMP)
         `;
-
-        const roles = [...new Set(rows.map((row) => row.role_key).filter(Boolean))];
-        const allow = [];
-        const deny = [];
-
-        for (const row of rows) {
-            const scope = String(row.scope || "").trim();
-            if (!scope) continue;
-            if (String(row.effect || "allow").toLowerCase() === "deny") {
-                deny.push(scope);
-            } else {
-                allow.push(scope);
-            }
-        }
-
-        const policy = {
-            roles,
-            allow: normalizeScopes(allow),
-            deny: normalizeScopes(deny),
-        };
-
-        setLocalPolicyCache(key, policy);
-        await redisClient.set(
-            redisPolicyCacheKey(normalizedUserId, version),
-            policy,
-            ROLE_CACHE_REDIS_TTL_SEC
-        );
-
-        return policy;
+        return policyFromRows(rows);
     } catch (error) {
         logger.error(`[policy] 读取用户角色策略失败 user=${normalizedUserId}: ${error.message}`);
-        return { roles: [], allow: [], deny: [] };
+        return { roles: [], allow: [], deny: [], sources: [], valid: false };
     }
 }
 
@@ -793,11 +764,39 @@ function hasNonAdminDeny(policy) {
     });
 }
 
+function sourceAllowsScope(source, requiredScope) {
+    const required = parseScope(requiredScope);
+    if (source.effect !== "allow") return false;
+    if (required?.resource === "project" && required.action === "delete"
+        && source.target_type !== "global"
+        && (source.restrict_project_delete
+            || [source.role_key, source.root_role_key].includes(SYSTEM_ROLE_KEYS.PROJECT_MANAGER))) return false;
+    return scopeSatisfies([source.scope], requiredScope);
+}
+
+export function resourcePolicyAllowsScope(policy, requiredScope) {
+    if (policy.valid === false || policyDeniesScope(policy, requiredScope)) return false;
+    return (policy.sources || []).some((source) => {
+        const parsed = parseScope(source.scope);
+        const bound = source.target_type !== "global" || (parsed?.id !== null && parsed?.resource !== "admin");
+        return bound && sourceAllowsScope(source, requiredScope);
+    });
+}
+
+export function policyDeniesScope(policy, requiredScope) {
+    if (scopeSatisfies(policy.deny || [], requiredScope)) return true;
+    const required = parseScope(requiredScope);
+    if (!required || !["manage", "write"].includes(required.action)) return false;
+    const actions = ["read", "create", "update", "delete", "interact"];
+    return actions.some((action) => scopeSatisfies(policy.deny || [], required.id === null
+        ? `${required.resource}:${action}` : `${required.resource}:${required.id}:${action}`));
+}
+
 function policyAllowsConcreteScope(policy, requiredScope) {
-    if (scopeSatisfies(policy.deny, requiredScope)) {
-        return false;
-    }
-    return scopeSatisfies(policy.allow, requiredScope);
+    if (policy.valid === false || policyDeniesScope(policy, requiredScope)) return false;
+    return Array.isArray(policy.sources)
+        ? policy.sources.some((source) => sourceAllowsScope(source, requiredScope))
+        : scopeSatisfies(policy.allow || [], requiredScope);
 }
 
 export function policyAllowsScope(policy, requiredScope) {
@@ -814,7 +813,9 @@ export function policyAllowsScope(policy, requiredScope) {
 }
 
 export async function userSatisfiesPolicy(userId, requiredScope) {
-    const policy = await getUserPolicy(userId);
+    const parsed = parseScope(requiredScope);
+    const policy = await getUserPolicy(userId, parsed?.id && parsed.resource !== "admin"
+        ? { targetType: parsed.resource, targetId: parsed.id } : {});
     return policyAllowsScope(policy, requiredScope);
 }
 
@@ -824,7 +825,13 @@ export async function userSatisfiesPolicy(userId, requiredScope) {
 export async function canUserGrantScopes(userId, scopes) {
     const normalized = normalizeScopes(scopes);
     const policy = await getUserPolicy(userId);
-    const denied = normalized.filter((scope) => !policyAllowsScope(policy, scope));
+    const denied = [];
+    for (const scope of normalized) {
+        const parsed = parseScope(scope);
+        const effective = parsed?.id && parsed.resource !== "admin"
+            ? await getUserPolicy(userId, { targetType: parsed.resource, targetId: parsed.id }) : policy;
+        if (!policyAllowsScope(effective, scope)) denied.push(scope);
+    }
     const admin = policyAllowsScope(policy, "admin:manage");
 
     return {
@@ -856,6 +863,11 @@ export default {
     getUserRoleAssignments,
     replaceUserRoles,
     getUserPolicy,
+    resourcePolicyAllowsScope,
+    policyDeniesScope,
+    policyFromRows,
+    assertSupportedConditions,
+    assertRoleInheritanceGraph,
     policyAllowsScope,
     userSatisfiesPolicy,
     canUserGrantScopes,

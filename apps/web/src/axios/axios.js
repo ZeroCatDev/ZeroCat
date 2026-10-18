@@ -129,6 +129,9 @@ axiosInstance.interceptors.response.use(
     }
 
     const errorCode = getErrorCode(error);
+    if (['ZC_ERROR_READONLY', 'ZC_ERROR_ACCOUNT_READONLY'].includes(errorCode)) {
+      window.dispatchEvent(new CustomEvent('accountReadonly'));
+    }
 
     // ZC_ERROR_NEED_LOGOUT 或 ZC_ERROR_NEED_LOGIN：
     // 先尝试刷新令牌，刷新成功则重放请求；仅在刷新失败时才清除登录态并跳转

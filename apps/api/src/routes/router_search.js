@@ -1,6 +1,14 @@
 import { Router } from "express";
 import { prisma } from "../services/prisma.js"; // 功能函数集
 import logger from "../services/logger.js";
+import { visibleWhere, visibleSql, sanitizePublicUser } from "../services/moderation/visibility.js";
+
+async function appendVisibility(conditions, params, kind, alias, viewerId) {
+  const visibility = await visibleSql(kind, alias, viewerId);
+  const offset = params.length;
+  conditions.push(`(${visibility.text.replace(/\$(\d+)/g, (_, index) => `$${Number(index) + offset}`)})`);
+  params.push(...visibility.values);
+}
 import { federatedUserSearch, parseFediAddress } from "../services/activitypub/index.js";
 
 const router = Router();
@@ -110,7 +118,7 @@ function escapeIlike(str) {
   return String(str).replace(/[%_\\]/g, "\\$&");
 }
 
-function buildProjectTrgmWhere({ keyword, type, state, useridArray, tagsArray }) {
+async function buildProjectTrgmWhere({ keyword, type, state, useridArray, tagsArray, viewerId }) {
   const ilikePattern = `%${escapeIlike(keyword)}%`;
   const params = [keyword, ilikePattern];
   const conditions = [
@@ -150,15 +158,18 @@ function buildProjectTrgmWhere({ keyword, type, state, useridArray, tagsArray })
     paramIndex += 1;
   }
 
+  conditions.push("(p.state = 'public' OR p.authorid = $" + (params.length + 1) + ")");
+  params.push(Number(viewerId) || 0);
+  await appendVisibility(conditions, params, "project", "p", viewerId);
   return {
     whereSql: conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "",
     params,
   };
 }
 
-async function findReadmeProjectUserIds(keyword) {
+async function findReadmeProjectUserIds(keyword, viewerId) {
   const projects = await prisma.ow_projects.findMany({
-    where: { type: "readme", name: { contains: keyword, mode: "insensitive" } },
+    where: { type: "readme", name: { contains: keyword, mode: "insensitive" }, AND: [await visibleWhere("project", viewerId)], OR: [{ state: "public" }, ...(viewerId ? [{ authorid: Number(viewerId) }] : [])] },
     select: { authorid: true },
     take: 20,
   });
@@ -175,13 +186,15 @@ async function searchProjectsByTrgm({
   order,
   skip,
   take,
+  viewerId,
 }) {
-  const { whereSql, params } = buildProjectTrgmWhere({
+  const { whereSql, params } = await buildProjectTrgmWhere({
     keyword,
     type,
     state,
     useridArray,
     tagsArray,
+    viewerId,
   });
 
   const scoreExpr =
@@ -210,7 +223,7 @@ async function searchProjectsByTrgm({
   };
 }
 
-async function searchUsersByTrgm({ keyword, userStatus, skip, take }) {
+async function searchUsersByTrgm({ keyword, userStatus, skip, take, viewerId }) {
   const ilikePattern = `%${escapeIlike(keyword)}%`;
   const params = [keyword, ilikePattern];
   const conditions = [
@@ -224,6 +237,7 @@ async function searchUsersByTrgm({ keyword, userStatus, skip, take }) {
     paramIndex += 1;
   }
 
+  await appendVisibility(conditions, params, "profile", "u", viewerId);
   const scoreExpr =
     "GREATEST(similarity(COALESCE(u.username, ''), $1), similarity(COALESCE(u.display_name, ''), $1), similarity(COALESCE(u.bio, ''), $1), similarity(COALESCE(u.location, ''), $1), similarity(COALESCE(u.region, ''), $1))";
 
@@ -252,7 +266,7 @@ async function searchUsersByTrgm({ keyword, userStatus, skip, take }) {
   };
 }
 
-async function searchPostsByTrgm({ keyword, postType, useridArray, skip, take }) {
+async function searchPostsByTrgm({ keyword, postType, useridArray, skip, take, viewerId }) {
   const ilikePattern = `%${escapeIlike(keyword)}%`;
   const params = [keyword, ilikePattern];
   const conditions = [
@@ -274,6 +288,7 @@ async function searchPostsByTrgm({ keyword, postType, useridArray, skip, take })
     paramIndex += 1;
   }
 
+  await appendVisibility(conditions, params, "post", "p", viewerId);
   const scoreExpr = "similarity(COALESCE(p.content, ''), $1)";
   const whereSql = `WHERE ${conditions.join(" AND ")}`;
 
@@ -456,7 +471,14 @@ router.get("/", async (req, res, next) => {
     const listState = buildListStateFilter(useridArray, res.locals.userid, stateQuery);
     const { orderBy, order } = buildProjectOrder(orderbyQuery);
 
+    const viewerId = res.locals.userid || null;
+    const projectVisibility = await visibleWhere("project", viewerId);
+    const userVisibility = await visibleWhere("profile", viewerId);
+    const postVisibility = await visibleWhere("post", viewerId);
+    const listVisibility = await visibleWhere("list", viewerId);
     const projectAnd = [
+      projectVisibility,
+      { OR: [{ state: "public" }, ...(viewerId ? [{ authorid: Number(viewerId) }] : [])] },
       { authorid: { not: null } },
       { type: { not: "readme" } },
       type ? { type: { equals: String(type) } } : undefined,
@@ -477,6 +499,7 @@ router.get("/", async (req, res, next) => {
     const projectWhere = projectAnd.length > 0 ? { AND: projectAnd } : {};
 
     const userAnd = [
+      userVisibility,
       userStatus ? { status: { equals: String(userStatus) } } : undefined,
       keyword
         ? {
@@ -494,6 +517,7 @@ router.get("/", async (req, res, next) => {
     const userWhere = userAnd.length > 0 ? { AND: userAnd } : {};
 
     const postAnd = [
+      postVisibility,
       { is_deleted: false },
       postType ? { post_type: { equals: String(postType) } } : undefined,
       useridArray.length > 0 ? { author_id: { in: useridArray } } : undefined,
@@ -502,6 +526,8 @@ router.get("/", async (req, res, next) => {
     const postWhere = postAnd.length > 0 ? { AND: postAnd } : {};
 
     const listAnd = [
+      listVisibility,
+      { OR: [{ state: "public" }, ...(viewerId ? [{ authorid: Number(viewerId) }] : [])] },
       listState.length > 0 ? { state: { in: listState } } : undefined,
       useridArray.length > 0 ? { authorid: { in: useridArray } } : undefined,
       keyword
@@ -521,6 +547,8 @@ router.get("/", async (req, res, next) => {
         ...(keyword ? { contains: keyword, mode: "insensitive" } : {}),
       },
       project: {
+        AND: [projectVisibility],
+        OR: [{ state: "public" }, ...(viewerId ? [{ authorid: Number(viewerId) }] : [])],
         ...(type ? { type: { equals: String(type) } } : {}),
         ...(useridArray.length > 0 ? { authorid: { in: useridArray } } : {}),
         state: { in: state },
@@ -553,12 +581,13 @@ router.get("/", async (req, res, next) => {
           order,
           skip,
           take,
+          viewerId,
         });
         projectTotal = projectResult.total;
         const projectIds = projectResult.items.map((item) => item.id);
         if (projectIds.length > 0) {
           const projectRows = await prisma.ow_projects.findMany({
-            where: { id: { in: projectIds } },
+            where: { id: { in: projectIds }, AND: [projectVisibility], OR: [{ state: "public" }, ...(viewerId ? [{ authorid: Number(viewerId) }] : [])] },
             select: {
               id: true,
               title: true,
@@ -641,12 +670,12 @@ router.get("/", async (req, res, next) => {
           logger.warn('[search] 联邦用户搜索失败，回退到本地搜索:', fediErr.message);
           // 回退到普通搜索
           if (keyword && useTrgm) {
-            const userResult = await searchUsersByTrgm({ keyword, userStatus, skip, take });
+            const userResult = await searchUsersByTrgm({ keyword, userStatus, skip, take, viewerId });
             userTotal = userResult.total;
             const userIds = userResult.items.map((item) => item.id);
             if (userIds.length > 0) {
               const userRows = await prisma.ow_users.findMany({
-                where: { id: { in: userIds } },
+                where: { id: { in: userIds }, AND: [userVisibility] },
                 select: {
                   id: true, username: true, display_name: true, avatar: true,
                   status: true, bio: true, location: true, region: true, regTime: true,
@@ -675,12 +704,13 @@ router.get("/", async (req, res, next) => {
           userStatus,
           skip,
           take,
+          viewerId,
         });
         userTotal = userResult.total;
         const userIds = userResult.items.map((item) => item.id);
         if (userIds.length > 0) {
           const userRows = await prisma.ow_users.findMany({
-            where: { id: { in: userIds } },
+            where: { id: { in: userIds }, AND: [userVisibility] },
             select: {
               id: true,
               username: true,
@@ -721,13 +751,13 @@ router.get("/", async (req, res, next) => {
 
       // 将 readme 项目匹配的用户追加到搜索结果
       if (keyword) {
-        const readmeUserIds = await findReadmeProjectUserIds(keyword);
+        const readmeUserIds = await findReadmeProjectUserIds(keyword, viewerId);
         if (readmeUserIds.length > 0) {
           const existingIds = new Set(users.map((u) => u.id));
           const newIds = readmeUserIds.filter((id) => !existingIds.has(id));
           if (newIds.length > 0) {
             const extraUsers = await prisma.ow_users.findMany({
-              where: { id: { in: newIds } },
+              where: { id: { in: newIds }, AND: [userVisibility] },
               select: {
                 id: true, username: true, display_name: true, avatar: true,
                 status: true, bio: true, location: true, region: true, regTime: true,
@@ -747,12 +777,13 @@ router.get("/", async (req, res, next) => {
           useridArray,
           skip,
           take,
+          viewerId,
         });
         postTotal = postResult.total;
         const postIds = postResult.items.map((item) => item.id);
         if (postIds.length > 0) {
           const postRows = await prisma.ow_posts.findMany({
-            where: { id: { in: postIds } },
+            where: { id: { in: postIds }, AND: [postVisibility] },
             select: {
               id: true,
               author_id: true,
@@ -876,6 +907,10 @@ router.get("/", async (req, res, next) => {
       tagTotal = countedTags.length;
     }
 
+    users = (await Promise.all(users.map(user => sanitizePublicUser(user, viewerId)))).filter(Boolean);
+    await Promise.all([...projects, ...posts, ...lists].map(async item => {
+      item.author = await sanitizePublicUser(item.author, viewerId);
+    }));
     const totals = {
       projects: projectTotal,
       users: userTotal,

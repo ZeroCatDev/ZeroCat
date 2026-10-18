@@ -55,6 +55,8 @@ export const ACTION_DEFINITIONS = {
     },
 };
 
+export const ADMIN_MODULES = ["permissions", "restrictions", "content", "hidden_content"];
+
 const ACTION_COVERAGE = {
     read: ["read"],
     create: ["create"],
@@ -405,6 +407,12 @@ export const SCOPE_CATALOG = [
         action: "manage",
         action_label: ACTION_DEFINITIONS.manage.label,
     }),
+    ...ADMIN_MODULES.flatMap((module) => ["read", "manage"].map((action) =>
+        scope(`admin:${module}:${action}`, `${module} ${ACTION_DEFINITIONS[action].label}`,
+            `管理后台 ${module} 模块的${ACTION_DEFINITIONS[action].label}权限。`, "admin", "high", {
+                resource: "admin", module, action, action_label: ACTION_DEFINITIONS[action].label,
+            })
+    )),
 ];
 
 export const SCOPE_PRESETS = [
@@ -480,7 +488,10 @@ export function isValidScope(scope) {
     if (parsed.wildcard) return true;
     if (!RESOURCE_SET.has(parsed.resource)) return false;
     if (parsed.action !== "*" && !ACTION_SET.has(parsed.action)) return false;
-    if (parsed.id !== null && String(parsed.id).length === 0) return false;
+    if (parsed.id !== null && (!String(parsed.id).length || /[\s:]/.test(parsed.id))) return false;
+    if (parsed.resource === "admin" && parsed.id !== null) {
+        return ADMIN_MODULES.includes(parsed.id) && ["read", "manage", "*"].includes(parsed.action);
+    }
     return true;
 }
 
@@ -600,24 +611,25 @@ function isWriteLikeAction(action) {
     return WRITE_LIKE_ACTIONS.has(action);
 }
 
-async function canUseProjectLikeResource(userId, resourceId, action, { articleOnly = false } = {}) {
+async function canUseProjectLikeResource(userId, resourceId, action, { articleOnly = false, db } = {}) {
     const projectId = numericId(resourceId);
     if (!projectId) return false;
 
-    const { prisma } = await import("../prisma.js");
-    const project = await prisma.ow_projects.findUnique({
-        where: { id: projectId },
-        select: { authorid: true, state: true, type: true },
-    });
+    // Instance capabilities must still pass current deny and governance checks.
+    const [{ prisma: defaultDb }, { canViewContent }] = await Promise.all([
+        import("../prisma.js"), import("../moderation/visibility.js"),
+    ]);
+    const prisma = db || defaultDb;
+    const project = await prisma.ow_projects.findUnique({ where: { id: projectId } });
 
-    if (!project) return false;
+    if (!project || !await canViewContent("project", project, userId, { db: prisma })) return false;
     if (articleOnly && String(project.type || "").toLowerCase() !== "article") return false;
     if (Number(project.authorid) === Number(userId)) return true;
 
     // 协作者放行：删除永远仅作者；其余动作看实例级协作角色覆盖的 scope。
     if (action !== "delete") {
-        const { getCollabScopes } = await import("../projectCollaborationService.js");
-        const collabScopes = await getCollabScopes(userId, projectId);
+        const { getUserResourceRoleScopes } = await import("./policyEngine.js");
+        const collabScopes = await getUserResourceRoleScopes(userId, "project", String(projectId), { db: prisma });
         if (scopeSatisfies(collabScopes, `project:${action}`)) return true;
     }
 
@@ -625,41 +637,42 @@ async function canUseProjectLikeResource(userId, resourceId, action, { articleOn
     return false;
 }
 
-async function canUsePostResource(userId, resourceId, action) {
+async function canUsePostResource(userId, resourceId, action, { db } = {}) {
     const postId = numericId(resourceId);
     if (!postId) return false;
 
-    const { prisma } = await import("../prisma.js");
-    const post = await prisma.ow_posts.findUnique({
-        where: { id: postId },
-        select: { author_id: true, is_deleted: true },
-    });
+    const [{ prisma: defaultDb }, { canViewContent }] = await Promise.all([
+        import("../prisma.js"), import("../moderation/visibility.js"),
+    ]);
+    const prisma = db || defaultDb;
+    const post = await prisma.ow_posts.findUnique({ where: { id: postId } });
 
-    if (!post || post.is_deleted) return false;
+    if (!post || !await canViewContent("post", post, userId, { db: prisma })) return false;
     if (Number(post.author_id) === Number(userId)) return true;
     return !isWriteLikeAction(action);
 }
 
-async function canUseListResource(userId, resourceId, action) {
+async function canUseListResource(userId, resourceId, action, { db } = {}) {
     const listId = numericId(resourceId);
     if (!listId) return false;
 
-    const { prisma } = await import("../prisma.js");
-    const list = await prisma.ow_projects_lists.findUnique({
-        where: { id: listId },
-        select: { authorid: true, state: true },
-    });
+    const [{ prisma: defaultDb }, { canViewContent }] = await Promise.all([
+        import("../prisma.js"), import("../moderation/visibility.js"),
+    ]);
+    const prisma = db || defaultDb;
+    const list = await prisma.ow_projects_lists.findUnique({ where: { id: listId } });
 
-    if (!list) return false;
+    if (!list || !await canViewContent("list", list, userId, { db: prisma })) return false;
     if (Number(list.authorid) === Number(userId)) return true;
     return !isWriteLikeAction(action) && list.state === "public";
 }
 
-async function canUseExtensionResource(userId, resourceId, action) {
+async function canUseExtensionResource(userId, resourceId, action, { db } = {}) {
     const extensionId = numericId(resourceId);
     if (!extensionId) return false;
 
-    const { prisma } = await import("../prisma.js");
+    const { prisma: defaultDb } = await import("../prisma.js");
+    const prisma = db || defaultDb;
     const extension = await prisma.ow_scratch_extensions.findUnique({
         where: { id: extensionId },
         select: {
@@ -675,8 +688,9 @@ async function canUseExtensionResource(userId, resourceId, action) {
         || extension.project?.state === "public";
 }
 
-async function canUseCommentResource(userId, resourceId, action) {
-    const { prisma } = await import("../prisma.js");
+async function canUseCommentResource(userId, resourceId, action, { db } = {}) {
+    const { prisma: defaultDb } = await import("../prisma.js");
+    const prisma = db || defaultDb;
     const rawId = String(resourceId || "").trim();
     if (!rawId) return false;
 
@@ -694,18 +708,19 @@ async function canUseCommentResource(userId, resourceId, action) {
     const comment = await prisma.ow_comment_service.findUnique({
         where: { id: commentId },
         select: {
-            user_id: true,
+            account_user_id: true,
             space: { select: { owner_id: true, status: true } },
         },
     });
     if (!comment) return false;
     if (Number(comment.space?.owner_id) === Number(userId)) return true;
-    if (String(comment.user_id || "") === String(userId)) return true;
+    if (Number(comment.account_user_id) === Number(userId)) return true;
     return !isWriteLikeAction(action) && comment.space?.status === "active";
 }
 
-async function canUseAssetResource(userId, resourceId, action) {
-    const { prisma } = await import("../prisma.js");
+async function canUseAssetResource(userId, resourceId, action, { db } = {}) {
+    const { prisma: defaultDb } = await import("../prisma.js");
+    const prisma = db || defaultDb;
     const assetId = numericId(resourceId);
     const where = assetId
         ? { id: assetId }
@@ -720,11 +735,12 @@ async function canUseAssetResource(userId, resourceId, action) {
     return !isWriteLikeAction(action);
 }
 
-async function canUseNotificationResource(userId, resourceId) {
+async function canUseNotificationResource(userId, resourceId, { db } = {}) {
     const notificationId = numericId(resourceId);
     if (!notificationId) return false;
 
-    const { prisma } = await import("../prisma.js");
+    const { prisma: defaultDb } = await import("../prisma.js");
+    const prisma = db || defaultDb;
     const notification = await prisma.ow_notifications.findUnique({
         where: { id: notificationId },
         select: { user_id: true },
@@ -732,8 +748,9 @@ async function canUseNotificationResource(userId, resourceId) {
     return Number(notification?.user_id) === Number(userId);
 }
 
-async function canUseOAuthApplicationResource(userId, resourceId, action) {
-    const { prisma } = await import("../prisma.js");
+async function canUseOAuthApplicationResource(userId, resourceId, action, { db } = {}) {
+    const { prisma: defaultDb } = await import("../prisma.js");
+    const prisma = db || defaultDb;
     const appId = numericId(resourceId);
     const application = await prisma.ow_oauth_applications.findUnique({
         where: appId ? { id: appId } : { client_id: String(resourceId || "") },
@@ -744,11 +761,12 @@ async function canUseOAuthApplicationResource(userId, resourceId, action) {
     return !isWriteLikeAction(action) && application.is_public;
 }
 
-async function canUseTokenResource(userId, resourceId) {
+async function canUseTokenResource(userId, resourceId, { db } = {}) {
     const tokenId = numericId(resourceId);
     if (!tokenId) return false;
 
-    const { prisma } = await import("../prisma.js");
+    const { prisma: defaultDb } = await import("../prisma.js");
+    const prisma = db || defaultDb;
     const token = await prisma.ow_tokens.findUnique({
         where: { id: tokenId },
         select: { user_id: true },
@@ -756,11 +774,12 @@ async function canUseTokenResource(userId, resourceId) {
     return Number(token?.user_id) === Number(userId);
 }
 
-async function canUseEventResource(userId, resourceId, action) {
+async function canUseEventResource(userId, resourceId, action, { db } = {}) {
     const eventId = numericId(resourceId);
     if (!eventId) return false;
 
-    const { prisma } = await import("../prisma.js");
+    const { prisma: defaultDb } = await import("../prisma.js");
+    const prisma = db || defaultDb;
     const event = await prisma.ow_events.findUnique({
         where: { id: eventId },
         select: { actor_id: true, public: true },
@@ -780,40 +799,43 @@ async function canUseEventResource(userId, resourceId, action) {
  * @param {string} requiredScope
  * @returns {Promise<boolean>}
  */
-export async function userCanAccessResourceScope(userId, requiredScope) {
+export async function userCanAccessResourceScope(userId, requiredScope, options = {}) {
     const parsed = parseScope(requiredScope);
-    if (!parsed || parsed.wildcard) return false;
+    if (!isValidScope(requiredScope) || !parsed || parsed.wildcard) return false;
     if (parsed.id === null || parsed.id === undefined) return true;
 
     const normalizedUserId = Number(userId);
     if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return false;
 
     try {
+        const { getUserPolicy, policyDeniesScope } = await import("./policyEngine.js");
+        const policy = await getUserPolicy(normalizedUserId, { targetType: parsed.resource, targetId: parsed.id, db: options.db });
+        if (!policy.valid || policyDeniesScope(policy, requiredScope)) return false;
         switch (parsed.resource) {
             case "user":
                 return String(parsed.id) === String(normalizedUserId);
             case "project":
-                return canUseProjectLikeResource(normalizedUserId, parsed.id, parsed.action);
+                return canUseProjectLikeResource(normalizedUserId, parsed.id, parsed.action, options);
             case "blog":
-                return canUseProjectLikeResource(normalizedUserId, parsed.id, parsed.action, { articleOnly: true });
+                return canUseProjectLikeResource(normalizedUserId, parsed.id, parsed.action, { ...options, articleOnly: true });
             case "post":
-                return canUsePostResource(normalizedUserId, parsed.id, parsed.action);
+                return canUsePostResource(normalizedUserId, parsed.id, parsed.action, options);
             case "list":
-                return canUseListResource(normalizedUserId, parsed.id, parsed.action);
+                return canUseListResource(normalizedUserId, parsed.id, parsed.action, options);
             case "extension":
-                return canUseExtensionResource(normalizedUserId, parsed.id, parsed.action);
+                return canUseExtensionResource(normalizedUserId, parsed.id, parsed.action, options);
             case "comment":
-                return canUseCommentResource(normalizedUserId, parsed.id, parsed.action);
+                return canUseCommentResource(normalizedUserId, parsed.id, parsed.action, options);
             case "asset":
-                return canUseAssetResource(normalizedUserId, parsed.id, parsed.action);
+                return canUseAssetResource(normalizedUserId, parsed.id, parsed.action, options);
             case "notification":
-                return canUseNotificationResource(normalizedUserId, parsed.id);
+                return canUseNotificationResource(normalizedUserId, parsed.id, options);
             case "oauth_app":
-                return canUseOAuthApplicationResource(normalizedUserId, parsed.id, parsed.action);
+                return canUseOAuthApplicationResource(normalizedUserId, parsed.id, parsed.action, options);
             case "token":
-                return canUseTokenResource(normalizedUserId, parsed.id);
+                return canUseTokenResource(normalizedUserId, parsed.id, options);
             case "event":
-                return canUseEventResource(normalizedUserId, parsed.id, parsed.action);
+                return canUseEventResource(normalizedUserId, parsed.id, parsed.action, options);
             case "follow":
             case "cachekv":
             case "git_sync":
@@ -822,7 +844,7 @@ export async function userCanAccessResourceScope(userId, requiredScope) {
             case "admin":
                 return false;
             default:
-                return true;
+                return false;
         }
     } catch (error) {
         logger.error(`[scopes] 检查资源实例权限失败 ${requiredScope}: ${error.message}`);
@@ -854,7 +876,7 @@ export async function validateUserGrantableScopes(userId, scopes) {
         return { allowed: false, denied: normalized, admin: false };
     }
 
-    const { canUserGrantScopes } = await import("./policyEngine.js");
+    const { canUserGrantScopes, getUserPolicy, resourcePolicyAllowsScope } = await import("./policyEngine.js");
     const policyCheck = await canUserGrantScopes(userId, normalized);
     const isAdmin = policyCheck.admin;
     const denied = [];
@@ -873,7 +895,11 @@ export async function validateUserGrantableScopes(userId, scopes) {
 
         if (parsed.wildcard) continue;
 
-        if (!(await canGrantInstanceScope(Number(userId), parsed, isAdmin))) {
+        if (parsed.id !== null && parsed.resource !== "admin") {
+            const policy = await getUserPolicy(userId, { targetType: parsed.resource, targetId: parsed.id });
+            if (resourcePolicyAllowsScope(policy, scopeName)) continue;
+        }
+        if (parsed.resource !== "admin" && !(await canGrantInstanceScope(Number(userId), parsed, isAdmin))) {
             denied.push(scopeName);
         }
     }

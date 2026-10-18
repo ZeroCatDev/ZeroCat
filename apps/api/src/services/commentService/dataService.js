@@ -2,7 +2,7 @@ import { prisma } from '../prisma.js';
 import redisClient from '../redis.js';
 import logger from '../logger.js';
 import zcconfig from '../config/zcconfig.js';
-import { getOrCreateSpaceUser } from './spaceManager.js';
+import { assertCanWrite, visibleWhere, canViewContent } from '../moderation/visibility.js';
 import { sanitizeComment } from './sanitizer.js';
 
 const TASK_TTL = 86400; // 24h
@@ -85,13 +85,29 @@ export async function listTasks(spaceId) {
 // 导出 (Waline JSON 格式)
 // ============================================================
 
+async function getTaskActor(taskId, spaceId, type) {
+    const task = await getTask(taskId);
+    if (!task?.user_id || task.space_id !== spaceId || task.type !== type) {
+        throw Object.assign(new Error('数据任务不存在或无权限'), { statusCode: 404, code: 'RESOURCE_NOT_FOUND' });
+    }
+    const space = await prisma.ow_comment_spaces.findUnique({
+        where: { id: Number(spaceId) },
+        select: { owner_id: true },
+    });
+    if (!space || space.owner_id !== Number(task.user_id)) {
+        throw Object.assign(new Error('空间不存在或无权限'), { statusCode: 404, code: 'RESOURCE_NOT_FOUND' });
+    }
+    return Number(task.user_id);
+}
+
 /**
  * 导出空间数据为 Waline JSON 格式
  */
-export async function exportSpaceData(spaceId, spaceCuid, spaceName, taskId, progressCb) {
+export async function exportSpaceData(spaceId, spaceCuid, spaceName, taskId, progressCb, { download = false } = {}) {
+    const userId = await getTaskActor(taskId, spaceId, 'export');
     const [comments, counters, spaceUsers] = await Promise.all([
         prisma.ow_comment_service.findMany({
-            where: { space_id: spaceId },
+            where: { space_id: spaceId, AND: [await visibleWhere('comment_service', userId)] },
             orderBy: { id: 'asc' },
         }),
         prisma.ow_comment_service_counter.findMany({
@@ -99,7 +115,7 @@ export async function exportSpaceData(spaceId, spaceCuid, spaceName, taskId, pro
             orderBy: { id: 'asc' },
         }),
         prisma.ow_comment_service_users.findMany({
-            where: { space_id: spaceId },
+            where: { space_id: spaceId, user: { is: await visibleWhere('profile', userId) } },
             orderBy: { user_id: 'asc' },
             include: {
                 user: {
@@ -111,6 +127,11 @@ export async function exportSpaceData(spaceId, spaceCuid, spaceName, taskId, pro
             },
         }),
     ]);
+
+    const hiddenProfiles = new Set();
+    for (const accountId of new Set(comments.map(comment => comment.account_user_id).filter(Boolean))) {
+        if (!await canViewContent('profile', { id: accountId }, userId)) hiddenProfiles.add(accountId);
+    }
 
     const total = comments.length + counters.length + spaceUsers.length;
     let processed = 0;
@@ -134,12 +155,12 @@ export async function exportSpaceData(spaceId, spaceCuid, spaceName, taskId, pro
         const rid = c.rid ? (idMap[Number(c.rid)] ?? null) : null;
 
         return {
-            user_id: c.user_id ? (Number(c.user_id) || null) : null,
+            user_id: hiddenProfiles.has(c.account_user_id) ? null : (c.account_user_id || null),
             comment: c.comment || '',
             ip: c.ip || '',
-            link: c.link || null,
-            mail: c.mail || null,
-            nick: c.nick || null,
+            link: hiddenProfiles.has(c.account_user_id) ? null : (c.link || null),
+            mail: hiddenProfiles.has(c.account_user_id) ? null : (c.mail || null),
+            nick: hiddenProfiles.has(c.account_user_id) ? '用户' : (c.nick || null),
             pid,
             rid,
             sticky: c.sticky ? true : null,
@@ -230,7 +251,9 @@ export async function exportSpaceData(spaceId, spaceCuid, spaceName, taskId, pro
         },
     };
 
-    // JSON 字符串存入 Redis，1 小时有效
+    if (download) return JSON.stringify(walineJson);
+
+    // 缓存仅控制下载有效期，下载时重新构建当前可见数据。
     await redisClient.set(`cs:datatask:data:${taskId}`, JSON.stringify(walineJson), DATA_TTL);
 
     return {
@@ -246,8 +269,9 @@ export async function exportSpaceData(spaceId, spaceCuid, spaceName, taskId, pro
 export async function getExportData(taskId) {
     const data = await redisClient.get(`cs:datatask:data:${taskId}`);
     if (!data) return null;
-    // redisClient.get 会自动 JSON.parse，所以拿回来的可能是对象
-    return typeof data === 'string' ? data : JSON.stringify(data);
+    const task = await getTask(taskId);
+    if (!task || task.type !== 'export' || task.status !== 'completed') return null;
+    return exportSpaceData(task.space_id, task.spaceCuid, task.spaceName, taskId, null, { download: true });
 }
 
 // ============================================================
@@ -299,7 +323,7 @@ function parseDate(val) {
  * Waline JSON 字段:
  *   objectId - 顺序编号 (1,2,3...)，仅用于 pid/rid 映射
  *   pid/rid  - 引用其他 Comment 的 objectId
- *   user_id  - Waline 内部用户 id，导入时通过邮箱重新关联
+ *   user_id  - 外部显示字段，不用于本站账号归属
  *   日期字段  - ISO 8601 字符串
  */
 function normalizeComments(input) {
@@ -340,9 +364,10 @@ function normalizeComments(input) {
  * @param {function} progressCb
  */
 export async function importSpaceData(spaceId, data, taskId, progressCb) {
+    const userId = await getTaskActor(taskId, spaceId, 'import');
+    await assertCanWrite(userId, 'comments', 'manage');
     const commentInput = Array.isArray(data.Comment) ? data.Comment : [];
     const counterInput = Array.isArray(data.Counter) ? data.Counter : [];
-    const userInput = Array.isArray(data.Users) ? data.Users : [];
 
     const comments = normalizeComments(commentInput);
 
@@ -360,41 +385,6 @@ export async function importSpaceData(spaceId, data, taskId, progressCb) {
         `[data-import] Cleared ${deletedComments.count} comments and ${deletedCounters.count} counters for space ${spaceId}`,
     );
 
-    // ── 阶段 1: 邮箱 → 用户映射 ──
-    // 收集所有邮箱：来自 Comment 的 mail 和 Users 的 email
-    const emailToUser = new Map();
-    const allEmails = new Set();
-
-    for (const c of comments) {
-        if (c.mail) allEmails.add(c.mail.toLowerCase());
-    }
-    for (const u of userInput) {
-        if (u.email) allEmails.add(u.email.toLowerCase());
-    }
-
-    const emails = [...allEmails];
-    if (emails.length > 0) {
-        const BATCH = 200;
-        for (let i = 0; i < emails.length; i += BATCH) {
-            const batch = emails.slice(i, i + BATCH);
-            const users = await prisma.ow_users.findMany({
-                where: { email: { in: batch } },
-                select: { id: true, email: true, username: true, display_name: true, avatar: true },
-            });
-            for (const u of users) {
-                emailToUser.set(u.email.toLowerCase(), u);
-            }
-        }
-    }
-
-    // 构建 Waline user objectId → email 映射 (用于关联 user_id 没有 mail 的评论)
-    const walineUserIdToEmail = new Map();
-    for (const u of userInput) {
-        if (u.objectId != null && u.email) {
-            walineUserIdToEmail.set(String(u.objectId), u.email.toLowerCase());
-        }
-    }
-
     // ── 阶段 2: 插入评论 (objectId → DB id 重映射) ──
     const objIdToDbId = new Map();
 
@@ -403,7 +393,7 @@ export async function importSpaceData(spaceId, data, taskId, progressCb) {
 
     // 先插入根评论
     for (const c of rootComments) {
-        const record = await _createComment(spaceId, c, emailToUser, walineUserIdToEmail, null, null);
+        const record = await _createComment(spaceId, c, null, null);
         objIdToDbId.set(c._obj_id, record.id);
         processed++;
         if (progressCb && processed % 50 === 0) await progressCb(processed, total);
@@ -425,7 +415,7 @@ export async function importSpaceData(spaceId, data, taskId, progressCb) {
 
             const newRid = c._obj_rid ? (objIdToDbId.get(c._obj_rid) ?? newPid) : newPid;
 
-            const record = await _createComment(spaceId, c, emailToUser, walineUserIdToEmail, newPid, newRid);
+            const record = await _createComment(spaceId, c, newPid, newRid);
             objIdToDbId.set(c._obj_id, record.id);
             processed++;
             if (progressCb && processed % 50 === 0) await progressCb(processed, total);
@@ -434,7 +424,7 @@ export async function importSpaceData(spaceId, data, taskId, progressCb) {
         if (stillRemaining.length === remaining.length) {
             // 无法解析父级，降级为根评论
             for (const c of stillRemaining) {
-                const record = await _createComment(spaceId, c, emailToUser, walineUserIdToEmail, null, null);
+                const record = await _createComment(spaceId, c, null, null);
                 objIdToDbId.set(c._obj_id, record.id);
                 processed++;
             }
@@ -492,7 +482,7 @@ export async function importSpaceData(spaceId, data, taskId, progressCb) {
     return {
         commentCount: comments.length,
         counterCount,
-        usersMapped: emailToUser.size,
+        usersMapped: 0,
     };
 }
 
@@ -500,37 +490,16 @@ export async function importSpaceData(spaceId, data, taskId, progressCb) {
  * 内部: 创建单条评论
  * @param {number} spaceId
  * @param {object} c - normalizeComments 产出的评论对象
- * @param {Map} emailToUser - 邮箱 → ow_users 映射
- * @param {Map} walineUserIdToEmail - Waline user objectId → email 映射
  * @param {number|null} pid - 已映射的新 DB pid
  * @param {number|null} rid - 已映射的新 DB rid
  */
-async function _createComment(spaceId, c, emailToUser, walineUserIdToEmail, pid, rid) {
-    let userId = null;
-
-    // 通过邮箱关联 ZeroCat 用户
-    // 优先使用评论自带的 mail，其次通过 Waline user_id 查 Users 表的 email
-    const mail = c.mail?.toLowerCase() || walineUserIdToEmail.get(c._waline_user_id) || null;
-
-    if (mail) {
-        const zcUser = emailToUser.get(mail);
-        if (zcUser) {
-            userId = zcUser.id;
-            try {
-                await getOrCreateSpaceUser(spaceId, zcUser.id, {
-                    display_name: zcUser.display_name || zcUser.username,
-                    email: zcUser.email,
-                });
-            } catch (err) {
-                logger.warn(`[data-import] getOrCreateSpaceUser failed uid=${zcUser.id}:`, err.message);
-            }
-        }
-    }
-
+async function _createComment(spaceId, c, pid, rid) {
+    // 导入文件中的邮箱和用户 ID 未经过本站认证，不能作为账号归属凭据。
     return prisma.ow_comment_service.create({
         data: {
             space_id: spaceId,
-            user_id: userId ? truncate(String(userId), COL_LIMITS.user_id) : null,
+            user_id: null,
+            account_user_id: null,
             nick: c.nick,
             mail: c.mail,
             link: c.link,

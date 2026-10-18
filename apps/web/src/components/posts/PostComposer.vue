@@ -167,7 +167,7 @@
             class="composer-textarea"
             :class="{ 'composer-textarea--compact': compact }"
             :placeholder="placeholder"
-            :disabled="disabled || submitting"
+            :disabled="disabled || submitting || localuser.isReadonly('posts')"
             rows="1"
             @focus="isFocused = true"
             @blur="onBlur"
@@ -219,7 +219,7 @@
         />
 
         <ComposerToolbar
-          :disabled="disabled || submitting"
+          :disabled="disabled || submitting || localuser.isReadonly('posts')"
           :assets-count="uploadedAssets.length"
           :has-embed="!!embedPreview"
           :char-count="charCount"
@@ -358,6 +358,7 @@ const mediaIds = computed(() => {
 
 // Can submit
 const canSubmit = computed(() => {
+  if (localuser.isReadonly('posts') || props.disabled || submitting.value) return false;
   const hasContent = content.value.trim().length > 0;
   const hasMedia = mediaIds.value.length > 0;
   const hasEmbed = !!embedPreview.value;
@@ -656,6 +657,7 @@ const collapseFloating = () => {
 
 // File upload
 const triggerUpload = () => {
+  if (localuser.isReadonly('posts') || props.disabled || submitting.value) return;
   fileInputRef.value?.click();
 };
 
@@ -669,6 +671,7 @@ const normalizeUploadResult = (res) => {
 };
 
 const onFilesSelected = async (event) => {
+  if (localuser.isReadonly('posts') || props.disabled || submitting.value) return;
   const files = Array.from(event.target?.files || []);
   if (!files.length) return;
 

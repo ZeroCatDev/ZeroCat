@@ -1,5 +1,18 @@
 import { prisma } from '../services/prisma.js'
 import logger from "../services/logger.js";
+import { visibleWhere, canViewContent, assertCanWrite, sanitizePublicUser } from "../services/moderation/visibility.js";
+import { authorizeResourceOperation } from "../services/auth/resourceOperation.js";
+
+async function ensureListOwner(userId, listId, action, authorizationContext) {
+    const decision = await authorizeResourceOperation(userId, "list", listId, action, authorizationContext);
+    if (decision.principalId !== Number(userId)) await assertCanWrite(decision.principalId, "lists", action);
+    const list = await prisma.ow_projects_lists.findFirst({
+        where: { id: Number(listId), ...(!decision.allowed || decision.delegationId != null ? { authorid: decision.principalId } : {}),
+            AND: [await visibleWhere("list", userId, { ignorePrivacy: true })] },
+    });
+    if (!list) throw Object.assign(new Error("列表不存在或无权限"), { statusCode: 404, code: "NOT_FOUND" });
+    return list;
+}
 
 /**
  * Get a project list by ID
@@ -7,21 +20,22 @@ import logger from "../services/logger.js";
  * @param {number} userId - The current user ID
  * @returns {Promise<object>} - The list with projects
  */
-export async function getProjectList(listId, userId) {
+export async function getProjectList(listId, userId, authorizationContext) {
     try {
         // Get the list
         const list = await prisma.ow_projects_lists.findUnique({
             where: {id: parseInt(listId)}
         });
 
-        if (!list) {
-            return null;
-        }
+        if (!list) return null;
 
-        // Check if the user can access this list
-        if (list.state === "private" && list.authorid !== parseInt(userId)) {
-            return null;
+        let decision;
+        if (authorizationContext && (authorizationContext.delegationId !== undefined || list.state !== "public")) {
+            decision = await authorizeResourceOperation(userId, "list", list.id, "read", authorizationContext);
         }
+        if (list.state !== "public" && (!decision?.allowed || decision.delegationId != null)
+            && list.authorid !== (decision?.principalId ?? Number(userId))) return null;
+        if (!await canViewContent("list", list, userId, { ignorePrivacy: true })) return null;
 
         // Get the projects in the list
         const listItems = await prisma.ow_projects_list_items.findMany({
@@ -33,7 +47,9 @@ export async function getProjectList(listId, userId) {
         // Get the project details
         const projects = await prisma.ow_projects.findMany({
             where: {
-                id: {in: projectIds}
+                id: {in: projectIds},
+                AND: [await visibleWhere("project", userId)],
+                OR: [{ state: "public" }, ...(userId ? [{ authorid: Number(userId) }] : [])],
             },
             select: {
                 id: true,
@@ -59,6 +75,9 @@ export async function getProjectList(listId, userId) {
             }
         });
 
+        await Promise.all(projects.map(async project => {
+            project.author = await sanitizePublicUser(project.author, userId);
+        }));
         return {
             ...list,
             projects
@@ -116,6 +135,7 @@ export async function getUserListInfoAndCheak(userId, projectId) {
  * @returns {Promise<object>} - The created list
  */
 export async function createList(userId, title, description) {
+    await assertCanWrite(Number(userId), "lists", "create");
     try {
         const list = await prisma.ow_projects_lists.create({
             data: {
@@ -140,19 +160,10 @@ export async function createList(userId, title, description) {
  * @param {number} listId - The list ID
  * @returns {Promise<object>} - The deleted list
  */
-export async function deleteList(userId, listId) {
+export async function deleteList(userId, listId, authorizationContext) {
+    await assertCanWrite(Number(userId), "lists", "delete");
     try {
-        // Check if the list belongs to the user
-        const list = await prisma.ow_projects_lists.findFirst({
-            where: {
-                id: parseInt(listId),
-                authorid: parseInt(userId)
-            }
-        });
-
-        if (!list) {
-            throw new Error("List not found or you don't have permission");
-        }
+        const list = await ensureListOwner(userId, listId, "delete", authorizationContext);
 
         // Delete all list items
         await prisma.ow_projects_list_items.deleteMany({
@@ -178,19 +189,14 @@ export async function deleteList(userId, listId) {
  * @param {number} projectId - The project ID
  * @returns {Promise<object>} - The created list item
  */
-export async function addProjectToList(userId, listId, projectId) {
+export async function addProjectToList(userId, listId, projectId, authorizationContext) {
+    await assertCanWrite(Number(userId), "lists", "update");
+    const project = await prisma.ow_projects.findFirst({
+        where: { id: Number(projectId), AND: [await visibleWhere("project", userId)], OR: [{ state: "public" }, { authorid: Number(userId) }] },
+    });
+    if (!project) throw Object.assign(new Error("项目不存在"), { statusCode: 404, code: "NOT_FOUND" });
     try {
-        // Check if the list belongs to the user
-        const list = await prisma.ow_projects_lists.findFirst({
-            where: {
-                id: parseInt(listId),
-                authorid: parseInt(userId)
-            }
-        });
-
-        if (!list) {
-            throw new Error("List not found or you don't have permission");
-        }
+        const list = await ensureListOwner(userId, listId, "update", authorizationContext);
 
         // Check if the project is already in the list
         const existingItem = await prisma.ow_projects_list_items.findFirst({
@@ -237,19 +243,10 @@ export async function addProjectToList(userId, listId, projectId) {
  * @param {number} projectId - The project ID
  * @returns {Promise<object>} - The deleted list item
  */
-export async function removeProjectFromList(userId, listId, projectId) {
+export async function removeProjectFromList(userId, listId, projectId, authorizationContext) {
+    await assertCanWrite(Number(userId), "lists", "update");
     try {
-        // Check if the list belongs to the user
-        const list = await prisma.ow_projects_lists.findFirst({
-            where: {
-                id: parseInt(listId),
-                authorid: parseInt(userId)
-            }
-        });
-
-        if (!list) {
-            throw new Error("List not found or you don't have permission");
-        }
+        const list = await ensureListOwner(userId, listId, "update", authorizationContext);
 
         // Remove the project from the list
         const deletedItem = await prisma.ow_projects_list_items.deleteMany({
@@ -321,7 +318,7 @@ export async function getUserListInfo(userId) {
  */
 export async function getUserListInfoPublic(userId, currentUserId) {
     try {
-        const where = {authorid: parseInt(userId)};
+        const where = {authorid: parseInt(userId), AND: [await visibleWhere("list", currentUserId)]};
 
         // If not the owner, only show public lists
         if (parseInt(userId) !== parseInt(currentUserId)) {
@@ -350,7 +347,10 @@ export async function getUserListInfoPublic(userId, currentUserId) {
             }
         });
 
-        return lists;
+        return Promise.all(lists.map(async list => ({
+            ...list,
+            author: await sanitizePublicUser(list.author, currentUserId),
+        })));
     } catch (error) {
         logger.error("Error in getUserListInfoPublic:", error);
         throw error;
@@ -364,19 +364,10 @@ export async function getUserListInfoPublic(userId, currentUserId) {
  * @param {object} data - The update data
  * @returns {Promise<object>} - The updated list
  */
-export async function updateList(userId, listId, data) {
+export async function updateList(userId, listId, data, authorizationContext) {
+    await assertCanWrite(Number(userId), "lists", "update");
     try {
-        // Check if the list belongs to the user
-        const list = await prisma.ow_projects_lists.findFirst({
-            where: {
-                id: parseInt(listId),
-                authorid: parseInt(userId)
-            }
-        });
-
-        if (!list) {
-            throw new Error("List not found or you don't have permission");
-        }
+        const list = await ensureListOwner(userId, listId, "update", authorizationContext);
 
         // Update the list
         const updatedList = await prisma.ow_projects_lists.update({

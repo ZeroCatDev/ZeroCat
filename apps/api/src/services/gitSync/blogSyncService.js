@@ -1,6 +1,9 @@
 import { createHash } from 'crypto';
 import { prisma } from '../prisma.js';
 import { createInstallationToken } from './githubApp.js';
+import { assertSyncAuthorized, loadSyncProject, moderationRemovalProject, syncAuthorizationContext } from './authorization.js';
+import { canViewContent, visibleWhere } from '../moderation/visibility.js';
+import { ModerationError } from '../moderation/policy.js';
 import {
     createBlob,
     createCommit,
@@ -76,6 +79,9 @@ async function fetchArticleProjects(userId) {
             state: true,
             authorid: true,
             time: true,
+            deleted_at: true,
+            is_shadowbanned: true,
+            shadowban_expires_at: true,
         },
         orderBy: { time: 'desc' },
     });
@@ -244,8 +250,13 @@ async function createGitBlobs(token, owner, repo, entries) {
     return treeEntries;
 }
 
-async function syncAllArticles({ userId, reason, triggerProjectId } = {}) {
+async function syncAllArticles({ userId, reason, triggerProjectId, actorId, authorizationContext } = {}) {
+    const payload = { actorId, authorizationContext };
+    await assertSyncAuthorized(payload, null, { blog: true });
     const numericUserId = Number(userId);
+    if (syncAuthorizationContext(payload).actorId !== numericUserId) {
+        throw new ModerationError(403, 'BLOG_SYNC_OWNER_REQUIRED', '只能同步自己的博客');
+    }
     if (!Number.isInteger(numericUserId)) {
         throw new Error('blog-sync: invalid user');
     }
@@ -300,6 +311,9 @@ async function syncAllArticles({ userId, reason, triggerProjectId } = {}) {
 
     const fileEntries = [];
     for (const project of projects) {
+        // Moderation removals use a separate job that cannot publish the other articles.
+        if (!await canViewContent('project', project, null, { ignorePrivacy: true })) continue;
+        await assertSyncAuthorized(payload, project);
         if (settings.excludeReadme !== false && username) {
             const projectName = String(project.name || '').trim().toLowerCase();
             if (projectName && projectName === username) {
@@ -391,6 +405,13 @@ async function syncAllArticles({ userId, reason, triggerProjectId } = {}) {
         }
     }
 
+    const recheckEntries = async () => {
+        await assertSyncAuthorized(payload, null, { blog: true });
+        for (const entry of validEntries) {
+            await loadSyncProject({ ...payload, projectId: entry.projectId, userId: numericUserId }, { blog: true });
+        }
+    };
+    await recheckEntries();
     const blobEntries = await createGitBlobs(token, settings.repoOwner, settings.repoName, validEntries);
     const deleteEntries = filteredDeletionPaths.map((path) => ({
         path,
@@ -407,6 +428,7 @@ async function syncAllArticles({ userId, reason, triggerProjectId } = {}) {
     const parents = baseCommitSha ? [baseCommitSha] : [];
     const newCommit = await createCommit(token, settings.repoOwner, settings.repoName, commitMessage, newTree.sha, parents);
 
+    await recheckEntries();
     if (branchExists) {
         await updateRef(token, settings.repoOwner, settings.repoName, branch, newCommit.sha);
     } else {
@@ -440,37 +462,89 @@ async function syncAllArticles({ userId, reason, triggerProjectId } = {}) {
     };
 }
 
+async function removeModeratedArticle(payload) {
+    if (!await moderationRemovalProject(payload)) return { skipped: true, reason: 'content_visible' };
+    const settings = await getBlogSettings(payload.userId);
+    const state = await getBlogState(payload.userId);
+    const entry = state[String(payload.projectId)];
+    if (!entry?.filePath) return { skipped: true, reason: 'article_not_synced' };
+    if (!settings?.linkId || !settings.repoOwner || !settings.repoName) return { skipped: true, reason: 'repo_not_configured' };
+    if (Object.entries(state).some(([id, value]) => id !== String(payload.projectId) && value?.filePath === entry.filePath)) {
+        return { skipped: true, reason: 'shared_file_path' };
+    }
+    const link = await findUserGitLink(payload.userId, settings.linkId);
+    if (!link?.installationId) return { skipped: true, reason: 'link_missing' };
+    const token = (await createInstallationToken(link.installationId)).token;
+    if (!token) throw new Error('Failed to create installation token');
+    const repo = await getRepo(token, settings.repoOwner, settings.repoName);
+    const branch = safeBranch(settings.branch || repo.default_branch || DEFAULT_BRANCH);
+    const { branchExists, baseCommitSha, baseTreeSha } = await resolveBranchBase(token, settings.repoOwner, settings.repoName, branch, repo.default_branch);
+    if (!baseTreeSha) return { skipped: true, reason: 'article_not_synced' };
+    const tree = await getTree(token, settings.repoOwner, settings.repoName, baseTreeSha, true);
+    if (!await moderationRemovalProject(payload)) return { skipped: true, reason: 'content_visible' };
+    const exists = tree?.tree?.some((item) => item.type === 'blob' && item.path === entry.filePath);
+    let commitSha = null;
+    if (exists) {
+        const nextTree = await createTree(token, settings.repoOwner, settings.repoName,
+            [{ path: entry.filePath, mode: '100644', type: 'blob', sha: null }], baseTreeSha);
+        const commit = await createCommit(token, settings.repoOwner, settings.repoName,
+            'ZeroCat Blog Sync: remove moderated article', nextTree.sha, baseCommitSha ? [baseCommitSha] : []);
+        if (!await moderationRemovalProject(payload)) return { skipped: true, reason: 'content_visible' };
+        if (branchExists) await updateRef(token, settings.repoOwner, settings.repoName, branch, commit.sha);
+        else await createRef(token, settings.repoOwner, settings.repoName, branch, commit.sha);
+        commitSha = commit.sha;
+    }
+    const nextState = await getBlogState(payload.userId);
+    // A later sync may have moved the article to a new path while removal was running.
+    if (nextState[String(payload.projectId)]?.filePath === entry.filePath) {
+        delete nextState[String(payload.projectId)];
+        await setBlogState(payload.userId, nextState);
+    }
+    return { removed: exists ? 1 : 0, commitSha, branch };
+}
+
 const blogSyncService = {
-    async syncArticleProject({ projectId, userId }) {
+    async syncArticleProject({ projectId, userId, actorId, authorizationContext }) {
         const numericProjectId = Number(projectId);
         const numericUserId = Number(userId);
         if (!Number.isInteger(numericProjectId) || !Number.isInteger(numericUserId)) {
             throw new Error('blog-sync: invalid payload');
         }
 
+        await loadSyncProject({ projectId: numericProjectId, userId: numericUserId, actorId, authorizationContext }, { blog: true });
         return syncAllArticles({
             userId: numericUserId,
             triggerProjectId: numericProjectId,
+            actorId,
+            authorizationContext,
             reason: 'project-commit',
         });
     },
 
-    async removeArticleFromBlog({ projectId, userId, reason }) {
+    async removeArticleFromBlog({ projectId, userId, reason, actorId, authorizationContext, systemModeration = false }) {
         const numericProjectId = Number(projectId);
         const numericUserId = Number(userId);
         if (!Number.isInteger(numericProjectId) || !Number.isInteger(numericUserId)) {
             throw new Error('blog-sync: invalid remove payload');
         }
 
+        const payload = { projectId: numericProjectId, userId: numericUserId, actorId, authorizationContext, systemModeration };
+        if (systemModeration === true) return removeModeratedArticle(payload);
+        await loadSyncProject(payload, { blog: true });
         return syncAllArticles({
             userId: numericUserId,
             triggerProjectId: numericProjectId,
+            actorId,
+            authorizationContext,
             reason: reason || 'removed',
         });
     },
 
     async listArticleProjects(userId) {
-        return fetchArticleProjects(userId);
+        return prisma.ow_projects.findMany({
+            where: { authorid: Number(userId), type: 'article', AND: [await visibleWhere('project', userId)] },
+            orderBy: { time: 'desc' },
+        });
     },
 };
 

@@ -23,6 +23,7 @@
       </v-card-item>
     </v-card>
 
+    <RoleManager :roles="roles" @changed="refreshAll" />
     <v-row>
       <v-col cols="12" lg="5">
         <v-card>
@@ -106,7 +107,7 @@
               </div>
               <v-spacer></v-spacer>
               <v-btn
-                :disabled="!dirty || saving"
+                :disabled="!canManage || !dirty || saving"
                 :loading="saving"
                 color="primary"
                 prepend-icon="mdi-content-save"
@@ -135,6 +136,10 @@
                   有效权限 {{ policy.allow?.length || 0 }}
                 </v-chip>
               </div>
+              <v-row class="mt-3">
+                <v-col cols="12" sm="6"><v-text-field v-model="roleExpiresAt" type="datetime-local" label="本次角色到期时间（留空不限期）" variant="outlined" :disabled="!canManage || saving" hide-details /></v-col>
+                <v-col cols="12" sm="6"><v-text-field v-model="roleReason" label="本次角色变更原因" variant="outlined" :disabled="!canManage || saving" hide-details /></v-col>
+              </v-row>
             </v-card-text>
           </v-card>
 
@@ -144,10 +149,10 @@
                 <v-card-title class="d-flex align-center">
                   角色
                   <v-spacer></v-spacer>
-                  <v-btn size="small" variant="text" @click="selectBaseRoles">
+                  <v-btn :disabled="!canManage || saving" size="small" variant="text" @click="selectBaseRoles">
                     基础角色
                   </v-btn>
-                  <v-btn size="small" variant="text" @click="clearRoles">
+                  <v-btn :disabled="!canManage || saving" size="small" variant="text" @click="clearRoles">
                     清空
                   </v-btn>
                 </v-card-title>
@@ -157,6 +162,7 @@
                     <template v-slot:prepend>
                       <v-checkbox
                         v-model="selectedRoleKeys"
+                        :disabled="!canManage || saving"
                         :value="role.key"
                         color="primary"
                         density="compact"
@@ -256,6 +262,7 @@
               </v-expansion-panel>
             </v-expansion-panels>
           </v-card>
+          <UserPermissionRules :key="selectedUser.id" :user-id="selectedUser.id" :roles="roles" @changed="loadUserPermissions(selectedUser.id)" />
         </template>
       </v-col>
     </v-row>
@@ -269,9 +276,13 @@
 <script>
 import axios from "@/axios/axios";
 import { debounce } from "lodash-es";
+import { localuser } from '@/services/localAccount';
+import RoleManager from '@/components/admin/RoleManager.vue';
+import UserPermissionRules from '@/components/admin/UserPermissionRules.vue';
 
 export default {
   name: "AdminPermissionsPage",
+  components: { RoleManager, UserPermissionRules },
   data() {
     return {
       roles: [],
@@ -280,6 +291,8 @@ export default {
       selectedUser: null,
       selectedRoleKeys: [],
       savedRoleKeys: [],
+      roleExpiresAt: '',
+      roleReason: '',
       policy: { roles: [], allow: [], deny: [] },
       searchQuery: "",
       loadingRoles: false,
@@ -307,12 +320,13 @@ export default {
     };
   },
   computed: {
+    canManage() { return !this.loadingPermissions && localuser.can('admin:permissions:manage') && !localuser.readonly && Number(this.selectedUser?.id) !== Number(localuser.user.value.id); },
     selectedRoles() {
       const selected = new Set(this.selectedRoleKeys);
       return this.roles.filter((role) => selected.has(role.key));
     },
     dirty() {
-      return this.normalizeRoleKeys(this.selectedRoleKeys).join("|") !==
+      return !!this.roleExpiresAt || !!this.roleReason.trim() || this.normalizeRoleKeys(this.selectedRoleKeys).join("|") !==
         this.normalizeRoleKeys(this.savedRoleKeys).join("|");
     },
   },
@@ -329,8 +343,8 @@ export default {
     async loadRoles() {
       this.loadingRoles = true;
       try {
-        const { data } = await axios.get("/admin/users/permissions/roles");
-        this.roles = data.data?.roles || [];
+        const { data } = await axios.get("/admin/permissions/roles");
+        this.roles = data.data?.roles || data.roles || [];
       } catch (error) {
         this.showError("加载角色清单失败");
         console.error("Error loading roles:", error);
@@ -346,9 +360,10 @@ export default {
           itemsPerPage: this.options.itemsPerPage,
           search: this.searchQuery || undefined,
         };
-        const { data } = await axios.get("/admin/users", { params });
-        this.users = data.items || [];
-        this.total = Number(data.total || 0);
+        const { data } = await axios.get("/admin/permissions/users", { params });
+        const payload = data.data || data;
+        this.users = payload.items || payload.users || [];
+        this.total = Number(payload.total || 0);
       } catch (error) {
         this.showError("加载用户列表失败");
         console.error("Error loading users:", error);
@@ -357,17 +372,24 @@ export default {
       }
     },
     async selectUser(user) {
+      if (this.saving) return;
       this.selectedUser = user;
+      this.selectedRoleKeys = [];
+      this.savedRoleKeys = [];
+      this.policy = { roles: [], allow: [], deny: [] };
+      this.roleExpiresAt = '';
+      this.roleReason = '';
       await this.loadUserPermissions(user.id);
     },
     async loadUserPermissions(userId) {
       this.loadingPermissions = true;
       try {
-        const { data } = await axios.get(`/admin/users/${userId}/permissions`);
+        const { data } = await axios.get(`/admin/permissions/users/${userId}`);
         const payload = data.data || {};
+        if (String(this.selectedUser?.id) !== String(userId)) return;
         this.selectedUser = payload.user || this.selectedUser;
         const roleKeys = (payload.assignments || [])
-          .filter((assignment) => assignment.active)
+          .filter((assignment) => assignment.active !== false && (!assignment.target_type || assignment.target_type === 'global'))
           .map((assignment) => assignment.role_key);
         this.selectedRoleKeys = this.normalizeRoleKeys(roleKeys);
         this.savedRoleKeys = this.normalizeRoleKeys(roleKeys);
@@ -380,21 +402,25 @@ export default {
       }
     },
     async savePermissions() {
-      if (!this.selectedUser) return;
+      if (!this.selectedUser || !this.canManage) return;
       this.saving = true;
       try {
         const roleKeys = this.normalizeRoleKeys(this.selectedRoleKeys);
-        const { data } = await axios.put(`/admin/users/${this.selectedUser.id}/permissions`, {
+        const { data } = await axios.put(`/admin/permissions/users/${this.selectedUser.id}`, {
           role_keys: roleKeys,
+          expiresAt: this.roleExpiresAt ? new Date(this.roleExpiresAt).toISOString() : null,
+          reason: this.roleReason,
         });
         const payload = data.data || {};
         this.policy = payload.policy || this.policy;
         this.savedRoleKeys = this.normalizeRoleKeys(
           (payload.assignments || [])
-            .filter((assignment) => assignment.active)
+            .filter((assignment) => assignment.active !== false && (!assignment.target_type || assignment.target_type === 'global'))
             .map((assignment) => assignment.role_key)
         );
         this.selectedRoleKeys = [...this.savedRoleKeys];
+        this.roleExpiresAt = '';
+        this.roleReason = '';
         this.showSuccess(data.message || "用户权限已更新");
       } catch (error) {
         this.showError(error.response?.data?.message || "保存用户权限失败");
@@ -405,7 +431,7 @@ export default {
     },
     selectBaseRoles() {
       this.selectedRoleKeys = this.roles
-        .filter((role) => role.key !== "admin")
+        .filter((role) => ['user', 'default'].includes(role.key))
         .map((role) => role.key);
     },
     clearRoles() {

@@ -25,12 +25,15 @@ import {
 } from '../services/commentService/spaceManager.js';
 import {
     getCommentList,
+    getComment,
     searchMyComments,
     updateComment,
     deleteComment,
 } from '../services/commentService/commentManager.js';
 import { toWalineType } from '../services/commentService/walineFormatter.js';
 import { renderMarkdown } from '../services/commentService/markdown.js';
+import { visibleWhere, assertCanWrite } from '../services/moderation/visibility.js';
+import { authorizeResourceOperation, resourceAuthorizationContext } from '../services/auth/resourceOperation.js';
 import {
     createTask,
     getTask,
@@ -91,7 +94,12 @@ router.get('/spaces', needLogin, requireScope("comment:read"), async (req, res, 
  * - 所有者: 返回完整信息
  * - 其他用户: 返回公开信息 (名称、所有者、审核员、域名、创建时间)
  */
-router.get('/spaces/:cuid', async (req, res, next) => {
+router.get('/spaces/:cuid', (req, res, next) => {
+    if (req.headers['x-zerocat-delegation'] !== undefined) {
+        return res.status(403).json({ status: 'error', code: 'ZC_ERROR_DELEGATION_NOT_SUPPORTED', message: '此操作不支持授权委托' });
+    }
+    next();
+}, async (req, res, next) => {
     try {
         const space = await getSpaceByGuid(req.params.cuid);
         if (!space || space.status !== 'active') {
@@ -102,14 +110,15 @@ router.get('/spaces/:cuid', async (req, res, next) => {
 
         // 获取所有者和管理团队信息 (所有人都能看到)
         const [owner, staff] = await Promise.all([
-            prisma.ow_users.findUnique({
-                where: { id: space.owner_id },
+            prisma.ow_users.findFirst({
+                where: { id: space.owner_id, AND: [await visibleWhere('profile', res.locals.userid)] },
                 select: { id: true, username: true, display_name: true, avatar: true },
             }),
             prisma.ow_comment_service_users.findMany({
                 where: {
                     space_id: space.id,
                     type: { in: ['administrator', 'moderator'] },
+                    user: await visibleWhere('profile', res.locals.userid),
                 },
                 include: {
                     user: {
@@ -241,14 +250,17 @@ router.put('/spaces/:cuid/config', needLogin, requireResource("comment", "manage
  * GET /commentservice/spaces/:cuid/comments
  * 评论管理列表
  */
-router.get('/spaces/:cuid/comments', needLogin, requireResource("comment", "read", "cuid"), async (req, res, next) => {
+router.get('/spaces/:cuid/comments', needLogin, requireResource("comment", "read", "cuid", { allowDelegation: true }), async (req, res, next) => {
     try {
+        const decision = await authorizeResourceOperation(res.locals.userid, 'comment', req.params.cuid, 'read', resourceAuthorizationContext(req, res));
         const space = await getSpaceByGuid(req.params.cuid);
-        if (!space || space.owner_id !== res.locals.userid) {
+        if (!space || ((!decision.resourceGrant || decision.delegationId != null) && space.owner_id !== decision.principalId)) {
             return res.status(404).json({ status: 'error', message: '空间不存在或无权限' });
         }
 
-        const data = await getCommentList(space.id, req.query);
+        const data = await getCommentList(space.id, { ...req.query, userId: res.locals.userid }, {}, {
+            spaceCuid: req.params.cuid, authorizationContext: resourceAuthorizationContext(req, res),
+        });
         return res.json({ status: 'success', data });
     } catch (err) {
         next(err);
@@ -259,10 +271,15 @@ router.get('/spaces/:cuid/comments', needLogin, requireResource("comment", "read
  * PUT /commentservice/spaces/:cuid/comments/:id
  * 审核评论 (更新状态)
  */
-router.put('/spaces/:cuid/comments/:id', needLogin, requireResource("comment", "update", "cuid"), async (req, res, next) => {
+router.put('/spaces/:cuid/comments/:id', needLogin, requireScope((req) => {
+    const likeOnly = Object.keys(req.body || {}).length === 1 && req.body.like !== undefined;
+    return `comment:${req.params.cuid}:${likeOnly ? 'interact' : 'update'}`;
+}, { allowDelegation: true }), async (req, res, next) => {
     try {
+        const likeOnly = Object.keys(req.body || {}).length === 1 && req.body.like !== undefined;
+        const decision = await authorizeResourceOperation(res.locals.userid, 'comment', req.params.cuid, likeOnly ? 'interact' : 'update', resourceAuthorizationContext(req, res));
         const space = await getSpaceByGuid(req.params.cuid);
-        if (!space || space.owner_id !== res.locals.userid) {
+        if (!space || ((!decision.resourceGrant || decision.delegationId != null) && space.owner_id !== decision.principalId)) {
             return res.status(404).json({ status: 'error', message: '空间不存在或无权限' });
         }
 
@@ -272,6 +289,7 @@ router.put('/spaces/:cuid/comments/:id', needLogin, requireResource("comment", "
             req.body,
             res.locals.userid,
             true, // isAdmin
+            { spaceCuid: req.params.cuid, authorizationContext: resourceAuthorizationContext(req, res) },
         );
 
         if (!updated) {
@@ -297,10 +315,11 @@ router.put('/spaces/:cuid/comments/:id', needLogin, requireResource("comment", "
  * DELETE /commentservice/spaces/:cuid/comments/:id
  * 删除评论
  */
-router.delete('/spaces/:cuid/comments/:id', needLogin, requireResource("comment", "delete", "cuid"), async (req, res, next) => {
+router.delete('/spaces/:cuid/comments/:id', needLogin, requireResource("comment", "delete", "cuid", { allowDelegation: true }), async (req, res, next) => {
     try {
+        const decision = await authorizeResourceOperation(res.locals.userid, 'comment', req.params.cuid, 'delete', resourceAuthorizationContext(req, res));
         const space = await getSpaceByGuid(req.params.cuid);
-        if (!space || space.owner_id !== res.locals.userid) {
+        if (!space || ((!decision.resourceGrant || decision.delegationId != null) && space.owner_id !== decision.principalId)) {
             return res.status(404).json({ status: 'error', message: '空间不存在或无权限' });
         }
 
@@ -309,6 +328,7 @@ router.delete('/spaces/:cuid/comments/:id', needLogin, requireResource("comment"
             req.params.id,
             res.locals.userid,
             true, // isAdmin
+            { spaceCuid: req.params.cuid, authorizationContext: resourceAuthorizationContext(req, res) },
         );
 
         if (!deleted) {
@@ -534,6 +554,7 @@ router.post('/spaces/:cuid/data/import', needLogin, requireResource("comment", "
             return res.status(404).json({ status: 'error', message: '空间不存在或无权限' });
         }
 
+        await assertCanWrite(Number(res.locals.userid), 'comments', 'manage');
         const importData = req.body;
         if (!importData?.data || !Array.isArray(importData.data.Comment) || importData.data.Comment.length === 0) {
             return res.status(400).json({
@@ -639,6 +660,52 @@ router.get('/spaces/:cuid/data/tasks/:taskId/download', needLogin, requireResour
 });
 
 // ============================================================
+// 单条评论 (统一令牌与具体资源委托)
+// ============================================================
+
+router.use('/comments/:id', (req, res, next) => {
+    const id = Number(req.params.id);
+    if (!/^[1-9]\d*$/.test(req.params.id) || !Number.isSafeInteger(id)) {
+        return res.status(400).json({ status: 'error', code: 'ZC_ERROR_INVALID_ID', message: '无效评论 ID' });
+    }
+    next();
+});
+
+router.get('/comments/:id', needLogin, requireResource('comment', 'read', 'id', { allowDelegation: true }), async (req, res, next) => {
+    try {
+        const comment = await getComment(req.params.id, res.locals.userid, { authorizationContext: resourceAuthorizationContext(req, res) });
+        if (!comment) return res.status(404).json({ status: 'error', message: '评论不存在' });
+        return res.json({ status: 'success', data: { objectId: String(comment.id), comment: renderMarkdown(comment.comment),
+            orig: comment.comment, url: comment.url, status: comment.status, insertedAt: comment.insertedAt } });
+    } catch (err) { next(err); }
+});
+
+router.put('/comments/:id', needLogin, requireScope((req) => {
+    const likeOnly = Object.keys(req.body || {}).length === 1 && req.body.like !== undefined;
+    return `comment:${req.params.id}:${likeOnly ? 'interact' : 'update'}`;
+}, { allowDelegation: true }), async (req, res, next) => {
+    try {
+        const comment = await prisma.ow_comment_service.findUnique({ where: { id: Number(req.params.id) } });
+        if (!comment) return res.status(404).json({ status: 'error', message: '评论不存在' });
+        const updated = await updateComment(comment.space_id, req.params.id, req.body, res.locals.userid, false,
+            { authorizationContext: resourceAuthorizationContext(req, res) });
+        if (!updated) return res.status(404).json({ status: 'error', message: '评论不存在或无权限' });
+        return res.json({ status: 'success', data: { objectId: String(updated.id) } });
+    } catch (err) { next(err); }
+});
+
+router.delete('/comments/:id', needLogin, requireResource('comment', 'delete', 'id', { allowDelegation: true }), async (req, res, next) => {
+    try {
+        const comment = await prisma.ow_comment_service.findUnique({ where: { id: Number(req.params.id) } });
+        if (!comment) return res.status(404).json({ status: 'error', message: '评论不存在' });
+        const deleted = await deleteComment(comment.space_id, req.params.id, res.locals.userid, false,
+            { authorizationContext: resourceAuthorizationContext(req, res) });
+        if (!deleted) return res.status(404).json({ status: 'error', message: '评论不存在或无权限' });
+        return res.json({ status: 'success', message: '评论已删除' });
+    } catch (err) { next(err); }
+});
+
+// ============================================================
 // 我的评论
 // ============================================================
 
@@ -659,7 +726,7 @@ router.get('/my/comments', needLogin, requireScope("comment:read"), async (req, 
             return res.json({ status: 'success', data: result });
         }
 
-        const where = { user_id: String(userId) };
+        const where = { account_user_id: Number(userId) };
         const [comments, count] = await Promise.all([
             prisma.ow_comment_service.findMany({
                 where,

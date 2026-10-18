@@ -2,6 +2,7 @@ import { prisma } from '../../prisma.js';
 import { buildContext, getAdminEmail } from './notifyContext.js';
 import { getEnabledProviders } from './providers/index.js';
 import logger from '../../logger.js';
+import { canViewContent, assertCanWrite } from '../../moderation/visibility.js';
 
 /**
  * 通知编排服务
@@ -17,6 +18,18 @@ const notifyService = {
      */
     async run(type, comment, spaceConfig, spaceCuid, log) {
         const jobLog = log || (() => {});
+        comment = await prisma.ow_comment_service.findUnique({ where: { id: Number(comment.id) } });
+        if (!comment || !await canViewContent('comment_service', comment, null)) {
+            return { skipped: true, reason: 'comment_unavailable' };
+        }
+        if (comment.account_user_id) {
+            try {
+                await assertCanWrite(Number(comment.account_user_id), 'comments', 'sync');
+            } catch (error) {
+                if (error.statusCode === 403 || error.status === 403) return { skipped: true, reason: 'actor_restricted' };
+                throw error;
+            }
+        }
 
         // 查找父评论
         let parent = null;
@@ -24,6 +37,18 @@ const notifyService = {
             parent = await prisma.ow_comment_service.findUnique({
                 where: { id: parseInt(comment.pid) },
             });
+        }
+
+        if (parent && !await canViewContent('comment_service', parent, null)) {
+            return { skipped: true, reason: 'parent_unavailable' };
+        }
+
+        for (const record of [comment, parent].filter(Boolean)) {
+            if (record.account_user_id && !await canViewContent('profile', { id: record.account_user_id }, null)) {
+                record.nick = '用户';
+                record.mail = null;
+                record.link = null;
+            }
         }
 
         // 构建标准化上下文
@@ -91,7 +116,7 @@ const notifyService = {
         }
 
         // 自回复跳过
-        if (comment.user_id && parent.user_id && comment.user_id === parent.user_id) {
+        if (comment.account_user_id && parent.account_user_id && comment.account_user_id === parent.account_user_id) {
             await jobLog('Self-reply (same user_id)');
             return { skipped: true, reason: 'self_reply' };
         }
@@ -119,7 +144,7 @@ const notifyService = {
             }
         }
 
-        // 2) 站内信：通过邮箱匹配站内用户，始终发送
+        // 2) 站内信：通过可信父评论账号归属发送
         const inappResult = await this._sendInAppNotification(comment, parent, context, spaceCuid, jobLog);
         if (inappResult) results.push({ provider: 'inapp', ...inappResult });
 
@@ -128,14 +153,14 @@ const notifyService = {
     },
 
     /**
-     * 站内信：通过父评论邮箱匹配 ow_users，找到则创建 ow_notifications 记录
+     * 站内信：通过可信父评论账号归属创建 ow_notifications 记录
      */
     async _sendInAppNotification(comment, parent, context, spaceCuid, jobLog) {
-        if (!parent?.mail) return null;
+        if (!parent?.account_user_id) return null;
 
         try {
             const user = await prisma.ow_users.findFirst({
-                where: { email: parent.mail },
+                where: { id: Number(parent.account_user_id) },
                 select: { id: true },
             });
 
@@ -153,8 +178,8 @@ const notifyService = {
                     content: self.comment || '(empty)',
                     link: site.postUrl,
                     notification_type: 'comment_reply',
-                    actor_id: comment.user_id ? Number(comment.user_id) : null,
-                    target_type: 'comment',
+                    actor_id: comment.account_user_id ? Number(comment.account_user_id) : null,
+                    target_type: 'comment_service',
                     target_id: comment.id,
                     data: { spaceCuid, commentId: comment.id, parentId: parent.id },
                     push_channels: ['browser'],

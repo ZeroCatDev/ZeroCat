@@ -152,8 +152,10 @@
               title="合作邀请"
               to="/app/collaborations"
             />
+            <v-list-item title="授权委托" to="/app/account/delegations" prepend-icon="mdi-account-arrow-right" rounded="xl" />
+            <v-list-item title="回收站" to="/app/account/recycle-bin" prepend-icon="mdi-delete-restore" rounded="xl" />
             <v-list-item
-              v-if="localuser.user.value?.isAdmin"
+              v-if="localuser.canAdmin"
               color="primary"
               prepend-icon="mdi-shield-crown-outline"
               rounded="xl"

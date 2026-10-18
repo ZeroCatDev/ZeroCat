@@ -6,6 +6,7 @@
  */
 
 import { prisma } from '../prisma.js';
+import { visibleWhere } from '../moderation/visibility.js';
 import logger from '../logger.js';
 import { TARGET_TYPES, getInstanceDomain } from './config.js';
 import { fetchRemoteActor, resolveWebFinger } from './federation.js';
@@ -519,7 +520,7 @@ export async function getProxyUserSharedInbox(proxyUserId) {
  */
 export async function listProxyUsers(limit = 50, offset = 0) {
     return prisma.ow_users.findMany({
-        where: { type: REMOTE_USER_TYPE },
+        where: { type: REMOTE_USER_TYPE, AND: [await visibleWhere('profile')] },
         select: {
             id: true, username: true, display_name: true,
             avatar: true, bio: true, url: true,
@@ -541,6 +542,7 @@ export async function searchProxyUsers(keyword, limit = 20) {
     return prisma.ow_users.findMany({
         where: {
             type: REMOTE_USER_TYPE,
+            AND: [await visibleWhere('profile')],
             OR: [
                 { username: { contains: keyword, mode: 'insensitive' } },
                 { display_name: { contains: keyword, mode: 'insensitive' } },

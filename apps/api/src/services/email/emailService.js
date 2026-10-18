@@ -2,6 +2,8 @@ import { sendMail, getMailProvider, getFromAddress } from './emailSender.js';
 import { createTransport } from 'nodemailer';
 import zcconfig from '../config/zcconfig.js';
 import logger from '../logger.js';
+import { emailDeliveryAllowed, prepareEmailDelivery } from './emailDeliveryPolicy.js';
+export { emailDeliveryAllowed, prepareEmailDelivery } from './emailDeliveryPolicy.js';
 
 let transporter;
 
@@ -52,8 +54,11 @@ const initializeTransporter = async () => {
     }
 };
 
-const sendEmailDirect = async (to, subject, html) => {
+const sendEmailDirect = async (to, subject, html, options = {}) => {
     try {
+        const delivery = await prepareEmailDelivery({ ...options, to, subject, html });
+        if (!delivery) return { skipped: true, reason: 'content_unavailable' };
+        ({ subject, html } = delivery);
         const provider = await getMailProvider();
 
         if (provider === 'amail') {
@@ -87,17 +92,18 @@ const sendEmailDirect = async (to, subject, html) => {
     }
 };
 
-const sendEmail = async (to, subject, html) => {
+const sendEmail = async (to, subject, html, options = {}) => {
+    if (!await emailDeliveryAllowed(options)) return { skipped: true, reason: 'content_unavailable' };
     try {
         const { default: queueManager } = await import('../queue/queueManager.js');
         if (queueManager.isInitialized()) {
-            return await queueManager.enqueueEmail(to, subject, html);
+            return await queueManager.enqueueEmail(to, subject, html, options);
         }
     } catch (error) {
         logger.warn("[email] 通过队列发送失败，回退到直接发送:", error.message);
     }
 
-    return sendEmailDirect(to, subject, html);
+    return sendEmailDirect(to, subject, html, options);
 };
 
 // Initialize email service when the module is loaded

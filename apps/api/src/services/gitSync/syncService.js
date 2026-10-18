@@ -5,6 +5,9 @@ import zcconfig from '../config/zcconfig.js';
 import { downloadFromS3 } from '../assets.js';
 import { createNotification } from '../../controllers/notifications.js';
 import { createInstallationToken } from './githubApp.js';
+import { assertSyncAuthorized, loadSyncProject } from './authorization.js';
+import { canViewContent } from '../moderation/visibility.js';
+import { findProjectCommit } from '../projectCommitAccess.js';
 import { createBlob, createCommit, createRef, createTree, getCommit, getContent, getRef, getRepo, getTree, updateRef } from './githubApi.js';
 import { extractScratchAssetMd5ExtList, buildScratchAssetS3Key } from './scratchAssets.js';
 import { findUserGitLink, getProjectGitSyncSettings, getProjectGitSyncState, setProjectGitSyncState, updateProjectGitSyncSettings } from './storage.js';
@@ -217,6 +220,11 @@ async function buildScratchAssets({
     let limitReached = false;
 
     for (const md5ext of assetList) {
+        const asset = await prisma.ow_assets.findUnique({ where: { md5: md5ext.split('.')[0] } });
+        if (!asset || !await canViewContent('asset', asset, null)) {
+            skipped.push(md5ext);
+            continue;
+        }
         if (previousAssets.has(md5ext)) {
             skipped.push(md5ext);
             continue;
@@ -227,7 +235,7 @@ async function buildScratchAssets({
             break;
         }
 
-        const key = buildScratchAssetS3Key(md5ext);
+        const key =buildScratchAssetS3Key(md5ext);
         if (!key) {
             skipped.push(md5ext);
             continue;
@@ -287,6 +295,7 @@ const gitSyncService = {
             throw new Error('Invalid project sync payload');
         }
 
+        await assertSyncAuthorized(job?.data || {});
         let settings = null;
         let project = null;
         let commit = null;
@@ -310,15 +319,18 @@ const gitSyncService = {
                     description: true,
                     authorid: true,
                     default_branch: true,
+                    state: true,
+                    deleted_at: true,
+                    is_shadowbanned: true,
+                    shadowban_expires_at: true,
                 },
             });
             if (!project?.authorid) {
                 return { skipped: true, reason: 'project_missing' };
             }
 
-            commit = await prisma.ow_projects_commits.findFirst({
-                where: { id: commitId, project_id: projectId },
-            });
+            await assertSyncAuthorized(job.data, project);
+            commit = await findProjectCommit(projectId, commitId);
             if (!commit) {
                 return { skipped: true, reason: 'commit_missing' };
             }
@@ -472,6 +484,7 @@ const gitSyncService = {
                 return { skipped: true, reason: 'no_changes' };
             }
 
+            project = await loadSyncProject(job.data);
             const treeEntries = await createGitBlobs(token, repoOwner, repoName, entries);
             const newTree = await createTree(token, repoOwner, repoName, treeEntries, baseTreeSha);
 
@@ -482,6 +495,7 @@ const gitSyncService = {
             const parents = baseCommitSha ? [baseCommitSha] : [];
             const newCommit = await createCommit(token, repoOwner, repoName, commitMessage, newTree.sha, parents);
 
+            await loadSyncProject(job.data);
             if (branchExists) {
                 await updateRef(token, repoOwner, repoName, branch, newCommit.sha);
             } else {
@@ -508,6 +522,7 @@ const gitSyncService = {
                 assetLimitReached,
             };
         } catch (error) {
+            if (error.status === 403 || error.status === 404) throw error;
             logger.warn(`[git-sync] sync failed project=${projectId} commit=${commitId}: ${error.message}`);
             const state = (await getProjectGitSyncState(projectId)) || {};
             await setProjectGitSyncState(projectId, {

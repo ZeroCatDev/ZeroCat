@@ -13,6 +13,9 @@
     </v-navigation-drawer>
 
     <v-main>
+      <v-alert v-if="localuser.readonly || localuser.user.value?.restrictions?.length" class="ma-4" type="warning" variant="tonal" role="status">
+        当前账号的部分或全部功能处于只读状态，受限范围内暂时无法发布、修改内容或互动。仍可读取内容及维护账号安全。
+      </v-alert>
       <router-view v-slot="{ Component, route }">
         <transition mode="out-in" name="md3">
           <div :key="route.path">
@@ -28,6 +31,7 @@
 
 <script setup>
 import { ref } from "vue";
+import { localuser } from '@/services/localAccount';
 import AppHeader from "@/components/AppHeader.vue";
 import UnifiedSidebar from "@/components/sidebar/UnifiedSidebar.vue";
 import Toast from "primevue/toast";

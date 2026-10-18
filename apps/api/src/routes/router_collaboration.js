@@ -9,7 +9,7 @@
 import { Router } from "express";
 import logger from "../services/logger.js";
 import { needLogin } from "../middleware/auth.js";
-import { requireResource } from "../middleware/scope.js";
+import { requireResource, requireScope } from "../middleware/scope.js";
 import { COLLABORATION_ROLE_KEYS } from "../services/auth/rolePermissions.js";
 import collaborationService, {
     CollaborationError,
@@ -18,8 +18,8 @@ import collaborationService, {
 const router = Router();
 
 function handleError(res, error, fallback) {
-    if (error instanceof CollaborationError) {
-        return res.status(error.status).json({
+    if (error instanceof CollaborationError || error.status || error.statusCode) {
+        return res.status(error.status || error.statusCode).json({
             status: "error",
             message: error.message,
             code: error.code,
@@ -55,20 +55,20 @@ router.post(
 );
 
 // 成员名单 + 待处理邀请（作者或在册成员可见）
-router.get("/projects/:projectId/members", needLogin, async (req, res) => {
+router.get("/projects/:projectId/members", needLogin, requireResource("project", "read", "projectId"), async (req, res) => {
     try {
         const allowed = await collaborationService.isProjectMemberOrOwner(
             res.locals.userid,
             req.params.projectId
         );
         if (!allowed) {
-            return res.status(403).json({
+            return res.status(404).json({
                 status: "error",
-                message: "无权查看该项目的合作者",
-                code: "ZC_ERROR_FORBIDDEN",
+                message: "项目不存在",
+                code: "ZC_ERROR_CONTENT_NOT_FOUND",
             });
         }
-        const data = await collaborationService.listProjectMembers(req.params.projectId);
+        const data = await collaborationService.listProjectMembers(req.params.projectId, res.locals.userid);
         res.json({ status: "success", data });
     } catch (error) {
         handleError(res, error, "获取合作者列表失败");
@@ -166,7 +166,7 @@ router.get("/roles", needLogin, (req, res) => {
 });
 
 // 我收到的待处理邀请
-router.get("/invitations", needLogin, async (req, res) => {
+router.get("/invitations", needLogin, requireScope("project:read"), async (req, res) => {
     try {
         const invitations = await collaborationService.listReceivedInvitations(res.locals.userid);
         res.json({ status: "success", data: { invitations } });
@@ -176,7 +176,7 @@ router.get("/invitations", needLogin, async (req, res) => {
 });
 
 // 接受邀请
-router.post("/invitations/:id/accept", needLogin, async (req, res) => {
+router.post("/invitations/:id/accept", needLogin, requireScope("project:interact"), async (req, res) => {
     try {
         const data = await collaborationService.respondToInvitation({
             invitationId: req.params.id,
@@ -190,7 +190,7 @@ router.post("/invitations/:id/accept", needLogin, async (req, res) => {
 });
 
 // 拒绝邀请
-router.post("/invitations/:id/decline", needLogin, async (req, res) => {
+router.post("/invitations/:id/decline", needLogin, requireScope("project:interact"), async (req, res) => {
     try {
         const data = await collaborationService.respondToInvitation({
             invitationId: req.params.id,
@@ -204,7 +204,7 @@ router.post("/invitations/:id/decline", needLogin, async (req, res) => {
 });
 
 // 我参与协作的项目
-router.get("/memberships", needLogin, async (req, res) => {
+router.get("/memberships", needLogin, requireScope("project:read"), async (req, res) => {
     try {
         const memberships = await collaborationService.listMyCollaborations(res.locals.userid);
         res.json({ status: "success", data: { memberships } });
@@ -214,7 +214,7 @@ router.get("/memberships", needLogin, async (req, res) => {
 });
 
 // 离开某项目（自助解除）
-router.delete("/memberships/:projectId", needLogin, async (req, res) => {
+router.delete("/memberships/:projectId", needLogin, requireScope("project:interact"), async (req, res) => {
     try {
         const data = await collaborationService.leaveProject({
             projectId: req.params.projectId,

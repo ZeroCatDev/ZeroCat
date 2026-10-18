@@ -7,6 +7,27 @@ import { Readable } from "stream";
 import sharp from "sharp";
 import ffmpeg from "fluent-ffmpeg";
 import { fileTypeFromBuffer } from "file-type";
+import { authorize } from "./auth/authorization.js";
+import { assertCanWrite, canViewContent, sanitizeProfile, visibleWhere } from "./moderation/visibility.js";
+import { ModerationError } from "./moderation/policy.js";
+
+async function assertUploadAllowed(res, purpose = 'general') {
+  const actorId = res.locals?.userid;
+  await assertCanWrite(actorId, 'assets', 'create');
+  const decision = await authorize({
+    actorId, tokenType: res.locals?.tokenType, tokenScopes: res.locals?.scopes || [],
+    requiredScope: purpose === 'avatar' ? 'user:update' : 'asset:create',
+    category: purpose === 'avatar' ? 'profile' : 'assets', action: purpose === 'avatar' ? 'update' : 'create',
+  });
+  if (!decision.allowed) throw new ModerationError(decision.status || 403, decision.code, decision.message);
+}
+
+async function visibleExistingAsset(asset, viewerId) {
+  if (asset && !await canViewContent('asset', asset, viewerId)) {
+    throw new ModerationError(404, 'RESOURCE_NOT_FOUND', '素材不存在');
+  }
+  return asset;
+}
 
 // 配置S3客户端
 const s3Client = new S3Client({
@@ -492,6 +513,7 @@ export async function checkAssetExists(md5) {
  * @returns {Promise<Object>} 创建的素材记录
  */
 export async function createAssetRecord(data) {
+  await assertCanWrite(data.uploaderId, 'assets', 'create');
   return await prisma.ow_assets.create({
     data: {
       md5: data.md5,
@@ -534,7 +556,7 @@ export async function updateAssetUsage(assetId) {
 export async function getAssetsList(options = {}) {
   const { page = 1, limit = 20, category, search, sortBy = "created_at", sortOrder = "desc" } = options;
 
-  const where = {};
+  const where = { AND: [await visibleWhere('asset', options.viewerId)] };
 
   if (category) {
     where.category = category;
@@ -568,6 +590,7 @@ export async function getAssetsList(options = {}) {
     prisma.ow_assets.count({ where })
   ]);
 
+  for (const asset of assets) asset.uploader = await sanitizeProfile(asset.uploader, options.viewerId);
   return {
     assets,
     pagination: {
@@ -584,7 +607,7 @@ export async function getAssetsList(options = {}) {
  * @param {number} assetId 素材ID
  * @returns {Promise<Object|null>} 素材详情
  */
-export async function getAssetDetails(assetId) {
+export async function getAssetDetails(assetId, viewerId = null) {
   const asset = await prisma.ow_assets.findUnique({
     where: { id: parseInt(assetId) },
     include: {
@@ -598,9 +621,10 @@ export async function getAssetDetails(assetId) {
     }
   });
 
-  if (!asset) {
+  if (!asset || !await canViewContent('asset', asset, viewerId)) {
     return null;
   }
+  asset.uploader = await sanitizeProfile(asset.uploader, viewerId);
 
   // 生成S3访问URL
   const s3Key = `assets/${asset.md5.substring(0, 2)}/${asset.md5.substring(2, 4)}/${asset.md5}.${asset.extension}`;
@@ -616,8 +640,10 @@ export async function getAssetDetails(assetId) {
  * 获取素材统计信息
  * @returns {Promise<Object>} 统计信息
  */
-export async function getAssetStats() {
+export async function getAssetStats(viewerId = null) {
+  const where = await visibleWhere('asset', viewerId);
   const stats = await prisma.ow_assets.groupBy({
+    where,
     by: ['category'],
     _count: {
       id: true
@@ -627,8 +653,9 @@ export async function getAssetStats() {
     }
   });
 
-  const totalAssets = await prisma.ow_assets.count();
+  const totalAssets = await prisma.ow_assets.count({ where });
   const totalSize = await prisma.ow_assets.aggregate({
+    where,
     _sum: {
       file_size: true
     }
@@ -655,6 +682,7 @@ export async function getAssetStats() {
  * @returns {Promise<Object>} 处理结果
  */
 export async function processSimpleImageUpload(file, options, res, ip, userAgent) {
+  await assertUploadAllowed(res);
   const { quality = 80, tags, category } = options;
 
   // 使用Sharp检测和处理图片
@@ -686,7 +714,7 @@ export async function processSimpleImageUpload(file, options, res, ip, userAgent
   const md5 = generateMD5(processedBuffer);
 
   // 检查素材是否已存在
-  const existingAsset = await checkAssetExists(md5);
+  const existingAsset = await visibleExistingAsset(await checkAssetExists(md5), res.locals.userid);
   if (existingAsset) {
     return {
       success: true,
@@ -750,6 +778,7 @@ export async function uploadFile(file, options, res, ip, userAgent) {
     purpose = 'general', // 'general', 'scratch', 'avatar'
     imageOptions = {}
   } = options;
+  await assertUploadAllowed(res, purpose);
 
   // 如果文件对象包含检测到的类型信息，使用检测到的类型
   // 否则检测文件类型
@@ -873,7 +902,7 @@ export async function uploadFile(file, options, res, ip, userAgent) {
   const md5 = generateMD5(processedBuffer);
 
   // 检查素材是否已存在
-  const existingAsset = await checkAssetExists(md5);
+  const existingAsset = await visibleExistingAsset(await checkAssetExists(md5), res.locals.userid);
   if (existingAsset) {
     return {
       success: true,
@@ -1044,6 +1073,7 @@ export async function handleAssetUpload(req, res, config = {}) {
 
   } catch (error) {
     logger.error(`${errorMessage}:`, error);
+    if (error.status) return { success: false, status: error.status, error: error.message, code: error.code };
 
     // 处理特定错误类型
     if (error.code === 'LIMIT_FILE_SIZE') {

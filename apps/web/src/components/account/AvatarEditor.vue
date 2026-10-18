@@ -2,6 +2,7 @@
   <v-row>
     <v-col cols="12" md="6">
       <v-file-input
+        :disabled="localuser.isReadonly('profile')"
         :rules="[
           v => (!v || !v.length || v[0].size < 2000000) || '头像大小不能超过2MB'
         ]"
@@ -39,7 +40,7 @@
     </v-col>
     <v-col cols="12">
       <v-btn
-        :disabled="!avatarFile"
+        :disabled="!avatarFile || localuser.isReadonly('profile')"
         :loading="loading"
         class="px-6"
         color="primary"
@@ -103,7 +104,7 @@ export default {
       }
     },
     async uploadAvatar() {
-      if (!this.avatarFile) return;
+      if (!this.avatarFile || localuser.isReadonly('profile')) return;
 
       this.loading = true;
       try {

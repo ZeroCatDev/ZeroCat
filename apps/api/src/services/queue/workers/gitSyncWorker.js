@@ -8,7 +8,7 @@ import blogSyncService from '../../gitSync/blogSyncService.js';
 
 let worker = null;
 
-async function processGitSync(job) {
+export async function processGitSync(job) {
     const type = String(job?.data?.type || '');
     switch (type) {
         case 'sync-project':

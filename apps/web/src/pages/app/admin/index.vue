@@ -15,7 +15,7 @@
         <v-card-subtitle class="mt-2"> 系统管理</v-card-subtitle>
       </v-card-item>
     </v-card>
-<v-card class="mb-6" elevation="2" @click="openAdminQueues">
+<v-card v-if="localuser.can('admin:manage')" class="mb-6" elevation="2" @click="openAdminQueues">
       <v-card-item>
         <template v-slot:prepend>
           <v-icon
@@ -31,7 +31,7 @@
     </v-card>
     <v-row>
       <!-- OAuth 应用卡片 -->
-      <v-col v-for="item in config" :key="item.path" cols="6" md="6">
+      <v-col v-for="item in visibleConfig" :key="item.path" cols="6" md="6">
         <v-card :to="item.path" elevation="1" hover>
           <v-card-item>
             <v-card-title>{{ item.name }}</v-card-title>
@@ -51,16 +51,19 @@
 <script>
 import { get, fetchConfig } from "@/services/serverConfig";
 import { localuser } from "@/services/localAccount";
+import { canAccessAdminPage } from '@/services/permissions';
 
 export default {
   name: "AdminIndex",
   data() {
     return {
+      localuser,
       config: [
         {name: "配置管理", path: "/app/admin/config"},
         {name: "Sitemap", path: "/app/admin/sitemap"},
         {name: "用户管理", path: "/app/admin/users"},
-        {name: "用户权限", path: "/app/admin/permissions"},
+        {name: "角色与权限", path: "/app/admin/permissions"},
+        {name: "内容与用户治理", path: "/app/admin/moderation"},
         {name: "项目管理", path: "/app/admin/project"},
         {name: "扩展管理", path: "/app/admin/extensions"},
         {name: "OAuth应用", path: "/app/admin/oauth/applications"},
@@ -72,6 +75,9 @@ export default {
         {name: "40code 镜像同步", path: "/app/admin/mirror40code"},
       ],
     };
+  },
+  computed: {
+    visibleConfig() { return this.config.filter(item => canAccessAdminPage(localuser.user.value, item.path)); },
   },
   methods: {
     async openAdminQueues() {

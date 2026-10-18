@@ -29,6 +29,11 @@ export const localuser = {
     return hasAuthHint;
   },
 
+  can: (...args) => store.can(...args),
+  isReadonly: (...args) => store.isReadonly(...args),
+  get readonly() { return store.readonly; },
+  get canAdmin() { return store.canAdmin; },
+
   // Original functions
   loadUser: (...args) => store.loadUser(...args),
   setUser: (...args) => store.setUser(...args),

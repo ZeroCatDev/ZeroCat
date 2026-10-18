@@ -78,7 +78,7 @@ router.get("/unread-count", needLogin, requireScope("notification:read"), async 
  * @desc 将通知标记为已读
  * @access Private
  */
-router.post("/mark-read", needLogin, requireResource("notification", "update", (req) => req.body?.notification_ids), async (req, res) => {
+router.post("/mark-read", needLogin, requireResource("notification", "update", (req) => req.body?.notification_ids, { action: "private" }), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const {notification_ids} = req.body;
@@ -104,7 +104,7 @@ router.post("/mark-read", needLogin, requireResource("notification", "update", (
  * @desc 将通知标记为已读 (兼容旧API)
  * @access Private
  */
-router.put("/read", needLogin, requireResource("notification", "update", (req) => req.body?.notification_ids), async (req, res) => {
+router.put("/read", needLogin, requireResource("notification", "update", (req) => req.body?.notification_ids, { action: "private" }), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const {notification_ids} = req.body;
@@ -130,7 +130,7 @@ router.put("/read", needLogin, requireResource("notification", "update", (req) =
  * @desc 将所有通知标记为已读
  * @access Private
  */
-router.put("/read_all", needLogin, requireScope("notification:update"), async (req, res) => {
+router.put("/read_all", needLogin, requireScope("notification:update", { action: "private" }), async (req, res) => {
     try {
         const userId = res.locals.userid;
 
@@ -281,7 +281,7 @@ router.post("/send", needLogin, requireScope("notification:update"), async (req,
  * @desc 注册浏览器推送通知
  * @access Private
  */
-router.post("/register-browser", needLogin, requireScope("notification:update"), async (req, res) => {
+router.post("/register-browser", needLogin, requireScope("notification:update", { action: "private" }), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const { subscription, device_info } = req.body;
@@ -328,7 +328,7 @@ router.post("/register-browser", needLogin, requireScope("notification:update"),
  * @desc 取消浏览器推送通知
  * @access Private
  */
-router.delete("/register-browser", needLogin, requireScope("notification:update"), async (req, res) => {
+router.delete("/register-browser", needLogin, requireScope("notification:update", { action: "private" }), async (req, res) => {
     try {
         const { endpoint } = req.body;
 
@@ -520,7 +520,7 @@ router.get("/settings/changed", needLogin, requireScope("notification:read"), as
     }
 });
 
-router.put("/settings", needLogin, requireScope("notification:update"), async (req, res) => {
+router.put("/settings", needLogin, requireScope("notification:update", { action: "private" }), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const { targetId, targetType, level } = req.body;
@@ -548,7 +548,7 @@ router.put("/settings", needLogin, requireScope("notification:update"), async (r
  * @desc 批量更新通知设置
  * @access Private
  */
-router.put("/settings/bulk", needLogin, requireScope("notification:update"), async (req, res) => {
+router.put("/settings/bulk", needLogin, requireScope("notification:update", { action: "private" }), async (req, res) => {
     try {
         const userId = res.locals.userid;
         const { settings } = req.body;

@@ -1,4 +1,5 @@
 import { prisma } from "../../services/prisma.js";
+import { visibleWhere } from "../../services/moderation/visibility.js";
 
 const stableTagId = (name) => {
   let hash = 0;
@@ -25,6 +26,7 @@ export const getTags = async (req, res) => {
         project: {
           type: "article",
           state: "public",
+          AND: [await visibleWhere("project", res.locals.userid)],
         },
       },
       orderBy: {

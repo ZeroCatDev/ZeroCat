@@ -21,6 +21,7 @@
       </v-card-title>
       <v-tabs v-model="tab" :disabled="!!busy || accountDeleted" show-arrows>
         <v-tab value="account">账号状态</v-tab>
+        <v-tab v-if="localuser.can('admin:restrictions:read')" value="restrictions">用户限制</v-tab>
         <v-tab value="sessions">登录设备</v-tab>
         <v-tab value="data">数据管理</v-tab>
       </v-tabs>
@@ -86,6 +87,10 @@
             <v-btn color="primary" :disabled="!canManage || !!busy || nextStatus === target.status" :loading="busy === 'status'" @click="askStatus">
               确认变更状态
             </v-btn>
+          </v-window-item>
+
+          <v-window-item value="restrictions">
+            <UserRestrictions :user-id="user.id" :disabled="isSelf || !!busy" @changed="emit('changed', { user: target, deleted: false })" />
           </v-window-item>
 
           <v-window-item value="sessions">
@@ -280,6 +285,7 @@
   import axios from '@/axios/axios';
   import {useSudoManager} from '@/composables/useSudoManager';
   import {localuser} from '@/services/localAccount';
+  import UserRestrictions from '@/components/admin/UserRestrictions.vue';
 
   const props = defineProps({
     modelValue: Boolean,

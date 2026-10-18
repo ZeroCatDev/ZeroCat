@@ -78,6 +78,7 @@
         >
       </v-col>
       <v-col cols="12">
+        <v-btn to="/app/account/recycle-bin" variant="text" prepend-icon="mdi-delete-restore">我的回收站</v-btn>
         <v-btn
           append-icon="mdi-magnify"
           color="primary"
@@ -212,12 +213,14 @@
             color="error"
             text="删除"
             variant="tonal"
-            @click="deleteProject"
+            :disabled="localuser.isReadonly('projects')"
+            @click="deleteConfirm = true"
           ></v-btn>
           <v-btn
             color="text"
             text="一键推送"
             variant="tonal"
+            :disabled="localuser.isReadonly('projects')"
             @click="pushproject(currentProject.id)"
           ></v-btn>
 
@@ -228,10 +231,14 @@
             color="primary"
             text="保存"
             variant="tonal"
+            :disabled="localuser.isReadonly('projects')"
             @click="SaveProjectsInfo"
           ></v-btn>
         </v-card-actions>
       </v-card>
+    </v-dialog>
+    <v-dialog v-model="deleteConfirm" max-width="500">
+      <v-card title="移入回收站"><v-card-text>将「{{ currentProject.title || currentProject.name }}」移入回收站，保留项目历史与关联数据，可在账号设置中恢复。</v-card-text><v-card-actions><v-spacer /><v-btn @click="deleteConfirm = false">取消</v-btn><v-btn color="error" :disabled="localuser.isReadonly('projects')" @click="deleteProject">移入回收站</v-btn></v-card-actions></v-card>
     </v-dialog>
   </v-container>
 </template>
@@ -279,6 +286,7 @@ export default {
       ],
       currentProjectID: 0,
       dialog: false,
+      deleteConfirm: false,
       currentProject: {},
       previousProject: {},
       search: {
@@ -347,6 +355,7 @@ export default {
     },
 
     async pushproject(id) {
+      if (localuser.isReadonly('projects')) return;
       try {
         const res = await request.post(`/project/${id}/push`);
         console.log(res.data);
@@ -368,6 +377,7 @@ export default {
       }
     },
     async deleteProject() {
+      if (localuser.isReadonly('projects')) return;
       try {
         const res = await request.delete(`/project/edit/${this.currentProjectID}`);
         console.log(res.data);
@@ -379,6 +389,7 @@ export default {
         });
         this.onPageChange();
         this.dialog = false;
+        this.deleteConfirm = false;
       } catch (err) {
         console.log(err);
         this.$toast.add({
@@ -390,6 +401,7 @@ export default {
       }
     },
     async SaveProjectsInfo() {
+      if (localuser.isReadonly('projects')) return;
       this.currentProject.tags = this.aboutTags.chips.map(name => name);
       try {
         const res = await request.put(`/project/id/${this.currentProjectID}`, this.currentProject);

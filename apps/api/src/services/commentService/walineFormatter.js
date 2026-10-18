@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import ipLocation from '../ip/ipLocation.js';
 import zcconfig from '../config/zcconfig.js';
 import { renderMarkdown } from './markdown.js';
+import { canViewContent } from '../moderation/visibility.js';
 
 /**
  * 将内部角色映射为 Waline 客户端识别的 type
@@ -50,6 +51,7 @@ function getDefaultAvatar(nick, mail) {
  */
 export async function formatComment(comment, options = {}) {
     const { isAdmin = false, spaceUser = null, zcUser = null, disableUserAgent = false, disableRegion = false, userLevelMap = null } = options;
+    const hiddenProfile = comment.account_user_id && !await canViewContent('profile', { id: Number(comment.account_user_id) }, options.viewerId || null);
 
     let browser = '';
     let os = '';
@@ -74,7 +76,7 @@ export async function formatComment(comment, options = {}) {
     let link = comment.link || '';
     let avatar = '';
     const staticUrl = await zcconfig.get('s3.staticurl');
-    if (comment.user_id && zcUser) {
+    if (comment.account_user_id && zcUser) {
         if (zcUser.url) {
             link = zcUser.url;
         } else {
@@ -116,7 +118,7 @@ export async function formatComment(comment, options = {}) {
         browser,
         os,
         addr,
-        user_id: comment.user_id ? Number(comment.user_id) : null,
+        user_id: comment.account_user_id ? Number(comment.account_user_id) : null,
         orig: comment.comment,
     };
 
@@ -131,8 +133,8 @@ export async function formatComment(comment, options = {}) {
     }
 
     // 用户等级
-    if (userLevelMap && comment.user_id) {
-        const userId = Number(comment.user_id);
+    if (userLevelMap && comment.account_user_id) {
+        const userId = Number(comment.account_user_id);
         if (userLevelMap.has(userId)) {
             formatted.level = userLevelMap.get(userId);
         }
@@ -145,6 +147,15 @@ export async function formatComment(comment, options = {}) {
         formatted.orig = comment.comment;
     }
 
+    if (hiddenProfile) {
+        formatted.nick = '用户';
+        formatted.link = '';
+        formatted.avatar = '';
+        formatted.user_id = null;
+        delete formatted.label;
+        delete formatted.type;
+        delete formatted.level;
+    }
     return formatted;
 }
 
@@ -160,8 +171,8 @@ export async function formatComment(comment, options = {}) {
 export async function formatCommentsWithChildren(comments, children, options = {}, spaceUsersMap = new Map(), zcUsersMap = new Map()) {
     const formatOpts = (comment) => ({
         ...options,
-        spaceUser: comment.user_id ? spaceUsersMap.get(Number(comment.user_id)) || null : null,
-        zcUser: comment.user_id ? zcUsersMap.get(Number(comment.user_id)) || null : null,
+        spaceUser: comment.account_user_id ? spaceUsersMap.get(Number(comment.account_user_id)) || null : null,
+        zcUser: comment.account_user_id ? zcUsersMap.get(Number(comment.account_user_id)) || null : null,
     });
 
     const formattedRoots = await Promise.all(

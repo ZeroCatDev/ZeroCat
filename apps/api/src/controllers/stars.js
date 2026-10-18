@@ -3,6 +3,7 @@ import { prisma } from '../services/prisma.js';
 import logger from "../services/logger.js";
 import gorseService from "../services/gorse.js";
 import queueManager from '../services/queue/queueManager.js';
+import { visibleWhere, canViewContent, assertCanWrite } from '../services/moderation/visibility.js';
 
 
 /**
@@ -12,6 +13,7 @@ import queueManager from '../services/queue/queueManager.js';
  * @returns {Promise<object>} - The created star record
  */
 export async function starProject(userId, projectId) {
+    await assertCanWrite(Number(userId), 'projects', 'interact');
     try {
         const parsedUserId = parseInt(userId);
         const parsedProjectId = parseInt(projectId);
@@ -21,8 +23,8 @@ export async function starProject(userId, projectId) {
             where: {id: parsedProjectId}
         });
 
-        if (!project) {
-            throw new Error("项目不存在");
+        if (!project || !await canViewContent('project', project, parsedUserId)) {
+            throw Object.assign(new Error('项目不存在'), { statusCode: 404, code: 'RESOURCE_NOT_FOUND' });
         }
 
         // 检查是否已经收藏
@@ -79,6 +81,7 @@ export async function starProject(userId, projectId) {
  * @returns {Promise<object>} - The deleted star record
  */
 export async function unstarProject(userId, projectId) {
+    await assertCanWrite(Number(userId), 'projects', 'interact');
     try {
         const parsedUserId = parseInt(userId);
         const parsedProjectId = parseInt(projectId);
@@ -88,8 +91,8 @@ export async function unstarProject(userId, projectId) {
             where: {id: parsedProjectId}
         });
 
-        if (!project) {
-            throw new Error("项目不存在");
+        if (!project || !await canViewContent('project', project, parsedUserId)) {
+            throw Object.assign(new Error('项目不存在'), { statusCode: 404, code: 'RESOURCE_NOT_FOUND' });
         }
 
         // 检查用户是否已收藏该项目
@@ -157,6 +160,7 @@ export async function getProjectStarStatus(userId, projectId) {
             where: {
                 userid: parsedUserId,
                 projectid: parsedProjectId,
+                project: { is: await visibleWhere('project', parsedUserId) },
             }
         });
 
@@ -172,13 +176,15 @@ export async function getProjectStarStatus(userId, projectId) {
  * @param {number} projectId - The project ID
  * @returns {Promise<number>} - The number of stars
  */
-export async function getProjectStars(projectId) {
+export async function getProjectStars(projectId, viewerId = null) {
     try {
         const parsedProjectId = parseInt(projectId);
 
         const count = await prisma.ow_projects_stars.count({
             where: {
                 projectid: parsedProjectId,
+                project: { is: await visibleWhere('project', viewerId) },
+                user: { is: { AND: [await visibleWhere('profile', viewerId), await visibleWhere('profile', viewerId, { category: 'projects' })] } },
             }
         });
 

@@ -15,6 +15,8 @@ import {
   bookmarkPost,
   unbookmarkPost,
   deletePost,
+  getDeletedPosts,
+  restorePost,
   getPostById,
   getUserPosts,
   getHomeFeed,
@@ -40,8 +42,18 @@ import {
   MAX_MEDIA_COUNT,
 } from "../controllers/posts.js";
 import { handleAssetUpload, validateFileTypeFromContent } from "../services/assets.js";
+import { assertCanWrite } from "../services/moderation/restrictions.js";
+import { visibleWhere } from "../services/moderation/visibility.js";
 
 const router = Router();
+
+router.use((req, res, next) => {
+  if (req.headers["x-zerocat-delegation"] !== undefined && req.method === "GET"
+      && !/^\/\d+\/?$/.test(req.path)) {
+    return res.status(403).json({ status: "error", code: "ZC_ERROR_DELEGATION_NOT_SUPPORTED", message: "此操作不支持授权委托" });
+  }
+  next();
+});
 
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -94,6 +106,7 @@ const parseEmbedDataQuery = (value) => {
 };
 router.post("/upload-image", needLogin, requireScope("post:create"), upload.single("file"), async (req, res) => {
   try {
+    await assertCanWrite(res.locals.userid, "post", "create");
     if (!req.file) {
       return res.status(400).json({ status: "error", message: "没有上传文件" });
     }
@@ -124,7 +137,7 @@ router.post("/upload-image", needLogin, requireScope("post:create"), upload.sing
     });
   } catch (error) {
     logger.error("上传图片失败:", error);
-    return res.status(500).json({ status: "error", message: "图片上传失败" });
+    return res.status(error.status || 500).json({ status: "error", message: error.status ? error.message : "图片上传失败", ...(error.code ? { code: error.code } : {}) });
   }
 });
 
@@ -143,7 +156,7 @@ router.post("/", needLogin, requireScope("post:create"), async (req, res) => {
     res.status(200).json({ status: "success", data });
   } catch (error) {
     logger.error("创建推文失败:", error);
-    res.status(400).json({ status: "error", message: error.message });
+    res.status(error.status || error.statusCode || 400).json({ status: "error", message: error.message, ...(error.code ? { code: error.code } : {}) });
   }
 });
 
@@ -160,7 +173,7 @@ router.post("/:id/reply", needLogin, requireScope("post:create"), async (req, re
     res.status(200).json({ status: "success", data });
   } catch (error) {
     logger.error("回复推文失败:", error);
-    res.status(400).json({ status: "error", message: error.message });
+    res.status(error.status || error.statusCode || 400).json({ status: "error", message: error.message, ...(error.code ? { code: error.code } : {}) });
   }
 });
 
@@ -173,7 +186,7 @@ router.post("/:id/retweet", needLogin, requireResource("post", "interact", "id")
     res.status(200).json({ status: "success", data });
   } catch (error) {
     logger.error("转推失败:", error);
-    res.status(400).json({ status: "error", message: error.message });
+    res.status(error.status || error.statusCode || 400).json({ status: "error", message: error.message, ...(error.code ? { code: error.code } : {}) });
   }
 });
 
@@ -186,7 +199,7 @@ router.delete("/:id/retweet", needLogin, requireResource("post", "interact", "id
     res.status(200).json({ status: "success", data: result });
   } catch (error) {
     logger.error("取消转推失败:", error);
-    res.status(400).json({ status: "error", message: error.message });
+    res.status(error.status || error.statusCode || 400).json({ status: "error", message: error.message, ...(error.code ? { code: error.code } : {}) });
   }
 });
 
@@ -203,7 +216,7 @@ router.post("/:id/quote", needLogin, requireScope("post:create"), async (req, re
     res.status(200).json({ status: "success", data });
   } catch (error) {
     logger.error("引用推文失败:", error);
-    res.status(400).json({ status: "error", message: error.message });
+    res.status(error.status || error.statusCode || 400).json({ status: "error", message: error.message, ...(error.code ? { code: error.code } : {}) });
   }
 });
 
@@ -213,7 +226,7 @@ router.post("/:id/read", async (req, res) => {
     res.status(200).json({ status: "success", data: result });
   } catch (error) {
     logger.error("标记已读失败:", error);
-    res.status(400).json({ status: "error", message: error.message });
+    res.status(error.status || error.statusCode || 400).json({ status: "error", message: error.message, ...(error.code ? { code: error.code } : {}) });
   }
 });
 
@@ -223,7 +236,7 @@ router.post("/:id/like", needLogin, requireResource("post", "interact", "id"), a
     res.status(200).json({ status: "success", data: like });
   } catch (error) {
     logger.error("点赞失败:", error);
-    res.status(400).json({ status: "error", message: error.message });
+    res.status(error.status || error.statusCode || 400).json({ status: "error", message: error.message, ...(error.code ? { code: error.code } : {}) });
   }
 });
 
@@ -233,7 +246,7 @@ router.delete("/:id/like", needLogin, requireResource("post", "interact", "id"),
     res.status(200).json({ status: "success", data: result });
   } catch (error) {
     logger.error("取消点赞失败:", error);
-    res.status(400).json({ status: "error", message: error.message });
+    res.status(error.status || error.statusCode || 400).json({ status: "error", message: error.message, ...(error.code ? { code: error.code } : {}) });
   }
 });
 
@@ -243,7 +256,7 @@ router.post("/:id/bookmark", needLogin, requireResource("post", "interact", "id"
     res.status(200).json({ status: "success", data: bookmark });
   } catch (error) {
     logger.error("收藏失败:", error);
-    res.status(400).json({ status: "error", message: error.message });
+    res.status(error.status || error.statusCode || 400).json({ status: "error", message: error.message, ...(error.code ? { code: error.code } : {}) });
   }
 });
 
@@ -253,17 +266,39 @@ router.delete("/:id/bookmark", needLogin, requireResource("post", "interact", "i
     res.status(200).json({ status: "success", data: result });
   } catch (error) {
     logger.error("取消收藏失败:", error);
-    res.status(400).json({ status: "error", message: error.message });
+    res.status(error.status || error.statusCode || 400).json({ status: "error", message: error.message, ...(error.code ? { code: error.code } : {}) });
   }
 });
 
-router.delete("/:id", needLogin, requireResource("post", "delete", "id"), async (req, res) => {
+router.delete("/:id", needLogin, requireResource("post", "delete", "id", { allowDelegation: true }), async (req, res) => {
   try {
-    const result = await deletePost({ userId: res.locals.userid, postId: req.params.id });
+    const result = await deletePost({
+      userId: res.locals.userid, postId: req.params.id, authorization: res.locals.authorization,
+      authorizationContext: { tokenType: res.locals.tokenType, tokenScopes: res.locals.scopes || [], delegationId: req.headers["x-zerocat-delegation"], allowDelegation: true },
+    });
     res.status(200).json({ status: "success", data: result });
   } catch (error) {
     logger.error("删除推文失败:", error);
-    res.status(400).json({ status: "error", message: error.message });
+    res.status(error.status || error.statusCode || 400).json({ status: "error", message: error.message, ...(error.code ? { code: error.code } : {}) });
+  }
+});
+
+router.get(["/recycle-bin", "/deleted"], needLogin, requireScope("post:read"), async (req, res) => {
+  try {
+    const data = await getDeletedPosts({ userId: res.locals.userid, cursor: req.query.cursor, page: req.query.page, limit: req.query.limit });
+    res.json({ status: "success", data });
+  } catch (error) {
+    res.status(error.status || 500).json({ status: "error", message: error.message, code: error.code });
+  }
+});
+
+router.post("/:id/restore", needLogin, requireResource("post", "delete", "id", { includeDeleted: true }), async (req, res) => {
+  try {
+    const data = await restorePost({ userId: res.locals.userid, postId: req.params.id,
+      authorizationContext: { tokenType: res.locals.tokenType, tokenScopes: res.locals.scopes || [] } });
+    res.json({ status: "success", data });
+  } catch (error) {
+    res.status(error.status || 400).json({ status: "error", message: error.message, code: error.code });
   }
 });
 
@@ -413,7 +448,7 @@ router.get("/related", async (req, res) => {
     res.status(200).json({ status: "success", data });
   } catch (error) {
     logger.error("获取关联帖子失败:", error);
-    res.status(400).json({ status: "error", message: error.message });
+    res.status(error.status || error.statusCode || 400).json({ status: "error", message: error.message, ...(error.code ? { code: error.code } : {}) });
   }
 });
 
@@ -558,7 +593,7 @@ router.get("/:id/retweets", async (req, res) => {
     res.status(200).json({ status: "success", data });
   } catch (error) {
     logger.error("获取转推列表失败:", error);
-    res.status(400).json({ status: "error", message: error.message });
+    res.status(error.status || error.statusCode || 400).json({ status: "error", message: error.message, ...(error.code ? { code: error.code } : {}) });
   }
 });
 
@@ -576,7 +611,7 @@ router.get("/:id/quotes", async (req, res) => {
     res.status(200).json({ status: "success", data });
   } catch (error) {
     logger.error("获取引用列表失败:", error);
-    res.status(400).json({ status: "error", message: error.message });
+    res.status(error.status || error.statusCode || 400).json({ status: "error", message: error.message, ...(error.code ? { code: error.code } : {}) });
   }
 });
 
@@ -596,7 +631,7 @@ router.get("/:id/likes", needLogin, requireResource("post", "read", "id"), async
     if (error.message === "无权查看点赞列表") {
       return res.status(403).json({ status: "error", message: error.message });
     }
-    res.status(400).json({ status: "error", message: error.message });
+    res.status(error.status || error.statusCode || 400).json({ status: "error", message: error.message, ...(error.code ? { code: error.code } : {}) });
   }
 });
 
@@ -611,7 +646,7 @@ router.get("/:id/analytics", async (req, res) => {
     res.status(200).json({ status: "success", data });
   } catch (error) {
     logger.error("获取帖子分析失败:", error);
-    res.status(400).json({ status: "error", message: error.message });
+    res.status(error.status || error.statusCode || 400).json({ status: "error", message: error.message, ...(error.code ? { code: error.code } : {}) });
   }
 });
 
@@ -632,7 +667,7 @@ router.get("/:id/analytics/views", needLogin, requireResource("post", "read", "i
     if (error.message === "无权查看帖子浏览分析") {
       return res.status(403).json({ status: "error", message: error.message });
     }
-    res.status(400).json({ status: "error", message: error.message });
+    res.status(error.status || error.statusCode || 400).json({ status: "error", message: error.message, ...(error.code ? { code: error.code } : {}) });
   }
 });
 
@@ -663,11 +698,12 @@ router.get("/:id/similar", async (req, res) => {
     res.status(200).json({ status: "success", data });
   } catch (error) {
     logger.error("获取相似帖子失败:", error);
-    res.status(400).json({ status: "error", message: error.message });
+    res.status(error.status || error.statusCode || 400).json({ status: "error", message: error.message, ...(error.code ? { code: error.code } : {}) });
   }
 });
 
-router.get("/:id", async (req, res) => {
+router.get("/:id", (req, res, next) => req.headers["x-zerocat-delegation"] !== undefined
+  ? requireResource("post", "read", "id", { allowDelegation: true })(req, res, next) : next(), async (req, res) => {
   try {
     const viewerId = res.locals.userid || null;
     const data = await getPostById(req.params.id, viewerId);
@@ -696,8 +732,9 @@ router.post("/:id/resync", needLogin, requireResource("post", "update", "id"), a
     }
 
     const { prisma } = await import("../services/prisma.js");
-    const post = await prisma.ow_posts.findUnique({
-      where: { id: postId },
+    await assertCanWrite(res.locals.userid, "post", "update");
+    const post = await prisma.ow_posts.findFirst({
+      where: { AND: [{ id: postId }, await visibleWhere("post", null)] },
       select: { id: true, author_id: true, is_deleted: true },
     });
 
@@ -720,7 +757,7 @@ router.post("/:id/resync", needLogin, requireResource("post", "update", "id"), a
     });
   } catch (error) {
     logger.error("重新同步帖子失败:", error);
-    res.status(500).json({ status: "error", message: "重新同步失败" });
+    res.status(error.status || 500).json({ status: "error", message: error.status ? error.message : "重新同步失败", ...(error.code ? { code: error.code } : {}) });
   }
 });
 
@@ -737,8 +774,9 @@ router.post("/:id/push-federation", needLogin, requireResource("post", "update",
     }
 
     const { prisma } = await import("../services/prisma.js");
-    const post = await prisma.ow_posts.findUnique({
-      where: { id: postId },
+    await assertCanWrite(res.locals.userid, "post", "update");
+    const post = await prisma.ow_posts.findFirst({
+      where: { AND: [{ id: postId }, await visibleWhere("post", null)] },
       include: { author: { select: { id: true, username: true, display_name: true } } },
     });
 
@@ -783,7 +821,7 @@ router.post("/:id/push-federation", needLogin, requireResource("post", "update",
     });
   } catch (error) {
     logger.error("推送到联邦网络失败:", error);
-    res.status(500).json({ status: "error", message: "推送到联邦网络失败" });
+    res.status(error.status || 500).json({ status: "error", message: error.status ? error.message : "推送到联邦网络失败", ...(error.code ? { code: error.code } : {}) });
   }
 });
 
@@ -794,6 +832,7 @@ router.post("/:id/push-federation", needLogin, requireResource("post", "update",
  */
 router.post("/remote-user/:userId/fetch", needLogin, requireScope("post:read"), async (req, res) => {
   try {
+    await assertCanWrite(res.locals.userid, "post", "create");
     const userId = parseInt(req.params.userId);
     if (isNaN(userId)) {
       return res.status(400).json({ status: "error", message: "无效的用户 ID" });
@@ -829,7 +868,7 @@ router.post("/remote-user/:userId/fetch", needLogin, requireScope("post:read"), 
     });
   } catch (error) {
     logger.error("拉取远程用户帖子失败:", error);
-    res.status(500).json({ status: "error", message: "拉取远程用户帖子失败" });
+    res.status(error.status || 500).json({ status: "error", message: error.status ? error.message : "拉取远程用户帖子失败", ...(error.code ? { code: error.code } : {}) });
   }
 });
 

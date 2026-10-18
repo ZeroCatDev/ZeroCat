@@ -5,6 +5,7 @@ import { sendMail, getMailProvider } from '../../email/emailSender.js';
 import { createTransport } from 'nodemailer';
 import zcconfig from '../../config/zcconfig.js';
 import logger from '../../logger.js';
+import { prepareEmailDelivery } from '../../email/emailDeliveryPolicy.js';
 
 let worker = null;
 
@@ -15,7 +16,9 @@ async function createEmailWorker() {
     worker = new Worker(
         QUEUE_NAMES.EMAIL,
         async (job) => {
-            const { to, subject, html } = job.data;
+            const delivery = await prepareEmailDelivery(job.data, { queued: true });
+            if (!delivery) return { skipped: true, reason: 'content_unavailable' };
+            const { to, subject, html } = delivery;
             await job.log(`Processing email to ${to}, subject: "${subject}"`);
 
             const provider = await getMailProvider();

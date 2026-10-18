@@ -5,6 +5,7 @@ import {createGzip} from 'zlib';
 import {prisma} from './prisma.js';
 import logger from './logger.js';
 import zcconfig from './config/zcconfig.js';
+import { visibleWhere } from './moderation/visibility.js';
 
 class SitemapService {
     constructor() {
@@ -31,7 +32,7 @@ class SitemapService {
             const projects = await prisma.ow_projects.findMany({
                 where: {
                     state: 'public',
-                    // 可以添加其他条件
+                    AND: [await visibleWhere('project'), { author: await visibleWhere('profile') }]
                 },
                 select: {
                     id: true,
@@ -50,7 +51,7 @@ class SitemapService {
             const users = await prisma.ow_users.findMany({
                 where: {
                     status: 'active',
-                    // 可以添加其他条件
+                    AND: [await visibleWhere('profile')]
                 },
                 select: {
                     id: true,
@@ -87,6 +88,13 @@ class SitemapService {
         }
 
         return urls;
+    }
+
+    async getCurrentSitemapBuffer() {
+        const stream = new SitemapStream({ hostname: await zcconfig.get('urls.frontend'), xmlns: { news: false, xhtml: true, image: true, video: false } });
+        const compressed = stream.pipe(createGzip());
+        Readable.from(await this.getUrls()).pipe(stream);
+        return streamToPromise(compressed);
     }
 
     async generateSitemap(isIncremental = false) {

@@ -2,7 +2,8 @@ import logger from "../services/logger.js";
 import { prisma } from "../services/prisma.js";
 import embeddingService from "../services/embedding.js";
 import gorseService from "../services/gorse.js";
-import { projectSelectionFields } from "./projects.js";
+import { projectSelectionFields, sanitizeProjectAuthors } from "./projects.js";
+import { visibleWhere } from "../services/moderation/visibility.js";
 
 function normalizeLimit(limit, fallback = 20) {
   const parsed = Number(limit);
@@ -23,17 +24,8 @@ function normalizeMinSimilarity(minSimilarity) {
   return Math.min(Math.max(parsed, 0), 1);
 }
 
-function visibilityWhere(userId) {
-  if (userId) {
-    return {
-      state: { not: "deleted" },
-      OR: [{ state: "public" }, { authorid: Number(userId) }],
-    };
-  }
-
-  return {
-    state: "public",
-  };
+async function visibilityWhere(userId) {
+  return visibleWhere("project", userId);
 }
 
 async function ensureProjectVector(projectId) {
@@ -112,7 +104,7 @@ async function findProjectRecommendationsByVector({
   const similarityMap = new Map(filtered.map((item) => [Number(item.entityId), Number(item.similarity)]));
 
   const where = {
-    ...visibilityWhere(userId),
+    ...await visibilityWhere(userId),
     id: { in: candidateIds },
   };
 
@@ -133,7 +125,7 @@ async function findProjectRecommendationsByVector({
   }));
 
   return {
-    projects: paged,
+    projects: await sanitizeProjectAuthors(paged, userId),
     total_candidates: projects.length,
     offset: safeOffset,
     limit: safeLimit,
@@ -234,7 +226,7 @@ async function findProjectRecommendationsByMultiVector({
   const similarityMap = new Map(filtered.map((item) => [Number(item.entityId), Number(item.similarity)]));
 
   const where = {
-    ...visibilityWhere(userId),
+    ...await visibilityWhere(userId),
     id: { in: candidateIds },
   };
 
@@ -255,7 +247,7 @@ async function findProjectRecommendationsByMultiVector({
   }));
 
   return {
-    projects: paged,
+    projects: await sanitizeProjectAuthors(paged, userId),
     total_candidates: projects.length,
     offset: safeOffset,
     limit: safeLimit,
@@ -291,7 +283,7 @@ export async function getRecommendedProjectsForUser({ userId, limit = 20, offset
 
   const projects = await prisma.ow_projects.findMany({
     where: {
-      ...visibilityWhere(nUserId),
+      ...await visibilityWhere(nUserId),
       authorid: { not: nUserId },
       id: { in: projectIds },
     },
@@ -302,7 +294,7 @@ export async function getRecommendedProjectsForUser({ userId, limit = 20, offset
   const ordered = projectIds.map((id) => projectMap.get(Number(id))).filter(Boolean);
 
   return {
-    projects: ordered,
+    projects: await sanitizeProjectAuthors(ordered, nUserId),
     total_candidates: ordered.length,
     offset: safeOffset,
     limit: safeLimit,
@@ -332,7 +324,7 @@ export async function getContextRecommendedProjects({
   const sourceProject = await prisma.ow_projects.findFirst({
     where: {
       id: nProjectId,
-      ...visibilityWhere(nUserId),
+      ...await visibilityWhere(nUserId),
     },
     select: { id: true },
   });
@@ -395,7 +387,7 @@ export async function getSimilarProjectsByProject({
   const sourceProject = await prisma.ow_projects.findFirst({
     where: {
       id: nProjectId,
-      ...visibilityWhere(nUserId),
+      ...await visibilityWhere(nUserId),
     },
     select: { id: true },
   });

@@ -5,6 +5,7 @@
 
 import { prisma } from '../prisma.js';
 import logger from '../logger.js';
+import { visibleWhere, canViewContent } from '../moderation/visibility.js';
 import axios from 'axios';
 import { AP_CONTEXT, AP_ACCEPT_TYPES, getApEndpointBaseUrl, getInstanceBaseUrl, getInstanceDomain, getStaticUrl } from './config.js';
 import { getActorUrl } from './actor.js';
@@ -77,6 +78,7 @@ async function getPostMentions(postId) {
 async function resolveRelatedNoteRef(relatedPostId, relatedPost = null) {
     if (!relatedPostId) return null;
 
+    if (!await prisma.ow_posts.findFirst({ where: { id: Number(relatedPostId), AND: [await visibleWhere('post')] }, select: { id: true } })) return null;
     let candidate = relatedPost;
     const hasReferenceFields =
         candidate &&
@@ -168,6 +170,7 @@ async function isPublicApObjectReachable(url) {
  * @returns {object} AP Note
  */
 export async function postToNote(post) {
+    if (!post || !await canViewContent('post', post, null)) return null;
     const apBaseUrl = await getApEndpointBaseUrl();
     const frontendBaseUrl = await getInstanceBaseUrl();
     const domain = await getInstanceDomain();
@@ -443,8 +446,8 @@ async function buildEmbedHtml(embed, staticUrl, baseUrl, domain, tags) {
         switch (embed.type) {
             case 'project': {
                 if (!embed.id) return null;
-                const project = await prisma.ow_projects.findUnique({
-                    where: { id: Number(embed.id) },
+                const project = await prisma.ow_projects.findFirst({
+                    where: { id: Number(embed.id), state: 'public', AND: [await visibleWhere('project')] },
                     select: {
                         id: true, name: true, title: true,
                         state: true,
@@ -458,8 +461,8 @@ async function buildEmbedHtml(embed, staticUrl, baseUrl, domain, tags) {
 
             case 'user': {
                 if (!embed.id) return null;
-                const user = await prisma.ow_users.findUnique({
-                    where: { id: Number(embed.id) },
+                const user = await prisma.ow_users.findFirst({
+                    where: { id: Number(embed.id), AND: [await visibleWhere('profile')] },
                     select: { id: true, username: true },
                 });
                 if (!user) return null;
@@ -474,8 +477,8 @@ async function buildEmbedHtml(embed, staticUrl, baseUrl, domain, tags) {
 
             case 'list': {
                 if (!embed.id) return null;
-                const list = await prisma.ow_projects_lists.findUnique({
-                    where: { id: Number(embed.id) },
+                const list = await prisma.ow_projects_lists.findFirst({
+                    where: { id: Number(embed.id), state: 'public', AND: [await visibleWhere('list')] },
                     select: { id: true, state: true },
                 });
                 if (!list || list.state === 'private') return null;

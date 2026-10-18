@@ -14,6 +14,7 @@ import {
   handleAssetUpload
 } from "../services/assets.js";
 import { prisma } from "../services/prisma.js";
+import { visibleWhere } from "../services/moderation/visibility.js";
 
 const router = Router();
 
@@ -150,6 +151,7 @@ router.post("/image-upload", needLogin, requireScope("asset:create"), upload.sin
     res.json(result);
   } catch (error) {
     logger.error("简化图片上传失败:", error);
+    if (error.status) return res.status(error.status).json({ error: error.message, code: error.code });
 
     // 根据错误类型返回不同的错误信息
     if (error.code === 'LIMIT_FILE_SIZE') {
@@ -170,7 +172,7 @@ router.get("/list", needLogin, requireScope("asset:read"), async (req, res) => {
     const { page, limit, category, search, sortBy, sortOrder } = req.query;
 
     const result = await getAssetsList({
-      page, limit, category, search, sortBy, sortOrder
+      page, limit, category, search, sortBy, sortOrder, viewerId: res.locals.userid
     });
 
     res.json({
@@ -190,7 +192,7 @@ router.get("/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
-    const asset = await getAssetDetails(parseInt(id));
+    const asset = await getAssetDetails(parseInt(id), res.locals.userid);
 
     if (!asset) {
       return res.status(404).json({ error: "素材不存在" });
@@ -210,7 +212,7 @@ router.get("/:id", async (req, res) => {
 // 获取素材统计信息
 router.get("/stats/overview", async (req, res) => {
   try {
-    const stats = await getAssetStats();
+    const stats = await getAssetStats(res.locals.userid);
 
     res.json({
       success: true,
@@ -232,9 +234,8 @@ router.post("/scratch/check", async (req, res) => {
     }
     const result = await prisma.ow_assets.findMany({
       where: {
-        md5: {
-          in: files
-        }
+        md5: { in: files },
+        AND: [await visibleWhere('asset', res.locals.userid)]
       }
     })
     res.json({

@@ -13,7 +13,7 @@ const router = express.Router();
  */
 function handleError(res, error) {
     logger.error('API Error:', error);
-    const statusCode = error.status || 500;
+    const statusCode = error.statusCode || error.status || 500;
     const errorMessage = process.env.NODE_ENV === 'production'
         ? '操作失败'
         : error.message || '未知错误';
@@ -251,7 +251,7 @@ router.get('/followers/:userId', async (req, res) => {
         const limit = parseInt(req.query.limit) || 20;
         const offset = parseInt(req.query.offset) || 0;
 
-        const result = await followsController.getUserFollowers(userId, limit, offset);
+        const result = await followsController.getUserFollowers(userId, limit, offset, res.locals.userid);
         res.json({success: true, data: result});
     } catch (error) {
         handleError(res, error);
@@ -304,7 +304,7 @@ router.get('/following/:userId', async (req, res) => {
         const limit = parseInt(req.query.limit) || 20;
         const offset = parseInt(req.query.offset) || 0;
 
-        const result = await followsController.getUserFollowing(userId, limit, offset);
+        const result = await followsController.getUserFollowing(userId, limit, offset, res.locals.userid);
         res.json({success: true, data: result});
     } catch (error) {
         handleError(res, error);

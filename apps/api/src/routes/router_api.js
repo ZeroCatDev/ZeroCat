@@ -9,6 +9,8 @@ import followsRoutes from "./router_follows.js";
 import {CONFIG_TYPES} from "../services/config/configTypes.js";
 import sitemapService from '../services/sitemap.js';
 import { buildAvatarURL } from "../utils/avatarUrl.js";
+import { visibleWhere } from "../services/moderation/visibility.js";
+import { sanitizeFeaturedProjects } from "../controllers/users.js";
 
 var router = Router();
 
@@ -17,6 +19,7 @@ router.get("/usertx", async function (req, res, next) {
         const USER = await prisma.ow_users.findFirst({
             where: {
                 id: parseInt(req.query.id),
+                AND: [await visibleWhere('profile', res.locals.userid)],
             },
             select: {
                 avatar: true,
@@ -44,6 +47,7 @@ router.get("/getuserinfo", async function (req, res, next) {
         var user = await prisma.ow_users.findMany({
             where: {
                 id: parseInt(req.query.id),
+                AND: [await visibleWhere('profile', res.locals.userid)],
             },
             select: {
                 id: true,
@@ -67,17 +71,19 @@ router.get("/getuserinfo", async function (req, res, next) {
             where: {
                 type: "scratch",
                 state: "public",
+                AND: [await visibleWhere('project', res.locals.userid)],
             },
         });
         var pythoncount = await prisma.ow_projects.count({
             where: {
                 type: "python",
                 state: "public",
+                AND: [await visibleWhere('project', res.locals.userid)],
             },
         });
         if (!user[0]) {
             logger.debug("用户不存在");
-            res.status(404).json({
+            return res.status(404).json({
                 status: "error",
                 code: "404",
                 message: "找不到页面",
@@ -86,7 +92,7 @@ router.get("/getuserinfo", async function (req, res, next) {
         res.send({
             status: "success",
             info: {
-                user: { ...user[0], avatarURL: await buildAvatarURL(user[0]?.avatar) },
+                user: { ...await sanitizeFeaturedProjects(user[0], res.locals.userid), avatarURL: await buildAvatarURL(user[0]?.avatar) },
                 count: {pythoncount, scratchcount},
             },
         });
@@ -97,9 +103,10 @@ router.get("/getuserinfo", async function (req, res, next) {
 
 router.get("/info", async (req, res, next) => {
     try {
-        const userCount = await prisma.ow_users.count();
-        const scratchCount = await prisma.ow_projects.count();
-        const pythonCount = await prisma.ow_projects.count();
+        const projectWhere = await visibleWhere('project', res.locals.userid);
+        const userCount = await prisma.ow_users.count({ where: await visibleWhere('profile', res.locals.userid) });
+        const scratchCount = await prisma.ow_projects.count({ where: { type: 'scratch', AND: [projectWhere] } });
+        const pythonCount = await prisma.ow_projects.count({ where: { type: 'python', AND: [projectWhere] } });
 
         res.send({
             user: userCount,
@@ -117,7 +124,7 @@ router.get("/projectinfo", async function (req, res, next) {
         const project = await prisma.ow_projects.findFirst({
             where: {
                 id: Number(req.query.id),
-                OR: [{state: "public"}, {authorid: res.locals.userid}],
+                AND: [await visibleWhere('project', res.locals.userid)],
             },
             select: {
                 id: true,
@@ -148,7 +155,7 @@ router.get("/projectinfo", async function (req, res, next) {
         }
 
         const author = await prisma.ow_users.findFirst({
-            where: {id: project.authorid},
+            where: {id: project.authorid, AND: [await visibleWhere('profile', res.locals.userid)]},
             select: {
                 display_name: true,
                 avatar: true,
@@ -159,10 +166,10 @@ router.get("/projectinfo", async function (req, res, next) {
 
         res.json({
             ...project,
-            author_display_name: author.display_name,
-            author_avatar: author.avatar,
-            author_avatarURL: await buildAvatarURL(author.avatar),
-            author_bio: author.bio,
+            author_display_name: author?.display_name ?? null,
+            author_avatar: author?.avatar ?? null,
+            author_avatarURL: author ? await buildAvatarURL(author.avatar) : null,
+            author_bio: author?.bio ?? null,
         });
     } catch (err) {
         next(err);
@@ -356,21 +363,8 @@ router.get('/sitemap.xml', async (req, res) => {
             return res.status(404).send('Sitemap is disabled');
         }
 
-        const hash = await sitemapService.getCurrentSitemapHash();
-        if (!hash) {
-            return res.status(404).send('Sitemap not generated yet');
-        }
-
-        const file = await prisma.ow_projects_file.findUnique({
-            where: {sha256: hash}
-        });
-
-        if (!file) {
-            return res.status(404).send('Sitemap file not found');
-        }
-
-        // Convert base64 to buffer
-        const buffer = Buffer.from(file.source, 'base64');
+        const buffer = await sitemapService.getCurrentSitemapBuffer();
+        res.header('Cache-Control', 'no-store');
 
         // Set appropriate headers
         res.header('Content-Type', 'application/xml');

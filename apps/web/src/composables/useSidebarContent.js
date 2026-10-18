@@ -4,6 +4,7 @@ import { useTheme } from 'vuetify';
 import { localuser } from '@/services/localAccount';
 import { get } from '@/services/serverConfig';
 import { useAccountState } from '@/composables/useAccountState';
+import { canAccessAdminPage } from '@/services/permissions';
 
 /**
  * 统一侧边栏内容提供者
@@ -51,13 +52,15 @@ export function useSidebarContent() {
   const adminNavItems = computed(() => [
     { name: 'admin-back', label: '返回', icon: 'mdi-arrow-left', to: '/' },
     { name: 'admin-users', label: '用户管理', icon: 'mdi-account-group', to: '/app/admin/users' },
+    { name: 'admin-permissions', label: '角色与权限', icon: 'mdi-shield-account', to: '/app/admin/permissions' },
+    { name: 'admin-moderation', label: '内容与用户治理', icon: 'mdi-shield-edit-outline', to: '/app/admin/moderation' },
     { name: 'admin-project', label: '项目管理', icon: 'mdi-xml', to: '/app/admin/project' },
     { name: 'admin-config', label: '系统设置', icon: 'mdi-cog', to: '/app/admin/config' },
     { name: 'admin-sitemap', label: '站点地图', icon: 'mdi-sitemap', to: '/app/admin/sitemap' },
     { name: 'admin-extensions', label: '扩展管理', icon: 'mdi-puzzle', to: '/app/admin/extensions' },
     { name: 'admin-oauth', label: 'OAuth应用', icon: 'mdi-shield-key', to: '/app/admin/oauth/applications' },
     { name: 'admin-comment', label: '评论服务', icon: 'mdi-comment-text-multiple-outline', to: '/app/admin/commentservice' },
-  ]);
+  ].filter(item => item.name === 'admin-back' || canAccessAdminPage(user.value, item.to)));
 
   // 统一导航项
   const unifiedNavItems = computed(() => {
@@ -76,7 +79,10 @@ export function useSidebarContent() {
         { name: 'dashboard', label: '仪表盘', icon: 'mdi-view-dashboard-outline', to: '/app/dashboard' },
         { name: 'profile', label: '个人主页', icon: 'mdi-account-outline', to: user.value ? `/${user.value.username}` : '/app/account' },
         { name: 'settings', label: '设置', icon: 'mdi-cog-outline', to: '/app/account' },
+        { name: 'delegations', label: '授权委托', icon: 'mdi-account-arrow-right', to: '/app/account/delegations' },
+        { name: 'recycle-bin', label: '回收站', icon: 'mdi-delete-restore', to: '/app/account/recycle-bin' },
       );
+      if (localuser.canAdmin) items.push({ name: 'admin', label: '管理后台', icon: 'mdi-shield-crown-outline', to: '/app/admin' });
     }
 
     items.push(

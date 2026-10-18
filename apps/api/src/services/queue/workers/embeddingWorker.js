@@ -18,6 +18,7 @@ import logger from '../../logger.js';
 import { prisma } from '../../prisma.js';
 import embeddingService from '../../embedding.js';
 import gorseService from '../../gorse.js';
+import { visibleWhere, canViewContent } from '../../moderation/visibility.js';
 
 let worker = null;
 
@@ -59,7 +60,7 @@ async function processPostEmbedding(job) {
         return { skipped: true, reason: 'retweet' };
     }
 
-    if (post.is_deleted) {
+    if (post.is_deleted || !await canViewContent('post', post, null)) {
         await job.log(`帖子 ${postId} 已删除，跳过`);
         return { skipped: true, reason: 'deleted' };
     }
@@ -269,7 +270,7 @@ async function processProjectEmbedding(job) {
         return { skipped: true, reason: 'not_found' };
     }
 
-    if (project.state === 'deleted') {
+    if (project.state !== 'public' || !await canViewContent('project', project, null)) {
         await job.log(`项目 ${projectId} 已删除，跳过`);
         return { skipped: true, reason: 'deleted' };
     }
@@ -354,7 +355,7 @@ async function processProjectGorseSync(job) {
         return { skipped: true, reason: 'not_found' };
     }
 
-    if (project.state === 'deleted') {
+    if (project.state !== 'public' || !await canViewContent('project', project, null)) {
         await gorseService.hideProject(nProjectId);
         await job.log(`项目 ${nProjectId} 已删除，已在 Gorse 隐藏`);
         return { projectId: nProjectId, hidden: true };
@@ -504,14 +505,14 @@ async function processUserEmbedding(job) {
         },
     });
 
-    if (!user) {
+    if (!user || !await canViewContent('profile', user, null)) {
         await job.log(`用户 ${userId} 不存在，跳过`);
         return { skipped: true, reason: 'not_found' };
     }
 
     // 用户基础语料：同名 readme 项目 + 昵称简介 + 作品名称简介
     const authoredProjects = await prisma.ow_projects.findMany({
-        where: { authorid: userId },
+        where: { authorid: userId, state: 'public', AND: [await visibleWhere('project')] },
         select: {
             id: true,
             name: true,
@@ -595,10 +596,14 @@ async function processUserEmbedding(job) {
         interactionSignature.push(`${action}:${sourceType}:${sourceId}:${Number.isFinite(ts) ? ts : 0}:${signatureExtra}`);
     };
 
+    const publicPostWhere = await visibleWhere('post');
+    const publicProjectWhere = await visibleWhere('project');
+
     // 1. 用户自己发的帖子（高权重）
     const userPosts = await prisma.ow_posts.findMany({
         where: {
             author_id: userId,
+            AND: [publicPostWhere],
             is_deleted: false,
             post_type: { not: 'retweet' }, // 排除纯转推
         },
@@ -640,7 +645,7 @@ async function processUserEmbedding(job) {
 
     // 2. 用户点赞的帖子（中权重）
     const likedPosts = await prisma.ow_posts_like.findMany({
-        where: { user_id: userId },
+        where: { user_id: userId, post: { is: publicPostWhere } },
         select: {
             post_id: true,
             created_at: true,
@@ -686,7 +691,7 @@ async function processUserEmbedding(job) {
 
     // 3. 用户收藏的帖子（较高权重）
     const bookmarkedPosts = await prisma.ow_posts_bookmark.findMany({
-        where: { user_id: userId },
+        where: { user_id: userId, post: { is: publicPostWhere } },
         select: {
             post_id: true,
             created_at: true,
@@ -734,6 +739,7 @@ async function processUserEmbedding(job) {
     const repostPosts = await prisma.ow_posts.findMany({
         where: {
             author_id: userId,
+            AND: [publicPostWhere],
             is_deleted: false,
             post_type: 'retweet',
             retweet_post_id: { not: null },
@@ -818,7 +824,7 @@ async function processUserEmbedding(job) {
 
     // 6. 用户收藏(Star)的作品（project embedding）
     const starredProjects = await prisma.ow_projects_stars.findMany({
-        where: { userid: userId },
+        where: { userid: userId, project: { is: publicProjectWhere } },
         select: {
             projectid: true,
             createTime: true,
@@ -978,6 +984,10 @@ async function syncPostToGorse(post, vector) {
 
         // 纯转推不推送给 Gorse
         if (post.post_type === 'retweet') return;
+        if (!await canViewContent('post', post, null)) {
+            await gorseService.hidePost(post.id);
+            return;
+        }
 
         const client = await getGorseClient();
         if (!client) return;
@@ -1002,6 +1012,7 @@ async function syncPostToGorse(post, vector) {
 async function syncUserToGorse(userId, user, vector) {
     try {
         if (!gorseService.isEnabled()) return;
+        if (!await canViewContent('profile', user, null)) return;
 
         const client = await getGorseClient();
         if (!client) return;
@@ -1148,7 +1159,7 @@ async function processBatchPostEmbedding(job) {
 
     // 批量查询帖子
     const posts = await prisma.ow_posts.findMany({
-        where: { id: { in: postIds } },
+        where: { id: { in: postIds }, AND: [await visibleWhere('post')] },
         select: {
             id: true,
             author_id: true,

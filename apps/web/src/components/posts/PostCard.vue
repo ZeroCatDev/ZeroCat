@@ -78,6 +78,7 @@
                 </template>
                 <v-list-item-title>删除</v-list-item-title>
               </v-list-item>
+              <ContentModerationAction kind="post" :content-id="postId" @changed="action => action === 'delete' && emit('deleted', postId)" />
               <v-list-item @click="copyLink">
                 <template #prepend>
                   <v-icon size="18">mdi-link-variant</v-icon>
@@ -421,6 +422,7 @@
                 <v-list-item-title>删除</v-list-item-title>
               </v-list-item>
               <!-- 复制链接 -->
+              <ContentModerationAction kind="post" :content-id="postId" @changed="action => action === 'delete' && emit('deleted', postId)" />
               <v-list-item @click="copyLink">
                 <template #prepend>
                   <v-icon size="18">mdi-link-variant</v-icon>
@@ -873,6 +875,7 @@ import federationService from "@/services/federationService";
 import { showSnackbar } from "@/composables/useNotifications";
 import { useDeleteConfirm } from "@/composables/useDeleteConfirm";
 import axios from "@/axios/axios";
+import ContentModerationAction from '@/components/admin/ContentModerationAction.vue';
 import twemoji from "twemoji";
 import { TWEMOJI_SVG_OPTIONS } from "@/utils/twemoji";
 import PostComposer from "./PostComposer.vue";
@@ -1526,7 +1529,7 @@ const replyToPost = computed(() => {
 
 // Permissions
 const canDelete = computed(() => {
-  if (!currentUserId.value) return false;
+  if (!currentUserId.value || localuser.isReadonly('posts')) return false;
   return Number(currentUserId.value) === Number(authorId.value);
 });
 
@@ -1560,6 +1563,7 @@ const checkRelationship = async () => {
 };
 
 const toggleFollow = async () => {
+  if (localuser.isReadonly('relations')) return;
   if (!requireLogin("关注")) return;
   followLoading.value = true;
   try {
@@ -1583,6 +1587,7 @@ const toggleFollow = async () => {
 };
 
 const toggleBlock = async () => {
+  if (localuser.isReadonly('relations')) return;
   if (!requireLogin("拉黑")) return;
   followLoading.value = true;
   try {
@@ -1665,6 +1670,10 @@ const openViewCountDialog = async () => {
 const requireLogin = (action) => {
   if (!isLogin.value) {
     showSnackbar(`请先登录后再${action}`, "warning");
+    return false;
+  }
+  if (localuser.isReadonly('posts')) {
+    showSnackbar('当前账号为只读状态，暂时无法进行此操作', 'warning');
     return false;
   }
   return true;
@@ -1822,7 +1831,7 @@ const handleDeleteClick = () => {
     {
       title: "删除帖文？",
       message:
-        "此操作无法撤消。该帖文将从你的个人资料、任何关注你的用户的时间线以及搜索结果中删除。",
+        "该帖文将移入回收站，并从个人资料、时间线和搜索结果中隐藏。你可以在账号设置的回收站中恢复。",
       confirmText: "删除",
       cancelText: "取消",
     },

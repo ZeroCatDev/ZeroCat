@@ -3,13 +3,23 @@ import {prisma} from "../services/prisma.js";
 import gorseService from "../services/gorse.js";
 import { buildAvatarURL } from "../utils/avatarUrl.js";
 import {validateUsername} from "../services/global.js";
+import { visibleWhere, assertCanWrite } from "../services/moderation/visibility.js";
+
+export async function sanitizeFeaturedProjects(user, viewerId = null) {
+    if (!user?.featured_projects) return user;
+    const project = await prisma.ow_projects.findFirst({
+        where: { id: Number(user.featured_projects), AND: [await visibleWhere('project', viewerId)] },
+        select: { id: true },
+    });
+    return { ...user, featured_projects: project?.id ?? null };
+}
 
 /**
  * Get users by list of IDs
  * @param {Array<number>} userIds - List of user IDs
  * @returns {Promise<Array<User>>}
  */
-async function getUsersByList(userIds) {
+async function getUsersByList(userIds, viewerId = null) {
     const select = {
         id: true,
         username: true,
@@ -25,6 +35,7 @@ async function getUsersByList(userIds) {
     const users = await prisma.ow_users.findMany({
         where: {
             id: {in: userIds.map((id) => parseInt(id, 10))},
+            AND: [await visibleWhere("profile", viewerId)],
         },
         select,
     });
@@ -36,10 +47,10 @@ async function getUsersByList(userIds) {
 }
 
 // 获取用户信息通过用户名
-export async function getUserByUsername(username) {
+export async function getUserByUsername(username, viewerId = null) {
     try {
         const user = await prisma.ow_users.findFirst({
-            where: {username},
+            where: {username, AND: [await visibleWhere("profile", viewerId)]},
             select: {
                 id: true,
                 username: true,
@@ -114,8 +125,8 @@ export async function getRecommendedUsersForUser({ userId, limit = 20, offset = 
 
         if (!isFollowing) {
             // 获取管理员用户信息
-            adminUser = await prisma.ow_users.findUnique({
-                where: { id: ADMIN_USER_ID },
+            adminUser = await prisma.ow_users.findFirst({
+                where: { id: ADMIN_USER_ID, AND: [await visibleWhere("profile", nUserId)] },
                 select: userSelectionFields(),
             });
 
@@ -159,6 +170,7 @@ export async function getRecommendedUsersForUser({ userId, limit = 20, offset = 
     const users = await prisma.ow_users.findMany({
         where: {
             id: { in: recommendedUserIds },
+            AND: [await visibleWhere("profile", nUserId)],
             status: "active",
             NOT: { id: nUserId }, // 不包括当前用户
         },
@@ -205,6 +217,7 @@ export async function getRecommendedUsersForUser({ userId, limit = 20, offset = 
 export const changeUsername = async (req, res) => {
     try {
         const userId = res.locals.userid;
+        await assertCanWrite(userId, "profile", "update");
         const { newUsername } = req.body;
 
         if (!newUsername || typeof newUsername !== "string" || newUsername.trim().length === 0) {
@@ -254,10 +267,10 @@ export const changeUsername = async (req, res) => {
         });
     } catch (error) {
         logger.error("修改用户名时出错:", error);
-        res.status(500).json({
+        res.status(error.statusCode || error.status || 500).json({
             status: "error",
-            message: "修改用户名失败",
-            code: "CHANGE_USERNAME_FAILED"
+            message: error.statusCode ? error.message : "修改用户名失败",
+            code: error.code || "CHANGE_USERNAME_FAILED"
         });
     }
 };

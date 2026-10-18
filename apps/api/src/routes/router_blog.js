@@ -3,8 +3,17 @@ import { needLogin } from "../middleware/auth.js";
 import { requireResource, requireScope } from "../middleware/scope.js";
 import logger from "../services/logger.js";
 import * as draftService from "../services/blog/draftService.js";
+import { resourceAuthorizationContext } from "../services/auth/resourceOperation.js";
 
 const router = Router();
+
+router.use((req, res, next) => {
+  if (req.headers["x-zerocat-delegation"] !== undefined && ["GET", "HEAD"].includes(req.method)
+      && (/^\/posts\/?$/i.test(req.path) || /^\/posts\/@[^/]+\/?$/i.test(req.path) || /^\/tags(?:\/|$)/i.test(req.path) || /\/related\/?$/i.test(req.path))) {
+    return res.status(403).json({ status: "error", code: "ZC_ERROR_DELEGATION_NOT_SUPPORTED", message: "此操作不支持授权委托" });
+  }
+  next();
+});
 
 const sendServiceError = (res, err, fallback = "服务器错误") => {
   const status = err?.statusCode && Number.isInteger(err.statusCode) ? err.statusCode : 500;
@@ -12,6 +21,7 @@ const sendServiceError = (res, err, fallback = "服务器错误") => {
   return res.status(status).json({
     status: "error",
     message: err?.message || fallback,
+    ...(err?.code ? { code: err.code } : {}),
   });
 };
 
@@ -24,9 +34,9 @@ router.get("/drafts", needLogin, requireScope("blog:read"), async (req, res) => 
   }
 });
 
-router.get("/drafts/:projectId", needLogin, requireResource("blog", "read", "projectId"), async (req, res) => {
+router.get("/drafts/:projectId", needLogin, requireResource("blog", "read", "projectId", { allowDelegation: true }), async (req, res) => {
   try {
-    const draft = await draftService.getDraft(res.locals.userid, req.params.projectId);
+    const draft = await draftService.getDraft(res.locals.userid, req.params.projectId, { authorizationContext: resourceAuthorizationContext(req, res) });
     if (!draft) {
       return res.status(404).json({ status: "error", message: "草稿不存在" });
     }
@@ -36,7 +46,7 @@ router.get("/drafts/:projectId", needLogin, requireResource("blog", "read", "pro
   }
 });
 
-router.put("/drafts/:projectId", needLogin, requireResource("blog", "update", "projectId"), async (req, res) => {
+router.put("/drafts/:projectId", needLogin, requireResource("blog", "update", "projectId", { allowDelegation: true }), async (req, res) => {
   try {
     const payload = req.body || {};
     const patch = {
@@ -51,7 +61,7 @@ router.put("/drafts/:projectId", needLogin, requireResource("blog", "update", "p
       res.locals.userid,
       req.params.projectId,
       patch,
-      { creatorIp: req.ipInfo?.clientIP || req.ip || "" }
+      { creatorIp: req.ipInfo?.clientIP || req.ip || "", authorizationContext: resourceAuthorizationContext(req, res) }
     );
     res.json({ status: "success", data: draft });
   } catch (err) {
@@ -59,22 +69,22 @@ router.put("/drafts/:projectId", needLogin, requireResource("blog", "update", "p
   }
 });
 
-router.delete("/drafts/:projectId", needLogin, requireResource("blog", "delete", "projectId"), async (req, res) => {
+router.delete("/drafts/:projectId", needLogin, requireResource("blog", "delete", "projectId", { allowDelegation: true }), async (req, res) => {
   try {
-    const removed = await draftService.discardDraft(res.locals.userid, req.params.projectId);
+    const removed = await draftService.discardDraft(res.locals.userid, req.params.projectId, { authorizationContext: resourceAuthorizationContext(req, res) });
     res.json({ status: "success", data: { removed: Boolean(removed) } });
   } catch (err) {
     return sendServiceError(res, err, "丢弃草稿失败");
   }
 });
 
-router.post("/drafts/:projectId/publish", needLogin, requireResource("blog", "update", "projectId"), async (req, res) => {
+router.post("/drafts/:projectId/publish", needLogin, requireResource("blog", "update", "projectId", { allowDelegation: true }), async (req, res) => {
   try {
     const { message } = req.body || {};
     const result = await draftService.publishDraft(
       res.locals.userid,
       req.params.projectId,
-      { message }
+      { message, authorizationContext: resourceAuthorizationContext(req, res) }
     );
     res.json({ status: "success", data: result });
   } catch (err) {
@@ -92,9 +102,9 @@ router.get("/posts/@:username", postsController.getPostsByAuthor);
 router.get("/posts/@:username/:slug", postsController.getPostDetail); // Assuming detail can handle slug or id
 router.get("/posts/:id", postsController.getPostDetail);
 router.post("/posts", needLogin, requireScope("blog:create"), postsController.createPost);
-router.patch("/posts/:id/meta", needLogin, requireResource("blog", "update", "id"), postsController.updatePostMeta);
+router.patch("/posts/:id/meta", needLogin, requireResource("blog", "update", "id", { allowDelegation: true }), postsController.updatePostMeta);
 // router.post("/posts/:id/publish", needLogin, postsController.publishPost); // Re-uses draft publish?
-router.post("/posts/:id/unpublish", needLogin, requireResource("blog", "update", "id"), postsController.unpublishPost);
+router.post("/posts/:id/unpublish", needLogin, requireResource("blog", "update", "id", { allowDelegation: true }), postsController.unpublishPost);
 router.get("/posts/:id/related", postsController.getRelatedPosts);
 // router.get("/posts/:id/toc", postsController.getPostToc);
 

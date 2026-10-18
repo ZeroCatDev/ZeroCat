@@ -148,6 +148,9 @@ async function registerBusinessRoutes(app) {
         const tokensModule = await import('./routes/router_tokens.js');
         app.use("/tokens", tokensModule.default);
 
+        const delegationsModule = await import('./routes/router_delegations.js');
+        app.use("/delegations", delegationsModule.default);
+
         // CodeRun Runner路由
         const coderunRunnerModule = await import('./routes/admin/coderun_runner.js');
         app.use("/coderun", coderunRunnerModule.default);

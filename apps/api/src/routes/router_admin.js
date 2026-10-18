@@ -11,6 +11,8 @@ import embeddingRouter from "./admin/embedding.js";
 import mirror40CodeRouter from "./admin/mirror40code.js";
 import oauthRouter from "./admin/oauth.js";
 import {needAdmin} from '../middleware/auth.js';
+import permissionsRouter from './admin/permissions.js';
+import moderationRouter from './admin/moderation.js';
 
 import sitemapService from '../services/sitemap.js';
 import zcconfig from '../services/config/zcconfig.js';
@@ -31,6 +33,8 @@ router.get('/queues/auth', (req, res) => {
     res.redirect('/admin/queues');
 });
 
+router.use('/permissions', permissionsRouter);
+router.use('/moderation', moderationRouter);
 router.use(needAdmin);
 /**
  * Admin Router

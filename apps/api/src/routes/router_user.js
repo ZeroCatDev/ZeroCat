@@ -7,12 +7,14 @@ import {needAdmin, needLogin} from "../middleware/auth.js";
 import { requireSudo } from "../middleware/sudo.js";
 import { requireScope } from "../middleware/scope.js";
 import {assignDefaultRolesToUser, userSatisfiesPolicy} from "../services/auth/policyEngine.js";
+import { scopeSatisfies } from "../services/auth/scopes.js";
 import {createEvent} from "../controllers/events.js";
 import jwt from "jsonwebtoken";
 import * as bcrypt from "bcrypt";
 import {PasswordHash} from "phpass";
-import { changeUsername, getRecommendedUsersForUser } from "../controllers/users.js";
+import { changeUsername, getRecommendedUsersForUser, sanitizeFeaturedProjects } from "../controllers/users.js";
 import { buildAvatarURL } from "../utils/avatarUrl.js";
+import { visibleWhere, assertCanWrite } from "../services/moderation/visibility.js";
 
  // PHPass hasher for legacy password validation
  const passwordHash = new PasswordHash();
@@ -31,6 +33,7 @@ router.get("/id/:id", async function (req, res, next) {
         var user = await prisma.ow_users.findMany({
             where: {
                 id: parseInt(req.params.id),
+                AND: [await visibleWhere("profile", res.locals.userid)],
             },
             select: {
                 id: true,
@@ -63,7 +66,7 @@ router.get("/id/:id", async function (req, res, next) {
 
         // 格式化用户信息
         const formattedUser = {
-            ...user[0],
+            ...await sanitizeFeaturedProjects(user[0], res.locals.userid),
             avatarURL: await buildAvatarURL(user[0].avatar),
             isActive: user[0].status === "active",
             isAdmin: user[0].type === "administrator",
@@ -82,9 +85,10 @@ router.get("/id/:id", async function (req, res, next) {
 router.get("/username/:username", async function (req, res, next) {
     logger.debug("获取用户信息: " + req.params.username);
     try {
-        var user = await prisma.ow_users.findUnique({
+        var user = await prisma.ow_users.findFirst({
             where: {
                 username: req.params.username,
+                AND: [await visibleWhere("profile", res.locals.userid)],
             },
             select: {
                 id: true,
@@ -117,7 +121,7 @@ logger.debug(user);
 
         // 格式化用户信息
         const formattedUser = {
-            ...user,
+            ...await sanitizeFeaturedProjects(user, res.locals.userid),
             avatarURL: await buildAvatarURL(user.avatar),
             isActive: user.status === "active",
             isAdmin: user.type === "administrator",
@@ -174,6 +178,7 @@ router.post("/batch/:type", async function (req, res, next) {
         const queryField = req.params.type === "id" ? "id" : "username";
         const usersinfo = await prisma.ow_users.findMany({
             where: {
+                AND: [await visibleWhere("profile", res.locals.userid)],
                 [queryField]: {
                     in: users.map((id) => (req.params.type === "id" ? parseInt(id) : id)),
                 },
@@ -200,7 +205,7 @@ router.post("/batch/:type", async function (req, res, next) {
 
         // 格式化用户信息
         const formattedUsers = await Promise.all(usersinfo.map(async (user) => ({
-            ...user,
+            ...await sanitizeFeaturedProjects(user, res.locals.userid),
             avatarURL: await buildAvatarURL(user.avatar),
             isActive: user.status === "active",
             isAdmin: user.type === "administrator",
@@ -250,13 +255,21 @@ router.get("/me", needLogin, requireScope("user:read"), async function (req, res
             });
         }
 
-        // 格式化用户信息
+        const [{ getReadOnlyState }, { getUserPolicy, policyAllowsScope }] = await Promise.all([
+            import("../services/moderation/restrictions.js"), import("../services/auth/policyEngine.js"),
+        ]);
+        const [restrictionState, policy] = await Promise.all([
+            getReadOnlyState(res.locals.userid), getUserPolicy(res.locals.userid),
+        ]);
+        const capabilities = ["admin:manage", ...["permissions", "restrictions", "content", "hidden_content"]
+            .flatMap((module) => ["read", "manage"].map((action) => `admin:${module}:${action}`))]
+            .filter((scope) => policyAllowsScope(policy, scope)
+                && (res.locals.tokenType === "session" || scopeSatisfies(res.locals.scopes || [], scope)));
         const formattedUser = {
-            ...user,
+            ...user, ...restrictionState, capabilities,
             avatarURL: await buildAvatarURL(user.avatar),
             isActive: user.status === "active",
-            // 基于角色策略判断（覆盖配置管理员、type 管理员、admin 角色），与 needAdmin 一致
-            isAdmin: await userSatisfiesPolicy(res.locals.userid, "admin:manage"),
+            isAdmin: capabilities.includes("admin:manage"),
         };
 
         res.send({
@@ -480,7 +493,7 @@ router.post("/login", async function (req, res, next) {
 });
 
 // 修改密码
-router.post("/change-password", needLogin, requireScope("user:update"), requireSudo, async function (req, res, next) {
+router.post("/change-password", needLogin, requireScope("user:update", { action: "security" }), requireSudo, async function (req, res, next) {
     try {
         const userId = res.locals.userid;
         const { newPassword } = req.body;
@@ -521,6 +534,9 @@ router.post("/change-username", needLogin, requireScope("user:update"), requireS
     try {
         const userId = res.locals.userid;
         const {display_name, bio, avatar, settings} = req.body;
+        if ([display_name, bio, avatar].some(value => value !== undefined)) {
+            await assertCanWrite(userId, "profile", "update");
+        }
 
         // 获取原有用户信息
         const oldUser = await prisma.ow_users.findUnique({

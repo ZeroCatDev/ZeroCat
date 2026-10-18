@@ -2,6 +2,7 @@ import {prisma} from "../services/prisma.js";
 import logger from "../services/logger.js";
 import {createNotification} from "./notifications.js";
 import {EventConfig} from "../config/eventConfig.js";
+import { visibleSql, canViewContent, sanitizePublicUser } from "../services/moderation/visibility.js";
 
 // 重新导出这些常量供外部使用
 export {EventConfig};
@@ -545,25 +546,48 @@ export async function createEvent(eventType, actorId, targetType, targetId, even
     }
 }
 
+async function readVisibleEvents(filter, limit, offset, includePrivate, viewerId) {
+    const params = [];
+    const bind = value => { params.push(value); return `$${params.length}`; };
+    const visibility = async (kind, alias) => {
+        const fragment = await visibleSql(kind, alias, viewerId);
+        const start = params.length;
+        params.push(...fragment.values);
+        return fragment.text.replace(/\$(\d+)/g, (_, index) => `$${Number(index) + start}`);
+    };
+    const conditions = Object.entries(filter).map(([field, value]) => `e."${field}" = ${bind(value)}`);
+    conditions.push(includePrivate && viewerId ? `e.actor_id = ${bind(Number(viewerId))}` : 'e.public = true');
+    conditions.push(await visibility('activity', 'e'));
+    conditions.push(`EXISTS (SELECT 1 FROM ow_users a WHERE a.id = e.actor_id AND ${await visibility('profile', 'a')})`);
+
+    const targets = [];
+    for (const [type, kind, table] of [
+        ['project', 'project', 'ow_projects'], ['post', 'post', 'ow_posts'],
+        ['user', 'profile', 'ow_users'], ['comment', 'comment', 'ow_comment'],
+        ['list', 'list', 'ow_projects_lists'],
+    ]) {
+        const guard = await visibility(kind, 't');
+        const parentGuard = type === 'comment' ? ` AND (
+            (t.page_type IS DISTINCT FROM 'project' AND t.page_type IS DISTINCT FROM 'post')
+            OR (t.page_type = 'project' AND EXISTS (SELECT 1 FROM ow_projects p WHERE p.id::text = t.page_id AND ${await visibility('project', 'p')}))
+            OR (t.page_type = 'post' AND EXISTS (SELECT 1 FROM ow_posts p WHERE p.id::text = t.page_id AND ${await visibility('post', 'p')}))
+        )` : '';
+        targets.push(`(e.target_type = ${bind(type)} AND EXISTS (SELECT 1 FROM ${table} t WHERE t.id = e.target_id AND ${guard}${parentGuard}))`);
+    }
+    conditions.push(`(${targets.join(' OR ')})`);
+    const take = bind(Math.min(100, Math.max(1, Number.parseInt(limit, 10) || 10)));
+    const skip = bind(Math.max(0, Number.parseInt(offset, 10) || 0));
+    return prisma.$queryRawUnsafe(`SELECT e.* FROM ow_events e WHERE ${conditions.join(' AND ')}
+        ORDER BY e.created_at DESC, e.id DESC LIMIT ${take} OFFSET ${skip}`, ...params);
+}
+
 /**
  * 获取特定目标的事件
  */
-export async function getTargetEvents(targetType, targetId, limit = 10, offset = 0, includePrivate = false) {
+export async function getTargetEvents(targetType, targetId, limit = 10, offset = 0, includePrivate = false, viewerId = null) {
     try {
-        const events = await prisma.ow_events.findMany({
-            where: {
-                target_type: targetType,
-                target_id: targetId,
-                ...(includePrivate ? {} : {public: true}),
-            },
-            orderBy: {
-                created_at: 'desc',
-            },
-            take: limit,
-            skip: offset,
-        });
-
-        return await enrichEvents(events);
+        const events = await readVisibleEvents({ target_type: targetType, target_id: targetId }, limit, offset, includePrivate, viewerId);
+        return await enrichEvents(events, viewerId);
     } catch (error) {
         logger.error('获取目标事件错误:', error);
         return [];
@@ -573,21 +597,10 @@ export async function getTargetEvents(targetType, targetId, limit = 10, offset =
 /**
  * 获取特定行为者的事件
  */
-export async function getActorEvents(actorId, limit = 10, offset = 0, includePrivate = false) {
+export async function getActorEvents(actorId, limit = 10, offset = 0, includePrivate = false, viewerId = null) {
     try {
-        const events = await prisma.ow_events.findMany({
-            where: {
-                actor_id: actorId,
-                ...(includePrivate ? {} : {public: true}),
-            },
-            orderBy: {
-                created_at: 'desc',
-            },
-            take: limit,
-            skip: offset,
-        });
-
-        return await enrichEvents(events);
+        const events = await readVisibleEvents({ actor_id: actorId }, limit, offset, includePrivate, viewerId);
+        return await enrichEvents(events, viewerId);
     } catch (error) {
         logger.error('获取行为者事件错误:', error);
         return [];
@@ -597,17 +610,30 @@ export async function getActorEvents(actorId, limit = 10, offset = 0, includePri
 /**
  * 用行为者和目标信息丰富事件数据
  */
-async function enrichEvents(events) {
+async function enrichEvents(events, viewerId = null) {
     try {
-        return Promise.all(events.map(async (event) => {
+        const enriched = await Promise.all(events.map(async (event) => {
+            if (!await canViewContent("activity", event, viewerId)) return null;
             const [actor, target] = await Promise.all([
                 getActor(event.actor_id),
                 getTarget(event.target_type, event.target_id)
             ]);
 
+            const kind = event.target_type === "user" ? "profile" : event.target_type;
+            if (['profile', 'project', 'post', 'comment', 'list'].includes(kind)) {
+                if (!target || !await canViewContent(kind, target, viewerId)) return null;
+                if (kind === 'comment' && ['project', 'post'].includes(target.page_type)) {
+                    const parent = await getTarget(target.page_type, target.page_id);
+                    if (!await canViewContent(target.page_type, parent, viewerId)) return null;
+                }
+                if (target.author) target.author = await sanitizePublicUser(target.author, viewerId);
+            }
+            const safeActor = await sanitizePublicUser(actor, viewerId);
+            if (!safeActor) return null;
             return {
                 ...event,
-                actor,
+                event_data: {},
+                actor: safeActor,
                 target: {
                     type: event.target_type,
                     id: event.target_id,
@@ -615,9 +641,10 @@ async function enrichEvents(events) {
                 }
             };
         }));
+        return enriched.filter(Boolean);
     } catch (error) {
         logger.error('丰富事件数据错误:', error);
-        return events;
+        return [];
     }
 }
 
@@ -654,8 +681,11 @@ async function getTarget(targetType, targetId) {
                         id: true,
                         name: true,
                         title: true,
+                        state: true,
+                        authorid: true,
                         author: {
                             select: {
+                                id: true,
                                 username: true
                             }
                         }
@@ -663,15 +693,23 @@ async function getTarget(targetType, targetId) {
                 });
             case "post":
                 return await prisma.ow_posts.findUnique({
-                    where: {id: Number(targetId)}
+                    where: {id: Number(targetId)},
+                    select: { id: true, author_id: true, post_type: true, content: true, created_at: true },
                 });
             case "user":
                 return await prisma.ow_users.findUnique({
-                    where: {id: Number(targetId)}
+                    where: {id: Number(targetId)},
+                    select: { id: true, username: true, display_name: true, avatar: true },
                 });
             case "comment":
                 return await prisma.ow_comment.findUnique({
-                    where: {id: Number(targetId)}
+                    where: {id: Number(targetId)},
+                    select: { id: true, text: true, user_id: true, page_type: true, page_id: true },
+                });
+            case "list":
+                return await prisma.ow_projects_lists.findUnique({
+                    where: {id: Number(targetId)},
+                    select: { id: true, title: true, description: true, state: true, authorid: true },
                 });
             default:
                 return null;

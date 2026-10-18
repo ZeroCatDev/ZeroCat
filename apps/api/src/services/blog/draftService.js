@@ -8,6 +8,8 @@ import {
 } from "../commitService.js";
 import { createEvent } from "../../controllers/events.js";
 import queueManager from "../queue/queueManager.js";
+import { visibleWhere, assertCanWrite } from "../moderation/visibility.js";
+import { authorizeResourceOperation } from "../auth/resourceOperation.js";
 
 const DRAFT_PREFIX = "blog.draft.";
 
@@ -23,10 +25,15 @@ const assertProjectId = (projectId) => {
   return num;
 };
 
-const ensureArticleOwner = async (projectId, userId) => {
+const ensureArticleOwner = async (projectId, userId, action, authorizationContext) => {
   const numericId = assertProjectId(projectId);
+  const decision = await authorizeResourceOperation(userId, "blog", numericId, action, authorizationContext);
+  if (action !== "read" && decision.principalId !== Number(userId)) {
+    await assertCanWrite(decision.principalId, "blog", action);
+    await assertCanWrite(decision.principalId, "projects", action);
+  }
   const project = await prisma.ow_projects.findFirst({
-    where: { id: numericId },
+    where: { id: numericId, type: "article", AND: [await visibleWhere("project", userId, { ignorePrivacy: true })] },
     select: {
       id: true,
       name: true,
@@ -43,7 +50,7 @@ const ensureArticleOwner = async (projectId, userId) => {
     err.statusCode = 404;
     throw err;
   }
-  if (project.authorid !== Number(userId)) {
+  if ((!decision.allowed || decision.delegationId != null) && project.authorid !== decision.principalId) {
     const err = new Error("无权编辑此文章");
     err.statusCode = 403;
     throw err;
@@ -51,9 +58,9 @@ const ensureArticleOwner = async (projectId, userId) => {
   return project;
 };
 
-export async function getDraft(userId, projectId) {
-  assertProjectId(projectId);
-  const record = await cachekv.get(Number(userId), draftKey(projectId));
+export async function getDraft(userId, projectId, { authorizationContext } = {}) {
+  const project = await ensureArticleOwner(projectId, userId, "read", authorizationContext);
+  const record = await cachekv.get(project.authorid, draftKey(projectId));
   if (!record) return null;
   return {
     ...record.value,
@@ -61,9 +68,11 @@ export async function getDraft(userId, projectId) {
   };
 }
 
-export async function saveDraft(userId, projectId, patch, { creatorIp = "" } = {}) {
-  const project = await ensureArticleOwner(projectId, userId);
-  const existing = (await cachekv.get(Number(userId), draftKey(projectId)))?.value || {};
+export async function saveDraft(userId, projectId, patch, { creatorIp = "", authorizationContext } = {}) {
+  await assertCanWrite(Number(userId), "blog", "update");
+  await assertCanWrite(Number(userId), "projects", "update");
+  const project = await ensureArticleOwner(projectId, userId, "update", authorizationContext);
+  const existing = (await cachekv.get(project.authorid, draftKey(projectId)))?.value || {};
 
   let baseCommitId = existing.baseCommitId;
   if (!baseCommitId) {
@@ -83,7 +92,7 @@ export async function saveDraft(userId, projectId, patch, { creatorIp = "" } = {
   };
 
   const saved = await cachekv.set(
-    Number(userId),
+    project.authorid,
     draftKey(projectId),
     merged,
     creatorIp
@@ -91,9 +100,11 @@ export async function saveDraft(userId, projectId, patch, { creatorIp = "" } = {
   return { ...merged, savedAt: saved.updated_at };
 }
 
-export async function discardDraft(userId, projectId) {
-  await ensureArticleOwner(projectId, userId);
-  return cachekv.remove(Number(userId), draftKey(projectId));
+export async function discardDraft(userId, projectId, { authorizationContext } = {}) {
+  await assertCanWrite(Number(userId), "blog", "delete");
+  await assertCanWrite(Number(userId), "projects", "delete");
+  const project = await ensureArticleOwner(projectId, userId, "delete", authorizationContext);
+  return cachekv.remove(project.authorid, draftKey(projectId));
 }
 
 export async function listDrafts(userId) {
@@ -110,7 +121,7 @@ export async function listDrafts(userId) {
   if (!projectIds.length) return [];
 
   const projects = await prisma.ow_projects.findMany({
-    where: { id: { in: projectIds }, authorid: Number(userId), type: "article" },
+    where: { id: { in: projectIds }, authorid: Number(userId), type: "article", AND: [await visibleWhere("project", userId)] },
     select: { id: true, name: true, title: true, state: true, time: true },
   });
   const projectMap = new Map(projects.map((p) => [p.id, p]));
@@ -130,9 +141,11 @@ export async function listDrafts(userId) {
     .filter(Boolean);
 }
 
-export async function publishDraft(userId, projectId, { message = "发布" } = {}) {
-  const project = await ensureArticleOwner(projectId, userId);
-  const draftRecord = await cachekv.get(Number(userId), draftKey(projectId));
+export async function publishDraft(userId, projectId, { message = "发布", authorizationContext } = {}) {
+  await assertCanWrite(Number(userId), "blog", "publish");
+  await assertCanWrite(Number(userId), "projects", "publish");
+  const project = await ensureArticleOwner(projectId, userId, "update", authorizationContext);
+  const draftRecord = await cachekv.get(project.authorid, draftKey(projectId));
   if (!draftRecord) {
     const err = new Error("没有草稿可发布");
     err.statusCode = 400;
@@ -191,7 +204,7 @@ export async function publishDraft(userId, projectId, { message = "发布" } = {
     }
   }
 
-  await cachekv.remove(Number(userId), draftKey(projectId));
+  await cachekv.remove(project.authorid, draftKey(projectId));
 
   try {
     await createEvent(
@@ -227,6 +240,7 @@ export async function publishDraft(userId, projectId, { message = "发布" } = {
     await queueManager.enqueueGitSyncCommit(project.id, commit.id, {
       triggeredBy: "blog-publish",
       actorId: Number(userId),
+      authorizationContext,
     });
   } catch (err) {
     logger.warn(`[git-sync] enqueue failed project=${project.id}: ${err.message}`);
@@ -237,6 +251,8 @@ export async function publishDraft(userId, projectId, { message = "发布" } = {
       await queueManager.enqueueBlogSyncArticle(project.id, project.authorid, {
         reason: "blog-publish",
         commitId: commit.id,
+        actorId: Number(userId),
+        authorizationContext,
       });
     } catch (err) {
       logger.warn(`[blog-sync] enqueue failed project=${project.id}: ${err.message}`);

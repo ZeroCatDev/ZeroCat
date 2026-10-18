@@ -5,6 +5,7 @@
 
 import { prisma } from '../prisma.js';
 import logger from '../logger.js';
+import { visibleWhere, assertCanWrite } from '../moderation/visibility.js';
 import { getInstanceDomain, isFederationEnabled } from './config.js';
 import { getActorUrl } from './actor.js';
 import { buildFollowActivity, buildUndoActivity } from './objects.js';
@@ -25,6 +26,12 @@ const OUTBOUND_FOLLOW_TYPE = 'ap_outbound_follow';
  * @param {number} followedId - 被关注者用户 ID（可能是代理用户）
  */
 export async function syncFollowToRemote(followerId, followedId) {
+    await assertCanWrite(Number(followerId), 'relations', 'sync');
+    const relationship = await prisma.ow_user_relationships.findFirst({ where: {
+        source_user_id: Number(followerId), target_user_id: Number(followedId), relationship_type: 'follow',
+        AND: [await visibleWhere('relation')],
+    } });
+    if (!relationship) return;
     const enabled = await isFederationEnabled();
     if (!enabled) return;
 
@@ -105,6 +112,7 @@ export async function syncFollowToRemote(followerId, followedId) {
  * @param {number} unfollowedId
  */
 export async function syncUnfollowToRemote(followerId, unfollowedId) {
+    await assertCanWrite(Number(followerId), 'relations', 'sync');
     const enabled = await isFederationEnabled();
     if (!enabled) return;
 

@@ -205,7 +205,7 @@ const isArticle = computed(() => String(projectinfo.type || '').toLowerCase() ==
 const selectedLink = computed(() => links.value.find((l) => l.id === selectedLinkId.value));
 
 const canSubmit = computed(() => {
-  if (submitting.value) return false;
+  if (submitting.value || localuser.isReadonly(isArticle.value ? 'blog' : 'projects')) return false;
   if (!projectinfo.name || nameError.value) return false;
   if (syncEnabled.value) {
     if (!selectedLinkId.value) return false;
@@ -231,6 +231,7 @@ function onNameBlur() {
 }
 
 async function submit() {
+  if (localuser.isReadonly(isArticle.value ? 'blog' : 'projects')) return;
   onNameBlur();
   if (nameError.value) return;
   submitting.value = true;

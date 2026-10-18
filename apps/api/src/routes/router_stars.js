@@ -124,7 +124,7 @@ router.get("/project/:id/stars", async (req, res) => {
             return res.status(400).send({status: "error", message: "项目ID不能为空"});
         }
 
-        const stars = await getProjectStars(projectId);
+        const stars = await getProjectStars(projectId, res.locals.userid);
         res.status(200).send({
             status: "success",
             message: "获取成功",

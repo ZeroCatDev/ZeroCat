@@ -3,41 +3,46 @@ import {prisma} from "../services/prisma.js";
 
 import {createHash} from "crypto";
 import {getUsersByList} from "./users.js";
+import { visibleWhere, sanitizeProfile } from "../services/moderation/visibility.js";
 
 async function getProjectsByList(list, userid = null) {
     const select = projectSelectionFields();
     const projectIds = list.map(Number);
     const projects = await prisma.ow_projects.findMany({
-        where: {id: {in: projectIds}},
+        where: { AND: [{id: {in: projectIds}}, await visibleWhere("project", userid)] },
         select,
     });
-    if (userid) {
-        return projects.filter(
-            (project) => !(project.state === "private" && project.authorid !== userid)
-        );
-    }
-    return projects;
+    return sanitizeProjectAuthors(projects, userid);
 }
 
 async function getProjectById(projectId, userid = null) {
     const select = projectSelectionFields();
     const project = await prisma.ow_projects.findFirst({
-        where: {id: Number(projectId)},
+        where: { AND: [{id: Number(projectId)}, await visibleWhere("project", userid)] },
         select,
     });
-    if (!project) {
-        return null;
-    }
-    if (userid && project.state === "private" && project.authorid !== userid) {
-        return null;
-    }
-    return project;
+    if (!project) return null;
+    return (await sanitizeProjectAuthors([project], userid))[0];
+}
+
+async function sanitizeProjectAuthors(projects, viewerId = null) {
+    return Promise.all(projects.map(async (project) => {
+        let fork = project.fork;
+        if (fork) {
+            const source = await prisma.ow_projects.findFirst({
+                where: { AND: [{ id: Number(fork) }, await visibleWhere("project", viewerId)] },
+                select: { id: true },
+            });
+            if (!source) fork = null;
+        }
+        return { ...project, ...(project.fork ? { fork } : {}), author: await sanitizeProfile(project.author, viewerId) };
+    }));
 }
 
 async function getProjectsAndUsersByProjectsList(list, userid = null) {
     const projects = await getProjectsByList(list, userid);
     const userslist = [...new Set(projects.map((project) => project.authorid))];
-    const users = await getUsersByList(userslist);
+    const users = (await Promise.all((await getUsersByList(userslist, userid)).map((user) => sanitizeProfile(user, userid)))).filter(Boolean);
     return {projects, users};
 }
 
@@ -202,6 +207,7 @@ function isJson(str) {
 
 export {
     getProjectsByList,
+    sanitizeProjectAuthors,
     getUsersByList,
     getProjectsAndUsersByProjectsList,
     extractProjectData,

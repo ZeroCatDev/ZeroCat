@@ -5,6 +5,7 @@
 
 import { prisma } from '../prisma.js';
 import logger from '../logger.js';
+import { visibleWhere, assertCanWrite } from '../moderation/visibility.js';
 import { isFederationEnabled, getApEndpointBaseUrl } from './config.js';
 import { getLocalUserById, getActorUrl } from './actor.js';
 import {
@@ -27,6 +28,9 @@ import { fetchRemoteActor, getSharedInboxUrl } from './federation.js';
 async function ensurePostSynced(refPostId, deliveredInboxes = null) {
     if (!refPostId) return null;
 
+    const visible = await prisma.ow_posts.findFirst({ where: { id: refPostId, AND: [await visibleWhere('post')] } });
+    if (!visible) return null;
+    await assertCanWrite(visible.author_id, 'posts', 'sync');
     // 已有 AP ref，直接返回
     const existingApId = await getPostApId(refPostId);
     if (existingApId) return existingApId;
@@ -77,6 +81,12 @@ export async function syncPostToActivityPub({ actorUserId, postId, eventType }) 
     if (!enabled) return;
 
     try {
+        await assertCanWrite(Number(actorUserId), 'posts', 'sync');
+        if (eventType !== 'delete') {
+            const current = await prisma.ow_posts.findFirst({ where: { id: Number(postId), AND: [await visibleWhere('post')] } });
+            if (!current) return;
+            if (['create', 'reply', 'quote', 'retweet'].includes(eventType) && current.author_id !== Number(actorUserId)) return;
+        }
         switch (eventType) {
             case 'create':
             case 'reply':
@@ -249,6 +259,7 @@ async function handlePostRetweet(userId, postId) {
     });
 
     if (!post?.retweet_post_id) return;
+    if (!await prisma.ow_posts.findFirst({ where: { id: post.retweet_post_id, AND: [await visibleWhere('post')] }, select: { id: true } })) return;
 
     const user = await getLocalUserById(userId);
     if (!user) return;
@@ -276,6 +287,7 @@ async function handlePostUnretweet(userId, postId) {
     });
 
     if (!post?.retweet_post_id) return;
+    if (!await prisma.ow_posts.findFirst({ where: { id: post.retweet_post_id, AND: [await visibleWhere('post')] }, select: { id: true } })) return;
 
     const user = await getLocalUserById(userId);
     if (!user) return;
@@ -304,7 +316,7 @@ export async function buildUserOutbox(username, page = 0, pageSize = 20) {
     const outboxUrl = `${apBaseUrl}/ap/users/${username}/outbox`;
 
     const user = await prisma.ow_users.findFirst({
-        where: { username, status: 'active' },
+        where: { username, status: 'active', AND: [await visibleWhere('profile')] },
         select: { id: true },
     });
 
@@ -315,6 +327,7 @@ export async function buildUserOutbox(username, page = 0, pageSize = 20) {
         where: {
             author_id: user.id,
             is_deleted: false,
+            AND: [await visibleWhere('post')],
             post_type: { in: ['normal', 'reply', 'quote', 'retweet'] },
         },
     });
@@ -328,6 +341,7 @@ export async function buildUserOutbox(username, page = 0, pageSize = 20) {
         where: {
             author_id: user.id,
             is_deleted: false,
+            AND: [await visibleWhere('post')],
             post_type: { in: ['normal', 'reply', 'quote', 'retweet'] },
         },
         include: {
@@ -343,6 +357,7 @@ export async function buildUserOutbox(username, page = 0, pageSize = 20) {
     const items = [];
     for (const post of posts) {
         if (post.post_type === 'retweet' && post.retweet_post_id) {
+            if (!await prisma.ow_posts.findFirst({ where: { id: post.retweet_post_id, AND: [await visibleWhere('post')] }, select: { id: true } })) continue;
             // 转推 → Announce 活动
             const originalNoteId = await getPostApId(post.retweet_post_id)
                 || await getNoteId(post.retweet_post_id);
@@ -379,6 +394,7 @@ export async function buildUserOutbox(username, page = 0, pageSize = 20) {
  * @param {string} opts.followerActorUrl - 新关注者的 Actor URL
  */
 export async function backfillPostsToFollower({ userId, followerActorUrl }) {
+    await assertCanWrite(Number(userId), 'posts', 'sync');
     const enabled = await isFederationEnabled();
     if (!enabled) return;
 
@@ -405,6 +421,7 @@ export async function backfillPostsToFollower({ userId, followerActorUrl }) {
         where: {
             author_id: userId,
             is_deleted: false,
+            AND: [await visibleWhere('post')],
             post_type: { in: ['normal', 'reply', 'quote'] },
         },
         include: {

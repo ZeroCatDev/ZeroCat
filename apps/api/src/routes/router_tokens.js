@@ -451,7 +451,7 @@ router.get("/:id", requireResource("token", "read", "id"), async (req, res) => {
  * 吊销 (删除) 个人令牌
  * DELETE /tokens/:id
  */
-router.delete("/:id", requireResource("token", "manage", "id"), requireSudo, async (req, res) => {
+router.delete("/:id", requireResource("token", "manage", "id", { action: "security" }), requireSudo, async (req, res) => {
     try {
         const tokenId = parseInt(req.params.id, 10);
         if (isNaN(tokenId)) {

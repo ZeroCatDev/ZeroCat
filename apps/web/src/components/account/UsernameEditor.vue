@@ -1,5 +1,5 @@
 <template>
-  <v-form v-model="valid" @submit.prevent="changeUsername">
+  <v-form v-model="valid" :disabled="localuser.isReadonly('profile')" @submit.prevent="changeUsername">
     <v-row>
       <v-col cols="12" md="8">
         <v-text-field
@@ -15,7 +15,7 @@
       </v-col>
       <v-col cols="12">
         <v-btn
-          :disabled="!valid"
+          :disabled="!valid || localuser.isReadonly('profile')"
           :loading="loading"
           class="px-6"
           color="primary"
@@ -32,6 +32,7 @@
 
 <script>
 import {updateUsername} from "@/services/accountService";
+import { localuser } from '@/services/localAccount';
 import { useSudoManager } from '@/composables/useSudoManager';
 
 export default {
@@ -44,6 +45,7 @@ export default {
   },
   data() {
     return {
+      localuser,
       loading: false,
       valid: false,
       username: this.userData.username || '',
@@ -70,7 +72,7 @@ export default {
   },
   methods: {
     async changeUsername() {
-      if (!this.valid) return;
+      if (!this.valid || localuser.isReadonly('profile')) return;
 
       this.loading = true;
       try {

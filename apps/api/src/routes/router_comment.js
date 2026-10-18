@@ -33,8 +33,16 @@ import {
 } from '../services/commentService/sensitiveWordService.js';
 import queueManager from '../services/queue/queueManager.js';
 import { renderMarkdown } from '../services/commentService/markdown.js';
+import { visibleWhere, assertCanWrite } from '../services/moderation/visibility.js';
 
 const router = Router();
+
+router.use((req, res, next) => {
+    if (req.headers['x-zerocat-delegation'] !== undefined) {
+        return res.status(403).json({ errno: 1003, code: 'ZC_ERROR_DELEGATION_NOT_SUPPORTED', errmsg: '请使用统一令牌的评论服务 API 进行委托操作' });
+    }
+    next();
+});
 
 function parseWalineListParam(input, { preserveEmpty = false } = {}) {
     if (input === undefined || input === null) return [];
@@ -476,6 +484,7 @@ router.put('/:spaceCuid/api/user', async (req, res, next) => {
         }
 
         const space = req.commentSpace;
+        await assertCanWrite(Number(req.walineUser.userId), 'profile', 'update');
         const spaceUser = await getOrCreateSpaceUser(space.id, req.walineUser.userId, {
             display_name: req.walineUser.nick,
         });
@@ -565,6 +574,7 @@ router.post('/:spaceCuid/api/article', async (req, res, next) => {
         const [url] = parseWalineListParam(req.body.path ?? req.body.url ?? req.query.path ?? req.query.url, { preserveEmpty: true });
         if (!url) return res.status(400).json({ errno: 1004, errmsg: '缺少页面地址' });
 
+        if (req.walineUser?.userId) await assertCanWrite(Number(req.walineUser.userId), 'comments', 'interact');
         const type = req.body.type || req.query.type || 'time';
         const action = req.body.action || req.query.action || 'inc';
         const { field, value } = await updateArticleCounter(req.commentSpace.id, url, type, action);
@@ -588,7 +598,7 @@ router.get('/:spaceCuid/api/comment/rss', async (req, res, next) => {
         const space = req.commentSpace;
         const pathFilter = req.query.path || null;
 
-        const where = { space_id: space.id, status: 'approved' };
+        const where = { space_id: space.id, status: 'approved', AND: [await visibleWhere('comment_service')] };
         if (pathFilter) where.url = pathFilter;
 
         const comments = await prisma.ow_comment_service.findMany({

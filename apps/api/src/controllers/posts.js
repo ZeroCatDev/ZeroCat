@@ -10,6 +10,24 @@ import * as embeddingService from "../services/embedding.js";
 import { getAnalytics } from "../services/analytics.js";
 import { getPostUrlPreview } from "../services/postPreview.js";
 import { toAvatarURL } from "../utils/avatarUrl.js";
+import { visibleWhere, sanitizeProfile } from "../services/moderation/visibility.js";
+import { assertCanWrite } from "../services/moderation/restrictions.js";
+import { softDeleteContent, restoreContent } from "../services/moderation/lifecycle.js";
+
+async function visiblePostWhere(where, viewerId = null) {
+  return { AND: [where, await visibleWhere("post", viewerId)] };
+}
+
+async function visibleInteractionUserWhere(viewerId = null) {
+  return { AND: [
+    await visibleWhere("profile", viewerId),
+    await visibleWhere("profile", viewerId, { category: "relations" }),
+  ] };
+}
+
+function postNotFound(message = "帖子不存在") {
+  return Object.assign(new Error(message), { status: 404, code: "ZC_ERROR_CONTENT_NOT_FOUND" });
+}
 
 const POST_CHAR_LIMIT = 280;
 const MAX_MEDIA_COUNT = 4;
@@ -68,6 +86,28 @@ function validateEmbed(embed) {
   return embed;
 }
 
+async function validatePostAttachments(authorId, mediaIds, embed) {
+  if (mediaIds.some((id) => !Number.isSafeInteger(id) || id <= 0)) throw new Error("无效的媒体 ID");
+  if (mediaIds.length) {
+    const assets = await prisma.ow_assets.findMany({
+      where: { AND: [{ id: { in: mediaIds }, uploader_id: Number(authorId) }, await visibleWhere("asset", authorId)] },
+      select: { id: true },
+    });
+    if (assets.length !== mediaIds.length) throw postNotFound("媒体不存在");
+  }
+  if (!embed || embed.type === "url") return embed;
+  const kind = { project: "project", article: "project", list: "list", user: "profile" }[embed.type];
+  const model = { project: "ow_projects", list: "ow_projects_lists", profile: "ow_users" }[kind];
+  const identity = embed.id ? { id: Number(embed.id) } : kind === "profile" && embed.username ? { username: String(embed.username) } : null;
+  if (!identity || (identity.id !== undefined && (!Number.isSafeInteger(identity.id) || identity.id <= 0))) throw postNotFound();
+  const target = await prisma[model].findFirst({
+    where: { AND: [identity, await visibleWhere(kind, authorId)] },
+    select: { id: true },
+  });
+  if (!target) throw postNotFound();
+  return { type: embed.type, id: target.id };
+}
+
 function countPostCharacters(content = "") {
   if (!content) return 0;
   return twitterText.parseTweet(content).weightedLength;
@@ -106,6 +146,7 @@ async function resolveMentionedUsers(content, authorId) {
           mode: "insensitive",
         },
       })),
+      AND: [await visibleWhere("profile", authorId)],
     },
     select: {
       id: true,
@@ -246,7 +287,7 @@ function formatPost(raw) {
     quote_of_id: raw.quoted_post_id,
     retweet_of_id: raw.retweet_post_id,
     thread_id: raw.thread_root_id,
-    media: (raw.post_media || [])
+    media: (raw.is_deleted || raw.deleted_at ? [] : raw.post_media || [])
       .map((m) => {
         if (!m.asset?.id) return null;
         const extension = m.asset.extension || m.asset.mime_type?.split("/")[1] || "webp";
@@ -270,6 +311,26 @@ function formatPost(raw) {
   };
 }
 
+export async function serializePost(raw, viewerId = null) {
+  await initStaticUrl();
+  const post = formatPost(raw);
+  if (!post) return null;
+  post.author = await sanitizeProfile(post.author, viewerId);
+  if (post.embed && post.embed.type !== "url") {
+    const embed = post.embed;
+    const kind = { project: "project", article: "project", list: "list", user: "profile" }[embed.type];
+    const model = { project: "ow_projects", list: "ow_projects_lists", profile: "ow_users" }[kind];
+    const identity = embed.id ? { id: Number(embed.id) } : kind === "profile" && embed.username ? { username: String(embed.username) } : null;
+    const target = model && identity ? await prisma[model].findFirst({
+      where: { AND: [identity, await visibleWhere(kind, viewerId)] },
+      select: { id: true },
+    }) : null;
+    post.embed = target ? { type: embed.type, id: target.id } : null;
+  }
+  post.mentions = (await Promise.all(post.mentions.map((user) => sanitizeProfile(user, viewerId)))).filter(Boolean);
+  return post;
+}
+
 async function getPostViewCountMap(postIds) {
   const normalizedIds = [...new Set((postIds || []).map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))];
   if (normalizedIds.length === 0) return new Map();
@@ -290,20 +351,35 @@ async function getPostViewCountMap(postIds) {
   return map;
 }
 
-async function attachPostViewCounts(posts) {
+async function attachPostViewCounts(posts, viewerId = null) {
   if (!posts || posts.length === 0) return posts || [];
-
-  const viewMap = await getPostViewCountMap(posts.map((p) => p.id));
-  return posts.map((post) => {
-    const viewCount = viewMap.get(Number(post.id)) || 0;
-    return {
-      ...post,
-      stats: {
-        ...(post.stats || {}),
-        views: viewCount,
-      },
-    };
-  });
+  const ids = posts.map((post) => post.id);
+  const [viewMap, visibility, users] = await Promise.all([
+    getPostViewCountMap(ids), visibleWhere("post", viewerId), visibleInteractionUserWhere(viewerId),
+  ]);
+  const [replies, retweets, quotes, likes, bookmarks] = await Promise.all([
+    prisma.ow_posts.groupBy({ by: ["in_reply_to_id"], where: { in_reply_to_id: { in: ids }, AND: [visibility] }, _count: { _all: true } }),
+    prisma.ow_posts.groupBy({ by: ["retweet_post_id"], where: { retweet_post_id: { in: ids }, AND: [visibility] }, _count: { _all: true } }),
+    prisma.ow_posts.groupBy({ by: ["quoted_post_id"], where: { quoted_post_id: { in: ids }, AND: [visibility] }, _count: { _all: true } }),
+    prisma.ow_posts_like.groupBy({ by: ["post_id"], where: { post_id: { in: ids }, user: { is: users } }, _count: { _all: true } }),
+    prisma.ow_posts_bookmark.groupBy({ by: ["post_id"], where: { post_id: { in: ids }, user: { is: users } }, _count: { _all: true } }),
+  ]);
+  const counts = (rows, field) => new Map(rows.map((row) => [Number(row[field]), Number(row._count?._all || 0)]));
+  const replyMap = counts(replies, "in_reply_to_id");
+  const retweetMap = counts(retweets, "retweet_post_id");
+  const quoteMap = counts(quotes, "quoted_post_id");
+  const likeMap = counts(likes, "post_id");
+  const bookmarkMap = counts(bookmarks, "post_id");
+  return posts.map((post) => ({
+    ...post,
+    stats: {
+      replies: replyMap.get(Number(post.id)) || 0,
+      retweets: (retweetMap.get(Number(post.id)) || 0) + (quoteMap.get(Number(post.id)) || 0),
+      likes: likeMap.get(Number(post.id)) || 0,
+      bookmarks: bookmarkMap.get(Number(post.id)) || 0,
+      views: viewMap.get(Number(post.id)) || 0,
+    },
+  }));
 }
 
 function collectReferencedIds(posts) {
@@ -320,15 +396,15 @@ function collectReferencedIds(posts) {
   return [...ids];
 }
 
-async function fetchReferencedPosts(ids) {
+async function fetchReferencedPosts(ids, viewerId = null) {
   if (ids.length === 0) return {};
   const raws = await prisma.ow_posts.findMany({
-    where: { id: { in: ids } },
+    where: await visiblePostWhere({ id: { in: ids } }, viewerId),
     select: buildLeanSelect(),
   });
 
-  const formatted = raws.map(formatPost);
-  const enriched = await attachPostViewCounts(formatted);
+  const formatted = await Promise.all(raws.map((raw) => serializePost(raw, viewerId)));
+  const enriched = await attachPostViewCounts(formatted, viewerId);
 
   const map = {};
   for (const post of enriched) {
@@ -357,7 +433,7 @@ async function addViewerContext(posts, viewerId) {
       where: {
         author_id: viewerId,
         retweet_post_id: { in: postIds },
-        is_deleted: false,
+        ...await visibleWhere("post", viewerId),
         post_type: "retweet",
       },
       select: { retweet_post_id: true },
@@ -379,12 +455,12 @@ async function addViewerContext(posts, viewerId) {
 }
 
 async function buildListResponse(rawPosts, limit, viewerId = null) {
-  let posts = rawPosts.map(formatPost);
+  let posts = await Promise.all(rawPosts.map((raw) => serializePost(raw, viewerId)));
   posts = await addViewerContext(posts, viewerId);
-  posts = await attachPostViewCounts(posts);
+  posts = await attachPostViewCounts(posts, viewerId);
 
   const refIds = collectReferencedIds(posts);
-  let referencedPosts = await fetchReferencedPosts(refIds);
+  let referencedPosts = await fetchReferencedPosts(refIds, viewerId);
 
   if (viewerId && Object.keys(referencedPosts).length > 0) {
     const refPostsArray = Object.values(referencedPosts);
@@ -531,6 +607,8 @@ async function notifyMentions(mentionedUsers, actorId, postId) {
 }
 
 export async function createPost({ authorId, content, mediaIds = [], embed }) {
+  const viewerId = authorId;
+  await assertCanWrite(authorId, "post", "create");
   // 确保静态URL已初始化
   await initStaticUrl();
 
@@ -549,7 +627,7 @@ export async function createPost({ authorId, content, mediaIds = [], embed }) {
     throw new Error(`最多只能上传${MAX_MEDIA_COUNT}张图片`);
   }
 
-  const validatedEmbed = validateEmbed(embed);
+  const validatedEmbed = await validatePostAttachments(authorId, uniqueMediaIds, validateEmbed(embed));
   const mentionedUsers = await resolveMentionedUsers(content, authorId);
   const mentionedUserIds = mentionedUsers.map((user) => user.id);
 
@@ -624,8 +702,8 @@ export async function createPost({ authorId, content, mediaIds = [], embed }) {
   // 异步刷新作者用户向量（帖子变化影响用户画像）
   queueManager.enqueueUserEmbedding(authorId, false, 'post_create').catch(e => logger.debug('[embedding] createPost user enqueue failed:', e.message));
 
-  const formattedPost = formatPost(post);
-  const [postWithViews] = await attachPostViewCounts([formattedPost]);
+  const formattedPost = await serializePost(post, viewerId);
+  const [postWithViews] = await attachPostViewCounts([formattedPost], viewerId);
   return {
     post: postWithViews,
     includes: { posts: {} },
@@ -639,6 +717,8 @@ export async function replyToPost({
   replyToId,
   embed,
 }) {
+  const viewerId = authorId;
+  await assertCanWrite(authorId, "post", "create");
   // 确保静态URL已初始化
   await initStaticUrl();
 
@@ -646,11 +726,11 @@ export async function replyToPost({
   const uniqueMediaIds = dedupeMediaIds(mediaIds);
 
   const target = await prisma.ow_posts.findFirst({
-    where: { id: Number(replyToId), is_deleted: false },
+    where: { id: Number(replyToId), ...await visibleWhere("post", viewerId) },
     select: { id: true, author_id: true, thread_root_id: true, in_reply_to_id: true },
   });
   if (!target) {
-    throw new Error("目标推文不存在");
+    throw postNotFound();
   }
 
   const { characterCount, valid } = analyzePostContent(content);
@@ -664,7 +744,7 @@ export async function replyToPost({
     throw new Error(`最多只能上传${MAX_MEDIA_COUNT}张图片`);
   }
 
-  const validatedEmbed = validateEmbed(embed);
+  const validatedEmbed = await validatePostAttachments(authorId, uniqueMediaIds, validateEmbed(embed));
   const threadRootId = target.thread_root_id || target.id;
   const mentionedUsers = await resolveMentionedUsers(content, authorId);
   const mentionedUserIds = mentionedUsers.map((user) => user.id);
@@ -747,10 +827,10 @@ export async function replyToPost({
   queueManager.enqueuePostEmbedding(post.id).catch(e => logger.debug('[embedding] reply enqueue failed:', e.message));
   queueManager.enqueueUserEmbedding(authorId, false, 'post_reply').catch(e => logger.debug('[embedding] reply user enqueue failed:', e.message));
 
-  const formattedPost = formatPost(post);
-  const [postWithViews] = await attachPostViewCounts([formattedPost]);
+  const formattedPost = await serializePost(post, viewerId);
+  const [postWithViews] = await attachPostViewCounts([formattedPost], viewerId);
   const refIds = collectReferencedIds([postWithViews]);
-  const referencedPosts = await fetchReferencedPosts(refIds);
+  const referencedPosts = await fetchReferencedPosts(refIds, viewerId);
 
   return {
     post: postWithViews,
@@ -759,12 +839,14 @@ export async function replyToPost({
 }
 
 export async function retweetPost({ authorId, retweetPostId }) {
+  const viewerId = authorId;
+  await assertCanWrite(authorId, "post", "interact");
   const target = await prisma.ow_posts.findFirst({
-    where: { id: Number(retweetPostId), is_deleted: false },
+    where: { id: Number(retweetPostId), ...await visibleWhere("post", viewerId) },
     select: { id: true, author_id: true, post_type: true, retweet_post_id: true, in_reply_to_id: true, content: true, embed: true },
   });
   if (!target) {
-    throw new Error("目标推文不存在");
+    throw postNotFound();
   }
 
   // 如果目标本身就是转推，自动追溯到原始推文
@@ -775,7 +857,7 @@ export async function retweetPost({ authorId, retweetPostId }) {
   let originalEmbed = target.embed;
   if (target.post_type === "retweet" && target.retweet_post_id) {
     const original = await prisma.ow_posts.findFirst({
-      where: { id: target.retweet_post_id, is_deleted: false },
+      where: { id: target.retweet_post_id, ...await visibleWhere("post", viewerId) },
       select: { id: true, author_id: true, content: true, embed: true },
     });
     if (!original) {
@@ -793,7 +875,7 @@ export async function retweetPost({ authorId, retweetPostId }) {
       author_id: authorId,
       retweet_post_id: originalId,
       post_type: "retweet",
-      is_deleted: false,
+      ...await visibleWhere("post", viewerId),
     },
     select: { id: true },
   });
@@ -852,10 +934,10 @@ export async function retweetPost({ authorId, retweetPostId }) {
   // 纯转推不生成向量，但刷新作者用户向量
   queueManager.enqueueUserEmbedding(authorId, false, 'post_retweet').catch(e => logger.debug('[embedding] retweet user enqueue failed:', e.message));
 
-  const formattedPost = formatPost(post);
-  const [postWithViews] = await attachPostViewCounts([formattedPost]);
+  const formattedPost = await serializePost(post, viewerId);
+  const [postWithViews] = await attachPostViewCounts([formattedPost], viewerId);
   const refIds = collectReferencedIds([postWithViews]);
-  const referencedPosts = await fetchReferencedPosts(refIds);
+  const referencedPosts = await fetchReferencedPosts(refIds, viewerId);
 
   return {
     post: postWithViews,
@@ -864,39 +946,25 @@ export async function retweetPost({ authorId, retweetPostId }) {
 }
 
 export async function unretweetPost({ authorId, retweetPostId }) {
+  const viewerId = authorId;
+  await assertCanWrite(authorId, "post", "interact");
   const target = await prisma.ow_posts.findFirst({
-    where: { id: Number(retweetPostId), is_deleted: false },
+    where: { id: Number(retweetPostId), ...await visibleWhere("post", viewerId) },
     select: { id: true },
   });
-  if (!target) throw new Error("目标推文不存在");
+  if (!target) throw postNotFound();
 
-  const result = await prisma.$transaction(async (tx) => {
-    const retweet = await tx.ow_posts.findFirst({
-      where: {
-        author_id: authorId,
-        retweet_post_id: target.id,
-        post_type: "retweet",
-        is_deleted: false,
-      },
-      select: { id: true },
-    });
-
-    if (!retweet) {
-      return { count: 0, retweetId: null };
-    }
-
-    await tx.ow_posts.update({
-      where: { id: retweet.id },
-      data: { is_deleted: true },
-    });
-
-    await tx.ow_posts.update({
-      where: { id: target.id },
-      data: { retweet_count: { decrement: 1 } },
-    });
-
-    return { count: 1, retweetId: retweet.id };
+  const retweet = await prisma.ow_posts.findFirst({
+    where: await visiblePostWhere({
+      author_id: authorId,
+      retweet_post_id: target.id,
+      post_type: "retweet",
+    }, viewerId),
+    select: { id: true },
   });
+  if (!retweet) return { count: 0, retweetId: null };
+  await softDeleteContent("post", retweet.id, authorId);
+  const result = { count: 1, retweetId: retweet.id };
 
   if (result.count > 0 && result.retweetId) {
     queueManager.enqueueSocialPostSync(authorId, result.retweetId, "unretweet").catch((error) => {
@@ -915,6 +983,8 @@ export async function quotePost({
   mediaIds = [],
   embed,
 }) {
+  const viewerId = authorId;
+  await assertCanWrite(authorId, "post", "create");
   // 确保静态URL已初始化
   await initStaticUrl();
 
@@ -922,11 +992,11 @@ export async function quotePost({
   const uniqueMediaIds = dedupeMediaIds(mediaIds);
 
   const target = await prisma.ow_posts.findFirst({
-    where: { id: Number(quotedPostId), is_deleted: false },
+    where: { id: Number(quotedPostId), ...await visibleWhere("post", viewerId) },
     select: { id: true, author_id: true, in_reply_to_id: true },
   });
   if (!target) {
-    throw new Error("目标推文不存在");
+    throw postNotFound();
   }
 
   const { characterCount, valid } = analyzePostContent(content);
@@ -940,7 +1010,7 @@ export async function quotePost({
     throw new Error(`最多只能上传${MAX_MEDIA_COUNT}张图片`);
   }
 
-  const validatedEmbed = validateEmbed(embed);
+  const validatedEmbed = await validatePostAttachments(authorId, uniqueMediaIds, validateEmbed(embed));
   const mentionedUsers = await resolveMentionedUsers(content, authorId);
   const mentionedUserIds = mentionedUsers.map((user) => user.id);
 
@@ -1021,10 +1091,10 @@ export async function quotePost({
   queueManager.enqueuePostEmbedding(post.id).catch(e => logger.debug('[embedding] quote enqueue failed:', e.message));
   queueManager.enqueueUserEmbedding(authorId, false, 'post_quote').catch(e => logger.debug('[embedding] quote user enqueue failed:', e.message));
 
-  const formattedPost = formatPost(post);
-  const [postWithViews] = await attachPostViewCounts([formattedPost]);
+  const formattedPost = await serializePost(post, viewerId);
+  const [postWithViews] = await attachPostViewCounts([formattedPost], viewerId);
   const refIds = collectReferencedIds([postWithViews]);
-  const referencedPosts = await fetchReferencedPosts(refIds);
+  const referencedPosts = await fetchReferencedPosts(refIds, viewerId);
 
   return {
     post: postWithViews,
@@ -1033,11 +1103,13 @@ export async function quotePost({
 }
 
 export async function likePost({ userId, postId }) {
+  const viewerId = userId;
+  await assertCanWrite(userId, "post", "interact");
   const target = await prisma.ow_posts.findFirst({
-    where: { id: Number(postId), is_deleted: false },
+    where: { id: Number(postId), ...await visibleWhere("post", viewerId) },
     select: { id: true, author_id: true, in_reply_to_id: true },
   });
-  if (!target) throw new Error("目标推文不存在");
+  if (!target) throw postNotFound();
 
   const like = await prisma.$transaction(async (tx) => {
     const existing = await tx.ow_posts_like.findUnique({
@@ -1090,11 +1162,13 @@ export async function likePost({ userId, postId }) {
 }
 
 export async function unlikePost({ userId, postId }) {
+  const viewerId = userId;
+  await assertCanWrite(userId, "post", "interact");
   const target = await prisma.ow_posts.findFirst({
-    where: { id: Number(postId), is_deleted: false },
+    where: { id: Number(postId), ...await visibleWhere("post", viewerId) },
     select: { id: true },
   });
-  if (!target) throw new Error("目标推文不存在");
+  if (!target) throw postNotFound();
 
   const result = await prisma.$transaction(async (tx) => {
     const deleted = await tx.ow_posts_like.deleteMany({
@@ -1124,11 +1198,13 @@ export async function unlikePost({ userId, postId }) {
 }
 
 export async function bookmarkPost({ userId, postId }) {
+  const viewerId = userId;
+  await assertCanWrite(userId, "post", "interact");
   const target = await prisma.ow_posts.findFirst({
-    where: { id: Number(postId), is_deleted: false },
+    where: { id: Number(postId), ...await visibleWhere("post", viewerId) },
     select: { id: true },
   });
-  if (!target) throw new Error("目标推文不存在");
+  if (!target) throw postNotFound();
 
   const bookmark = await prisma.$transaction(async (tx) => {
     const existing = await tx.ow_posts_bookmark.findUnique({
@@ -1165,11 +1241,13 @@ export async function bookmarkPost({ userId, postId }) {
 }
 
 export async function unbookmarkPost({ userId, postId }) {
+  const viewerId = userId;
+  await assertCanWrite(userId, "post", "interact");
   const target = await prisma.ow_posts.findFirst({
-    where: { id: Number(postId), is_deleted: false },
+    where: { id: Number(postId), ...await visibleWhere("post", viewerId) },
     select: { id: true },
   });
-  if (!target) throw new Error("目标推文不存在");
+  if (!target) throw postNotFound();
 
   const result = await prisma.$transaction(async (tx) => {
     const deleted = await tx.ow_posts_bookmark.deleteMany({
@@ -1205,6 +1283,11 @@ export async function unbookmarkPost({ userId, postId }) {
  */
 export async function markPostRead({ userId, postId }) {
   if (!userId) return { acknowledged: false, reason: 'not_logged_in' };
+  const post = await prisma.ow_posts.findFirst({
+    where: await visiblePostWhere({ id: Number(postId) }, userId),
+    select: { id: true },
+  });
+  if (!post) throw postNotFound();
 
   // 异步上报 Gorse，不阻塞响应
   gorseService.feedbackPostRead(userId, postId).catch(e =>
@@ -1214,27 +1297,56 @@ export async function markPostRead({ userId, postId }) {
   return { acknowledged: true };
 }
 
-export async function deletePost({ userId, postId }) {
+export async function deletePost({ userId, postId, authorization = null, authorizationContext = {} }) {
+  await assertCanWrite(userId, "post", "delete");
   const post = await prisma.ow_posts.findFirst({
-    where: { id: Number(postId), is_deleted: false },
+    where: await visiblePostWhere({ id: Number(postId) }, userId),
     select: { id: true, author_id: true },
   });
-  if (!post) throw new Error("推文不存在");
-  if (post.author_id !== userId) throw new Error("没有权限删除该推文");
-
-  await prisma.ow_posts.update({
-    where: { id: post.id },
-    data: { is_deleted: true },
-  });
-
-  queueManager.enqueueSocialPostSync(userId, post.id, "delete").catch((error) => {
-    logger.warn("推文社交同步入队失败(delete):", error.message);
-  });
-
-  // Gorse：隐藏已删除的帖子
-  gorseService.hidePost(post.id).catch(e => logger.debug('[gorse] hidePost failed:', e.message));
-
+  if (!post) throw postNotFound();
+  if (Number(post.author_id) !== Number(userId) && !authorization?.allowed) {
+    throw Object.assign(new Error("没有权限删除该推文"), { status: 403, code: "ZC_ERROR_SCOPE_RESOURCE_FORBIDDEN" });
+  }
+  await softDeleteContent("post", post.id, userId, { authorizationContext });
   return { id: post.id, deleted: true };
+}
+
+export async function getDeletedPosts({ userId, cursor, page, limit = 20 }) {
+  await initStaticUrl();
+  const safeLimit = normalizePositiveInt(limit, 20);
+  const safePage = normalizePositiveInt(page, 1, 100000);
+  const ownerWhere = { author_id: Number(userId), OR: [{ is_deleted: true }, { deleted_at: { not: null } }] };
+  const posts = await prisma.ow_posts.findMany({
+    where: { ...ownerWhere, ...(cursor ? { id: { lt: Number(cursor) } } : {}) },
+    orderBy: { id: "desc" },
+    take: safeLimit,
+    ...(page && !cursor ? { skip: (safePage - 1) * safeLimit } : {}),
+    select: { ...buildLeanSelect(), deleted_at: true, deletion_source: true },
+  });
+  return {
+    total: await prisma.ow_posts.count({ where: ownerWhere }),
+    page: safePage,
+    limit: safeLimit,
+    posts: await Promise.all(posts.map(async (raw) => ({
+      ...await serializePost({ ...raw, is_deleted: false, deleted_at: null }, userId),
+      is_deleted: true,
+      deleted_at: raw.deleted_at,
+      can_restore: raw.deletion_source !== "admin" && raw.deletion_source !== "administrative",
+    }))),
+    next_cursor: posts.length === safeLimit ? String(posts[posts.length - 1].id) : null,
+    has_more: posts.length === safeLimit,
+  };
+}
+
+export async function restorePost({ userId, postId, authorizationContext = {} }) {
+  await assertCanWrite(userId, "post", "restore");
+  const post = await prisma.ow_posts.findFirst({
+    where: { id: Number(postId), author_id: Number(userId) },
+    select: { id: true },
+  });
+  if (!post) throw postNotFound();
+  await restoreContent("post", post.id, userId, { authorizationContext });
+  return { id: post.id, restored: true };
 }
 
 /**
@@ -1243,7 +1355,7 @@ export async function deletePost({ userId, postId }) {
  * @param {number} maxDepth - 最大遍历深度，防止无限循环
  * @returns {Promise<Array>} 祖先帖子列表，从最顶级到直接父贴的顺序
  */
-async function getAncestorChain(postId, maxDepth = 50) {
+async function getAncestorChain(postId, viewerId = null, maxDepth = 50) {
   const ancestors = [];
   const visited = new Set();
   let currentId = Number(postId);
@@ -1256,7 +1368,7 @@ async function getAncestorChain(postId, maxDepth = 50) {
     visited.add(currentId);
 
     const post = await prisma.ow_posts.findFirst({
-      where: { id: currentId, is_deleted: false },
+      where: await visiblePostWhere({ id: currentId }, viewerId),
       select: buildLeanSelect(),
     });
 
@@ -1283,13 +1395,14 @@ async function getAncestorChain(postId, maxDepth = 50) {
  * @param {number} authorId - 作者ID
  * @returns {Promise<Set<number>>} 作者点赞的回复ID集合
  */
-async function getAuthorLikedReplyIds(postId, authorId) {
+async function getAuthorLikedReplyIds(postId, authorId, viewerId = null) {
   const likes = await prisma.ow_posts_like.findMany({
     where: {
       user_id: authorId,
+      user: { is: await visibleInteractionUserWhere(viewerId) },
       post: {
         in_reply_to_id: postId,
-        is_deleted: false,
+        ...await visibleWhere("post", viewerId),
       },
     },
     select: { post_id: true },
@@ -1310,7 +1423,7 @@ async function getRepliesWithClassification(postId, authorId, postLikeCount, vie
   const directReplies = await prisma.ow_posts.findMany({
     where: {
       in_reply_to_id: Number(postId),
-      is_deleted: false,
+      ...await visibleWhere("post", viewerId),
     },
     orderBy: [{ like_count: "desc" }, { created_at: "asc" }],
     select: buildLeanSelect(),
@@ -1321,11 +1434,12 @@ async function getRepliesWithClassification(postId, authorId, postLikeCount, vie
   }
 
   // 获取作者点赞的回复ID
-  const authorLikedIds = await getAuthorLikedReplyIds(postId, authorId);
+  const authorLikedIds = await getAuthorLikedReplyIds(postId, authorId, viewerId);
 
   // 格式化回复并添加viewer context
-  let formattedReplies = directReplies.map(formatPost);
+  let formattedReplies = await Promise.all(directReplies.map((raw) => serializePost(raw, viewerId)));
   formattedReplies = await addViewerContext(formattedReplies, viewerId);
+  formattedReplies = await attachPostViewCounts(formattedReplies, viewerId);
 
   // 分类回复
   const featured = [];
@@ -1336,7 +1450,7 @@ async function getRepliesWithClassification(postId, authorId, postLikeCount, vie
     const formatted = formattedReplies[i];
 
     const isAuthorLiked = authorLikedIds.has(raw.id);
-    const hasHighLikes = raw.like_count > postLikeCount;
+    const hasHighLikes = formatted.stats.likes > postLikeCount;
 
     if (isAuthorLiked || hasHighLikes) {
       featured.push({
@@ -1358,32 +1472,32 @@ async function getRepliesWithClassification(postId, authorId, postLikeCount, vie
 export async function getPostById(postId, viewerId = null) {
   await initStaticUrl();
   const raw = await prisma.ow_posts.findFirst({
-    where: { id: Number(postId), is_deleted: false },
+    where: { id: Number(postId), ...await visibleWhere("post", viewerId) },
     select: buildLeanSelect(),
   });
   if (!raw) return null;
 
-  let post = formatPost(raw);
+  let post = await serializePost(raw, viewerId);
   const [enriched] = await addViewerContext([post], viewerId);
   post = enriched;
-  [post] = await attachPostViewCounts([post]);
+  [post] = await attachPostViewCounts([post], viewerId);
 
   // 获取祖先链（如果是回复帖子）
   let ancestors = [];
   if (raw.in_reply_to_id) {
-    const ancestorRaws = await getAncestorChain(raw.in_reply_to_id);
+    const ancestorRaws = await getAncestorChain(raw.in_reply_to_id, viewerId);
     // 排除当前帖子本身（如果意外出现）
     const filteredAncestors = ancestorRaws.filter((a) => a.id !== raw.id);
-    ancestors = filteredAncestors.map(formatPost);
+    ancestors = await Promise.all(filteredAncestors.map((raw) => serializePost(raw, viewerId)));
     ancestors = await addViewerContext(ancestors, viewerId);
-    ancestors = await attachPostViewCounts(ancestors);
+    ancestors = await attachPostViewCounts(ancestors, viewerId);
   }
 
   // 获取分类后的回复
   let { featured: featuredReplies, regular: regularReplies } =
-    await getRepliesWithClassification(raw.id, raw.author_id, raw.like_count, viewerId);
-  featuredReplies = await attachPostViewCounts(featuredReplies);
-  regularReplies = await attachPostViewCounts(regularReplies);
+    await getRepliesWithClassification(raw.id, raw.author_id, post.stats.likes, viewerId);
+  featuredReplies = await attachPostViewCounts(featuredReplies, viewerId);
+  regularReplies = await attachPostViewCounts(regularReplies, viewerId);
 
   // 收集所有需要引用的帖子ID
   const allPosts = [post, ...ancestors, ...featuredReplies, ...regularReplies];
@@ -1393,7 +1507,7 @@ export async function getPostById(postId, viewerId = null) {
   const existingIds = new Set(allPosts.map((p) => p.id));
   const filteredRefIds = refIds.filter((id) => !existingIds.has(id));
 
-  let referencedPosts = await fetchReferencedPosts(filteredRefIds);
+  let referencedPosts = await fetchReferencedPosts(filteredRefIds, viewerId);
 
   if (viewerId && Object.keys(referencedPosts).length > 0) {
     const refPostsArray = Object.values(referencedPosts);
@@ -1442,11 +1556,10 @@ export async function getRelatedPosts({
 
   const rawPosts = await prisma.ow_posts.findMany({
     where: {
-      is_deleted: false,
       embed: { not: null },
       ...(includeReplies ? {} : { post_type: { not: "reply" } }),
       ...(safeCursor ? { created_at: { lt: new Date(safeCursor) } } : {}),
-      AND: clauses,
+      AND: [...clauses, await visibleWhere("post", viewerId)],
     },
     orderBy: { created_at: "desc" },
     take: safeLimit,
@@ -1467,7 +1580,7 @@ export async function getUserPosts({
   const rawPosts = await prisma.ow_posts.findMany({
     where: {
       author_id: Number(userId),
-      is_deleted: false,
+      ...await visibleWhere("post", viewerId),
       ...(includeReplies ? {} : { post_type: { not: "reply" } }),
       ...(cursor ? { created_at: { lt: new Date(cursor) } } : {}),
     },
@@ -1486,6 +1599,7 @@ export async function getHomeFeed({
   includeReplies = false,
   followingOnly = false,
 }) {
+  const viewerId = userId;
   await initStaticUrl();
 
   // 获取当前用户关注列表（用于 followingOnly 以及联邦帖子过滤）
@@ -1527,10 +1641,9 @@ export async function getHomeFeed({
 
   const rawPosts = await prisma.ow_posts.findMany({
     where: {
-      is_deleted: false,
       ...(includeReplies ? {} : { post_type: { not: "reply" } }),
       ...authorFilter,
-      ...federationFilter,
+      AND: [federationFilter, await visibleWhere("post", viewerId)],
       ...(cursor ? { created_at: { lt: new Date(cursor) } } : {}),
     },
     orderBy: { created_at: "desc" },
@@ -1551,6 +1664,7 @@ export async function getGlobalFeed({
   limit = 20,
   includeReplies = false,
 }) {
+  const viewerId = userId;
   await initStaticUrl();
 
   const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
@@ -1566,7 +1680,7 @@ export async function getGlobalFeed({
 
   const rawPosts = await prisma.ow_posts.findMany({
     where: {
-      is_deleted: false,
+      ...await visibleWhere("post", viewerId),
       ...(includeReplies ? {} : { post_type: { not: "reply" } }),
       ...cursorFilter,
     },
@@ -1576,12 +1690,12 @@ export async function getGlobalFeed({
   });
 
   // 构建响应（使用 created_at 作为游标而非 id）
-  let posts = rawPosts.map(formatPost);
+  let posts = await Promise.all(rawPosts.map((raw) => serializePost(raw, viewerId)));
   posts = await addViewerContext(posts, userId);
-  posts = await attachPostViewCounts(posts);
+  posts = await attachPostViewCounts(posts, viewerId);
 
   const refIds = collectReferencedIds(posts);
-  let referencedPosts = await fetchReferencedPosts(refIds);
+  let referencedPosts = await fetchReferencedPosts(refIds, viewerId);
   if (userId && Object.keys(referencedPosts).length > 0) {
     const refPostsArray = Object.values(referencedPosts);
     const enriched = await addViewerContext(refPostsArray, userId);
@@ -1610,24 +1724,24 @@ export async function getThread(postId, { cursor, limit = 50, viewerId = null } 
 
   // 获取请求的帖子
   const raw = await prisma.ow_posts.findFirst({
-    where: { id: Number(postId), is_deleted: false },
+    where: { id: Number(postId), ...await visibleWhere("post", viewerId) },
     select: buildLeanSelect(),
   });
   if (!raw) return null;
 
-  let post = formatPost(raw);
+  let post = await serializePost(raw, viewerId);
   const [enrichedPost] = await addViewerContext([post], viewerId);
   post = enrichedPost;
-  [post] = await attachPostViewCounts([post]);
+  [post] = await attachPostViewCounts([post], viewerId);
 
   // 获取祖先链（如果是回复帖子）
   let ancestors = [];
   if (raw.in_reply_to_id) {
-    const ancestorRaws = await getAncestorChain(raw.in_reply_to_id);
+    const ancestorRaws = await getAncestorChain(raw.in_reply_to_id, viewerId);
     const filteredAncestors = ancestorRaws.filter((a) => a.id !== raw.id);
-    ancestors = filteredAncestors.map(formatPost);
+    ancestors = await Promise.all(filteredAncestors.map((raw) => serializePost(raw, viewerId)));
     ancestors = await addViewerContext(ancestors, viewerId);
-    ancestors = await attachPostViewCounts(ancestors);
+    ancestors = await attachPostViewCounts(ancestors, viewerId);
   }
 
   // 确定线程根ID
@@ -1645,7 +1759,7 @@ export async function getThread(postId, { cursor, limit = 50, viewerId = null } 
   // 获取线程中的所有回复
   const repliesRaw = await prisma.ow_posts.findMany({
     where: {
-      is_deleted: false,
+      ...await visibleWhere("post", viewerId),
       thread_root_id: threadRootId,
       ...(cursor ? { created_at: { gt: new Date(cursor) } } : {}),
     },
@@ -1654,9 +1768,9 @@ export async function getThread(postId, { cursor, limit = 50, viewerId = null } 
     select: buildLeanSelect(),
   });
 
-  let replies = repliesRaw.map(formatPost);
+  let replies = await Promise.all(repliesRaw.map((raw) => serializePost(raw, viewerId)));
   replies = await addViewerContext(replies, viewerId);
-  replies = await attachPostViewCounts(replies);
+  replies = await attachPostViewCounts(replies, viewerId);
 
   // 获取根帖作者点赞的所有回复ID
   const allReplyIds = repliesRaw.map((r) => r.id);
@@ -1667,6 +1781,7 @@ export async function getThread(postId, { cursor, limit = 50, viewerId = null } 
           await prisma.ow_posts_like.findMany({
             where: {
               user_id: rootAuthorId,
+              user: { is: await visibleInteractionUserWhere(viewerId) },
               post_id: { in: allReplyIds },
             },
             select: { post_id: true },
@@ -1677,7 +1792,7 @@ export async function getThread(postId, { cursor, limit = 50, viewerId = null } 
 
   // 将回复按父帖ID分组，并分类为精选/普通
   const repliesByParent = {};
-  const rootLikeCount = actualRootLikeCount?.like_count || 0;
+  const rootLikeCount = ancestors.length > 0 ? ancestors[0].stats.likes : post.stats.likes;
 
   for (let i = 0; i < repliesRaw.length; i++) {
     const rawReply = repliesRaw[i];
@@ -1689,7 +1804,7 @@ export async function getThread(postId, { cursor, limit = 50, viewerId = null } 
     }
 
     const isAuthorLiked = authorLikedIds.has(rawReply.id);
-    const hasHighLikes = rawReply.like_count > rootLikeCount;
+    const hasHighLikes = formatted.stats.likes > rootLikeCount;
 
     if (isAuthorLiked || hasHighLikes) {
       repliesByParent[parentId].featured.push({
@@ -1710,7 +1825,7 @@ export async function getThread(postId, { cursor, limit = 50, viewerId = null } 
   const refIds = collectReferencedIds(allPosts);
   const existingIds = new Set(allPosts.map((p) => p.id));
   const filteredRefIds = refIds.filter((id) => !existingIds.has(id));
-  let referencedPosts = await fetchReferencedPosts(filteredRefIds);
+  let referencedPosts = await fetchReferencedPosts(filteredRefIds, viewerId);
 
   if (viewerId && Object.keys(referencedPosts).length > 0) {
     const refPostsArray = Object.values(referencedPosts);
@@ -1738,10 +1853,11 @@ export async function getThread(postId, { cursor, limit = 50, viewerId = null } 
 }
 
 export async function getMentions({ userId, cursor, limit = 20 }) {
+  const viewerId = userId;
   await initStaticUrl();
   const rawPosts = await prisma.ow_posts.findMany({
     where: {
-      is_deleted: false,
+      ...await visibleWhere("post", viewerId),
       mentions: {
         some: {
           user_id: Number(userId),
@@ -1764,16 +1880,16 @@ export async function getPostRetweets({ postId, cursor, limit = 20, viewerId = n
   await initStaticUrl();
 
   const target = await prisma.ow_posts.findFirst({
-    where: { id: Number(postId), is_deleted: false },
+    where: { id: Number(postId), ...await visibleWhere("post", viewerId) },
     select: { id: true },
   });
-  if (!target) throw new Error("帖子不存在");
+  if (!target) throw postNotFound();
 
   const rawPosts = await prisma.ow_posts.findMany({
     where: {
       retweet_post_id: target.id,
       post_type: "retweet",
-      is_deleted: false,
+      ...await visibleWhere("post", viewerId),
       ...(cursor ? { created_at: { lt: new Date(cursor) } } : {}),
     },
     orderBy: { created_at: "desc" },
@@ -1791,16 +1907,16 @@ export async function getPostQuotes({ postId, cursor, limit = 20, viewerId = nul
   await initStaticUrl();
 
   const target = await prisma.ow_posts.findFirst({
-    where: { id: Number(postId), is_deleted: false },
+    where: { id: Number(postId), ...await visibleWhere("post", viewerId) },
     select: { id: true },
   });
-  if (!target) throw new Error("帖子不存在");
+  if (!target) throw postNotFound();
 
   const rawPosts = await prisma.ow_posts.findMany({
     where: {
       quoted_post_id: target.id,
       post_type: "quote",
-      is_deleted: false,
+      ...await visibleWhere("post", viewerId),
       ...(cursor ? { created_at: { lt: new Date(cursor) } } : {}),
     },
     orderBy: { created_at: "desc" },
@@ -1818,10 +1934,10 @@ export async function getPostLikes({ postId, cursor, limit = 20, viewerId }) {
   await initStaticUrl();
 
   const target = await prisma.ow_posts.findFirst({
-    where: { id: Number(postId), is_deleted: false },
+    where: { id: Number(postId), ...await visibleWhere("post", viewerId) },
     select: { id: true, author_id: true },
   });
-  if (!target) throw new Error("帖子不存在");
+  if (!target) throw postNotFound();
 
   // 仅发帖人可见
   if (!viewerId || target.author_id !== Number(viewerId)) {
@@ -1831,6 +1947,7 @@ export async function getPostLikes({ postId, cursor, limit = 20, viewerId }) {
   const likes = await prisma.ow_posts_like.findMany({
     where: {
       post_id: target.id,
+      user: { is: await visibleInteractionUserWhere(viewerId) },
       ...(cursor ? { id: { lt: Number(cursor) } } : {}),
     },
     orderBy: { id: "desc" },
@@ -1857,7 +1974,7 @@ export async function getPostLikes({ postId, cursor, limit = 20, viewerId }) {
 
   return {
     users,
-    total: await prisma.ow_posts_like.count({ where: { post_id: target.id } }),
+    total: await prisma.ow_posts_like.count({ where: { post_id: target.id, user: { is: await visibleInteractionUserWhere(viewerId) } } }),
     next_cursor: hasMore ? nextCursor : null,
     has_more: hasMore,
   };
@@ -1868,7 +1985,7 @@ export async function getPostLikes({ postId, cursor, limit = 20, viewerId }) {
  */
 export async function getPostAnalytics({ postId, viewerId }) {
   const target = await prisma.ow_posts.findFirst({
-    where: { id: Number(postId), is_deleted: false },
+    where: { id: Number(postId), ...await visibleWhere("post", viewerId) },
     select: {
       id: true,
       author_id: true,
@@ -1878,7 +1995,7 @@ export async function getPostAnalytics({ postId, viewerId }) {
       bookmark_count: true,
     },
   });
-  if (!target) throw new Error("帖子不存在");
+  if (!target) throw postNotFound();
 
   // 仅发帖人可见详细分析
   const isAuthor = viewerId && target.author_id === Number(viewerId);
@@ -1888,19 +2005,18 @@ export async function getPostAnalytics({ postId, viewerId }) {
     where: {
       quoted_post_id: target.id,
       post_type: "quote",
-      is_deleted: false,
+      ...await visibleWhere("post", viewerId),
     },
   });
 
-  // 纯转推数 = retweet_count - quote_count
-  const pureRetweetCount = Math.max(0, target.retweet_count - quoteCount);
+  const [{ stats }] = await attachPostViewCounts([{ id: target.id }], viewerId);
 
   const result = {
     post_id: target.id,
-    reply_count: target.reply_count,
-    retweet_count: pureRetweetCount,
+    reply_count: stats.replies,
+    retweet_count: Math.max(0, stats.retweets - quoteCount),
     quote_count: quoteCount,
-    like_count: target.like_count,
+    like_count: stats.likes,
   };
 
   // 浏览分析（基于 ow_analytics_event）
@@ -1924,13 +2040,13 @@ export async function getPostAnalytics({ postId, viewerId }) {
   result.view_count = viewCount;
   result.visitor_count = uniqueVisitors.length;
   result.engagement_count =
-    target.reply_count + pureRetweetCount + quoteCount + target.like_count + target.bookmark_count;
+    stats.replies + stats.retweets + stats.likes + stats.bookmarks;
   result.engagement_rate =
     viewCount > 0 ? Number(((result.engagement_count / viewCount) * 100).toFixed(2)) : 0;
 
   // 仅作者可见收藏数
   if (isAuthor) {
-    result.bookmark_count = target.bookmark_count;
+    result.bookmark_count = stats.bookmarks;
   }
 
   return result;
@@ -1942,10 +2058,10 @@ export async function getPostAnalytics({ postId, viewerId }) {
  */
 export async function getPostViewAnalytics({ postId, viewerId, startDate, endDate }) {
   const target = await prisma.ow_posts.findFirst({
-    where: { id: Number(postId), is_deleted: false },
+    where: { id: Number(postId), ...await visibleWhere("post", viewerId) },
     select: { id: true, author_id: true },
   });
-  if (!target) throw new Error("帖子不存在");
+  if (!target) throw postNotFound();
 
   if (!viewerId || target.author_id !== Number(viewerId)) {
     throw new Error("无权查看帖子浏览分析");
@@ -1987,6 +2103,7 @@ export async function getPostViewAnalytics({ postId, viewerId, startDate, endDat
     prisma.ow_posts_like.findMany({
       where: {
         post_id: target.id,
+        user: { is: await visibleInteractionUserWhere(viewerId) },
         created_at: { gte: rangeStart, lte: rangeEnd },
       },
       select: { created_at: true },
@@ -1994,6 +2111,7 @@ export async function getPostViewAnalytics({ postId, viewerId, startDate, endDat
     prisma.ow_posts_bookmark.findMany({
       where: {
         post_id: target.id,
+        user: { is: await visibleInteractionUserWhere(viewerId) },
         created_at: { gte: rangeStart, lte: rangeEnd },
       },
       select: { created_at: true },
@@ -2002,7 +2120,7 @@ export async function getPostViewAnalytics({ postId, viewerId, startDate, endDat
       where: {
         in_reply_to_id: target.id,
         post_type: "reply",
-        is_deleted: false,
+        ...await visibleWhere("post", viewerId),
         created_at: { gte: rangeStart, lte: rangeEnd },
       },
       select: { created_at: true },
@@ -2011,7 +2129,7 @@ export async function getPostViewAnalytics({ postId, viewerId, startDate, endDat
       where: {
         retweet_post_id: target.id,
         post_type: "retweet",
-        is_deleted: false,
+        ...await visibleWhere("post", viewerId),
         created_at: { gte: rangeStart, lte: rangeEnd },
       },
       select: { created_at: true },
@@ -2020,7 +2138,7 @@ export async function getPostViewAnalytics({ postId, viewerId, startDate, endDat
       where: {
         quoted_post_id: target.id,
         post_type: "quote",
-        is_deleted: false,
+        ...await visibleWhere("post", viewerId),
         created_at: { gte: rangeStart, lte: rangeEnd },
       },
       select: { created_at: true },
@@ -2108,9 +2226,9 @@ export async function getPostViewAnalytics({ postId, viewerId, startDate, endDat
  * 构建带祖先链的回帖列表响应
  */
 async function buildRepliesListResponse(rawPosts, limit, viewerId = null) {
-  let posts = rawPosts.map(formatPost);
+  let posts = await Promise.all(rawPosts.map((raw) => serializePost(raw, viewerId)));
   posts = await addViewerContext(posts, viewerId);
-  posts = await attachPostViewCounts(posts);
+  posts = await attachPostViewCounts(posts, viewerId);
 
   // 为每个回帖获取祖先链
   const postsWithAncestors = await Promise.all(
@@ -2119,11 +2237,11 @@ async function buildRepliesListResponse(rawPosts, limit, viewerId = null) {
       let ancestors = [];
 
       if (raw.in_reply_to_id) {
-        const ancestorRaws = await getAncestorChain(raw.in_reply_to_id);
+        const ancestorRaws = await getAncestorChain(raw.in_reply_to_id, viewerId);
         const filteredAncestors = ancestorRaws.filter((a) => a.id !== raw.id);
-        ancestors = filteredAncestors.map(formatPost);
+        ancestors = await Promise.all(filteredAncestors.map((raw) => serializePost(raw, viewerId)));
         ancestors = await addViewerContext(ancestors, viewerId);
-        ancestors = await attachPostViewCounts(ancestors);
+        ancestors = await attachPostViewCounts(ancestors, viewerId);
       }
 
       return { post, ancestors };
@@ -2135,7 +2253,7 @@ async function buildRepliesListResponse(rawPosts, limit, viewerId = null) {
   const refIds = collectReferencedIds(allPosts);
   const existingIds = new Set(allPosts.map((p) => p.id));
   const filteredRefIds = refIds.filter((id) => !existingIds.has(id));
-  let referencedPosts = await fetchReferencedPosts(filteredRefIds);
+  let referencedPosts = await fetchReferencedPosts(filteredRefIds, viewerId);
 
   if (viewerId && Object.keys(referencedPosts).length > 0) {
     const refPostsArray = Object.values(referencedPosts);
@@ -2170,7 +2288,7 @@ export async function getUserReplies({ userId, cursor, limit = 20, viewerId = nu
     where: {
       author_id: Number(userId),
       post_type: "reply",
-      is_deleted: false,
+      ...await visibleWhere("post", viewerId),
       ...(cursor ? { created_at: { lt: new Date(cursor) } } : {}),
     },
     orderBy: { created_at: "desc" },
@@ -2191,7 +2309,7 @@ export async function getUserOriginalPosts({ userId, cursor, limit = 20, viewerI
     where: {
       author_id: Number(userId),
       post_type: "normal",
-      is_deleted: false,
+      ...await visibleWhere("post", viewerId),
       ...(cursor ? { created_at: { lt: new Date(cursor) } } : {}),
     },
     orderBy: { created_at: "desc" },
@@ -2211,7 +2329,7 @@ export async function getUserMediaPosts({ userId, cursor, limit = 20, viewerId =
   const rawPosts = await prisma.ow_posts.findMany({
     where: {
       author_id: Number(userId),
-      is_deleted: false,
+      ...await visibleWhere("post", viewerId),
       post_media: {
         some: {},
       },
@@ -2240,7 +2358,7 @@ export async function getUserLikedPosts({ userId, cursor, limit = 20, viewerId }
     where: {
       user_id: Number(userId),
       post: {
-        is_deleted: false,
+        ...await visibleWhere("post", viewerId),
       },
       ...(cursor ? { id: { lt: Number(cursor) } } : {}),
     },
@@ -2255,12 +2373,12 @@ export async function getUserLikedPosts({ userId, cursor, limit = 20, viewerId }
   });
 
   const rawPosts = likes.map((l) => l.post).filter(Boolean);
-  let posts = rawPosts.map(formatPost);
+  let posts = await Promise.all(rawPosts.map((raw) => serializePost(raw, viewerId)));
   posts = await addViewerContext(posts, viewerId);
-  posts = await attachPostViewCounts(posts);
+  posts = await attachPostViewCounts(posts, viewerId);
 
   const refIds = collectReferencedIds(posts);
-  let referencedPosts = await fetchReferencedPosts(refIds);
+  let referencedPosts = await fetchReferencedPosts(refIds, viewerId);
 
   if (Object.keys(referencedPosts).length > 0) {
     const refPostsArray = Object.values(referencedPosts);
@@ -2297,7 +2415,7 @@ export async function getUserBookmarks({ userId, cursor, limit = 20, viewerId })
     where: {
       user_id: Number(userId),
       post: {
-        is_deleted: false,
+        ...await visibleWhere("post", viewerId),
       },
       ...(cursor ? { id: { lt: Number(cursor) } } : {}),
     },
@@ -2312,12 +2430,12 @@ export async function getUserBookmarks({ userId, cursor, limit = 20, viewerId })
   });
 
   const rawPosts = bookmarks.map((b) => b.post).filter(Boolean);
-  let posts = rawPosts.map(formatPost);
+  let posts = await Promise.all(rawPosts.map((raw) => serializePost(raw, viewerId)));
   posts = await addViewerContext(posts, viewerId);
-  posts = await attachPostViewCounts(posts);
+  posts = await attachPostViewCounts(posts, viewerId);
 
   const refIds = collectReferencedIds(posts);
-  let referencedPosts = await fetchReferencedPosts(refIds);
+  let referencedPosts = await fetchReferencedPosts(refIds, viewerId);
 
   if (Object.keys(referencedPosts).length > 0) {
     const refPostsArray = Object.values(referencedPosts);
@@ -2350,6 +2468,7 @@ export async function getRecommendedFeed({
   limit = 20,
   offset = 0,
 }) {
+  const viewerId = userId;
   await initStaticUrl();
 
   let postIds;
@@ -2367,7 +2486,7 @@ export async function getRecommendedFeed({
   const rawPosts = await prisma.ow_posts.findMany({
     where: {
       id: { in: postIds },
-      is_deleted: false,
+      ...await visibleWhere("post", viewerId),
     },
     select: buildLeanSelect(),
   });
@@ -2378,12 +2497,12 @@ export async function getRecommendedFeed({
     .map(id => postMap.get(id))
     .filter(Boolean);
 
-  let posts = orderedRaw.map(formatPost);
+  let posts = await Promise.all(orderedRaw.map((raw) => serializePost(raw, viewerId)));
   posts = await addViewerContext(posts, userId);
-  posts = await attachPostViewCounts(posts);
+  posts = await attachPostViewCounts(posts, viewerId);
 
   const refIds = collectReferencedIds(posts);
-  let referencedPosts = await fetchReferencedPosts(refIds);
+  let referencedPosts = await fetchReferencedPosts(refIds, viewerId);
   if (userId && Object.keys(referencedPosts).length > 0) {
     const refPostsArray = Object.values(referencedPosts);
     const enriched = await addViewerContext(refPostsArray, userId);
@@ -2414,6 +2533,7 @@ export async function getMixedRecommendFeed({
   limit = 20,
   offset = 0,
 }) {
+  const viewerId = userId;
   await initStaticUrl();
 
   if (!userId) {
@@ -2437,7 +2557,7 @@ export async function getMixedRecommendFeed({
   const [rawPosts, rawProjects, rawUsers] = await Promise.all([
     postIds && postIds.length > 0
       ? prisma.ow_posts.findMany({
-          where: { id: { in: postIds }, is_deleted: false },
+          where: { id: { in: postIds }, ...await visibleWhere("post", viewerId) },
           select: buildLeanSelect(),
         })
       : Promise.resolve([]),
@@ -2445,7 +2565,7 @@ export async function getMixedRecommendFeed({
       ? prisma.ow_projects.findMany({
           where: {
             id: { in: projectIds },
-            state: 'public',
+            AND: [await visibleWhere("project", viewerId), { state: 'public' }],
             authorid: { not: userId },
           },
           select: {
@@ -2461,7 +2581,7 @@ export async function getMixedRecommendFeed({
       : Promise.resolve([]),
     userIds && userIds.length > 0
       ? prisma.ow_users.findMany({
-          where: { id: { in: userIds }, status: 'active', NOT: { id: userId } },
+          where: { AND: [{ id: { in: userIds }, status: 'active', NOT: { id: userId } }, await visibleWhere("profile", viewerId)] },
           select: {
             id: true, username: true, display_name: true,
             bio: true, avatar: true, motto: true,
@@ -2481,17 +2601,17 @@ export async function getMixedRecommendFeed({
   const orderedUsers = userIds.map(id => userMap.get(Number(id))).filter(Boolean);
 
   // 格式化帖子
-  let posts = orderedPosts.map(formatPost);
+  let posts = await Promise.all(orderedPosts.map((raw) => serializePost(raw, viewerId)));
   posts = await addViewerContext(posts, userId);
-  posts = await attachPostViewCounts(posts);
+  posts = await attachPostViewCounts(posts, viewerId);
 
   // 为作品附加头像 URL
   const projectsWithAvatar = await Promise.all(orderedProjects.map(async (p) => ({
     ...p,
-    author: p.author ? {
+    author: await sanitizeProfile(p.author ? {
       ...p.author,
       avatarURL: buildAuthorAvatarUrl(p.author.avatar),
-    } : null,
+    } : null, viewerId),
   })));
 
   // 为用户附加头像 URL
@@ -2535,7 +2655,7 @@ export async function getMixedRecommendFeed({
 
   // 收集引用帖子
   const refIds = collectReferencedIds(posts);
-  let referencedPosts = await fetchReferencedPosts(refIds);
+  let referencedPosts = await fetchReferencedPosts(refIds, viewerId);
   if (Object.keys(referencedPosts).length > 0) {
     const refPostsArray = Object.values(referencedPosts);
     const enriched = await addViewerContext(refPostsArray, userId);
@@ -2576,7 +2696,7 @@ export async function getSimilarPosts({ postId, limit = 10, viewerId = null, min
   if (isNaN(nPostId)) throw new Error('无效的帖子 ID');
 
   const sourcePost = await prisma.ow_posts.findFirst({
-    where: { id: nPostId, is_deleted: false },
+    where: { id: nPostId, ...await visibleWhere("post", viewerId) },
     select: {
       id: true,
       post_type: true,
@@ -2644,7 +2764,7 @@ export async function getSimilarPosts({ postId, limit = 10, viewerId = null, min
   const rawPosts = await prisma.ow_posts.findMany({
     where: {
       id: { in: candidateIds },
-      is_deleted: false,
+      ...await visibleWhere("post", viewerId),
     },
     select: buildLeanSelect(),
   });
@@ -2656,9 +2776,9 @@ export async function getSimilarPosts({ postId, limit = 10, viewerId = null, min
   // 截取到 safeLimit
   const trimmed = rawPosts.slice(0, safeLimit);
 
-  let posts = trimmed.map(formatPost);
+  let posts = await Promise.all(trimmed.map((raw) => serializePost(raw, viewerId)));
   posts = await addViewerContext(posts, viewerId);
-  posts = await attachPostViewCounts(posts);
+  posts = await attachPostViewCounts(posts, viewerId);
 
   // 附加相似度分数
   posts = posts.map(p => ({
@@ -2667,7 +2787,7 @@ export async function getSimilarPosts({ postId, limit = 10, viewerId = null, min
   }));
 
   const refIds = collectReferencedIds(posts);
-  let referencedPosts = await fetchReferencedPosts(refIds);
+  let referencedPosts = await fetchReferencedPosts(refIds, viewerId);
   if (viewerId && Object.keys(referencedPosts).length > 0) {
     const refPostsArray = Object.values(referencedPosts);
     const enriched = await addViewerContext(refPostsArray, viewerId);

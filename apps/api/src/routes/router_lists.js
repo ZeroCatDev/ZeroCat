@@ -2,6 +2,7 @@ import logger from "../services/logger.js";
 import {Router} from "express";
 import {needLogin} from "../middleware/auth.js";
 import { requireResource, requireScope } from "../middleware/scope.js";
+import { resourceAuthorizationContext } from "../services/auth/resourceOperation.js";
 import {
     addProjectToList,
     createList,
@@ -16,10 +17,18 @@ import {
 
 const router = Router();
 
+router.use((req, res, next) => {
+    if (req.headers["x-zerocat-delegation"] !== undefined && /^\/userid\/[^/]+\/public\/?$/i.test(req.path)) {
+        return res.status(403).json({ status: "error", code: "ZC_ERROR_DELEGATION_NOT_SUPPORTED", message: "此操作不支持授权委托" });
+    }
+    next();
+});
+
 // Get a specific list by ID
-router.get("/listid/:id", async (req, res) => {
+router.get("/listid/:id", (req, res, next) => req.headers["x-zerocat-delegation"] !== undefined
+    ? requireResource("list", "read", "id", { allowDelegation: true })(req, res, next) : next(), async (req, res) => {
     try {
-        const list = await getProjectList(req.params.id, res.locals.userid);
+        const list = await getProjectList(req.params.id, res.locals.userid, resourceAuthorizationContext(req, res));
         if (!list) {
             return res.status(404).send({status: "error", message: "列表不存在"});
         }
@@ -29,7 +38,7 @@ router.get("/listid/:id", async (req, res) => {
             .send({status: "success", message: "获取成功", data: list});
     } catch (err) {
         logger.error("Error getting project list:", err);
-        res.status(500).send({status: "error", message: "获取项目列表时出错"});
+        res.status(err.statusCode || err.status || 500).send({status: "error", code: err.code, message: err.statusCode || err.status ? err.message : "获取项目列表时出错"});
     }
 });
 
@@ -43,8 +52,8 @@ router.get("/userid/:id/public", async (req, res) => {
     } catch (err) {
         logger.error("Error getting public user list info:", err);
         res
-            .status(500)
-            .send({status: "error", message: "获取公共用户列表信息时出错"});
+            .status(err.statusCode || err.status || 500)
+            .send({status: "error", code: err.code, message: err.statusCode || err.status ? err.message : "获取公共用户列表信息时出错"});
     }
 });
 
@@ -58,8 +67,8 @@ router.get("/my", needLogin, requireScope("list:read"), async (req, res) => {
     } catch (err) {
         logger.error("Error getting my list info:", err);
         res
-            .status(500)
-            .send({status: "error", message: "获取我的列表信息时出错"});
+            .status(err.statusCode || err.status || 500)
+            .send({status: "error", code: err.code, message: err.statusCode || err.status ? err.message : "获取我的列表信息时出错"});
     }
 });
 
@@ -81,8 +90,8 @@ router.get("/check", needLogin, requireScope("list:read"), async (req, res) => {
     } catch (err) {
         logger.error("Error checking user list info:", err);
         res
-            .status(500)
-            .send({status: "error", message: "检查用户列表信息时出错"});
+            .status(err.statusCode || err.status || 500)
+            .send({status: "error", code: err.code, message: err.statusCode || err.status ? err.message : "检查用户列表信息时出错"});
     }
 });
 
@@ -101,14 +110,14 @@ router.post("/create", needLogin, requireScope("list:create"), async (req, res) 
             .send({status: "success", message: "创建成功", data: list});
     } catch (err) {
         logger.error("Error creating list:", err);
-        res.status(500).send({status: "error", message: "创建列表时出错"});
+        res.status(err.statusCode || err.status || 500).send({status: "error", code: err.code, message: err.statusCode || err.status ? err.message : "创建列表时出错"});
     }
 });
 
 // Delete a list
 import { requireSudo } from "../middleware/sudo.js";
 
-router.post("/delete", needLogin, requireResource("list", "delete", "id"), requireSudo, async (req, res) => {
+router.post("/delete", needLogin, requireResource("list", "delete", "id", { allowDelegation: true }), requireSudo, async (req, res) => {
     try {
         const {id} = req.body;
 
@@ -118,18 +127,18 @@ router.post("/delete", needLogin, requireResource("list", "delete", "id"), requi
                 .send({status: "error", message: "列表ID不能为空"});
         }
 
-        const list = await deleteList(res.locals.userid, id);
+        const list = await deleteList(res.locals.userid, id, resourceAuthorizationContext(req, res));
         res
             .status(200)
             .send({status: "success", message: "删除成功", data: list});
     } catch (err) {
         logger.error("Error deleting list:", err);
-        res.status(500).send({status: "error", message: "删除列表时出错"});
+        res.status(err.statusCode || err.status || 500).send({status: "error", code: err.code, message: err.statusCode || err.status ? err.message : "删除列表时出错"});
     }
 });
 
 // Add a project to a list
-router.post("/add", needLogin, requireResource("list", "update", "listid"), async (req, res) => {
+router.post("/add", needLogin, requireResource("list", "update", "listid", { allowDelegation: true }), async (req, res) => {
     try {
         const {listid, projectid} = req.body;
 
@@ -139,18 +148,18 @@ router.post("/add", needLogin, requireResource("list", "update", "listid"), asyn
                 .send({status: "error", message: "列表ID和项目ID不能为空"});
         }
 
-        const list = await addProjectToList(res.locals.userid, listid, projectid);
+        const list = await addProjectToList(res.locals.userid, listid, projectid, resourceAuthorizationContext(req, res));
         res
             .status(200)
             .send({status: "success", message: "添加成功", data: list});
     } catch (err) {
         logger.error("Error adding project to list:", err);
-        res.status(500).send({status: "error", message: "添加项目到列表时出错"});
+        res.status(err.statusCode || err.status || 500).send({status: "error", code: err.code, message: err.statusCode || err.status ? err.message : "添加项目到列表时出错"});
     }
 });
 
 // Remove a project from a list
-router.post("/remove", needLogin, requireResource("list", "update", "listid"), async (req, res) => {
+router.post("/remove", needLogin, requireResource("list", "update", "listid", { allowDelegation: true }), async (req, res) => {
     try {
         const {listid, projectid} = req.body;
 
@@ -163,7 +172,8 @@ router.post("/remove", needLogin, requireResource("list", "update", "listid"), a
         const list = await removeProjectFromList(
             res.locals.userid,
             listid,
-            projectid
+            projectid,
+            resourceAuthorizationContext(req, res)
         );
         res
             .status(200)
@@ -171,21 +181,21 @@ router.post("/remove", needLogin, requireResource("list", "update", "listid"), a
     } catch (err) {
         logger.error("Error removing project from list:", err);
         res
-            .status(500)
-            .send({status: "error", message: "从列表中删除项目时出错"});
+            .status(err.statusCode || err.status || 500)
+            .send({status: "error", code: err.code, message: err.statusCode || err.status ? err.message : "从列表中删除项目时出错"});
     }
 });
 
 // Update list details
-router.post("/update/:id", needLogin, requireResource("list", "update", "id"), async (req, res) => {
+router.post("/update/:id", needLogin, requireResource("list", "update", "id", { allowDelegation: true }), async (req, res) => {
     try {
-        const list = await updateList(res.locals.userid, req.params.id, req.body);
+        const list = await updateList(res.locals.userid, req.params.id, req.body, resourceAuthorizationContext(req, res));
         res
             .status(200)
             .send({status: "success", message: "修改成功", data: list});
     } catch (err) {
         logger.error("Error updating list:", err);
-        res.status(500).send({status: "error", message: "修改列表时出错"});
+        res.status(err.statusCode || err.status || 500).send({status: "error", code: err.code, message: err.statusCode || err.status ? err.message : "修改列表时出错"});
     }
 });
 

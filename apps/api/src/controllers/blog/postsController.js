@@ -1,6 +1,24 @@
 import {prisma} from "../../services/prisma.js";
 import { createHash } from "crypto";
-import { projectSelectionFields } from "../projects.js";
+import { projectSelectionFields, sanitizeProjectAuthors } from "../projects.js";
+import { visibleWhere, canViewContent, sanitizePublicUser, assertCanWrite } from "../../services/moderation/visibility.js";
+import { authorizeResourceOperation, resourceAuthorizationContext } from "../../services/auth/resourceOperation.js";
+
+async function ensureBlogOwner(req, res, action) {
+  const actorId = Number(res.locals.userid);
+  const decision = await authorizeResourceOperation(actorId, "blog", req.params.id, action, resourceAuthorizationContext(req, res));
+  await assertCanWrite(actorId, "blog", action);
+  await assertCanWrite(actorId, "projects", action);
+  if (decision.principalId !== actorId) {
+    await assertCanWrite(decision.principalId, "blog", action);
+    await assertCanWrite(decision.principalId, "projects", action);
+  }
+  return prisma.ow_projects.findFirst({
+    where: { id: Number(req.params.id), type: "article",
+      ...(decision.delegationId != null ? { authorid: decision.principalId } : {}),
+      AND: [await visibleWhere("project", actorId, { ignorePrivacy: true })] },
+  });
+}
 
 const MAX_PROJECT_NAME_LENGTH = 128;
 const ASSET_HASH_PATTERN = /^[a-f0-9]{32}$/i;
@@ -70,7 +88,8 @@ export const getPosts = async (req, res) => {
 
   const where = {
     type: "article",
-    state: "public"
+    state: "public",
+    AND: [await visibleWhere("project", res.locals.userid)],
   };
 
   if (author) {
@@ -122,9 +141,10 @@ export const getPosts = async (req, res) => {
       return acc;
     }, {});
 
-    posts.forEach(p => {
+    await Promise.all(posts.map(async p => {
       p.blogConfig = configMap[String(p.id)] || {};
-    });
+      p.author = await sanitizePublicUser(p.author, res.locals.userid);
+    }));
 
     const total = await prisma.ow_projects.count({ where });
 
@@ -229,7 +249,13 @@ export const getPostDetail = async (req, res) => {
       }
     }
 
-    if (!post) {
+    let decision;
+    if (req.headers?.["x-zerocat-delegation"] !== undefined || (post && post.state !== "public")) {
+      decision = await authorizeResourceOperation(res.locals.userid, "blog", post?.id || idStr, "read", resourceAuthorizationContext(req, res));
+    }
+    if (!post || !await canViewContent("project", post, res.locals.userid, { ignorePrivacy: true }) ||
+        (post.state !== "public" && (!decision?.allowed || decision.delegationId != null)
+          && post.authorid !== (decision?.principalId ?? Number(res.locals.userid)))) {
       return res.status(404).json({ status: "error", message: "文章不存在" });
     }
 
@@ -269,10 +295,12 @@ export const getPostDetail = async (req, res) => {
     }
 
     post.blogConfig = configObj;
+    post.author = await sanitizePublicUser(post.author, res.locals.userid);
+    for (const key of ["is_shadowbanned", "shadowban_expires_at", "shadowban_by", "shadowban_reason", "deleted_at", "deleted_by", "deletion_source", "deletion_reason"]) delete post[key];
     res.json({ status: "success", data: post });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ status: "error", message: "查询文章详情失败" });
+    res.status(err.statusCode || err.status || 500).json({ status: "error", code: err.code, message: err.statusCode || err.status ? err.message : "查询文章详情失败" });
   }
 };
 
@@ -280,12 +308,9 @@ export const updatePostMeta = async (req, res) => {
   const { id } = req.params;
   const { title, summary, state, cover, slug, seo, tags } = req.body;
   const projectId = Number(id);
-  const userId = Number(res.locals.userid);
 
   try {
-    const post = await prisma.ow_projects.findFirst({
-      where: { id: projectId, authorid: userId }
-    });
+    const post = await ensureBlogOwner(req, res, "update");
     if (!post) return res.status(403).json({ status: "error", message: "无权修改或文章不存在" });
 
     const toUpdate = {};
@@ -375,18 +400,15 @@ export const updatePostMeta = async (req, res) => {
     res.json({ status: "success", message: "元数据已更新" });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ status: "error", message: "修改元数据失败" });
+    res.status(err.statusCode || err.status || 500).json({ status: "error", code: err.code, message: err.statusCode || err.status ? err.message : "修改元数据失败" });
   }
 };
 
 export const unpublishPost = async (req, res) => {
   const { id } = req.params;
   const projectId = Number(id);
-  const userId = Number(res.locals.userid);
   try {
-    const post = await prisma.ow_projects.findFirst({
-      where: { id: projectId, authorid: userId }
-    });
+    const post = await ensureBlogOwner(req, res, "update");
     if (!post) return res.status(403).json({ status: "error", message: "无权修改或文章不存在" });
 
     await prisma.ow_projects.update({
@@ -397,7 +419,7 @@ export const unpublishPost = async (req, res) => {
     res.json({ status: "success", message: "已下架此文章" });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ status: "error", message: "下架文章失败" });
+    res.status(err.statusCode || err.status || 500).json({ status: "error", code: err.code, message: err.statusCode || err.status ? err.message : "下架文章失败" });
   }
 };
 
@@ -405,6 +427,8 @@ export const createPost = async (req, res) => {
   try {
     const { title, summary, state, cover, slug, seo } = req.body || {};
     const userId = Number(res.locals.userid);
+    await assertCanWrite(userId, "blog", "create");
+    await assertCanWrite(userId, "projects", "create");
 
     const preferredName = toSafeProjectName(slug || title || "untitled-post");
     const projectName = await ensureUniqueProjectName(userId, preferredName);
@@ -516,16 +540,16 @@ export const createPost = async (req, res) => {
 
 export const getRelatedPosts = async (req, res) => {
   try {
-     const post = await prisma.ow_projects.findUnique({where: {id: req.params.id}});
+     const post = await prisma.ow_projects.findFirst({where: {id: Number(req.params.id), AND: [await visibleWhere("project", res.locals.userid)], OR: [{ state: "public" }, ...(res.locals.userid ? [{ authorid: Number(res.locals.userid) }] : [])]}});
      if (!post) return res.status(404).json({status: "error"});
 
      const posts = await prisma.ow_projects.findMany({
-       where: { type: "article", state: "public", id: { not: post.id } },
+       where: { type: "article", state: "public", id: { not: post.id }, AND: [await visibleWhere("project", res.locals.userid)] },
        take: 5,
        orderBy: { time: "desc" },
        select: projectSelectionFields()
      });
-     res.json({ status: "success", data: posts });
+     res.json({ status: "success", data: await sanitizeProjectAuthors(posts, res.locals.userid) });
   } catch (err) {
      res.status(500).json({ status: "error", message: "Error" });
   }

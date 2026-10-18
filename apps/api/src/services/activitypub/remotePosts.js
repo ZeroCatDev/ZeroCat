@@ -6,6 +6,7 @@
 import axios from 'axios';
 import { prisma } from '../prisma.js';
 import logger from '../logger.js';
+import { visibleWhere } from '../moderation/visibility.js';
 import { AP_ACCEPT_TYPES, getInstanceDomain, getApEndpointBaseUrl } from './config.js';
 import { fetchRemoteActor, resolveWebFinger } from './federation.js';
 import { ensureProxyUser, findProxyUserByActorUrl, getRemoteUserInfo, REMOTE_USER_TYPE } from './remoteUser.js';
@@ -867,6 +868,7 @@ export async function handleIncomingDelete(objectId, remoteActor) {
 export async function getRemoteUserLocalPosts(proxyUserId, limit = 20, offset = 0) {
     return prisma.ow_posts.findMany({
         where: {
+            AND: [await visibleWhere('post')],
             author_id: proxyUserId,
             is_deleted: false,
         },

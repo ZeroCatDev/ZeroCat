@@ -73,7 +73,7 @@ const autoEmbeddedContextKey = ref(null);
 
 // Auth & Visibility
 const isLogin = computed(() => localuser.isLogin.value);
-const floatingVisible = computed(() => isLogin.value && !shouldHide.value);
+const floatingVisible = computed(() => isLogin.value && !shouldHide.value && !localuser.isReadonly('posts'));
 
 // Context computed
 const contextIcon = computed(() => {

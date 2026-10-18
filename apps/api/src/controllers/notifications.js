@@ -10,6 +10,54 @@ import { sendEmail } from "../services/email/emailService.js";
 import zcconfig from "../services/config/zcconfig.js";
 import { sendPushNotificationToUser } from "../services/pushNotification.js";
 import emailTemplateService from "../services/email/emailTemplateService.js";
+import { canViewContent, assertCanWrite } from "../services/moderation/visibility.js";
+
+async function notificationIsVisible(notification, viewerId = null) {
+    const actorId = notification.actor_id ?? notification.actorId;
+    if (actorId && !await canViewContent('activity', { actor_id: Number(actorId) }, viewerId)) return false;
+    if (actorId && !await canViewContent('profile', { id: Number(actorId) }, viewerId)) return false;
+    let kind = String(notification.target_type ?? notification.targetType ?? '').toLowerCase();
+    if (kind === 'user') kind = 'profile';
+    if (kind === 'comment' && notification.data?.spaceCuid) kind = 'comment_service';
+    const targetId = notification.target_id ?? notification.targetId;
+    if (targetId && ['profile', 'post', 'project', 'comment', 'comment_service', 'list'].includes(kind)) {
+        const models = { profile: 'ow_users', post: 'ow_posts', project: 'ow_projects', comment: 'ow_comment', comment_service: 'ow_comment_service', list: 'ow_projects_lists' };
+        const target = await prisma[models[kind]].findUnique({ where: { id: Number(targetId) } });
+        if (!target || !await canViewContent(kind, target, viewerId)) return false;
+        if (kind === 'comment' && ['project', 'post'].includes(target.page_type)) {
+            const parentModel = target.page_type === 'project' ? 'ow_projects' : 'ow_posts';
+            const parent = await prisma[parentModel].findUnique({ where: { id: Number(target.page_id) || 0 } });
+            if (!await canViewContent(target.page_type, parent, viewerId)) return false;
+        }
+    }
+    return true;
+}
+
+export async function notificationCanSend(notification, viewerId) {
+    if (!await notificationIsVisible(notification, viewerId)) return false;
+    const actorId = notification.actor_id ?? notification.actorId;
+    if (actorId) {
+        const type = String(notification.target_type ?? notification.targetType ?? '').toLowerCase();
+        const category = { post: 'posts', project: 'projects', user: 'relations', comment: 'comments', comment_service: 'comments' }[type] || 'activity';
+        try { await assertCanWrite(Number(actorId), category, 'sync'); }
+        catch (error) {
+            if (error.statusCode === 403 || error.status === 403) return false;
+            throw error;
+        }
+    }
+    return true;
+}
+
+async function sanitizeNotification(notification, viewerId) {
+    if (await notificationIsVisible(notification, viewerId)) {
+        if (notification.actor_id && notification.target_type) {
+            // 社区通知只保留当前可见的入口，历史正文/资料快照不作为可信公开数据。
+            return { ...notification, title: '社区通知', content: '你关注的内容有更新', metadata: {}, data: {} };
+        }
+        return notification;
+    }
+    return { ...notification, title: '内容不可用', content: '', link: null, metadata: {}, data: {}, actor_id: null, actor: null, target_type: null, target_id: null };
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -153,6 +201,7 @@ function generateTargetLink(targetType, targetId) {
 async function executeMultiChannelPush(pushData) {
     const { notification, userId, title, content, link, template, pushChannels, notificationData } = pushData;
     const pushResults = {};
+    if (!await notificationCanSend(notificationData, userId)) return { skipped: true, reason: 'content_unavailable' };
     let hasError = false;
 
     // 遍历所有推送渠道
@@ -223,7 +272,7 @@ async function executeMultiChannelPush(pushData) {
                         });
 
                         const { sendEmail } = await import('../services/email/emailService.js');
-                        await sendEmail(email_to, rendered.subject, rendered.html);
+                        await sendEmail(email_to, rendered.subject, rendered.html, { notificationId: notification.id });
 
                         result = {
                             success: true,
@@ -335,7 +384,7 @@ async function sendEmailNotificationDirect(emailData) {
     });
 
     // 发送邮件
-    await sendEmail(user.email, rendered.subject, rendered.html);
+    await sendEmail(user.email, rendered.subject, rendered.html, { notificationId });
 
     return {
         success: true,
@@ -494,6 +543,7 @@ async function shouldSendNotification({ userId, notificationRequirement, actorId
  */
 export async function createNotification(notificationData) {
     try {
+        if (!await notificationCanSend(notificationData, notificationData.userId)) return null;
         const notificationType = notificationData.notificationType
             ? String(notificationData.notificationType)
             : 'custom_notification';
@@ -666,8 +716,8 @@ export async function getUserNotifications(options) {
         const totalCount = await prisma.ow_notifications.count({
             where: whereConditions,
         });
-        //logger.debug(notifications);
-        const formattedNotifications = notifications.map((notification) => ({
+        const safeNotifications = await Promise.all(notifications.map(notification => sanitizeNotification(notification, userId)));
+        const formattedNotifications = safeNotifications.map((notification) => ({
             id: Number(notification.id),
             title: notification.title,
             content: notification.content,
@@ -868,6 +918,7 @@ export async function sendEnhancedNotification(notificationData) {
             notificationRequirement = 'BASIC',
             metadata = {}
         } = notificationData;
+        if (!await notificationCanSend(notificationData, userId)) return { skipped: true, reason: 'content_unavailable' };
 
         // 处理特殊的 link 类型
         let finalLink = link;
@@ -939,6 +990,7 @@ export async function sendNotification(notificationData) {
             notificationRequirement = 'BASIC',
             metadata = {}
         } = notificationData;
+        if (!await notificationCanSend(notificationData, userId)) return { skipped: true, reason: 'content_unavailable' };
 
         // 处理特殊的 link 类型
         let finalLink = link;
@@ -965,6 +1017,7 @@ export async function sendNotification(notificationData) {
                 skipPush: true // 手动发送推送通知以获得更好的控制
             });
             result.browser = browserNotification;
+            if (!browserNotification) return result;
 
             // 同时发送推送通知
             try {
@@ -983,13 +1036,17 @@ export async function sendNotification(notificationData) {
 
         // 发送邮件通知
         if (channel === 'email') {
-            // 这里将在后面实现邮件通知发送
+            const notification = await createNotification({
+                ...notificationData, notificationType: 'custom_notification',
+                link: finalLink, pushChannels: [], skipPush: true,
+            });
+            if (!notification) return result;
             result.email = await sendEmailNotification({
                 userId,
                 title,
                 content,
                 link: finalLink,
-                notificationId: result.browser?.id
+                notificationId: notification.id
             });
         }
 
@@ -1069,7 +1126,7 @@ async function sendEmailNotification(emailData) {
 </body>
 </html>`;
 
-        await sendEmail(user.email, title, emailHtml);
+        await sendEmail(user.email, title, emailHtml, { notificationId });
 
         return {
             success: true,

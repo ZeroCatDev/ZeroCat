@@ -1,8 +1,8 @@
 import zcconfig from "../services/config/zcconfig.js";
 import logger from "../services/logger.js";
 import { verifyToken } from "../services/auth/tokenService.js";
-import { scopeSatisfies } from "../services/auth/scopes.js";
-import { assignRoleToUser, SYSTEM_ROLE_KEYS, userSatisfiesPolicy } from "../services/auth/policyEngine.js";
+import { authorize } from "../services/auth/authorization.js";
+import { userSatisfiesPolicy } from "../services/auth/policyEngine.js";
 import { extractTokenFromRequest } from "../middleware.js";
 
 /**
@@ -126,18 +126,7 @@ export const needAdmin = async (req, res, next) => {
     }
 
     try {
-        let isAdmin = await userSatisfiesPolicy(res.locals.userid, "admin:manage");
-
-        if (!isAdmin) {
-            const adminUsers = await zcconfig.get("security.adminusers");
-            const adminUserIds = Array.isArray(adminUsers) ? adminUsers.map(String) : [];
-            if (adminUserIds.includes(res.locals.userid.toString())) {
-                await assignRoleToUser(res.locals.userid, SYSTEM_ROLE_KEYS.ADMIN, {
-                    reason: "system-config-admin",
-                });
-                isAdmin = await userSatisfiesPolicy(res.locals.userid, "admin:manage");
-            }
-        }
+        const isAdmin = await userSatisfiesPolicy(res.locals.userid, "admin:manage");
 
         if (!isAdmin) {
             return res.status(403).json({
@@ -147,15 +136,16 @@ export const needAdmin = async (req, res, next) => {
             });
         }
 
-        if (!scopeSatisfies(res.locals.scopes || [], "admin:manage")) {
-            return res.status(403).json({
-                status: "error",
-                message: "管理员令牌权限不足",
-                code: "ZC_ERROR_INSUFFICIENT_SCOPE",
-                required: "admin:manage",
+        const decision = await authorize({
+            userId: res.locals.userid, requiredScope: "admin:manage",
+            tokenType: res.locals.tokenType, tokenScopes: res.locals.scopes || [],
+        });
+        if (!decision.allowed) {
+            return res.status(decision.status).json({
+                status: "error", message: decision.message, code: decision.code, required: decision.required,
             });
         }
-
+        res.locals.authorization = decision;
         next();
     } catch (err) {
         logger.error("验证管理员权限时出错:", err);

@@ -187,11 +187,11 @@ test("lists delete only their joins, not contained projects or other lists", asy
     assert.equal(data.ow_projects.length, 1);
 });
 
-test("comments use exact numeric/string authors and detach selected pid/rid independently without deleting others' replies", async () => {
+test("comments use verified account authors and preserve unverified imported identities and others' replies", async () => {
     const { db, data } = fixture({
         ow_comment: [{ id: 10, user_id: 1 }, { id: 11, user_id: 2, pid: 10, rid: 99, text: "keep reply" }, { id: 12, user_id: 2, pid: 99, rid: 10 }],
         ow_comment_service: [
-            { id: 20, space_id: 5, user_id: "1" },
+            { id: 20, space_id: 5, user_id: "1", account_user_id: 1 },
             { id: 21, space_id: 5, user_id: "2", pid: "20", rid: "99", comment: "keep" },
             { id: 22, space_id: 5, user_id: "01", pid: "99", rid: "20" },
             { id: 23, space_id: 5, user_id: null, mail: "same@example.com" },
@@ -333,7 +333,7 @@ test("preview has exact UI category contract and secondary OAuth/visitor impact 
     const { db, calls } = fixture({
         ow_posts: [post(1, 1, { is_deleted: true })],
         ow_comment_spaces: [{ id: 5, owner_id: 1 }],
-        ow_comment_service: [{ id: 1, space_id: 5, user_id: "1" }, { id: 2, space_id: 5, user_id: "2" }, { id: 3, space_id: 5, user_id: null }],
+        ow_comment_service: [{ id: 1, space_id: 5, user_id: "1", account_user_id: 1 }, { id: 2, space_id: 5, user_id: "2" }, { id: 3, space_id: 5, user_id: null }],
         ow_tokens: [{ id: 1, user_id: 1, token_hash: "secret-own" }, { id: 2, user_id: 2, application_id: 10, token_hash: "secret-other" }],
         ow_oauth_applications: [{ id: 10, owner_id: 1, client_secret: "secret-app" }],
         ow_oauth_authorizations: [{ id: 1, user_id: 2, application_id: 10, code: "secret-code" }],

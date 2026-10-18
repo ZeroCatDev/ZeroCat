@@ -5,6 +5,8 @@
  */
 
 import axios from 'axios';
+import { prisma } from '../prisma.js';
+import { assertCanWrite, visibleWhere } from '../moderation/visibility.js';
 import logger from '../logger.js';
 import { AP_CONTENT_TYPE } from './config.js';
 import { signRequest, digestBody } from './httpSignature.js';
@@ -27,6 +29,17 @@ import { getSharedInboxUrl, fetchRemoteActor } from './federation.js';
  */
 export async function deliverActivity({ inbox, activity, userId, username, skipDedup = false, deliveredInboxes = null }) {
     try {
+        const activityType = activity?.type === 'Undo' ? activity.object?.type : activity?.type;
+        const category = ['Follow', 'Accept', 'Reject'].includes(activityType) ? 'relations' : 'posts';
+        await assertCanWrite(Number(userId), category, 'sync');
+        const ownerVisible = await prisma.ow_users.findFirst({ where: { id: Number(userId), AND: [await visibleWhere('profile')] }, select: { id: true } });
+        if (!ownerVisible) return false;
+        const objectId = typeof activity?.object === 'string' ? activity.object : activity?.object?.id;
+        const noteMatch = String(objectId || '').match(/\/ap\/notes\/(\d+)$/);
+        if (noteMatch && activity?.type !== 'Delete') {
+            const post = await prisma.ow_posts.findFirst({ where: { id: Number(noteMatch[1]), AND: [await visibleWhere('post')] } });
+            if (!post) return false;
+        }
         // ── 内存级去重（同一轮投递内跨 deliverToFollowers 调用共享） ──
         if (deliveredInboxes) {
             const domain = extractDomain(inbox);

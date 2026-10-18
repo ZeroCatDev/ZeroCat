@@ -8,6 +8,7 @@ import express from 'express';
 import logger from '../services/logger.js';
 import { prisma } from '../services/prisma.js';
 import zcconfig from '../services/config/zcconfig.js';
+import { visibleWhere, canViewContent } from '../services/moderation/visibility.js';
 import {
     AP_CONTENT_TYPE, AP_CONTEXT,
     getInstanceDomain, getInstanceBaseUrl, getApEndpointBaseUrl, getStaticUrl,
@@ -168,8 +169,8 @@ router.get('/nodeinfo', async (req, res) => {
 router.get('/nodeinfo/2.0', async (req, res) => {
     try {
         const [userCount, postCount, adminUser] = await Promise.all([
-            prisma.ow_users.count({ where: { status: 'active' } }),
-            prisma.ow_posts.count({ where: { is_deleted: false } }),
+            prisma.ow_users.count({ where: { status: 'active', AND: [await visibleWhere('profile')] } }),
+            prisma.ow_posts.count({ where: { is_deleted: false, AND: [await visibleWhere('post')] } }),
             prisma.ow_users.findUnique({
                 where: { id: 1 },
                 select: { id: true, username: true, display_name: true, email: true },
@@ -264,7 +265,7 @@ router.get('/users/:username', requireFederation, async (req, res) => {
         const actor = await buildActorObject(user);
 
         res.set('Content-Type', AP_CONTENT_TYPE);
-        res.set('Cache-Control', 'max-age=300');
+        res.set('Cache-Control', 'no-store');
         return res.json(actor);
     } catch (err) {
         logger.error('[ap-route] Actor 错误:', err);
@@ -372,7 +373,7 @@ router.get('/users/:username/outbox', requireFederation, async (req, res) => {
         }
 
         res.set('Content-Type', AP_CONTENT_TYPE);
-        res.set('Cache-Control', 'max-age=60');
+        res.set('Cache-Control', 'no-store');
         return res.json(outbox);
     } catch (err) {
         logger.error('[ap-route] 发件箱错误:', err);
@@ -399,6 +400,7 @@ router.get('/users/:username/followers', requireFederation, async (req, res) => 
             where: {
                 target_user_id: user.id,
                 relationship_type: 'follow',
+                AND: [await visibleWhere('relation'), { source_user: await visibleWhere('profile') }],
             },
         });
 
@@ -423,6 +425,7 @@ router.get('/users/:username/followers', requireFederation, async (req, res) => 
             where: {
                 target_user_id: user.id,
                 relationship_type: 'follow',
+                AND: [await visibleWhere('relation'), { source_user: await visibleWhere('profile') }],
             },
             include: {
                 source_user: { select: { username: true } },
@@ -482,6 +485,7 @@ router.get('/users/:username/following', requireFederation, async (req, res) => 
             where: {
                 source_user_id: user.id,
                 relationship_type: 'follow',
+                AND: [await visibleWhere('relation'), { target_user: await visibleWhere('profile') }],
             },
         });
 
@@ -499,6 +503,7 @@ router.get('/users/:username/following', requireFederation, async (req, res) => 
             where: {
                 source_user_id: user.id,
                 relationship_type: 'follow',
+                AND: [await visibleWhere('relation'), { target_user: await visibleWhere('profile') }],
             },
             include: {
                 target_user: { select: { username: true } },
@@ -545,7 +550,7 @@ router.get('/notes/:postId', async (req, res) => {
             },
         });
 
-        if (!post || post.is_deleted) {
+        if (!post || post.is_deleted || !await canViewContent('post', post, null)) {
             // AP 规范要求返回 Tombstone
             if (isApRequest(req)) {
                 res.set('Content-Type', AP_CONTENT_TYPE);
@@ -571,7 +576,7 @@ router.get('/notes/:postId', async (req, res) => {
         }
 
         res.set('Content-Type', AP_CONTENT_TYPE);
-        res.set('Cache-Control', 'max-age=300');
+        res.set('Cache-Control', 'no-store');
         return res.json(note);
     } catch (err) {
         logger.error('[ap-route] 笔记错误:', err);
@@ -844,7 +849,7 @@ router.get('/admin/federation/stats', requireAdmin, async (req, res) => {
             prisma.ow_target_configs.count({ where: { target_type: 'ap_follow' } }),
             prisma.ow_target_configs.count({ where: { target_type: 'ap_actor' } }),
             prisma.ow_posts.count({ where: { is_deleted: false, platform_refs: { not: null } } }),
-            prisma.ow_posts.count({ where: { is_deleted: false } }),
+            prisma.ow_posts.count({ where: { is_deleted: false, AND: [await visibleWhere('post')] } }),
             prisma.ow_target_configs.count({ where: { target_type: 'ap_delivery' } }),
         ]);
 
@@ -1150,7 +1155,7 @@ router.post('/admin/federation/posts/:postId/resync', requireAdmin, async (req, 
             where: { id: postId },
             select: { id: true, author_id: true, is_deleted: true },
         });
-        if (!post || post.is_deleted) return res.status(404).json({ error: 'Post not found' });
+        if (!post || post.is_deleted || !await canViewContent('post', post, null)) return res.status(404).json({ error: 'Post not found' });
 
         const results = {};
 
@@ -1181,7 +1186,7 @@ router.post('/admin/federation/posts/:postId/push-ap', requireAdmin, async (req,
             where: { id: postId },
             include: { author: { select: { id: true, username: true, display_name: true } } },
         });
-        if (!post || post.is_deleted) return res.status(404).json({ error: 'Post not found' });
+        if (!post || post.is_deleted || !await canViewContent('post', post, null)) return res.status(404).json({ error: 'Post not found' });
 
         const { postToNote, buildCreateActivity, getActorUrl, setPostApRef } = await import('../services/activitypub/index.js');
         const note = await postToNote(post);
@@ -1664,7 +1669,7 @@ router.get('/card/project/:id', async (req, res) => {
             },
         });
 
-        if (!project || project.state === 'private') {
+        if (!project || project.state !== 'public' || !await canViewContent('project', project, null)) {
             return res.status(404).send('Not found');
         }
 
@@ -1688,7 +1693,7 @@ router.get('/card/project/:id', async (req, res) => {
         const projectUrl = `${baseUrl}/${encodeURIComponent(authorName)}/${encodeURIComponent(project.name)}`;
 
         res.set('Content-Type', 'text/html; charset=utf-8');
-        res.set('Cache-Control', 'max-age=3600');
+        res.set('Cache-Control', 'no-store');
         return res.send(renderOgPage({
             title,
             description,
@@ -1717,7 +1722,7 @@ router.get('/card/user/:id', async (req, res) => {
             select: { id: true, username: true, display_name: true, bio: true, avatar: true },
         });
 
-        if (!user) return res.status(404).send('Not found');
+        if (!user || !await canViewContent('profile', user, null)) return res.status(404).send('Not found');
 
         const staticUrl = await getStaticUrl();
         const apBaseUrl = await getApEndpointBaseUrl();
@@ -1736,7 +1741,7 @@ router.get('/card/user/:id', async (req, res) => {
         const userUrl = `${baseUrl}/${user.username}`;
 
         res.set('Content-Type', 'text/html; charset=utf-8');
-        res.set('Cache-Control', 'max-age=3600');
+        res.set('Cache-Control', 'no-store');
         return res.send(renderOgPage({
             title,
             description,
@@ -1768,7 +1773,7 @@ router.get('/card/list/:id', async (req, res) => {
             },
         });
 
-        if (!list || list.state === 'private') {
+        if (!list || list.state !== 'public' || !await canViewContent('list', list, null)) {
             return res.status(404).send('Not found');
         }
 
@@ -1784,7 +1789,7 @@ router.get('/card/list/:id', async (req, res) => {
         const listUrl = `${baseUrl}/app/projectlist/${list.id}`;
 
         res.set('Content-Type', 'text/html; charset=utf-8');
-        res.set('Cache-Control', 'max-age=3600');
+        res.set('Cache-Control', 'no-store');
         return res.send(renderOgPage({
             title,
             description,

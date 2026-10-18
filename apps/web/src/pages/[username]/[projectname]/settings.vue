@@ -1,5 +1,6 @@
 <template>
   <v-container>
+    <v-form :disabled="localuser.isReadonly(project.type === 'article' ? 'blog' : 'projects')">
     <v-row>
       <v-col cols="12"><h1>常规</h1></v-col>
       <v-col cols="7">
@@ -13,6 +14,7 @@
           <template v-slot:append>
             <v-btn
               color="primary"
+              :disabled="localuser.isReadonly(project.type === 'article' ? 'blog' : 'projects')"
               text="修改名称"
               variant="tonal"
               @click="renameProject"
@@ -84,6 +86,7 @@
           <v-btn text="取消" variant="plain" @click="cancel"></v-btn>
           <v-btn
             color="primary"
+            :disabled="localuser.isReadonly(project.type === 'article' ? 'blog' : 'projects')"
             text="保存"
             variant="tonal"
             @click="saveProject"
@@ -102,7 +105,7 @@
         ></v-file-input>
         <v-img v-if="thumbnail" :src="thumbnail" max-width="200"></v-img>
         <v-btn
-          :disabled="!thumbnail"
+          :disabled="!thumbnail || localuser.isReadonly(project.type === 'article' ? 'blog' : 'projects')"
           color="primary"
           text="上传封面"
           variant="tonal"
@@ -183,10 +186,11 @@
       <v-col cols="12">
         <v-card>
           <v-list>
-            <v-list-item subtitle="删除此项目后无法恢复。" title="删除此项目">
+            <v-list-item subtitle="移入回收站，保留项目历史与关联数据，可在账号设置中恢复。" title="删除此项目">
               <template v-slot:append>
                 <v-btn
                   color="error"
+                  :disabled="localuser.isReadonly(project.type === 'article' ? 'blog' : 'projects')"
                   text="删除此项目"
                   variant="tonal"
                   @click="confirmDelete = true"
@@ -200,6 +204,7 @@
               <template v-slot:append>
                 <v-btn
                   color="error"
+                  :disabled="localuser.isReadonly(project.type === 'article' ? 'blog' : 'projects')"
                   text="更改项目可见性"
                   variant="tonal"
                   @click="changeVisibility = true"
@@ -210,6 +215,9 @@
         </v-card>
       </v-col>
     </v-row>
+    </v-form>
+    <ContentModerationAction kind="project" :content-id="projectID" />
+    <v-btn to="/app/account/recycle-bin" variant="text" prepend-icon="mdi-delete-restore">我的回收站</v-btn>
     <v-expansion-panels>
       <v-expansion-panel>
         <v-expansion-panel-title>详细数据</v-expansion-panel-title>
@@ -223,13 +231,13 @@
       <v-card>
         <v-card-title class="headline">删除 {{ project.title }}</v-card-title>
         <v-card-text
-          >你确定要删除这个项目吗？此操作无法撤销。<br />这将永久删除
-          {{ project.title }}
-          项目、推送、Star、评论、和其他所有数据，移除Fork对此项目的关联（但不会删除Fork）。<br />要确认，请在下面的框中输入提示的小字以确认您的操作。
+          >你确定要将此项目移入回收站吗？<br />
+          {{ project.title }} 将从公开页面和搜索中隐藏，项目历史及关联数据会保留。
+          你可以在账号设置的回收站中恢复。<br />要确认，请在下面的框中输入项目路径。
           <br /><br />
           <v-text-field
             v-model="confirmDeleteText"
-            :label="`${localuser.user.username}/${project.name}`"
+            :label="`${localuser.user.value.username}/${project.name}`"
             variant="outlined"
           ></v-text-field>
         </v-card-text>
@@ -247,7 +255,7 @@
           </v-btn>
           <v-btn
             :disabled="
-              confirmDeleteText !== `${localuser.user.username}/${project.name}`
+              confirmDeleteText !== `${localuser.user.value.username}/${project.name}`
             "
             color="error"
             text
@@ -276,11 +284,11 @@
             您的操作历史记录和日志将对所有人可见。
           </v-if>
           <br /><br />
-          要确认，请在下面的框中输入 <code>{{localuser.user.username}}/{{project.name}}</code> 以确认您的操作。
+          要确认，请在下面的框中输入 <code>{{localuser.user.value.username}}/{{project.name}}</code> 以确认您的操作。
           <br /><br />
           <v-text-field
             v-model="changeVisibilityText"
-            :label="`${localuser.user.username}/${project.name}`"
+            :label="`${localuser.user.value.username}/${project.name}`"
             variant="outlined"
           ></v-text-field>
         </v-card-text>
@@ -293,7 +301,7 @@
           <v-btn
             :disabled="
               changeVisibilityText !==
-              `${localuser.user.username}/${project.name}`
+              `${localuser.user.value.username}/${project.name}`
             "
             color="error"
             text
@@ -316,6 +324,7 @@ import LanguageSelector from "@/components/LanguageSelector.vue";
 import GitSyncManager from "@/components/GitSyncManager.vue";
 import ProjectCollaborators from "@/components/project/ProjectCollaborators.vue";
 import { useSudoManager } from "@/composables/useSudoManager";
+import ContentModerationAction from '@/components/admin/ContentModerationAction.vue';
 
 export default {
   components: {
@@ -323,6 +332,7 @@ export default {
     LanguageSelector,
     GitSyncManager,
     ProjectCollaborators,
+    ContentModerationAction,
   },
   data() {
     return {
@@ -455,6 +465,7 @@ export default {
       }
     },
     async updateCloudConfig() {
+      if (localuser.isReadonly(this.project.type === 'article' ? 'blog' : 'projects')) return;
       if (!this.projectID) return;
       this.cloudConfigLoading = true;
       try {
@@ -487,10 +498,11 @@ export default {
       }
     },
     async deleteProject() {
+      if (localuser.isReadonly(this.project.type === 'article' ? 'blog' : 'projects')) return;
       try {
         const sudoToken = await this.sudoManager.requireSudo({
           title: "删除项目",
-          subtitle: `您正在尝试删除项目 ${this.project.name}。此操作不可逆，请输入密码以确认。`,
+          subtitle: `您正在将项目 ${this.project.name} 移入回收站，请验证身份以确认。`,
           persistent: true,
         });
 
@@ -519,6 +531,7 @@ export default {
       }
     },
     async saveProject() {
+      if (localuser.isReadonly(this.project.type === 'article' ? 'blog' : 'projects')) return;
       this.project.tags = this.tags.chips.map((name) => name);
       try {
         const response = (
@@ -552,6 +565,7 @@ export default {
       }
     },
     async renameProject() {
+      if (localuser.isReadonly(this.project.type === 'article' ? 'blog' : 'projects')) return;
       try {
         const response = (
           await request.put(`/project/rename/${this.projectID}`, {
@@ -575,6 +589,7 @@ export default {
       }
     },
     async changeProjectVisibility() {
+      if (localuser.isReadonly(this.project.type === 'article' ? 'blog' : 'projects')) return;
       try {
         // 请求sudo认证
         const sudoToken = await this.sudoManager.requireSudo({
@@ -627,6 +642,7 @@ export default {
       }
     },
     async uploadThumbnail() {
+      if (localuser.isReadonly(this.project.type === 'article' ? 'blog' : 'projects')) return;
       const formData = new FormData();
       formData.append(
         "file",
@@ -659,7 +675,7 @@ export default {
   computed: {
     isAuthor() {
       return (
-        Number(this.project?.authorid) === Number(localuser.user.value?.id)
+        !localuser.isReadonly(this.project.type === 'article' ? 'blog' : 'projects') && Number(this.project?.authorid) === Number(localuser.user.value?.id)
       );
     },
   },

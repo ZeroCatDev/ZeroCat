@@ -12,6 +12,17 @@ import { createOrgRepo, createUserRepo, getAuthenticatedUser, getContent, getRep
 import { addUserGitLink, findUserGitHubUserToken, findUserGitLink, getProjectGitSyncSettings, getProjectGitSyncState, getUserGitHubUserTokens, getUserGitLinks, removeUserGitHubUserToken, removeUserGitLink, setProjectGitSyncState, updateProjectGitSyncSettings, upsertUserGitHubUserToken } from '../services/gitSync/storage.js';
 import blogSyncService, { getBlogSettings, setBlogSettings, disableBlogSettings, getBlogState } from '../services/gitSync/blogSyncService.js';
 import queueManager from '../services/queue/queueManager.js';
+import { authorize } from '../services/auth/authorization.js';
+import { canViewContent } from '../services/moderation/visibility.js';
+import { ModerationError } from '../services/moderation/policy.js';
+
+const requestAuthorization = (res) => ({ tokenType: res.locals.tokenType, tokenScopes: res.locals.scopes || [] });
+async function assertGitCallbackAuthorized(stateData) {
+    const decision = await authorize({
+        actorId: stateData.userId, ...stateData.authorizationContext, requiredScope: 'git_sync:manage',
+    });
+    if (!decision.allowed) throw new ModerationError(decision.status, decision.code, decision.message);
+}
 
 const router = Router();
 
@@ -200,12 +211,12 @@ const listAllInstallationRepos = async (token) => {
     return repos;
 };
 
-const ensureProjectOwner = async (projectId, userId) => {
+const ensureProjectOwner = async (projectId, userId, res, action = 'read') => {
     const project = await prisma.ow_projects.findFirst({
         where: { id: Number(projectId) },
         select: { id: true, authorid: true, default_branch: true, type: true, name: true, title: true, state: true },
     });
-    if (!project) {
+    if (!project || !await canViewContent('project', project, userId)) {
         const error = new Error('项目不存在');
         error.status = 404;
         throw error;
@@ -214,6 +225,11 @@ const ensureProjectOwner = async (projectId, userId) => {
         const error = new Error('无权操作该项目');
         error.status = 403;
         throw error;
+    }
+    if (project.type === 'article') {
+        const decision = await authorize({ actorId: userId, ...requestAuthorization(res),
+            requiredScope: `blog:${project.id}:${action}`, action, category: 'blog' });
+        if (!decision.allowed) throw new ModerationError(decision.status, decision.code, decision.message);
     }
     return project;
 };
@@ -266,6 +282,7 @@ router.post('/github/app/install-url', needLogin, requireScope("git_sync:manage"
         const parsedAutoUserToken = parseBooleanInput(req.body?.autoUserToken);
         const stored = await redisClient.set(stateKey, {
             userId: res.locals.userid,
+            authorizationContext: requestAuthorization(res),
             createdAt: new Date().toISOString(),
             redirectUrl: redirectUrl || null,
             autoUserToken: parsedAutoUserToken === null ? false : parsedAutoUserToken,
@@ -298,6 +315,7 @@ router.post('/github/app/user-token-url', needLogin, requireScope("git_sync:mana
 
         const stored = await redisClient.set(stateKey, {
             userId: res.locals.userid,
+            authorizationContext: requestAuthorization(res),
             createdAt: new Date().toISOString(),
             redirectUrl: redirectUrl || null,
             linkId: link?.id || null,
@@ -337,6 +355,7 @@ router.get('/github/app/callback', gitSyncRateLimit, async (req, res, next) => {
             return res.status(400).send({ status: 'error', message: '安装状态已过期' });
         }
 
+        await assertGitCallbackAuthorized(stateData);
         const installation = await getInstallationInfo(installationId);
         const account = installation?.account || {};
         const link = await addUserGitLink(stateData.userId, {
@@ -369,6 +388,7 @@ router.get('/github/app/callback', gitSyncRateLimit, async (req, res, next) => {
                 const userTokenStateKey = `git-sync:github:user-token:state:${userTokenState}`;
                 const storedUserToken = await redisClient.set(userTokenStateKey, {
                     userId: stateData.userId,
+                    authorizationContext: stateData.authorizationContext,
                     createdAt: new Date().toISOString(),
                     redirectUrl: stateData.redirectUrl || null,
                     linkId: link?.id || null,
@@ -430,6 +450,7 @@ router.get('/github/app/user-token/callback', gitSyncRateLimit, async (req, res,
             return res.status(400).send({ status: 'error', message: '授权状态已过期' });
         }
 
+        await assertGitCallbackAuthorized(stateData);
         const tokenData = await exchangeUserToken(authCode);
         if (!tokenData?.access_token) {
             throw new Error('GitHub未返回有效的用户令牌');
@@ -951,7 +972,7 @@ router.post('/github/app/repos/create', needLogin, requireScope("git_sync:manage
 
 router.post('/projects/:projectId/provision', needLogin, requireResource("project", "update", "projectId"), requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
     try {
-        const project = await ensureProjectOwner(req.params.projectId, res.locals.userid);
+        const project = await ensureProjectOwner(req.params.projectId, res.locals.userid, res, req.method === 'GET' ? 'read' : 'update');
         const { linkId, name, description, private: isPrivate, branch, fileName, includeReadme } = req.body || {};
 
         const repoName = sanitizeRepoNameInput(name || project.name);
@@ -1068,7 +1089,7 @@ router.post('/projects/:projectId/provision', needLogin, requireResource("projec
 
 router.get('/projects/:projectId', needLogin, requireResource("project", "read", "projectId"), requireScope("git_sync:read"), gitSyncRateLimit, async (req, res, next) => {
     try {
-        const project = await ensureProjectOwner(req.params.projectId, res.locals.userid);
+        const project = await ensureProjectOwner(req.params.projectId, res.locals.userid, res, req.method === 'GET' ? 'read' : 'update');
         const settings = await getProjectGitSyncSettings(project.id);
         const state = await getProjectGitSyncState(project.id);
         res.status(200).send({
@@ -1088,7 +1109,7 @@ router.get('/projects/:projectId', needLogin, requireResource("project", "read",
 
 router.post('/projects/:projectId/bind', needLogin, requireResource("project", "update", "projectId"), requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
     try {
-        const project = await ensureProjectOwner(req.params.projectId, res.locals.userid);
+        const project = await ensureProjectOwner(req.params.projectId, res.locals.userid, res, req.method === 'GET' ? 'read' : 'update');
         const {
             linkId,
             repoOwner,
@@ -1158,7 +1179,7 @@ router.post('/projects/:projectId/bind', needLogin, requireResource("project", "
 
 router.post('/projects/:projectId/unbind', needLogin, requireResource("project", "update", "projectId"), requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
     try {
-        const project = await ensureProjectOwner(req.params.projectId, res.locals.userid);
+        const project = await ensureProjectOwner(req.params.projectId, res.locals.userid, res, req.method === 'GET' ? 'read' : 'update');
         const settings = await updateProjectGitSyncSettings(project.id, {
             enabled: false,
             disabledReason: 'manual_unbind',
@@ -1171,7 +1192,7 @@ router.post('/projects/:projectId/unbind', needLogin, requireResource("project",
 
 router.post('/projects/:projectId/sync', needLogin, requireResource("project", "update", "projectId"), requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
     try {
-        const project = await ensureProjectOwner(req.params.projectId, res.locals.userid);
+        const project = await ensureProjectOwner(req.params.projectId, res.locals.userid, res, req.method === 'GET' ? 'read' : 'update');
         const latestCommit = await prisma.ow_projects_commits.findFirst({
             where: { project_id: project.id },
             orderBy: { commit_date: 'desc' },
@@ -1185,6 +1206,7 @@ router.post('/projects/:projectId/sync', needLogin, requireResource("project", "
         const result = await queueManager.enqueueGitSyncCommit(project.id, latestCommit.id, {
             triggeredBy: 'manual',
             actorId: res.locals.userid,
+            authorizationContext: requestAuthorization(res),
         });
 
         res.status(200).send({ status: 'success', result });
@@ -1335,6 +1357,8 @@ router.post('/blog/resync', needLogin, requireScope("blog:update"), requireScope
             try {
                 const result = await queueManager.enqueueBlogSyncArticle(project.id, res.locals.userid, {
                     reason: 'manual-resync',
+                    actorId: res.locals.userid,
+                    authorizationContext: requestAuthorization(res),
                 });
                 queued.push({ projectId: project.id, queued: Boolean(result?.queued) });
             } catch (error) {
@@ -1347,14 +1371,16 @@ router.post('/blog/resync', needLogin, requireScope("blog:update"), requireScope
     }
 });
 
-router.post('/blog/sync/:projectId', needLogin, requireResource("blog", "update", "projectId"), requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
+router.post('/blog/sync/:projectId', needLogin, requireResource("project", "update", "projectId"), requireResource("blog", "update", "projectId"), requireScope("git_sync:manage"), gitSyncRateLimit, async (req, res, next) => {
     try {
-        const project = await ensureProjectOwner(req.params.projectId, res.locals.userid);
+        const project = await ensureProjectOwner(req.params.projectId, res.locals.userid, res, req.method === 'GET' ? 'read' : 'update');
         if (String(project.type || '').toLowerCase() !== 'article') {
             return res.status(400).send({ status: 'error', message: '仅支持 article 类型项目' });
         }
         const result = await queueManager.enqueueBlogSyncArticle(project.id, res.locals.userid, {
             reason: 'manual',
+            actorId: res.locals.userid,
+            authorizationContext: requestAuthorization(res),
         });
         res.status(200).send({ status: 'success', result });
     } catch (error) {

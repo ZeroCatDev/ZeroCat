@@ -1,10 +1,13 @@
 import {prisma} from '../../services/prisma.js';
 import express from 'express';
+import { softDeleteContent, restoreContent } from '../../services/moderation/lifecycle.js';
+import { assertCanWrite } from '../../services/moderation/restrictions.js';
+import { requireScope } from '../../middleware/scope.js';
 
 const router = express.Router();
 
 // Get projects with filtering, sorting and pagination
-router.get('/', async (req, res) => {
+router.get('/', requireScope('admin:hidden_content:read'), async (req, res) => {
     try {
         const {
             page = 1,
@@ -29,6 +32,8 @@ router.get('/', async (req, res) => {
         if (state) where.state = state;
         if (type) where.type = type;
         if (authorid) where.authorid = parseInt(authorid);
+        if (req.query.deleted === 'true') where.deleted_at = { not: null };
+        else if (req.query.deleted !== 'all') where.deleted_at = null;
 
         // Get total count for pagination
         const total = await prisma.ow_projects.count({where});
@@ -68,7 +73,7 @@ router.get('/', async (req, res) => {
 });
 
 // Get single project by ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireScope('admin:hidden_content:read'), async (req, res) => {
     try {
         const project = await prisma.ow_projects.findUnique({
             where: {id: parseInt(req.params.id)},
@@ -100,9 +105,10 @@ router.get('/:id', async (req, res) => {
 });
 
 // Update project
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireScope('admin:content:manage'), async (req, res) => {
     try {
         const projectId = parseInt(req.params.id);
+        await assertCanWrite(res.locals.userid, 'project', 'update');
         const updateData = req.body;
 
         // Remove id as it's the primary key and shouldn't be updated
@@ -155,6 +161,7 @@ router.put('/:id', async (req, res) => {
         res.json(updatedProject);
     } catch (error) {
         console.error('Error updating project:', error);
+        if (error.status) return res.status(error.status).json({error: error.message, code: error.code});
         if (error.code === 'P2025') {
             res.status(404).json({error: 'Project not found'});
         } else if (error.code === 'P2003') {
@@ -166,35 +173,20 @@ router.put('/:id', async (req, res) => {
 });
 
 // Delete project
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireScope('admin:content:manage'), async (req, res) => {
     try {
         const projectId = parseInt(req.params.id);
 
-        // First delete related records
-        await prisma.$transaction([
-            prisma.ow_projects_stars.deleteMany({
-                where: {projectid: projectId}
-            }),
-            prisma.ow_projects_list_items.deleteMany({
-                where: {projectid: projectId}
-            }),
-            prisma.ow_projects_commits.deleteMany({
-                where: {project_id: projectId}
-            }),
-            prisma.ow_projects_branch.deleteMany({
-                where: {projectid: projectId}
-            }),
-            prisma.ow_projects_tags.deleteMany({
-                where: {projectid: projectId}
-            }),
-            prisma.ow_projects.delete({
-                where: {id: projectId}
-            })
-        ]);
+        await softDeleteContent('project', projectId, res.locals.userid, {
+            administrative: true,
+            authorizationContext: { tokenType: res.locals.tokenType, tokenScopes: res.locals.scopes || [] },
+            reason: String(req.body?.reason || ''),
+        });
 
         res.json({message: 'Project deleted successfully'});
     } catch (error) {
         console.error('Error deleting project:', error);
+        if (error.status) return res.status(error.status).json({error: error.message, code: error.code});
         if (error.code === 'P2025') {
             res.status(404).json({error: 'Project not found'});
         } else {
@@ -203,8 +195,20 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
+router.post('/:id/restore', requireScope('admin:content:manage'), async (req, res) => {
+    try {
+        const project = await restoreContent('project', Number(req.params.id), res.locals.userid, {
+            administrative: true, reason: String(req.body?.reason || ''),
+            authorizationContext: { tokenType: res.locals.tokenType, tokenScopes: res.locals.scopes || [] },
+        });
+        res.json({ status: 'success', data: project });
+    } catch (error) {
+        res.status(error.status || 400).json({ error: error.message, code: error.code });
+    }
+});
+
 // Get project statistics
-router.get('/stats/overview', async (req, res) => {
+router.get('/stats/overview', requireScope('admin:hidden_content:read'), async (req, res) => {
     try {
         const stats = await prisma.$transaction([
             // Total projects count

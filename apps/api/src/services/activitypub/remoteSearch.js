@@ -10,6 +10,7 @@ import { resolveWebFinger } from './federation.js';
 import { ensureProxyUser, resolveAndEnsureProxyUser, searchProxyUsers, REMOTE_USER_TYPE } from './remoteUser.js';
 import { isActorAllowed, isRemoteSearchAllowed } from './federationConfig.js';
 import { prisma } from '../prisma.js';
+import { visibleWhere, sanitizePublicUser } from '../moderation/visibility.js';
 
 // 匹配 @user@domain 或 user@domain 格式
 const FEDI_ADDRESS_REGEX = /^@?([a-zA-Z0-9_.-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$/;
@@ -36,7 +37,7 @@ export function parseFediAddress(keyword) {
  * @returns {object} { users, remoteUser, isFediSearch }
  */
 export async function federatedUserSearch(keyword, options = {}) {
-    const { limit = 20, includeLocal = true, includeRemote = true } = options;
+    const { limit = 20, includeLocal = true, includeRemote = true, currentUserId = null } = options;
 
     const enabled = await isFederationEnabled();
     const fediAddr = parseFediAddress(keyword);
@@ -53,6 +54,7 @@ export async function federatedUserSearch(keyword, options = {}) {
     if (includeLocal) {
         const localUsers = await prisma.ow_users.findMany({
             where: {
+                AND: [await visibleWhere('profile', currentUserId)],
                 OR: [
                     { username: { contains: keyword.replace(/^@/, ''), mode: 'insensitive' } },
                     { display_name: { contains: keyword.replace(/^@/, ''), mode: 'insensitive' } },
@@ -82,7 +84,7 @@ export async function federatedUserSearch(keyword, options = {}) {
         }
     }
 
-    result.users = localResults.slice(0, limit);
+    result.users = (await Promise.all(localResults.map(user => sanitizePublicUser(user, currentUserId)))).filter(Boolean).slice(0, limit);
 
     // 如果是联邦地址格式，且联邦启用，同时尝试远程拉取
     if (fediAddr && enabled) {
@@ -110,7 +112,7 @@ export async function federatedUserSearch(keyword, options = {}) {
         try {
             // 尝试 WebFinger 解析
             const proxyUser = await resolveAndEnsureProxyUser(`${username}@${domain}`);
-            if (proxyUser) {
+            if (proxyUser && await sanitizePublicUser(proxyUser, currentUserId)) {
                 result.remoteUser = {
                     id: proxyUser.id,
                     username: proxyUser.username,

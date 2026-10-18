@@ -11,6 +11,7 @@ import {routes} from 'vue-router/auto-routes'
 import {use404Helper} from '../composables/use404'
 import {requiresAuth} from '@/services/authRoutes'
 import {useAuthStore} from '@/stores/auth'
+import {canAccessAdminPage} from '@/services/permissions'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -43,7 +44,7 @@ router.isReady().then(() => {
 })
 
 // 添加路由错误处理和认证守卫
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   // 如果路由不存在
   if (!to.matched.length) {
     use404Helper.show404();
@@ -61,6 +62,15 @@ router.beforeEach((to, from, next) => {
       authStore.setAuthRedirectUrl(to.fullPath);
       const returnUrl = encodeURIComponent(to.fullPath);
       next(`/app/account/login?redirect=${returnUrl}`);
+      return;
+    }
+  }
+
+  if (to.path.startsWith('/app/admin')) {
+    const authStore = useAuthStore();
+    const user = await authStore.fetchUserInfo();
+    if (!user || !canAccessAdminPage(user, to.path)) {
+      next('/app/account');
       return;
     }
   }

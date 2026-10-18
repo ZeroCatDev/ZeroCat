@@ -3,7 +3,8 @@ import logger from "./logger.js";
 import {prisma} from "./prisma.js";
 import redisClient from "./redis.js";
 import {verifyToken} from "./auth/tokenService.js";
-import {scopeSatisfies, userCanAccessResourceScope} from "./auth/scopes.js";
+import {authorize} from "./auth/authorization.js";
+import {canViewContent, userPublicDataVisible} from "./moderation/visibility.js";
 
 const CLOUD_EVENT_TARGET_TYPE = "scratch_cloud";
 const TARGET_CONFIG_TYPE_PROJECT = "project";
@@ -264,6 +265,7 @@ const authenticateRequest = async (req) => {
         },
         scopes: result.scopes || [],
         tokenType: result.tokenType || null,
+        token,
     };
 };
 
@@ -275,6 +277,9 @@ const getScratchProject = async (projectId) => {
             authorid: true,
             state: true,
             type: true,
+            deleted_at: true,
+            is_shadowbanned: true,
+            shadowban_expires_at: true,
         },
     });
 
@@ -288,10 +293,41 @@ const getScratchProject = async (projectId) => {
 };
 
 const wsTokenAllowsProject = async (ws, projectId, action) => {
+    if (ws.authToken) {
+        const current = await verifyToken(ws.authToken, ws.ip);
+        if (!current.valid || current.user?.userid !== ws.authUser?.userid) return false;
+        ws.authScopes = current.scopes || [];
+        ws.tokenType = current.tokenType || null;
+    }
     if (!ws.authUser || typeof ws.authUser.userid !== "number") return false;
-    const requiredScope = `project:${projectId}:${action}`;
-    if (!scopeSatisfies(ws.authScopes || [], requiredScope)) return false;
-    return userCanAccessResourceScope(ws.authUser.userid, requiredScope);
+    const decision = await authorize({
+        actorId: ws.authUser.userid, requiredScope: `project:${projectId}:${action}`,
+        tokenType: ws.tokenType, tokenScopes: ws.authScopes || [],
+        category: 'projects', action: action === 'read' ? 'read' : 'interact',
+    });
+    return decision.allowed;
+};
+
+const readableProject = async (ws, projectId) => {
+    const project = await getScratchProject(projectId);
+    if (!project || !await canViewContent('project', project, ws.authUser?.userid)
+        || (ws.authUser && !await wsTokenAllowsProject(ws, projectId, 'read'))) {
+        throw new CloudWsError(WS_CLOSE_PROJECT_UNAVAILABLE, 'project unavailable');
+    }
+    return project;
+};
+
+const writableProject = async (ws, projectId) => {
+    const project = await readableProject(ws, projectId);
+    const {historyEnabled, anonymousWriteEnabled} = await getProjectCloudConfig(project.id);
+    const allowed = ws.authUser
+        ? await wsTokenAllowsProject(ws, project.id, anonymousWriteEnabled ? 'interact' : 'update')
+        : project.state === 'public' && anonymousWriteEnabled;
+    if (!allowed || (ws.authUser && ws.authUser.userid !== project.authorid
+        && !await userPublicDataVisible(ws.authUser.userid, 'projects', null))) {
+        throw new CloudWsError(WS_CLOSE_PROJECT_UNAVAILABLE, 'write not allowed');
+    }
+    return {project, historyEnabled};
 };
 
 const loadCloudState = async (project) => {
@@ -301,12 +337,12 @@ const loadCloudState = async (project) => {
     if (redisClient.client && redisClient.isConnected) {
         vars = await redisClient.client.hgetall(varsKey);
         if (Object.keys(vars).length > 0) {
-            return vars;
+            return {vars, fromSnapshot: false};
         }
     }
 
     if (!project.authorid) {
-        return {};
+        return {vars: {}, fromSnapshot: false};
     }
 
     const snapshot = await prisma.ow_cache_kv.findUnique({
@@ -320,14 +356,10 @@ const loadCloudState = async (project) => {
     });
 
     if (!snapshot || typeof snapshot.value !== "object" || Array.isArray(snapshot.value)) {
-        return {};
+        return {vars: {}, fromSnapshot: false};
     }
 
-    vars = snapshot.value;
-    if (redisClient.client && redisClient.isConnected && Object.keys(vars).length > 0) {
-        await redisClient.client.hset(varsKey, vars);
-    }
-    return vars;
+    return {vars: snapshot.value, fromSnapshot: true};
 };
 
 const saveCloudSnapshot = async (project, vars, creatorIp) => {
@@ -384,13 +416,21 @@ const leaveRoom = (ws) => {
     }
 };
 
-const broadcastToOtherClients = (projectId, sourceWs, message) => {
+const broadcastToOtherClients = async (projectId, sourceWs, message) => {
     const room = rooms.get(projectId);
     if (!room) {
         return;
     }
     for (const client of room) {
         if (client !== sourceWs && client.readyState === WebSocket.OPEN) {
+            try {
+                await readableProject(client, projectId);
+            } catch (error) {
+                if (!(error instanceof CloudWsError)) throw error;
+                client.close(WS_CLOSE_PROJECT_UNAVAILABLE, 'project unavailable');
+                leaveRoom(client);
+                continue;
+            }
             client.send(message);
         }
     }
@@ -398,7 +438,16 @@ const broadcastToOtherClients = (projectId, sourceWs, message) => {
 
 const processCloudWrite = async (project, ws, message, historyEnabled) => {
     const method = message.method;
-    const vars = await loadCloudState(project);
+    const {vars: loadedVars, fromSnapshot} = await loadCloudState(project);
+    const vars = {...loadedVars};
+    // Recheck after state I/O, immediately before any mutation or persistence.
+    const current = await writableProject(ws, project.id);
+    if (current.project.authorid !== project.authorid) {
+        throw new CloudWsError(WS_CLOSE_PROJECT_UNAVAILABLE, 'project changed');
+    }
+    project = current.project;
+    historyEnabled = current.historyEnabled;
+    ws.project = project;
     const username = ws.user.username;
     const actorId = typeof ws.user.userid === "number" ? ws.user.userid : null;
     const actorName = ws.user.username || (actorId === null ? `[匿名]unknown` : String(actorId));
@@ -417,7 +466,9 @@ const processCloudWrite = async (project, ws, message, historyEnabled) => {
 
         vars[name] = value;
         if (redisClient.client && redisClient.isConnected) {
-            await redisClient.client.hset(cloudVarsRedisKey(project.id), name, value);
+            const redisKey = cloudVarsRedisKey(project.id);
+            if (fromSnapshot) await redisClient.client.hset(redisKey, vars);
+            else await redisClient.client.hset(redisKey, name, value);
         }
         await saveCloudSnapshot(project, vars, ws.ip);
         const event = await appendCloudEvent(project.id, actorId, {
@@ -463,7 +514,10 @@ const processCloudWrite = async (project, ws, message, historyEnabled) => {
         delete vars[oldName];
         if (redisClient.client && redisClient.isConnected) {
             const redisKey = cloudVarsRedisKey(project.id);
-            await redisClient.client.multi().hdel(redisKey, oldName).hset(redisKey, newName, vars[newName]).exec();
+            const changes = redisClient.client.multi().hdel(redisKey, oldName);
+            if (fromSnapshot) changes.hset(redisKey, vars);
+            else changes.hset(redisKey, newName, vars[newName]);
+            await changes.exec();
         }
         await saveCloudSnapshot(project, vars, ws.ip);
         const event = await appendCloudEvent(project.id, actorId, {
@@ -505,7 +559,12 @@ const processCloudWrite = async (project, ws, message, historyEnabled) => {
 
         delete vars[name];
         if (redisClient.client && redisClient.isConnected) {
-            await redisClient.client.hdel(cloudVarsRedisKey(project.id), name);
+            const redisKey = cloudVarsRedisKey(project.id);
+            if (fromSnapshot && Object.keys(vars).length > 0) {
+                await redisClient.client.multi().hdel(redisKey, name).hset(redisKey, vars).exec();
+            } else {
+                await redisClient.client.hdel(redisKey, name);
+            }
         }
         await saveCloudSnapshot(project, vars, ws.ip);
         const event = await appendCloudEvent(project.id, actorId, {
@@ -553,7 +612,7 @@ const handleHandshake = async (ws, message) => {
     }
 
     const project = await getScratchProject(projectId);
-    if (!project) {
+    if (!project || !await canViewContent('project', project, ws.authUser?.userid)) {
         throw new CloudWsError(WS_CLOSE_PROJECT_UNAVAILABLE, "project unavailable");
     }
 
@@ -564,8 +623,8 @@ const handleHandshake = async (ws, message) => {
         if (!(await wsTokenAllowsProject(ws, project.id, "read"))) {
             throw new CloudWsError(WS_CLOSE_PROJECT_UNAVAILABLE, "project unavailable");
         }
-        ws.canWriteCloud = Boolean(projectConfig.anonymousWriteEnabled)
-            || await wsTokenAllowsProject(ws, project.id, "update");
+        ws.canWriteCloud = await wsTokenAllowsProject(ws, project.id,
+            projectConfig.anonymousWriteEnabled ? 'interact' : 'update');
         ws.user = {
             userid: ws.authUser.userid,
             username: ws.authUser.username || String(ws.authUser.userid),
@@ -593,14 +652,20 @@ const handleHandshake = async (ws, message) => {
     }
     room.add(ws);
 
-    const vars = await loadCloudState(project);
+    const {vars} = await loadCloudState(project);
+    try {
+        await readableProject(ws, project.id);
+    } catch (error) {
+        leaveRoom(ws);
+        throw error;
+    }
     const messages = Object.entries(vars).map(([name, value]) => createSetMessage(name, value));
     if (messages.length > 0) {
         ws.send(messages.join("\n"));
     }
 };
 
-const processRawMessage = async (ws, rawText) => {
+export const processRawMessage = async (ws, rawText) => {
     const lines = rawText.split("\n").map((line) => line.trim()).filter(Boolean);
     for (const line of lines) {
         let message;
@@ -624,14 +689,11 @@ const processRawMessage = async (ws, rawText) => {
         if (!ws.project) {
             throw new CloudWsError(WS_CLOSE_ERROR, "handshake required");
         }
-        if (!ws.canWriteCloud) {
-            throw new CloudWsError(WS_CLOSE_PROJECT_UNAVAILABLE, "write not allowed");
-        }
-
-        const {historyEnabled} = await getProjectCloudConfig(ws.project.id);
-        const update = await processCloudWrite(ws.project, ws, message, historyEnabled);
+        const {project: current, historyEnabled} = await writableProject(ws, ws.project.id);
+        ws.project = current;
+        const update = await processCloudWrite(current, ws, message, historyEnabled);
         if (update?.broadcast) {
-            broadcastToOtherClients(ws.project.id, ws, update.broadcast);
+            await broadcastToOtherClients(current.id, ws, update.broadcast);
         }
     }
 };
@@ -668,6 +730,7 @@ export function attachScratchCloudWebSocket(server) {
             req.wsHasToken = Boolean(authResult.hasToken);
             req.wsScopes = authResult.scopes || [];
             req.wsTokenType = authResult.tokenType || null;
+            req.wsAuthToken = authResult.token || null;
             req.wsClientIp = extractClientIpFromUpgradeRequest(req);
             wss.handleUpgrade(req, socket, head, (ws) => {
                 wss.emit("connection", ws, req);
@@ -682,6 +745,7 @@ export function attachScratchCloudWebSocket(server) {
         ws.authUser = req.wsUser || null;
         ws.authScopes = Array.isArray(req.wsScopes) ? req.wsScopes : [];
         ws.tokenType = req.wsTokenType || null;
+        ws.authToken = req.wsAuthToken || null;
         ws.hasToken = Boolean(req.wsHasToken);
         ws.user = null;
         ws.project = null;

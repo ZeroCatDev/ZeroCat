@@ -42,7 +42,7 @@
 
       <!-- Post Button -->
       <button
-        v-if="isLogin && !authPending"
+        v-if="isLogin && !authPending && !localuser.isReadonly('posts')"
         class="post-button"
         @click="openComposer"
       >
@@ -117,7 +117,7 @@ const navItems = computed(() => {
       { name: 'profile', label: '个人主页', icon: 'mdi-account-outline', to: user.value ? `/${user.value.username}` : '/app/account' },
       { name: 'settings', label: '设置', icon: 'mdi-cog-outline', to: '/app/account' }
     );
-    if (user.value?.isAdmin) {
+    if (localuser.canAdmin) {
       items.push({ name: 'admin', label: '管理后台', icon: 'mdi-shield-crown-outline', to: '/app/admin' });
     }
   } else if (!authPending.value) {

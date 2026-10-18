@@ -134,7 +134,7 @@ export async function getUserDataSummary(client, userId) {
     counts.projects = await db.count("ow_projects", { authorid: userId });
     counts.lists = await db.count("ow_projects_lists", { authorid: userId });
     const legacyComments = await db.count("ow_comment", { user_id: userId });
-    const serviceComments = await db.count("ow_comment_service", { user_id: String(userId) });
+    const serviceComments = await db.count("ow_comment_service", { account_user_id: userId });
     counts.comments = legacyComments + serviceComments;
     const relationships = await db.count("ow_user_relationships", { source_user_id: userId });
     const likes = await db.count("ow_posts_like", { user_id: userId });
@@ -148,7 +148,7 @@ export async function getUserDataSummary(client, userId) {
     await forIds(idsOf(spaces), async (batch) => {
         const total = await db.count("ow_comment_service", { space_id: { in: batch } });
         commentSpaceComments += total;
-        commentSpaceVisitors += total - await db.count("ow_comment_service", { space_id: { in: batch }, user_id: String(userId) });
+        commentSpaceVisitors += total - await db.count("ow_comment_service", { space_id: { in: batch }, account_user_id: userId });
     });
     const applicationIds = await ownedApplications(db, userId);
     const grantIds = await authorizationIds(db, userId, applicationIds);
@@ -223,6 +223,10 @@ export async function cleanupUserData(client, userId, categories, { permanent = 
     const removeTargetData = async (types, ids, entityType) => {
         await forIds(ids, async (batch) => {
             await remove("ow_target_configs", target(types, batch));
+            const resourceTypes = entityType === "project" ? ["project", "blog"] : types;
+            for (const model of ["ow_user_roles", "ow_user_permissions", "ow_permission_delegations"]) {
+                await remove(model, target(resourceTypes, batch));
+            }
             if (entityType) await remove("ow_embeddings", entity(entityType, batch));
         });
     };
@@ -301,13 +305,13 @@ export async function cleanupUserData(client, userId, categories, { permanent = 
 
     if (selected.has("comments")) {
         const legacy = idsOf(await db.read("ow_comment", { user_id: userId }, { id: true }));
-        const service = idsOf(await db.read("ow_comment_service", { user_id: String(userId) }, { id: true }));
+        const service = idsOf(await db.read("ow_comment_service", { account_user_id: userId }, { id: true }));
         for (const [model, ids, stringIds] of [["ow_comment", legacy, false], ["ow_comment_service", service, true]]) {
             await forIds(ids, async (batch) => {
                 for (const field of ["pid", "rid"]) {
                     await update(model, { [field]: { in: stringIds ? batch.map(String) : batch } }, { [field]: null });
                 }
-                counts.comments += await remove(model, { id: { in: batch }, user_id: stringIds ? String(userId) : userId });
+                counts.comments += await remove(model, { id: { in: batch }, ...(stringIds ? { account_user_id: userId } : { user_id: userId }) });
             });
         }
         // Comment-service page counters represent visits/reactions, not comment
@@ -373,9 +377,10 @@ export async function cleanupUserData(client, userId, categories, { permanent = 
         await removeIds("ow_oauth_access_tokens", "id", idsOf(legacyTokens));
         await removeIds("ow_oauth_authorizations", "id", grantIds);
         await removeIds("ow_oauth_applications", "id", applicationIds);
-        for (const model of ["ow_users_contacts", "ow_users_totp", "ow_push_subscriptions", "ow_cache_kv", "ow_notification_settings", "ow_user_embedding_updates", "ow_comment_service_users", "ow_posts_mention", "ow_user_roles"]) {
+        for (const model of ["ow_users_contacts", "ow_users_totp", "ow_push_subscriptions", "ow_cache_kv", "ow_notification_settings", "ow_user_embedding_updates", "ow_comment_service_users", "ow_posts_mention", "ow_user_roles", "ow_user_permissions", "ow_user_restrictions"]) {
             await remove(model, { user_id: userId });
         }
+        await remove("ow_permission_delegations", { OR: [{ grantor_id: userId }, { delegate_id: userId }] });
         await remove("ow_users_magiclink", { userId });
         await remove("ow_project_collaboration_invitations", { OR: [{ inviter_id: userId }, { invitee_id: userId }] });
         await remove("ow_user_relationships", { target_user_id: userId });
@@ -398,8 +403,15 @@ export async function cleanupUserData(client, userId, categories, { permanent = 
         await update("ow_projects_branch", { creator: userId }, { creator: null });
         await update("project_clouddata_history", { actor_id: userId }, { actor_id: null, actor_name: null, ip: null });
         await update("ow_user_roles", { assigned_by: userId }, { assigned_by: null });
+        await update("ow_user_permissions", { assigned_by: userId }, { assigned_by: null });
+        await update("ow_user_restrictions", { created_by: userId }, { created_by: null });
+        await update("ow_user_restrictions", { revoked_by: userId }, { revoked_by: null });
         await update("ow_assets", { uploader_id: userId }, { uploader_id: null, uploader_ip: null, uploader_ua: null });
         await update("ow_assets", { banned_by: userId }, { banned_by: null });
+        for (const model of ["ow_posts", "ow_projects"]) {
+            await update(model, { deleted_by: userId }, { deleted_by: null });
+            await update(model, { shadowban_by: userId }, { shadowban_by: null });
+        }
     }
 
     result.affectedPostIds = bounded([...affectedPosts]);

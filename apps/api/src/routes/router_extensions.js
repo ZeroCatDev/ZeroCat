@@ -6,6 +6,41 @@ import { needLogin } from "../middleware/auth.js";
 import { requireResource, requireScope } from "../middleware/scope.js";
 import { hasProjectPermission } from "../services/auth/permissionManager.js";
 import { setReviewStatus, isAutoApproveUser } from "../services/extensionReview.js";
+import { authorize } from "../services/auth/authorization.js";
+import { findProjectCommit } from "../services/projectCommitAccess.js";
+import { canViewContent, sanitizeProfile, visibleWhere } from "../services/moderation/visibility.js";
+
+async function sanitizeExtension(extension, res) {
+  const viewerId = res.locals.userid;
+  if (!extension || !await canViewContent('extension', extension, viewerId)) return null;
+  if (viewerId) {
+    for (const requiredScope of [`extension:${extension.id}:read`, `project:${extension.projectid}:read`]) {
+      const decision = await authorize({ actorId: viewerId, tokenType: res.locals.tokenType,
+        tokenScopes: res.locals.scopes || [], requiredScope });
+      if (!decision.allowed) return null;
+    }
+  }
+  if (extension.project?.author) extension.project.author = await sanitizeProfile(extension.project.author, viewerId);
+  if (extension.sample_project && !await canViewContent('project', extension.sample_project, viewerId)) {
+    extension.sample_project = null;
+  } else if (extension.sample_project?.author) {
+    extension.sample_project.author = await sanitizeProfile(extension.sample_project.author, viewerId);
+  }
+  return extension;
+}
+
+async function requireExtensionProject(req, res, next) {
+  try {
+    const extension = await prisma.ow_scratch_extensions.findUnique({ where: { id: Number(req.params.id) } });
+    if (!extension) return res.status(404).send({ status: 'error', message: '扩展不存在' });
+    const decision = await authorize({
+      actorId: res.locals.userid, tokenType: res.locals.tokenType, tokenScopes: res.locals.scopes || [],
+      requiredScope: `project:${extension.projectid}:update`, action: 'manage',
+    });
+    if (!decision.allowed) return res.status(decision.status).send({ status: 'error', code: decision.code, message: decision.message });
+    next();
+  } catch (error) { next(error); }
+}
 
 const router = Router();
 let s3staticurl=await zcconfig.get("s3.staticurl");
@@ -19,7 +54,7 @@ async function validateBranchAndCommit(projectid, branch, commit, userid) {
   }
 
   const hasPermission = await hasProjectPermission(projectid, userid, "read");
-  if (!hasPermission) {
+  if (!hasPermission || !await canViewContent('project', project, userid)) {
     throw new Error("无权访问该项目");
   }
 
@@ -41,13 +76,7 @@ async function validateBranchAndCommit(projectid, branch, commit, userid) {
     //targetCommit = branchRecord.latest_commit_hash;
     targetCommit = "latest";
   } else {
-    const commitRecord = await prisma.ow_projects_commits.findFirst({
-      where: {
-        id: commit,
-        project_id: Number(projectid),
-        branch: targetBranch,
-      },
-    });
+    const commitRecord = await findProjectCommit(projectid, commit, targetBranch);
     if (!commitRecord) {
       throw new Error("提交不存在");
     }
@@ -166,7 +195,7 @@ router.post("/manager/create", needLogin, requireResource("project", "update", "
   }
 });
 
-router.put("/manager/edit/:id", needLogin, requireResource("extension", "manage", "id"), async (req, res, next) => {
+router.put("/manager/edit/:id", needLogin, requireResource("extension", "manage", "id"), requireExtensionProject, async (req, res, next) => {
   try {
     const { id } = req.params;
     const { branch, commit, image, samples, docs, scratchCompatible } = req.body;
@@ -255,7 +284,7 @@ router.put("/manager/edit/:id", needLogin, requireResource("extension", "manage"
   }
 });
 
-router.post("/manager/update/:id", needLogin, requireResource("extension", "manage", "id"), async (req, res, next) => {
+router.post("/manager/update/:id", needLogin, requireResource("extension", "manage", "id"), requireExtensionProject, async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -324,7 +353,7 @@ router.post("/manager/update/:id", needLogin, requireResource("extension", "mana
   }
 });
 
-router.post("/manager/submit/:id", needLogin, requireResource("extension", "manage", "id"), async (req, res, next) => {
+router.post("/manager/submit/:id", needLogin, requireResource("extension", "manage", "id"), requireExtensionProject, async (req, res, next) => {
   try {
     const { id } = req.params;
     // 查找扩展及其项目作者
@@ -394,9 +423,8 @@ router.get("/manager/my", needLogin, requireScope("extension:read"), async (req,
   try {
     const extensions = await prisma.ow_scratch_extensions.findMany({
       where: {
-        project: {
-          authorid: res.locals.userid,
-        },
+        project: { authorid: res.locals.userid },
+        AND: [await visibleWhere('extension', res.locals.userid)],
       },
       include: {
         project: {
@@ -424,7 +452,7 @@ router.get("/manager/my", needLogin, requireScope("extension:read"), async (req,
     res.status(200).send({
       status: "success",
       message: "获取成功",
-      data: extensions,
+      data: (await Promise.all(extensions.map((extension) => sanitizeExtension(extension, res)))).filter(Boolean),
     });
   } catch (err) {
     logger.error("Error getting my extensions:", err);
@@ -435,7 +463,7 @@ router.get("/manager/my", needLogin, requireScope("extension:read"), async (req,
   }
 });
 
-router.delete("/manager/:id", needLogin, requireResource("extension", "manage", "id"), async (req, res, next) => {
+router.delete("/manager/:id", needLogin, requireResource("extension", "manage", "id"), requireExtensionProject, async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -480,10 +508,9 @@ router.delete("/manager/:id", needLogin, requireResource("extension", "manage", 
 router.get("/detail/:id", async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { scope = "public" } = req.query;
 
     // 构建查询条件
-    const where = { id: Number(id) };
+    const where = { id: Number(id), AND: [await visibleWhere('extension', res.locals.userid)] };
 
 
     const extension = await prisma.ow_scratch_extensions.findFirst({
@@ -514,12 +541,12 @@ router.get("/detail/:id", async (req, res, next) => {
       }
     });
 
-    if (!extension) {
+    if (!extension || !await sanitizeExtension(extension, res)) {
       return res.status(404).send({
         status: "error",
-        message: scope === "public" ? "扩展不存在或未通过审核" : "扩展不存在"
+        message: "扩展不存在或未通过审核"
       });
-    } if (extension.status !== "verified" && scope === "public"&&extension.project.author.id!== res.locals.userid) {
+    } if (extension.status !== "verified" && extension.project.authorid !== res.locals.userid) {
       return res.status(404).send({
         status: "error",
         message: "扩展不存在或未通过审核"
@@ -530,7 +557,7 @@ router.get("/detail/:id", async (req, res, next) => {
 
     res.status(200).send({
       status: "success",
-      data: extension
+      data: await sanitizeExtension(extension, res)
     });
   } catch (err) {
     logger.error("Error getting extension detail:", err);
@@ -552,7 +579,8 @@ router.get("/detailbyprojectid/:id", async (req, res, next) => {
 
     const extension = await prisma.ow_scratch_extensions.findFirst({
       where:{
-        projectid: Number(id)
+        projectid: Number(id),
+        AND: [await visibleWhere('extension', res.locals.userid)]
       },
       include: {
         project: {
@@ -580,13 +608,13 @@ router.get("/detailbyprojectid/:id", async (req, res, next) => {
       }
     });
 
-    if (!extension) {
+    if (!extension || !await sanitizeExtension(extension, res)) {
       return res.status(404).send({
         status: "error",
-        message: scope === "public" ? "扩展不存在或未通过审核" : "扩展不存在"
+        message: "扩展不存在或未通过审核"
       });
     }
-    if (extension.status !== "verified" &&extension.project.author.id!== res.locals.userid) {
+    if (extension.status !== "verified" && extension.project.authorid !== res.locals.userid) {
       return res.status(404).send({
         status: "error",
         message: "扩展不存在或未通过审核"
@@ -599,7 +627,7 @@ router.get("/detailbyprojectid/:id", async (req, res, next) => {
 
     res.status(200).send({
       status: "success",
-      data: extension
+      data: await sanitizeExtension(extension, res)
     });
   } catch (err) {
     logger.error("Error getting extension detail:", err);
@@ -634,7 +662,7 @@ router.post("/detail/batch", needLogin, requireResource("extension", "read", (re
     }
 
     const extensions = await prisma.ow_scratch_extensions.findMany({
-      where: { id: { in: numericIds } },
+      where: { id: { in: numericIds }, AND: [await visibleWhere('extension', res.locals.userid)] },
       include: {
         project: {
           select: {
@@ -659,7 +687,9 @@ router.post("/detail/batch", needLogin, requireResource("extension", "read", (re
     });
 
     const extensionMap = new Map(
-      extensions.map((ext) => [ext.id, ext])
+      (await Promise.all(extensions.map((ext) => sanitizeExtension(ext, res))))
+        .filter((ext) => ext && (ext.status === 'verified' || ext.project.authorid === res.locals.userid))
+        .map((ext) => [ext.id, ext])
     );
 
     const data = numericIds.map((id) => {
@@ -697,7 +727,7 @@ router.get("/", async (req, res, next) => {
     const frontendUrl = await zcconfig.get("urls.frontend");
 
     const extensions = await prisma.ow_scratch_extensions.findMany({
-      where: { status: "verified" },
+      where: { status: "verified", AND: [await visibleWhere('extension', res.locals.userid)] },
       include: {
         project: {
           include: {
@@ -721,7 +751,8 @@ router.get("/", async (req, res, next) => {
       },
     });
 
-    const formattedExtensions = extensions.map((ext) => {
+    const visibleExtensions = (await Promise.all(extensions.map((ext) => sanitizeExtension(ext, res)))).filter(Boolean);
+    const formattedExtensions = visibleExtensions.map((ext) => {
       logger.debug(ext)
       const result = {
         slug: String(ext.id),
@@ -731,13 +762,13 @@ router.get("/", async (req, res, next) => {
         image: `${s3staticurl}/assets/${ext.project.thumbnail.substring(0, 2)}/${ext.project.thumbnail.substring(2, 4)}/${ext.project.thumbnail}`,
         by: [
           {
-            name: ext.project.author.display_name,
-            link: `${frontendUrl}/${ext.project.author.username}`,
+            name: ext.project.author?.display_name || '',
+            link: ext.project.author ? `${frontendUrl}/${ext.project.author.username}` : '',
           },
         ],
       };
 
-      if (ext.sample_project) {
+      if (ext.sample_project?.author) {
         result.samples = [
           `${ext.sample_project.author.username}/${ext.sample_project.name}`,
         ];
@@ -769,23 +800,18 @@ router.get("/{:id}.js", async (req, res, next) => {
   try {
     const { id } = req.params;
     let extension = await prisma.ow_scratch_extensions.findFirst({
-      where: { id: Number(id) },
-      select: {
-        branch: true,
-        commit: true,
-        project: {
-          select: {
-            id: true,
-            default_branch: true,
-          },
-        },
-      },
+      where: { id: Number(id), AND: [await visibleWhere('extension', res.locals.userid)] },
+      include: { project: true },
     });
     if (!extension) {
       return res.status(404).send({
         status: "error",
         message: "扩展不存在",
       });
+    }
+    if ((extension.status !== 'verified' && extension.project.authorid !== res.locals.userid)
+      || !await sanitizeExtension(extension, res)) {
+      return res.status(404).send({ status: 'error', message: '扩展不存在' });
     }
     if (extension.branch == "") {
       extension.branch = extension.project.default_branch;
@@ -801,13 +827,7 @@ router.get("/{:id}.js", async (req, res, next) => {
             extension.commit = branchRecord.latest_commit_hash;
         }
     }
-    const commitRecord = await prisma.ow_projects_commits.findFirst({
-      where: {
-        id: extension.commit,
-        project_id: extension.project.id,
-        branch: extension.branch,
-      },
-    });
+    const commitRecord = await findProjectCommit(extension.project.id, extension.commit, extension.branch);
     if (!commitRecord) {
       return res.status(404).send({
         status: "error",

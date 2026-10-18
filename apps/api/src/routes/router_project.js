@@ -8,11 +8,12 @@ import {
   extractProjectData,
   handleTagsChange,
   projectSelectionFields,
+  sanitizeProjectAuthors,
 } from "../controllers/projects.js";
 import { createHash } from "crypto";
 import jwt from "jsonwebtoken";
+import { createTypedJWT } from "../services/auth/tokenUtils.js";
 import {
-  generateFileAccessToken,
   verifyFileAccessToken,
 } from "../services/auth/tokenManager.js";
 import {
@@ -23,8 +24,6 @@ import {
 import { needLogin } from "../middleware/auth.js";
 import { requireScope, requireResource } from "../middleware/scope.js";
 import { hasProjectPermission } from "../services/auth/permissionManager.js";
-import { userCanActOnProject } from "../services/projectCollaborationService.js";
-import { getUserByUsername } from "../controllers/users.js";
 import { createEvent } from "../controllers/events.js";
 import { getAnalytics } from "../services/analytics.js";
 import redisClient from "../services/redis.js";
@@ -36,7 +35,78 @@ import {
   updateBranchLatestCommit,
 } from "../services/commitService.js";
 
+import { visibleWhere, sanitizeProfile } from "../services/moderation/visibility.js";
+import { assertCanWrite } from "../services/moderation/restrictions.js";
+import { softDeleteContent, restoreContent } from "../services/moderation/lifecycle.js";
+
 const router = Router();
+
+router.use((req, res, next) => {
+  if (req.headers["x-zerocat-delegation"] !== undefined && req.method === "GET"
+      && !/^\/id\/[^/]+\/?$/.test(req.path)) {
+    return res.status(403).json({ status: "error", code: "ZC_ERROR_DELEGATION_NOT_SUPPORTED", message: "此操作不支持授权委托" });
+  }
+  next();
+});
+
+async function visibleProjectWhere(where, userId = null) {
+  return { AND: [where, await visibleWhere("project", userId)] };
+}
+
+function projectNotFound() {
+  return Object.assign(new Error("项目不存在"), { status: 404, code: "ZC_ERROR_CONTENT_NOT_FOUND" });
+}
+
+async function ensureProjectVisible(projectId, viewerId, options = {}) {
+  const project = await prisma.ow_projects.findFirst({
+    where: { AND: [{ id: Number(projectId) }, await visibleWhere("project", viewerId, options)] },
+    select: { id: true, type: true },
+  });
+  if (!project) throw projectNotFound();
+  return project;
+}
+
+const projectWriteGuard = (action, selector) => async (req, res, next) => {
+  try {
+    const id = selector ? selector(req) : null;
+    const authorization = res.locals.authorization;
+    const delegated = authorization?.allowed && authorization.principalId !== authorization.actorId;
+    const project = id ? await ensureProjectVisible(id, res.locals.userid, { ignorePrivacy: authorization?.allowed === true }) : null;
+    const type = project?.type || req.body?.type;
+    for (const userId of new Set([res.locals.userid, ...(delegated ? [authorization.principalId] : [])])) {
+      await assertCanWrite(userId, "project", action);
+      if (type === "article") await assertCanWrite(userId, "blog", action);
+    }
+    next();
+  } catch (error) {
+    res.status(error.status || 403).json({ status: "error", message: error.message, code: error.code });
+  }
+};
+
+const projectIdFromRequest = (req) => req.body?.projectid || req.query?.projectid || req.headers["x-project-id"] || req.params.id;
+
+const issueProjectFileAccessToken = (sha256, userid, projectId, staged = false) => createTypedJWT("file", {
+  action: "read", sha256, userid, project_id: Number(projectId), staged,
+}, 300);
+
+async function findReachableCommit(projectId, { commitId = null, sha256 = null } = {}) {
+  const branches = await prisma.ow_projects_branch.findMany({
+    where: { projectid: Number(projectId) },
+    select: { latest_commit_hash: true },
+  });
+  const pending = branches.map((branch) => branch.latest_commit_hash).filter(Boolean);
+  const visited = new Set();
+  while (pending.length && visited.size < 10000) {
+    const id = pending.shift();
+    if (visited.has(id)) continue;
+    visited.add(id);
+    const commit = await prisma.ow_projects_commits.findUnique({ where: { id } });
+    if (!commit) continue;
+    if ((commitId && commit.id === commitId) || (sha256 && commit.commit_file === sha256)) return commit;
+    if (commit.parent_commit_id) pending.push(commit.parent_commit_id);
+  }
+  return null;
+}
 
 const resolveProjectInitType = (projectType) => {
   if (projectType && default_project[projectType]) return projectType;
@@ -223,13 +293,15 @@ const refreshCloudConfigCache = async (projectId, config) => {
 
 // 抽离的函数
 async function checkProjectPermission(projectid, userid, permission) {
+  await ensureProjectVisible(projectid, userid);
+  if (permission === "write") await assertCanWrite(userid, "project", "update");
   const hasPermission = await hasProjectPermission(
     projectid,
     userid,
     permission
   );
   if (!hasPermission) {
-    throw new Error("无权访问此项目");
+    throw projectNotFound();
   }
 }
 
@@ -254,15 +326,16 @@ router.get("/analytics/:id", needLogin, requireResource("project", "read", "id")
     }
 
     // 验证项目权限
+    await ensureProjectVisible(id, res.locals.userid);
     const hasPermission = await hasProjectPermission(
       id,
       res.locals.userid,
       "read"
     );
     if (!hasPermission) {
-      return res.status(403).send({
+      return res.status(404).send({
         status: "error",
-        message: "无权访问此项目",
+        message: "项目不存在",
       });
     }
 
@@ -288,6 +361,7 @@ router.get("/query", async (req, res, next) => {
   try {
     const { type, target, limit = 20, offset = 0 } = req.query;
     const userId = res.locals.userid || 0; // 未登录用户为匿名用户
+    const visibility = await visibleWhere("project", userId);
 
     if (!type || !target) {
       return res.status(400).send({
@@ -305,7 +379,7 @@ router.get("/query", async (req, res, next) => {
         prisma.ow_projects.findMany({
           where: {
             fork: Number(target),
-            OR: [{ state: "public" }, { authorid: userId }],
+            AND: [visibility],
           },
           select: projectSelectionFields(),
           take: Number(limit),
@@ -315,7 +389,7 @@ router.get("/query", async (req, res, next) => {
         prisma.ow_projects.count({
           where: {
             fork: Number(target),
-            OR: [{ state: "public" }, { authorid: userId }],
+            AND: [visibility],
           },
         }),
       ]);
@@ -331,7 +405,7 @@ router.get("/query", async (req, res, next) => {
                 name: target,
               },
             },
-            OR: [{ state: "public" }, { authorid: userId }],
+            AND: [visibility],
           },
           select: projectSelectionFields(),
           take: Number(limit),
@@ -346,7 +420,7 @@ router.get("/query", async (req, res, next) => {
                 name: target,
               },
             },
-            OR: [{ state: "public" }, { authorid: userId }],
+            AND: [visibility],
           },
         }),
       ]);
@@ -357,7 +431,7 @@ router.get("/query", async (req, res, next) => {
         prisma.ow_projects.findMany({
           where: {
             authorid: Number(target),
-            OR: [{ state: "public" }, { authorid: userId }],
+            AND: [visibility],
           },
           select: projectSelectionFields(),
           take: Number(limit),
@@ -367,7 +441,7 @@ router.get("/query", async (req, res, next) => {
         prisma.ow_projects.count({
           where: {
             authorid: Number(target),
-            OR: [{ state: "public" }, { authorid: userId }],
+            AND: [visibility],
           },
         }),
       ]);
@@ -385,7 +459,7 @@ router.get("/query", async (req, res, next) => {
       status: "success",
       message: "获取成功",
       data: {
-        projects,
+        projects: await sanitizeProjectAuthors(projects, userId),
         total: totalCount,
         limit: Number(limit),
         offset: Number(offset),
@@ -398,7 +472,7 @@ router.get("/query", async (req, res, next) => {
 });
 
 // 创建新作品
-router.post("/", needLogin, requireScope("project:create"), async (req, res, next) => {
+router.post("/", needLogin, requireScope("project:create"), projectWriteGuard("create"), async (req, res, next) => {
   try {
     const existingProject = await prisma.ow_projects.findFirst({
       where: {
@@ -483,8 +557,9 @@ router.post("/", needLogin, requireScope("project:create"), async (req, res, nex
 
 // 保存源代码
 router.post("/savefile", needLogin, requireResource("project", "update", (req) =>
-  req.body?.projectid || req.query?.projectid || req.headers["x-project-id"]
-), async (req, res, next) => {
+  req.body?.projectid || req.query?.projectid || req.headers["x-project-id"],
+  { allowDelegation: true }
+), projectWriteGuard("update", projectIdFromRequest), async (req, res, next) => {
   try {
     let source;
     const shouldFormatJson = req.query.json === "true";
@@ -584,9 +659,11 @@ router.post("/savefile", needLogin, requireResource("project", "update", (req) =
         }
       });
 
-    const accessFileToken = await generateFileAccessToken(
+    const accessFileToken = await issueProjectFileAccessToken(
       sha256,
-      res.locals.userid
+      res.locals.userid,
+      projectIdFromRequest(req),
+      true
     );
     res.status(200).send({
       status: "success",
@@ -608,21 +685,20 @@ router.get("/commit", async (req, res, next) => {
   try {
     const { projectid, commitid } = req.query;
     const userId = res.locals.userid || 0; // 未登录用户为匿名用户
+    await ensureProjectVisible(projectid, userId);
     const hasPermission = await hasProjectPermission(projectid, userId, "read");
 
     if (!hasPermission) {
-      return res.status(200).send({
+      return res.status(404).send({
         status: "error",
-        message: "项目不存在或无权访问",
+        message: "项目不存在",
         code: "404",
       });
     }
 
     let commit;
 
-    commit = await prisma.ow_projects_commits.findFirst({
-      where: { project_id: Number(projectid), id: commitid },
-    });
+    commit = await findReachableCommit(projectid, { commitId: String(commitid) });
 
     if (!commit) {
       return res.status(200).send({
@@ -635,9 +711,10 @@ router.get("/commit", async (req, res, next) => {
       });
     }
 
-    const accessFileToken = await generateFileAccessToken(
+    const accessFileToken = await issueProjectFileAccessToken(
       commit.commit_file,
-      userId
+      userId,
+      req.query.projectid || req.params.id
     );
 
     res.status(200).send({
@@ -653,8 +730,9 @@ router.get("/commit", async (req, res, next) => {
 });
 // 提交代码
 router.put("/commit/id/:id", needLogin, requireResource("project", "update", (req) =>
-  req.body?.projectid || req.query?.projectid || req.headers["x-project-id"]
-), async (req, res, next) => {
+  req.body?.projectid || req.query?.projectid || req.headers["x-project-id"],
+  { allowDelegation: true }
+), projectWriteGuard("update", projectIdFromRequest), async (req, res, next) => {
   try {
     const {
       branch = "main",
@@ -677,7 +755,7 @@ router.put("/commit/id/:id", needLogin, requireResource("project", "update", (re
       where: { id: Number(projectid) },
     });
     if (!project) {
-      return res.status(403).send({
+      return res.status(404).send({
         status: "error",
         message: "项目不存在",
       });
@@ -686,8 +764,8 @@ router.put("/commit/id/:id", needLogin, requireResource("project", "update", (re
     // 提交权限已由 requireResource("project","update",...) 中间件校验（作者或编辑者及以上协作者）。
 
     // 检查项目是否已初始化（至少存在一次提交）
-    const commitCount = await prisma.ow_projects_commits.count({
-      where: { project_id: Number(projectid) },
+    const commitCount = await prisma.ow_projects_branch.count({
+      where: { projectid: Number(projectid), latest_commit_hash: { not: null } },
     });
     if (commitCount === 0) {
       return res.status(400).send({
@@ -713,6 +791,7 @@ router.put("/commit/id/:id", needLogin, requireResource("project", "update", (re
     if (
       decodedFileToken.type !== "file" ||
       action !== "read" ||
+      Number(decodedFileToken.data.project_id) !== Number(projectid) ||
       Number(userid) !== Number(res.locals.userid)
     ) {
       return res.status(200).send({
@@ -724,12 +803,22 @@ router.put("/commit/id/:id", needLogin, requireResource("project", "update", (re
     // 检查分支是否存在，不存在则创建
     await createBranchIfNotExists(projectid, branch, res.locals.userid);
 
-    const parent_commit_id = await getCommitParentId(
+    let parent_commit_id = await getCommitParentId(
       projectid,
       res.locals.userid,
       parent_commit,
       branch // 传入分支信息
     );
+    if (!parent_commit_id) {
+      const sourceBranch = await prisma.ow_projects_branch.findFirst({
+        where: { projectid: Number(projectid), name: branch },
+        select: { latest_commit_hash: true },
+      });
+      if (parent_commit && !(await findReachableCommit(projectid, { commitId: String(parent_commit) }))) {
+        throw projectNotFound();
+      }
+      parent_commit_id = parent_commit || sourceBranch?.latest_commit_hash || null;
+    }
     const timestamp = Date.now();
     // 计算提交的哈希值作为 id
     const commitContent = JSON.stringify({
@@ -794,6 +883,7 @@ router.put("/commit/id/:id", needLogin, requireResource("project", "update", (re
       await queueManager.enqueueGitSyncCommit(projectid, commitId, {
         triggeredBy: 'project-commit',
         actorId: res.locals.userid,
+        authorizationContext: { tokenType: res.locals.tokenType, tokenScopes: res.locals.scopes || [] },
       });
     } catch (error) {
       logger.warn(`[git-sync] enqueue failed project=${projectid} commit=${commitId}: ${error.message}`);
@@ -804,6 +894,8 @@ router.put("/commit/id/:id", needLogin, requireResource("project", "update", (re
         await queueManager.enqueueBlogSyncArticle(projectid, project.authorid, {
           reason: 'project-commit',
           commitId,
+          actorId: res.locals.userid,
+          authorizationContext: { tokenType: res.locals.tokenType, tokenScopes: res.locals.scopes || [] },
         });
       } catch (error) {
         logger.warn(`[blog-sync] enqueue failed project=${projectid}: ${error.message}`);
@@ -839,7 +931,7 @@ router.post("/batch", async (req, res, next) => {
 
     // 获取所有项目
     const projects = await prisma.ow_projects.findMany({
-      where: { id: { in: projectIds } },
+      where: await visibleProjectWhere({ id: { in: projectIds.map(Number) } }, userId),
       select: projectSelectionFields(),
     });
 
@@ -863,7 +955,7 @@ router.post("/batch", async (req, res, next) => {
     res.status(200).send({
       status: "success",
       message: "获取成功",
-      data: filteredProjects,
+      data: await sanitizeProjectAuthors(filteredProjects, userId),
     });
   } catch (err) {
     logger.error("Error fetching batch project information:", err);
@@ -1024,7 +1116,7 @@ router.get("/commits", async (req, res, next) => {
     res.status(200).send({
       status: "success",
       message: "获取成功 使用BFS",
-      data: result,
+      data: await Promise.all(result.map(async (commit) => ({ ...commit, author: await sanitizeProfile(commit.author, res.locals.userid) }))),
     });
   } catch (err) {
     logger.error("Error getting project commits:", err);
@@ -1032,10 +1124,9 @@ router.get("/commits", async (req, res, next) => {
   }
 });
 
-router.post("/branches", needLogin, requireResource("project", "create", "projectid"), async (req, res, next) => {
+router.post("/branches", needLogin, requireResource("project", "update", "projectid", { allowDelegation: true }), projectWriteGuard("update", projectIdFromRequest), async (req, res, next) => {
   try {
     const { name, branch, projectid } = req.body;
-    await checkProjectPermission(projectid, res.locals.userid, "write");
     const sourceBranch = await prisma.ow_projects_branch.findFirst({
       where: { projectid: Number(projectid), name: branch },
     });
@@ -1072,9 +1163,12 @@ router.post("/branches", needLogin, requireResource("project", "create", "projec
   }
 });
 // 获取项目信息
-router.get("/id/:id", async (req, res, next) => {
+router.get("/id/:id", (req, res, next) => req.headers["x-zerocat-delegation"] !== undefined
+  ? requireResource("project", "read", "id", { allowDelegation: true })(req, res, next) : next(), async (req, res, next) => {
+  try {
   const userId = res.locals.userid || 0; // 未登录用户为匿名用户
-  await checkProjectPermission(req.params.id, userId, "read");
+  if (res.locals.authorization?.allowed) await ensureProjectVisible(req.params.id, userId, { ignorePrivacy: true });
+  else await checkProjectPermission(req.params.id, userId, "read");
 
   const project = await prisma.ow_projects.findFirst({
     where: { id: Number(req.params.id) },
@@ -1091,11 +1185,12 @@ router.get("/id/:id", async (req, res, next) => {
     select: { name: true, id: true, created_at: true },
   });
 
-  project.author = author;
+  project.author = await sanitizeProfile(author, userId);
   project.tags = tags;
   logger.debug(tags);
   logger.debug(project);
-  res.status(200).send(project);
+  res.status(200).send((await sanitizeProjectAuthors([project], userId))[0]);
+  } catch (error) { next(error); }
 });
 
 // 获取项目云变量配置
@@ -1103,6 +1198,7 @@ router.get("/id/:id/cloudconfig", async (req, res, next) => {
   try {
     const projectId = Number(req.params.id);
     const userId = res.locals.userid || 0;
+    await ensureProjectVisible(projectId, userId);
     const project = await prisma.ow_projects.findFirst({
       where: { id: projectId },
       select: { id: true },
@@ -1116,9 +1212,9 @@ router.get("/id/:id/cloudconfig", async (req, res, next) => {
 
     const hasPermission = await hasProjectPermission(projectId, userId, "read");
     if (!hasPermission) {
-      return res.status(403).send({
+      return res.status(404).send({
         status: "error",
-        message: "无权访问此项目",
+        message: "项目不存在",
       });
     }
 
@@ -1153,7 +1249,7 @@ router.get("/id/:id/cloudconfig", async (req, res, next) => {
 });
 
 // 更新项目云变量匿名写入配置
-router.put("/id/:id/cloudconfig", needLogin, requireResource("project", "update", "id"), async (req, res, next) => {
+router.put("/id/:id/cloudconfig", needLogin, requireResource("project", "update", "id", { allowDelegation: true }), projectWriteGuard("update", projectIdFromRequest), async (req, res, next) => {
   try {
     const projectId = Number(req.params.id);
     // 权限已由 requireResource("project","update","id") 中间件校验（含协作者）。
@@ -1273,7 +1369,7 @@ router.put("/id/:id/cloudconfig", needLogin, requireResource("project", "update"
 });
 
 // 更新作品信息
-router.put("/id/:id", needLogin, requireResource("project", "update", "id"), async (req, res, next) => {
+router.put("/id/:id", needLogin, requireResource("project", "update", "id", { allowDelegation: true }), projectWriteGuard("update", projectIdFromRequest), async (req, res, next) => {
   try {
     // 权限已由 requireResource 中间件校验（作者或编辑者及以上协作者）。
     const project = await prisma.ow_projects.findFirst({
@@ -1288,9 +1384,21 @@ router.put("/id/:id", needLogin, requireResource("project", "update", "id"), asy
     }
 
     const updatedData = extractProjectData(req.body);
+    if (updatedData.type === "article") {
+      const authorization = res.locals.authorization;
+      for (const userId of new Set([res.locals.userid, ...(authorization?.allowed ? [authorization.principalId] : [])])) {
+        await assertCanWrite(userId, "blog", "update");
+      }
+    }
     // 可见性(state)属于高风险设置：仅作者/管理员协作者可改，编辑者通过本接口改 state 时忽略。
     if (updatedData.state !== undefined) {
-      const canManage = await userCanActOnProject(res.locals.userid, req.params.id, "manage");
+      const { authorize } = await import("../services/auth/authorization.js");
+      const decision = await authorize({
+        userId: res.locals.userid, requiredScope: `project:${req.params.id}:manage`,
+        tokenType: res.locals.tokenType, tokenScopes: res.locals.scopes || [],
+        allowDelegation: true, delegationId: req.headers["x-zerocat-delegation"],
+      });
+      const canManage = decision.allowed;
       if (!canManage) {
         delete updatedData.state;
       }
@@ -1380,7 +1488,7 @@ router.get("/namespace/:authorname/:projectname", async (req, res, next) => {
     const { authorname, projectname } = req.params;
     const userId = res.locals.userid || 0; // 未登录用户为匿名用户
 
-    const author = await getUserByUsername(authorname);
+    const author = await prisma.ow_users.findUnique({ where: { username: authorname }, select: authorSelectionFields() });
     if (!author) {
       return res.status(404).send({
         status: "error",
@@ -1389,10 +1497,7 @@ router.get("/namespace/:authorname/:projectname", async (req, res, next) => {
     }
 
     const project = await prisma.ow_projects.findFirst({
-      where: {
-        authorid: author.id,
-        name: projectname,
-      },
+      where: await visibleProjectWhere({ authorid: author.id, name: projectname }, userId),
       select: projectSelectionFields(),
     });
 
@@ -1410,11 +1515,11 @@ router.get("/namespace/:authorname/:projectname", async (req, res, next) => {
       select: { name: true, id: true, created_at: true },
     });
 
-    project.author = author;
+    project.author = await sanitizeProfile(author, userId);
     project.tags = tags;
     logger.debug(tags);
     logger.debug(project);
-    res.status(200).send(project);
+    res.status(200).send((await sanitizeProjectAuthors([project], userId))[0]);
   } catch (err) {
     logger.error("Error fetching project by authorname and projectname:", err);
     res.status(404).send({
@@ -1432,12 +1537,22 @@ router.get("/files/:sha256", async (req, res, next) => {
     const userId = res.locals.userid || 0; // 未登录用户为匿名用户
     const content = req.query.content;
     try {
-      await verifyFileAccessToken(accessFileToken, userId);
+      const tokenHash = await verifyFileAccessToken(accessFileToken, userId);
+      if (tokenHash !== sha256) throw projectNotFound();
+      const decoded = jwt.verify(accessFileToken, await zcconfig.get("security.jwttoken"));
+      const projectId = decoded.data?.project_id;
+      if (!projectId) throw projectNotFound();
+      await ensureProjectVisible(projectId, userId);
+      const reachable = await findReachableCommit(projectId, { sha256 });
+      if (!reachable) {
+        const staged = decoded.data.staged && userId && Number(decoded.data.userid) === Number(userId);
+        if (!staged) throw projectNotFound();
+      }
     } catch (err) {
       logger.error("Error verifying file access token:", err);
-      return res.status(200).send({
+      return res.status(404).send({
         status: "error",
-        message: "无效的文件访问令牌 #3",
+        message: "文件不存在",
       });
     }
 
@@ -1470,56 +1585,55 @@ router.get("/files/:sha256", async (req, res, next) => {
 // 删除作品
 import { requireSudo } from "../middleware/sudo.js"; // 放顶部已有import区
 
-router.delete("/:id", needLogin, requireResource("project", "delete", "id"), requireSudo, async (req, res, next) => {
+router.get(["/recycle-bin", "/deleted"], needLogin, requireScope("project:read"), async (req, res, next) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
+    const page = Math.min(Math.max(Number(req.query.page) || 1, 1), 100000);
+    const ownerWhere = { authorid: Number(res.locals.userid), deleted_at: { not: null } };
+    const projects = await prisma.ow_projects.findMany({
+      where: { ...ownerWhere, ...(req.query.cursor ? { id: { lt: Number(req.query.cursor) } } : {}) },
+      orderBy: { id: "desc" },
+      take: limit,
+      ...(req.query.page && !req.query.cursor ? { skip: (page - 1) * limit } : {}),
+      select: { ...projectSelectionFields(), deleted_at: true, deletion_source: true },
+    });
+    res.json({
+      status: "success",
+      data: {
+        total: await prisma.ow_projects.count({ where: ownerWhere }),
+        page,
+        limit,
+        projects: projects.map(({ deletion_source, ...project }) => ({ ...project, can_restore: deletion_source !== "admin" && deletion_source !== "administrative" })),
+        next_cursor: projects.length === limit ? String(projects[projects.length - 1].id) : null,
+        has_more: projects.length === limit,
+      },
+    });
+  } catch (error) { next(error); }
+});
+
+router.post("/:id/restore", needLogin, requireResource("project", "delete", "id", { includeDeleted: true }), async (req, res, next) => {
   try {
     const project = await prisma.ow_projects.findFirst({
-      where: { id: Number(req.params.id), authorid: res.locals.userid },
+      where: { id: Number(req.params.id), authorid: Number(res.locals.userid) },
+      select: { id: true, type: true },
     });
-
-    if (project) {
-      await prisma.ow_projects.delete({
-        where: { id: Number(req.params.id), authorid: res.locals.userid },
-      });
-
-      // Create project deletion event
-      await createEvent(
-        "project_delete",
-        res.locals.userid,
-        "project",
-        Number(req.params.id),
-        {
-          event_type: "project_delete",
-          actor_id: res.locals.userid,
-          target_type: "project",
-          target_id: Number(req.params.id),
-          project_name: project.name,
-          project_type: project.type,
-          project_title: project.title,
-          notification_title: `${res.locals.username || "有人"} 删除了项目`,
-          notification_content: `${res.locals.username || "有人"} 删除了项目《${project.title || project.name}》`,
-        }
-      );
-
-      queueManager.enqueueProjectGorseSync(Number(req.params.id), {
-        reason: "project_delete",
-        delayMs: 0,
-      }).catch((error) => {
-        logger.debug(`[gorse] delete project sync enqueue failed project=${req.params.id}: ${error.message}`);
-      });
-
-      if (String(project.type || '').toLowerCase() === 'article') {
-        queueManager.enqueueBlogSyncRemove(Number(req.params.id), project.authorid, {
-          reason: 'project-delete',
-        }).catch((error) => {
-          logger.debug(`[blog-sync] delete enqueue failed project=${req.params.id}: ${error.message}`);
-        });
-      }
-    }
-
-    res.status(200).send({
-      status: "success",
-      message: "删除成功",
+    if (!project) throw projectNotFound();
+    await assertCanWrite(res.locals.userid, "project", "restore");
+    if (project.type === "article") await assertCanWrite(res.locals.userid, "blog", "restore");
+    await restoreContent("project", project.id, res.locals.userid, {
+      authorizationContext: { tokenType: res.locals.tokenType, tokenScopes: res.locals.scopes || [] },
     });
+    res.json({ status: "success", message: "恢复成功" });
+  } catch (error) { next(error); }
+});
+
+router.delete("/:id", needLogin, requireResource("project", "delete", "id", { allowDelegation: true }), requireSudo, projectWriteGuard("delete", projectIdFromRequest), async (req, res, next) => {
+  try {
+    await softDeleteContent("project", Number(req.params.id), res.locals.userid, {
+      reason: String(req.body?.reason || ""),
+      authorizationContext: { tokenType: res.locals.tokenType, tokenScopes: res.locals.scopes || [], delegationId: req.headers["x-zerocat-delegation"], allowDelegation: true },
+    });
+    res.status(200).send({ status: "success", message: "删除成功" });
   } catch (err) {
     logger.error("Error deleting project:", err);
     next(err);
@@ -1527,7 +1641,7 @@ router.delete("/:id", needLogin, requireResource("project", "delete", "id"), req
 });
 
 // 重命名项目
-router.put("/rename/:id", needLogin, requireResource("project", "update", "id"), async (req, res, next) => {
+router.put("/rename/:id", needLogin, requireResource("project", "update", "id", { allowDelegation: true }), projectWriteGuard("update", projectIdFromRequest), async (req, res, next) => {
   try {
     const { id } = req.params;
     const { newName } = req.body;
@@ -1608,7 +1722,7 @@ router.put("/rename/:id", needLogin, requireResource("project", "update", "id"),
 });
 
 // 重命名项目
-router.put("/changevisibility/:id", needLogin, requireResource("project", "manage", "id"), requireSudo, async (req, res, next) => {
+router.put("/changevisibility/:id", needLogin, requireResource("project", "manage", "id", { allowDelegation: true }), requireSudo, projectWriteGuard("manage", projectIdFromRequest), async (req, res, next) => {
   try {
     const { id } = req.params;
     const { newState } = req.body;
@@ -1652,7 +1766,7 @@ router.put("/changevisibility/:id", needLogin, requireResource("project", "manag
 });
 
 // 修改分支简介
-router.post("/branches/description", needLogin, requireResource("project", "update", "projectid"), async (req, res, next) => {
+router.post("/branches/description", needLogin, requireResource("project", "update", "projectid", { allowDelegation: true }), projectWriteGuard("update", projectIdFromRequest), async (req, res, next) => {
   try {
     const { projectid, branch } = req.query;
     const { description } = req.body;
@@ -1664,7 +1778,6 @@ router.post("/branches/description", needLogin, requireResource("project", "upda
       });
     }
 
-    await checkProjectPermission(projectid, res.locals.userid, "write");
 
     const branchRecord = await prisma.ow_projects_branch.findFirst({
       where: { projectid: Number(projectid), name: branch },
@@ -1692,7 +1805,7 @@ router.post("/branches/description", needLogin, requireResource("project", "upda
   }
 });
 
-router.post("/fork", needLogin, requireScope("project:create"), async (req, res, next) => {
+router.post("/fork", needLogin, requireScope("project:create"), projectWriteGuard("create", projectIdFromRequest), async (req, res, next) => {
   const { projectid, branch, name } = req.body;
 
   try {
@@ -1829,6 +1942,7 @@ router.get("/stats/:id", async (req, res, next) => {
       prisma.ow_projects.count({
         where: {
           fork: Number(req.params.id),
+          ...await visibleWhere("project", userId),
         },
       }),
     ]);
@@ -1883,7 +1997,7 @@ router.get("/info/:id", async (req, res, next) => {
     );
 
     // 组合所有数据
-    project.author = author;
+    project.author = await sanitizeProfile(author, userId);
     project.tags = tags;
     project.analytics = {
       pageviews: analytics.overview.pageviews.value,
@@ -1893,7 +2007,7 @@ router.get("/info/:id", async (req, res, next) => {
     res.status(200).send({
       status: "success",
       message: "获取成功",
-      data: project,
+      data: (await sanitizeProjectAuthors([project], userId))[0],
     });
   } catch (err) {
     logger.error("Error getting project information with analytics:", err);
@@ -2007,12 +2121,13 @@ router.get("/:id/:branch/:ref", async (req, res, next) => {
   try {
     const { id, branch, ref } = req.params;
     const userId = res.locals.userid || 0; // 未登录用户为匿名用户
+    await ensureProjectVisible(id, userId);
     const hasPermission = await hasProjectPermission(id, userId, "read");
 
     if (!hasPermission) {
-      return res.status(200).send({
+      return res.status(404).send({
         status: "error",
-        message: "项目不存在或无权访问",
+        message: "项目不存在",
         code: "404",
       });
     }
@@ -2043,9 +2158,7 @@ router.get("/:id/:branch/:ref", async (req, res, next) => {
       }
     } else {
       // 对于特定提交，我们只需要验证提交ID
-      commit = await prisma.ow_projects_commits.findFirst({
-        where: { id: ref },
-      });
+      commit = await findReachableCommit(id, { commitId: ref });
     }
 
     if (!commit) {
@@ -2070,9 +2183,10 @@ router.get("/:id/:branch/:ref", async (req, res, next) => {
       });
     }
 
-    const accessFileToken = await generateFileAccessToken(
+    const accessFileToken = await issueProjectFileAccessToken(
       commit.commit_file,
-      userId
+      userId,
+      req.query.projectid || req.params.id
     );
 
     res.status(200).send({

@@ -11,7 +11,30 @@ import { Gorse } from 'gorsejs';
 import zcconfig from './config/zcconfig.js';
 import logger from './logger.js';
 import { prisma } from './prisma.js';
+import { visibleWhere, canViewContent } from './moderation/visibility.js';
+
+async function filterPublicRecords(kind, records) {
+    const checked = await Promise.all((records || []).map(async record =>
+        record && await canViewContent(kind, record, null) ? record : null));
+    return checked.filter(Boolean);
+}
 import * as embeddingService from './embedding.js';
+
+async function feedbackIsPublic(userId, itemId) {
+    if (!await canViewContent('activity', { actor_id: Number(userId) }, null)) return false;
+    const match = String(itemId).match(/^(post|project|user)_(\d+)$/);
+    if (!match) return false;
+    const kind = match[1] === 'user' ? 'profile' : match[1];
+    const model = { post: 'ow_posts', project: 'ow_projects', profile: 'ow_users' }[kind];
+    const record = await prisma[model].findUnique({ where: { id: Number(match[2]) } });
+    return Boolean(record && await canViewContent(kind, record, null) && (kind !== 'project' || record.state === 'public'));
+}
+
+async function filterPublicFeedbacks(rows, userId, itemId) {
+    const checked = await Promise.all(rows.map(async row =>
+        await feedbackIsPublic(userId(row), itemId(row)) ? row : null));
+    return checked.filter(Boolean);
+}
 
 // Gorse 反馈类型常量
 export const FEEDBACK_TYPES = {
@@ -145,6 +168,7 @@ async function generateMissingUserEmbeddings(usersWithoutEmbedding) {
  */
 export async function upsertUser(userId, { username, labels, display_name } = {}) {
     try {
+        if (!await canViewContent('profile', { id: Number(userId) }, null)) return;
         const client = await getClient();
         if (!client) return;
 
@@ -177,6 +201,8 @@ export async function upsertUser(userId, { username, labels, display_name } = {}
  */
 export async function insertUsers(users) {
     try {
+        users = await filterPublicRecords('profile', users);
+        if (!users.length) return;
         const client = await getClient();
         if (!client) return;
 
@@ -232,6 +258,7 @@ export async function insertUsers(users) {
  */
 export async function upsertPost(post) {
     try {
+        if (!await canViewContent('post', post, null)) { await hidePost(post.id); return; }
         // 纯转推不单独推送到 Gorse
         if (post.post_type === 'retweet') {
             logger.debug(`[gorse] 帖子 ${post.id} 是纯转推，跳过 Gorse 同步`);
@@ -325,7 +352,7 @@ export async function upsertProject(project) {
         const projectId = Number(project?.id);
         if (!Number.isInteger(projectId) || projectId <= 0) return;
 
-        if (project?.state === 'deleted') {
+        if (project?.state !== 'public' || !await canViewContent('project', project, null)) {
             await hideProject(projectId);
             return;
         }
@@ -369,7 +396,7 @@ export async function insertProjects(projects) {
         const client = await getClient();
         if (!client) return;
 
-        const filteredProjects = (projects || []).filter(p => p && p.state !== 'deleted');
+        const filteredProjects = (await filterPublicRecords('project', projects)).filter(p => p.state === 'public');
         if (filteredProjects.length === 0) return;
 
         const projectIds = filteredProjects
@@ -438,7 +465,7 @@ export async function insertPosts(posts) {
         if (!client) return;
 
         // 过滤掉纯转推和已删除帖子
-        const filteredPosts = posts.filter(p => p.post_type !== 'retweet' && !p.is_deleted);
+        const filteredPosts = (await filterPublicRecords('post', posts)).filter(p => p.post_type !== 'retweet' && !p.is_deleted);
         if (filteredPosts.length === 0) return;
 
         // 批量获取 embedding
@@ -516,6 +543,7 @@ function buildUserItem(user) {
  */
 export async function upsertUserItem(userId, { username, display_name } = {}) {
     try {
+        if (!await canViewContent('profile', { id: Number(userId) }, null)) return;
         const client = await getClient();
         if (!client) return;
         const item = buildUserItem({ id: userId, username, display_name });
@@ -576,6 +604,7 @@ function buildPostLabels(post) {
  */
 export async function insertFeedback(feedbackType, userId, itemId, { timestamp, value = 1 } = {}) {
     try {
+        if (!await feedbackIsPublic(userId, itemId)) return;
         const client = await getClient();
         if (!client) return;
 
@@ -597,6 +626,8 @@ export async function insertFeedback(feedbackType, userId, itemId, { timestamp, 
  */
 export async function insertFeedbacks(feedbacks) {
     try {
+        feedbacks = (await Promise.all(feedbacks.map(async feedback => await feedbackIsPublic(feedback.userId, feedback.itemId) ? feedback : null))).filter(Boolean);
+        if (!feedbacks.length) return;
         const client = await getClient();
         if (!client) return;
 
@@ -861,6 +892,7 @@ export async function syncAllUsers() {
 
     while (true) {
         const users = await prisma.ow_users.findMany({
+            where: await visibleWhere('profile'),
             skip: cursor,
             take: batchSize,
             select: { id: true, username: true, display_name: true, bio: true },
@@ -945,7 +977,7 @@ export async function syncAllPosts() {
                 created_at: true,
                 retweet_post_id: true,
             },
-            where: { is_deleted: false, post_type: { not: 'retweet' } },
+            where: { is_deleted: false, post_type: { not: 'retweet' }, AND: [await visibleWhere('post')] },
             orderBy: { id: 'asc' },
         });
 
@@ -1020,7 +1052,7 @@ export async function syncAllProjects() {
                     select: { name: true },
                 },
             },
-            where: { state: { not: 'deleted' } },
+            where: { state: 'public', AND: [await visibleWhere('project')] },
             orderBy: { id: 'asc' },
         });
 
@@ -1085,7 +1117,7 @@ export async function syncAllFeedbacks() {
         });
         if (likes.length === 0) break;
 
-        const feedbacks = likes.map(l => ({
+        const feedbacks = (await filterPublicFeedbacks(likes, row => row.user_id, row => `${ITEM_PREFIX.POST}${row.post_id}`)).map(l => ({
             FeedbackType: FEEDBACK_TYPES.LIKE,
             UserId: String(l.user_id),
             ItemId: `${ITEM_PREFIX.POST}${l.post_id}`,
@@ -1093,7 +1125,7 @@ export async function syncAllFeedbacks() {
             Timestamp: l.created_at ? new Date(l.created_at).toISOString() : new Date().toISOString(),
         }));
 
-        await client.upsertFeedbacks(feedbacks);
+        if (feedbacks.length) await client.upsertFeedbacks(feedbacks);
         result.likes += feedbacks.length;
         cursor += batchSize;
     }
@@ -1110,7 +1142,7 @@ export async function syncAllFeedbacks() {
         });
         if (bookmarks.length === 0) break;
 
-        const feedbacks = bookmarks.map(b => ({
+        const feedbacks = (await filterPublicFeedbacks(bookmarks, row => row.user_id, row => `${ITEM_PREFIX.POST}${row.post_id}`)).map(b => ({
             FeedbackType: FEEDBACK_TYPES.BOOKMARK,
             UserId: String(b.user_id),
             ItemId: `${ITEM_PREFIX.POST}${b.post_id}`,
@@ -1118,7 +1150,7 @@ export async function syncAllFeedbacks() {
             Timestamp: b.created_at ? new Date(b.created_at).toISOString() : new Date().toISOString(),
         }));
 
-        await client.upsertFeedbacks(feedbacks);
+        if (feedbacks.length) await client.upsertFeedbacks(feedbacks);
         result.bookmarks += feedbacks.length;
         cursor += batchSize;
     }
@@ -1135,7 +1167,7 @@ export async function syncAllFeedbacks() {
         });
         if (stars.length === 0) break;
 
-        const feedbacks = stars.map(s => ({
+        const feedbacks = (await filterPublicFeedbacks(stars, row => row.userid, row => `${ITEM_PREFIX.PROJECT}${row.projectid}`)).map(s => ({
             FeedbackType: FEEDBACK_TYPES.STAR,
             UserId: String(s.userid),
             ItemId: `${ITEM_PREFIX.PROJECT}${s.projectid}`,
@@ -1143,7 +1175,7 @@ export async function syncAllFeedbacks() {
             Timestamp: s.createTime ? new Date(s.createTime).toISOString() : new Date().toISOString(),
         }));
 
-        await client.upsertFeedbacks(feedbacks);
+        if (feedbacks.length) await client.upsertFeedbacks(feedbacks);
         result.projectStars += feedbacks.length;
         cursor += batchSize;
     }
@@ -1161,7 +1193,7 @@ export async function syncAllFeedbacks() {
         });
         if (follows.length === 0) break;
 
-        const feedbacks = follows.map(f => ({
+        const feedbacks = (await filterPublicFeedbacks(follows, row => row.source_user_id, row => `user_${row.target_user_id}`)).map(f => ({
             FeedbackType: FEEDBACK_TYPES.FOLLOW,
             UserId: String(f.source_user_id),
             ItemId: `user_${f.target_user_id}`,
@@ -1169,7 +1201,7 @@ export async function syncAllFeedbacks() {
             Timestamp: f.created_at ? new Date(f.created_at).toISOString() : new Date().toISOString(),
         }));
 
-        await client.upsertFeedbacks(feedbacks);
+        if (feedbacks.length) await client.upsertFeedbacks(feedbacks);
         result.follows += feedbacks.length;
         cursor += batchSize;
     }

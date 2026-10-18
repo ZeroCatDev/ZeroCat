@@ -8,18 +8,35 @@ import { sanitizeComment } from './sanitizer.js';
 import { checkAkismetSpam } from './akismetService.js';
 import { batchGetUserLevels } from './levelService.js';
 import { renderMarkdown } from './markdown.js';
+import { visibleWhere, visibleSql, canViewContent, assertCanWrite, sanitizePublicUser } from '../moderation/visibility.js';
+import { authorizeResourceOperation } from '../auth/resourceOperation.js';
 
-function buildVisibleCommentWhere(userId = null) {
-    if (userId) {
-        return {
-            OR: [
-                { status: 'approved' },
-                { user_id: String(userId) },
-            ],
-        };
+async function authorizeCommentOperation(spaceId, commentId, action, userId, options = {}) {
+    const { authorizationContext, spaceCuid } = options;
+    if (!authorizationContext) return { principalId: Number(userId), delegationId: null };
+    const decision = await authorizeResourceOperation(userId, 'comment', spaceCuid || commentId, action, authorizationContext);
+    if (spaceCuid) {
+        const space = await prisma.ow_comment_spaces.findUnique({ where: { cuid: spaceCuid } });
+        if (!space || space.id !== Number(spaceId) || space.status !== 'active'
+            || ((!decision.resourceGrant || decision.delegationId != null) && space.owner_id !== decision.principalId)) {
+            throw Object.assign(new Error('空间不存在或无权限'), { statusCode: 404, code: 'NOT_FOUND' });
+        }
+    } else {
+        const space = await prisma.ow_comment_spaces.findUnique({ where: { id: Number(spaceId) } });
+        if (!space || space.status !== 'active') {
+            throw Object.assign(new Error('空间不存在'), { statusCode: 404, code: 'NOT_FOUND' });
+        }
     }
+    return decision;
+}
 
-    return { status: 'approved' };
+async function buildVisibleCommentWhere(userId = null) {
+    return {
+        AND: [
+            await visibleWhere('comment_service', userId),
+            userId ? { OR: [{ status: 'approved' }, { account_user_id: Number(userId) }] } : { status: 'approved' },
+        ],
+    };
 }
 
 /**
@@ -73,6 +90,15 @@ export function checkForbiddenWords(text, forbiddenWords) {
  */
 export async function createComment(spaceId, data, config, userInfo = null) {
     const { comment, url, pid, rid, nick, mail, link, ua, ip } = data;
+    if (userInfo?.userId) await assertCanWrite(Number(userInfo.userId), 'comments', 'create');
+    for (const parentId of new Set([pid, rid].filter(Boolean))) {
+        const parent = await prisma.ow_comment_service.findFirst({
+            where: { id: Number(parentId), space_id: spaceId, url },
+        });
+        if (!parent || !await canViewContent('comment_service', parent, userInfo?.userId)) {
+            throw Object.assign(new Error('评论不存在'), { statusCode: 404, code: 'NOT_FOUND' });
+        }
+    }
 
     // 确定状态
     let status = 'approved';
@@ -120,6 +146,7 @@ export async function createComment(spaceId, data, config, userInfo = null) {
         data: {
             space_id: spaceId,
             user_id: userInfo ? String(userInfo.userId) : null,
+            account_user_id: userInfo?.userId ? Number(userInfo.userId) : null,
             nick: userInfo?.nick || nick || 'Anonymous',
             mail: userInfo?.mail || mail || null,
             link: userInfo?.link || link || null,
@@ -160,12 +187,10 @@ export async function getComments(spaceId, query, options = {}) {
         url: pageUrl,
     };
 
-    // 可见性：管理员可见全部；普通登录用户可见 approved + 自己；匿名仅 approved
-    if (!isAdmin) {
-        const visibleWhere = buildVisibleCommentWhere(userId);
-        Object.assign(rootWhere, visibleWhere);
-        Object.assign(totalWhere, visibleWhere);
-    }
+    // 公开评论接口始终使用当前访问者的可见性，审核通过专门管理接口访问。
+    const commentVisibility = await buildVisibleCommentWhere(userId);
+    Object.assign(rootWhere, commentVisibility);
+    Object.assign(totalWhere, commentVisibility);
 
     // 排序
     let orderBy = { insertedAt: 'desc' };
@@ -192,9 +217,7 @@ export async function getComments(spaceId, query, options = {}) {
             url: pageUrl,
             rid: { in: rootIds },
         };
-        if (!isAdmin) {
-            Object.assign(childWhere, buildVisibleCommentWhere(userId));
-        }
+        Object.assign(childWhere, await buildVisibleCommentWhere(userId));
         childComments = await prisma.ow_comment_service.findMany({
             where: childWhere,
             orderBy: { insertedAt: 'asc' },
@@ -204,7 +227,7 @@ export async function getComments(spaceId, query, options = {}) {
     // 收集所有用户ID
     const allComments = [...rootComments, ...childComments];
     const userIds = [...new Set(
-        allComments.filter(c => c.user_id).map(c => Number(c.user_id))
+        allComments.filter(c => c.account_user_id).map(c => Number(c.account_user_id))
     )];
 
     // 批量加载空间用户
@@ -224,11 +247,12 @@ export async function getComments(spaceId, query, options = {}) {
             spaceUsersMap.set(su.user_id, su);
         }
         for (const u of zcUsers) {
-            zcUsersMap.set(u.id, u);
+            zcUsersMap.set(u.id, await sanitizePublicUser(u, userId));
         }
     }
 
     const formatOptions = {
+        viewerId: userId,
         isAdmin,
         disableUserAgent: config.disableUserAgent === 'true',
         disableRegion: config.disableRegion === 'true',
@@ -256,7 +280,7 @@ export async function getComments(spaceId, query, options = {}) {
  */
 export async function getCommentCount(spaceId, urls = null, options = {}) {
     const { userId = null, forceArray = false } = options;
-    const visibleWhere = buildVisibleCommentWhere(userId);
+    const visibleWhere = await buildVisibleCommentWhere(userId);
 
     if (!urls || (Array.isArray(urls) && urls.length === 0)) {
         return prisma.ow_comment_service.count({
@@ -282,7 +306,7 @@ export async function getCommentCount(spaceId, urls = null, options = {}) {
  */
 export async function getRecentComments(spaceId, count = 10, config = {}, options = {}) {
     const { userId = null, isAdmin = false } = options;
-    const where = { space_id: spaceId, ...buildVisibleCommentWhere(userId) };
+    const where = { space_id: spaceId, ...await buildVisibleCommentWhere(userId) };
     const take = Math.max(1, Math.min(50, parseInt(count, 10) || 10));
 
     const comments = await prisma.ow_comment_service.findMany({
@@ -292,7 +316,7 @@ export async function getRecentComments(spaceId, count = 10, config = {}, option
     });
 
     const userIds = [...new Set(
-        comments.filter(c => c.user_id).map(c => Number(c.user_id))
+        comments.filter(c => c.account_user_id).map(c => Number(c.account_user_id))
     )];
     const spaceUsersMap = new Map();
     const zcUsersMap = new Map();
@@ -310,7 +334,7 @@ export async function getRecentComments(spaceId, count = 10, config = {}, option
             spaceUsersMap.set(su.user_id, su);
         }
         for (const u of zcUsers) {
-            zcUsersMap.set(u.id, u);
+            zcUsersMap.set(u.id, await sanitizePublicUser(u, userId));
         }
     }
 
@@ -323,9 +347,10 @@ export async function getRecentComments(spaceId, count = 10, config = {}, option
     return Promise.all(
         comments.map(c =>
             formatComment(c, {
+                viewerId: userId,
                 isAdmin,
-                spaceUser: c.user_id ? spaceUsersMap.get(Number(c.user_id)) || null : null,
-                zcUser: c.user_id ? zcUsersMap.get(Number(c.user_id)) || null : null,
+                spaceUser: c.account_user_id ? spaceUsersMap.get(Number(c.account_user_id)) || null : null,
+                zcUser: c.account_user_id ? zcUsersMap.get(Number(c.account_user_id)) || null : null,
                 disableUserAgent: config.disableUserAgent === 'true',
                 disableRegion: config.disableRegion === 'true',
                 userLevelMap,
@@ -338,8 +363,9 @@ export async function getRecentComments(spaceId, count = 10, config = {}, option
  * 管理列表 (type=list, 管理员用)
  * 支持 keyword 参数进行 pg_trgm 搜索
  */
-export async function getCommentList(spaceId, query, config = {}) {
-    const { page = 1, pageSize = 10, status, owner, keyword } = query;
+export async function getCommentList(spaceId, query, config = {}, options = {}) {
+    const { page = 1, pageSize = 10, status, owner, keyword, userId = null } = query;
+    await authorizeCommentOperation(spaceId, null, 'read', userId, options);
     const pageNum = Math.max(1, parseInt(page) || 1);
     const size = Math.min(100, Math.max(1, parseInt(pageSize) || 10));
 
@@ -348,10 +374,10 @@ export async function getCommentList(spaceId, query, config = {}) {
         return _searchComments(spaceId, keyword.trim(), { pageNum, size, status, owner, userId: query.userId });
     }
 
-    const where = { space_id: spaceId };
+    const where = { space_id: spaceId, AND: [await visibleWhere('comment_service', userId)] };
     if (status) where.status = status;
     if (owner === 'mine' && query.userId) {
-        where.user_id = String(query.userId);
+        where.account_user_id = Number(query.userId);
     }
 
     const [comments, count, spamCount, waitingCount] = await Promise.all([
@@ -362,12 +388,12 @@ export async function getCommentList(spaceId, query, config = {}) {
             take: size,
         }),
         prisma.ow_comment_service.count({ where }),
-        prisma.ow_comment_service.count({ where: { space_id: spaceId, status: 'spam' } }),
-        prisma.ow_comment_service.count({ where: { space_id: spaceId, status: 'waiting' } }),
+        prisma.ow_comment_service.count({ where: { space_id: spaceId, status: 'spam', AND: [await visibleWhere('comment_service', userId)] } }),
+        prisma.ow_comment_service.count({ where: { space_id: spaceId, status: 'waiting', AND: [await visibleWhere('comment_service', userId)] } }),
     ]);
 
     const userIds = [...new Set(
-        comments.filter(c => c.user_id).map(c => Number(c.user_id))
+        comments.filter(c => c.account_user_id).map(c => Number(c.account_user_id))
     )];
     const spaceUsersMap = new Map();
     const zcUsersMap = new Map();
@@ -385,7 +411,7 @@ export async function getCommentList(spaceId, query, config = {}) {
             spaceUsersMap.set(su.user_id, su);
         }
         for (const u of zcUsers) {
-            zcUsersMap.set(u.id, u);
+            zcUsersMap.set(u.id, await sanitizePublicUser(u, userId));
         }
     }
 
@@ -399,8 +425,8 @@ export async function getCommentList(spaceId, query, config = {}) {
         comments.map(c =>
             formatComment(c, {
                 isAdmin: true,
-                spaceUser: c.user_id ? spaceUsersMap.get(Number(c.user_id)) || null : null,
-                zcUser: c.user_id ? zcUsersMap.get(Number(c.user_id)) || null : null,
+                spaceUser: c.account_user_id ? spaceUsersMap.get(Number(c.account_user_id)) || null : null,
+                zcUser: c.account_user_id ? zcUsersMap.get(Number(c.account_user_id)) || null : null,
                 userLevelMap,
             })
         )
@@ -429,10 +455,14 @@ async function _searchComments(spaceId, keyword, { pageNum, size, status, owner,
         conditions.push(`c.status = $${params.length}`);
     }
     if (owner === 'mine' && userId) {
-        params.push(String(userId));
-        conditions.push(`c.user_id = $${params.length}`);
+        params.push(Number(userId));
+        conditions.push(`c.account_user_id = $${params.length}`);
     }
 
+    const moderation = await visibleSql('comment_service', 'c', userId);
+    const paramOffset = params.length;
+    conditions.push(`(${moderation.text.replace(/\$(\d+)/g, (_, index) => `$${Number(index) + paramOffset}`)})`);
+    params.push(...moderation.values);
     const whereSql = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     const scoreExpr = "similarity(COALESCE(c.comment, ''), $1)";
 
@@ -452,8 +482,8 @@ async function _searchComments(spaceId, keyword, { pageNum, size, status, owner,
     const [rows, countRows, spamCount, waitingCount] = await Promise.all([
         prisma.$queryRawUnsafe(dataSql, ...params, size, (pageNum - 1) * size),
         prisma.$queryRawUnsafe(countSql, ...params),
-        prisma.ow_comment_service.count({ where: { space_id: spaceId, status: 'spam' } }),
-        prisma.ow_comment_service.count({ where: { space_id: spaceId, status: 'waiting' } }),
+        prisma.ow_comment_service.count({ where: { space_id: spaceId, status: 'spam', AND: [await visibleWhere('comment_service', userId)] } }),
+        prisma.ow_comment_service.count({ where: { space_id: spaceId, status: 'waiting', AND: [await visibleWhere('comment_service', userId)] } }),
     ]);
 
     const count = countRows[0]?.total || 0;
@@ -465,14 +495,14 @@ async function _searchComments(spaceId, keyword, { pageNum, size, status, owner,
 
     // 用 Prisma 查出完整记录
     const comments = await prisma.ow_comment_service.findMany({
-        where: { id: { in: ids } },
+        where: { id: { in: ids }, AND: [await visibleWhere('comment_service', userId)] },
     });
 
     // 保持 score 排序
     const commentMap = new Map(comments.map(c => [c.id, c]));
     const sorted = ids.map(id => commentMap.get(id)).filter(Boolean);
 
-    const userIds = [...new Set(sorted.filter(c => c.user_id).map(c => Number(c.user_id)))];
+    const userIds = [...new Set(sorted.filter(c => c.account_user_id).map(c => Number(c.account_user_id)))];
     const spaceUsersMap = new Map();
     const zcUsersMap = new Map();
     if (userIds.length > 0) {
@@ -486,15 +516,15 @@ async function _searchComments(spaceId, keyword, { pageNum, size, status, owner,
             }),
         ]);
         for (const su of spaceUsers) spaceUsersMap.set(su.user_id, su);
-        for (const u of zcUsers) zcUsersMap.set(u.id, u);
+        for (const u of zcUsers) zcUsersMap.set(u.id, await sanitizePublicUser(u, userId));
     }
 
     const data = await Promise.all(
         sorted.map(c =>
             formatComment(c, {
                 isAdmin: true,
-                spaceUser: c.user_id ? spaceUsersMap.get(Number(c.user_id)) || null : null,
-                zcUser: c.user_id ? zcUsersMap.get(Number(c.user_id)) || null : null,
+                spaceUser: c.account_user_id ? spaceUsersMap.get(Number(c.account_user_id)) || null : null,
+                zcUser: c.account_user_id ? zcUsersMap.get(Number(c.account_user_id)) || null : null,
             })
         )
     );
@@ -506,20 +536,20 @@ async function _searchComments(spaceId, keyword, { pageNum, size, status, owner,
  * 搜索用户自己在所有空间的评论 (pg_trgm)
  */
 export async function searchMyComments(userId, keyword, page = 1, pageSize = 10) {
-    const params = [keyword, String(userId)];
+    const params = [keyword, Number(userId)];
     const scoreExpr = "similarity(COALESCE(c.comment, ''), $1)";
 
     const dataSql = `
         SELECT c.id, ${scoreExpr} AS score
         FROM ow_comment_service c
-        WHERE c.user_id = $2 AND (c.comment ILIKE '%' || $1 || '%' OR ${scoreExpr} > 0.1)
+        WHERE c.account_user_id = $2 AND (c.comment ILIKE '%' || $1 || '%' OR ${scoreExpr} > 0.1)
         ORDER BY score DESC, c."insertedAt" DESC
         LIMIT $3 OFFSET $4
     `;
     const countSql = `
         SELECT COUNT(*)::int AS total
         FROM ow_comment_service c
-        WHERE c.user_id = $2 AND (c.comment ILIKE '%' || $1 || '%' OR ${scoreExpr} > 0.1)
+        WHERE c.account_user_id = $2 AND (c.comment ILIKE '%' || $1 || '%' OR ${scoreExpr} > 0.1)
     `;
 
     const [rows, countRows] = await Promise.all([
@@ -535,7 +565,7 @@ export async function searchMyComments(userId, keyword, page = 1, pageSize = 10)
     }
 
     const comments = await prisma.ow_comment_service.findMany({
-        where: { id: { in: ids } },
+        where: { id: { in: ids }, AND: [await visibleWhere('comment_service', userId)] },
         include: { space: { select: { cuid: true, name: true } } },
     });
 
@@ -555,19 +585,34 @@ export async function searchMyComments(userId, keyword, page = 1, pageSize = 10)
     return { page, totalPages: Math.ceil(count / pageSize), pageSize, count, data };
 }
 
+export async function getComment(commentId, userId, { authorizationContext } = {}) {
+    const decision = await authorizeResourceOperation(userId, 'comment', commentId, 'read', authorizationContext);
+    const comment = await prisma.ow_comment_service.findUnique({ where: { id: Number(commentId) } });
+    const space = comment && await prisma.ow_comment_spaces.findUnique({ where: { id: comment.space_id } });
+    if (!comment || !space || space.status !== 'active' || !await canViewContent('comment_service', comment, userId)
+        || (comment.status !== 'approved' && (!decision.resourceGrant || decision.delegationId != null)
+            && comment.account_user_id !== decision.principalId)) return null;
+    return comment;
+}
+
 /**
  * 更新评论
  */
-export async function updateComment(spaceId, commentId, data, userId = null, isAdmin = false) {
+export async function updateComment(spaceId, commentId, data, userId = null, isAdmin = false, options = {}) {
+    const isLikeOnly = Object.keys(data).length === 1 && data.like !== undefined;
+    const action = isLikeOnly ? 'interact' : 'update';
+    if (userId) await assertCanWrite(Number(userId), 'comments', action);
+    const decision = await authorizeCommentOperation(spaceId, commentId, action, userId, options);
+    const spaceAdmin = Boolean(isAdmin && (!options.authorizationContext || options.spaceCuid));
     const comment = await prisma.ow_comment_service.findFirst({
         where: { id: parseInt(commentId), space_id: spaceId },
     });
 
-    if (!comment) return null;
+    if (!comment || !await canViewContent('comment_service', comment, userId)) return null;
 
     // 仅点赞操作允许匿名，其他编辑需校验归属
-    const isLikeOnly = Object.keys(data).length === 1 && data.like !== undefined;
-    if (!isLikeOnly && !isAdmin && comment.user_id !== String(userId)) {
+    if (!isLikeOnly && !spaceAdmin && (!decision.allowed || decision.delegationId != null)
+        && comment.account_user_id !== decision.principalId) {
         return null;
     }
 
@@ -576,8 +621,8 @@ export async function updateComment(spaceId, commentId, data, userId = null, isA
     if (data.nick !== undefined) updateData.nick = data.nick;
     if (data.mail !== undefined) updateData.mail = data.mail;
     if (data.link !== undefined) updateData.link = data.link;
-    if (data.status !== undefined && isAdmin) updateData.status = data.status;
-    if (data.sticky !== undefined && isAdmin) updateData.sticky = data.sticky;
+    if (data.status !== undefined && spaceAdmin) updateData.status = data.status;
+    if (data.sticky !== undefined && spaceAdmin) updateData.sticky = data.sticky;
     if (data.like !== undefined) {
         // Waline 客户端发送 like: true/false 表示点赞/取消，转为 increment/decrement
         if (data.like === true) {
@@ -598,15 +643,19 @@ export async function updateComment(spaceId, commentId, data, userId = null, isA
 /**
  * 删除评论
  */
-export async function deleteComment(spaceId, commentId, userId = null, isAdmin = false) {
+export async function deleteComment(spaceId, commentId, userId = null, isAdmin = false, options = {}) {
+    if (userId) await assertCanWrite(Number(userId), 'comments', 'delete');
+    const decision = await authorizeCommentOperation(spaceId, commentId, 'delete', userId, options);
+    const spaceAdmin = Boolean(isAdmin && (!options.authorizationContext || options.spaceCuid));
     const comment = await prisma.ow_comment_service.findFirst({
         where: { id: parseInt(commentId), space_id: spaceId },
     });
 
-    if (!comment) return false;
+    if (!comment || !await canViewContent('comment_service', comment, userId)) return false;
 
     // 非管理员只能删除自己的评论
-    if (!isAdmin && comment.user_id !== String(userId)) {
+    if (!spaceAdmin && (!decision.allowed || decision.delegationId != null)
+        && comment.account_user_id !== decision.principalId) {
         return false;
     }
 
@@ -614,9 +663,10 @@ export async function deleteComment(spaceId, commentId, userId = null, isAdmin =
     await prisma.ow_comment_service.deleteMany({
         where: {
             space_id: spaceId,
+            AND: [await visibleWhere('comment_service', userId)],
             OR: [
                 { id: parseInt(commentId) },
-                { rid: String(commentId) },
+                ...(!options.authorizationContext || options.spaceCuid ? [{ rid: String(commentId) }] : []),
             ],
         },
     });
@@ -633,6 +683,7 @@ export default {
     getCommentCount,
     getRecentComments,
     getCommentList,
+    getComment,
     searchMyComments,
     updateComment,
     deleteComment,

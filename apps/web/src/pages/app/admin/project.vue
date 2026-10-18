@@ -97,6 +97,7 @@
       <template v-slot:top>
         <v-toolbar flat>
           <v-toolbar-title>项目管理</v-toolbar-title>
+          <v-btn to="/app/admin/moderation" variant="text" prepend-icon="mdi-delete-restore">审核与回收站</v-btn>
           <v-divider class="mx-4" inset vertical></v-divider>
           <v-spacer></v-spacer>
           <v-btn
@@ -148,6 +149,7 @@
           variant="text"
           @click="confirmDelete(item)"
         ></v-btn>
+        <ContentModerationAction kind="project" :content-id="item.id" @changed="refreshData" />
       </template>
     </v-data-table-server>
 
@@ -311,7 +313,7 @@
     <v-dialog v-model="deleteDialog" max-width="500px">
       <v-card>
         <v-card-title class="text-h5">确认删除</v-card-title>
-        <v-card-text> 确定要删除这个项目吗？此操作不可撤销。</v-card-text>
+        <v-card-text> 确定要将此项目移入管理回收站吗？项目与关联数据会保留，需由审核人员恢复。</v-card-text>
         <v-card-actions>
           <v-spacer></v-spacer>
           <v-btn color="primary" variant="text" @click="deleteDialog = false">
@@ -337,9 +339,11 @@
 <script>
 import axios from '@/axios/axios'
 import {debounce} from 'lodash-es'
+import ContentModerationAction from '@/components/admin/ContentModerationAction.vue'
 
 export default {
   name: 'ProjectPage',
+  components: { ContentModerationAction },
   data() {
     return {
       // 表格配置
