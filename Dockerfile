@@ -1,5 +1,5 @@
 # 使用轻量且有社区支持的 Node 官方镜像
-FROM node:24-alpine
+FROM node:24.22.1-alpine
 
 # 设置作者信息
 LABEL author="wuyuan"
@@ -11,7 +11,7 @@ WORKDIR /app
 RUN corepack enable
 
 # 先复制依赖清单，提升构建缓存命中率
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps/api/package.json ./apps/api/package.json
 
 # 安装 workspace 依赖（后端运行时依赖根包 + apps/api）
