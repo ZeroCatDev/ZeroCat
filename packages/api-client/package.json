@@ -5,6 +5,6 @@
   "type": "module",
   "dependencies": {
     "@zerocat/types": "workspace:*",
-    "axios": "^1.6.0"
+    "axios": "^1.20.0"
   }
 }

@@ -74,10 +74,3 @@ if (!import.meta.env.DEV) {
     });
   });
 }
-
-// 如果是开发环境，异步启用 Vue DevTools
-if (import.meta.env.DEV) {
-  import('@vue/devtools').then(({ devtools }) => {
-    devtools.init();
-  });
-}

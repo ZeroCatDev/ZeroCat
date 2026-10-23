@@ -7,7 +7,10 @@ on:
     paths:
       - "Dockerfile"
       - ".dockerignore"
+      - ".node-version"
+      - ".npmrc"
       - "apps/api/**"
+      - "scripts/dependencies.test.js"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -17,7 +20,10 @@ on:
     paths:
       - "Dockerfile"
       - ".dockerignore"
+      - ".node-version"
+      - ".npmrc"
       - "apps/api/**"
+      - "scripts/dependencies.test.js"
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
@@ -45,12 +51,15 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "24"
+          node-version-file: ".node-version"
           cache: "pnpm"
           cache-dependency-path: "pnpm-lock.yaml"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Test dependency compatibility
+        run: pnpm run test:dependencies
 
       - name: Build backend package
         run: pnpm --filter ./apps/api build
@@ -105,6 +114,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
+          pull: true
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

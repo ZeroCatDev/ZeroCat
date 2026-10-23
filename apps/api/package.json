@@ -3,7 +3,10 @@
   "version": "1.0.21",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@9.0.0",
+  "packageManager": "pnpm@10.34.7",
+  "engines": {
+    "node": ">=24.22.1 <25"
+  },
   "scripts": {
     "start": "cross-env DOTENV_CONFIG_PATH=../../.env node --import tsx server.js",
     "dev": "cross-env DOTENV_CONFIG_PATH=../../.env NODE_ENV=development nodemon --exec \"node --import tsx\" server.js",
@@ -14,15 +17,15 @@
   },
   "devDependencies": {
     "cross-env": "^7.0.3",
-    "nodemon": "^3.1.10",
-    "prisma": "^7.6.0",
-    "tsx": "^4.22.4"
+    "nodemon": "^3.1.14",
+    "prisma": "^7.10.1",
+    "tsx": "^4.23.15"
   },
   "dependencies": {
-    "@prisma/client": "^7.7.0",
+    "@prisma/client": "^7.10.1",
     "@react-email/components": "^1.0.12",
-    "@react-email/render": "^2.0.8",
-    "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "@react-email/render": "^2.1.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   }
 }
